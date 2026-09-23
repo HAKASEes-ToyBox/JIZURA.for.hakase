@@ -80,10 +80,22 @@ J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signa
   const total = Math.max(1, Math.round(plan.duration * fps));
   const scale = w / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
+  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   try {
   for (let i = 0; i < total; i++) {
     if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
+    if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
+      const targetTime = (i / fps) % bgm.element.duration;
+      if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
+        bgm.element.currentTime = targetTime;
+        await new Promise(r => {
+          const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
+          bgm.element.addEventListener('seeked', onSeeked, { once: true });
+          setTimeout(r, 25);
+        });
+      }
+    }
     R.frame(ctx, plan, i / fps, { scale });
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
     venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
@@ -151,8 +163,20 @@ J.exportPNGZip = async ({ plan, project, transparent, onProgress, signal, every 
   const fps = plan.fps, total = Math.max(1, Math.round(plan.duration * fps));
   const zip = new ZipWriter();
   const scale = w / plan.W;
+  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   for (let i = 0; i < total; i += every) {
     if (signal && signal.aborted) throw new Error('キャンセルしました');
+    if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
+      const targetTime = (i / fps) % bgm.element.duration;
+      if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
+        bgm.element.currentTime = targetTime;
+        await new Promise(r => {
+          const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
+          bgm.element.addEventListener('seeked', onSeeked, { once: true });
+          setTimeout(r, 25);
+        });
+      }
+    }
     R.frame(ctx, plan, i / fps, { scale, transparent });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     zip.add(`jizura_${String(i).padStart(5, '0')}.png`, new Uint8Array(await blob.arrayBuffer()));

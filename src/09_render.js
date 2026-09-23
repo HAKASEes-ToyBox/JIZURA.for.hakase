@@ -5,6 +5,25 @@
 'use strict';
 const E = J.E;
 
+J.BLEND_MAP = {
+  normal: 'source-over',
+  multiply: 'multiply',
+  screen: 'screen',
+  overlay: 'overlay',
+  'soft-light': 'soft-light',
+  'hard-light': 'hard-light',
+  'color-dodge': 'color-dodge',
+  'color-burn': 'color-burn',
+  darken: 'darken',
+  lighten: 'lighten',
+  difference: 'difference',
+  exclusion: 'exclusion',
+  hue: 'hue',
+  saturation: 'saturation',
+  color: 'color',
+  luminosity: 'luminosity'
+};
+
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
 J.cutAt = (plan, t) => {
@@ -87,6 +106,30 @@ class Renderer {
         ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
     }
+    // ---------- custom background media layer ----------
+    const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
+    if (!opt.transparent && bgm && bgm.element && (bgm.ready || bgm.element.videoWidth || bgm.element.naturalWidth)) {
+      ctx.save();
+      const el = bgm.element;
+      const mw = el.naturalWidth || el.videoWidth || el.width || W;
+      const mh = el.naturalHeight || el.videoHeight || el.height || H;
+      if (mw > 0 && mh > 0) {
+        const fit = bgm.fit || 'cover';
+        const baseScale = fit === 'contain' ? Math.min(W / mw, H / mh) : Math.max(W / mw, H / mh);
+        const finalScale = baseScale * (bgm.scale !== undefined ? bgm.scale : 1);
+        const cx = W / 2 + (bgm.x || 0) * (W / 100);
+        const cy = H / 2 + (bgm.y || 0) * (H / 100);
+        ctx.translate(cx, cy);
+        ctx.scale(finalScale, finalScale);
+        ctx.globalAlpha = Math.max(0, Math.min(1, bgm.opacity !== undefined ? bgm.opacity : 1));
+        const bmode = J.BLEND_MAP[bgm.bgBlendMode] || 'source-over';
+        ctx.globalCompositeOperation = bmode;
+        try {
+          ctx.drawImage(el, -mw / 2, -mh / 2, mw, mh);
+        } catch (e) {}
+      }
+      ctx.restore();
+    }
     // ---------- camera & chroma amounts ----------
     const u = H / 1080;
     const events = plan.events;
@@ -125,17 +168,18 @@ class Renderer {
     // camera blur (focus pulls etc.) is applied ONCE to the whole content layer — a blur filter on every
     // individual draw call is extremely slow when a layout draws many text rows
     let layerBlur = 0, LX = null;
+    const textBlend = (bgm && bgm.textBlendMode && bgm.textBlendMode !== 'normal') ? bgm.textBlendMode : null;
     if (allowFilter && mainCut && J.CAMERA[mainCut.cam] && mainCut.cam !== 'push') {
       try {
         const e0 = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo });
         const c0 = J.CAMERA[mainCut.cam].get(e0, mainCut.camP || {});
         if (c0 && c0.blur > 0.4) layerBlur = c0.blur;
       } catch (e) {}
-      if (layerBlur) {
-        const L = this.ensure(this.camLayer || (this.camLayer = mk(2, 2)), cw, ch);
-        LX = L.getContext('2d'); LX.setTransform(1, 0, 0, 1, 0, 0); LX.globalAlpha = 1; LX.globalCompositeOperation = 'source-over'; LX.filter = 'none';
-        LX.clearRect(0, 0, cw, ch); LX.setTransform(scale, 0, 0, scale, 0, 0);
-      }
+    }
+    if (layerBlur || textBlend) {
+      const L = this.ensure(this.camLayer || (this.camLayer = mk(2, 2)), cw, ch);
+      LX = L.getContext('2d'); LX.setTransform(1, 0, 0, 1, 0, 0); LX.globalAlpha = 1; LX.globalCompositeOperation = 'source-over'; LX.filter = 'none';
+      LX.clearRect(0, 0, cw, ch); LX.setTransform(scale, 0, 0, scale, 0, 0);
     }
     for (const P of passes) {
       if (P.pass !== 'main' && !ghostOn) continue;
@@ -166,8 +210,11 @@ class Renderer {
       if (P.pass === 'main') { mainEnv = env; }
     }
     if (LX) {
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-      ctx.filter = `blur(${(layerBlur * scale).toFixed(1)}px)`; ctx.drawImage(LX.canvas, 0, 0); ctx.restore();
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = textBlend ? (J.BLEND_MAP[textBlend] || 'source-over') : 'source-over';
+      if (layerBlur) ctx.filter = `blur(${(layerBlur * scale).toFixed(1)}px)`;
+      ctx.drawImage(LX.canvas, 0, 0);
+      ctx.restore();
     }
     // ---------- cut-to-cut transition: composite the previous cut's resting frame with this one ----------
     if (!opt.noTrans && mainCut && mainCut.trans && J.TRANS[mainCut.trans] && mainCut.index > 0) {

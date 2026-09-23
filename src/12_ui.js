@@ -12,7 +12,7 @@ const ICON = {
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
 };
 
-const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2 };
+const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null };
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
@@ -35,6 +35,7 @@ function mergeProject(p) {
   const o = Object.assign(d, p || {});
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
+  o.bgMedia = Object.assign(J.defaultProject().bgMedia || {}, (p && p.bgMedia) || {});
   const en = J.defaultProject().enabled;
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
@@ -149,6 +150,7 @@ function tick(now) {
     }
     S.t = t; S.need = true;
   }
+  if (S.playing && typeof J !== 'undefined' && J.bgMedia && J.bgMedia.type === 'video') S.need = true;
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
@@ -159,14 +161,25 @@ function updateTimeUI() {
 function play() {
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.play) {
+    const v = J.bgMedia.element;
+    if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
+    v.play().catch(() => {});
+  }
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
 }
 function pause() {
   S.playing = false; AP.stop();
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
+    J.bgMedia.element.pause();
+  }
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && isFinite(J.bgMedia.element.duration) && J.bgMedia.element.duration > 0) {
+    J.bgMedia.element.currentTime = S.t % J.bgMedia.element.duration;
+  }
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
   S.need = true;
@@ -174,44 +187,134 @@ function seek(t) {
 
 /* ---------------- timeline ---------------- */
 const layoutHue = k => (J.LAYOUT_ORDER.indexOf(k) * 37 + 30) % 360;
+
+const tlVisSec = () => Math.max(0.1, (S.plan ? S.plan.duration : 10) / Math.max(1, S.timelineZoom || 1));
+const tlTimeFromPx = (px, w) => {
+  const vis = tlVisSec();
+  return Math.max(0, Math.min(S.plan ? S.plan.duration : 0, (px / w) * vis + S.timelineScroll));
+};
+const tlPxFromTime = (t, w) => {
+  const vis = tlVisSec();
+  return ((t - S.timelineScroll) / vis) * w;
+};
+function snapStep(vis) {
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120];
+  for (const s of steps) if (vis / s <= 14) return s;
+  return 60;
+}
+function fmtTime(t) {
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+}
+
+function hitTestTimeline(px, py, w, h, dpr) {
+  if (!S.plan || !S.plan.cuts) return null;
+  const top = h * 0.26, bot = h - 6 * dpr;
+  const handleW = 6 * dpr;
+  for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
+    const cut = S.plan.cuts[i];
+    const x0 = tlPxFromTime(cut.start, w);
+    const x1 = tlPxFromTime(cut.end, w);
+    if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', cut, index: i, x: x0 };
+    if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', cut, index: i, x: x1 };
+    if (py >= top && py <= bot && px >= x0 && px <= x1) return { type: 'move', cut, index: i };
+  }
+  return { type: 'seek' };
+}
+
 function drawTimeline() {
-  const c = $('timeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const c = $('timeline');
+  if (!c || !S.plan) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration), X = t => t / D * w;
+  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration);
+  const vis = tlVisSec();
+  // clamp scroll
+  S.timelineScroll = Math.max(0, Math.min(S.timelineScroll, Math.max(0, D - vis)));
+
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
+
+  // grid & time labels
+  const step = snapStep(vis);
+  const tStart = Math.floor(S.timelineScroll / step) * step;
+  x.strokeStyle = '#22222a'; x.lineWidth = 1;
+  x.fillStyle = '#6e6a74'; x.font = `${9 * dpr}px monospace`;
+  for (let t = tStart; t <= S.timelineScroll + vis + step; t += step) {
+    const px = Math.round(tlPxFromTime(t, w));
+    if (px < 0 || px > w) continue;
+    x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h); x.stroke();
+    x.fillText(fmtTime(t), px + 2 * dpr, 10 * dpr);
+  }
+
+  // waveform peaks
   if (S.audio && S.audio.peaks) {
     const pk = S.audio.peaks, n = pk.length, sd = S.audio.duration;
     x.fillStyle = '#2b2b33';
-    for (let i = 0; i < w; i += 2) { const t = i / w * D; if (t > sd) break; const v = pk[Math.min(n - 1, Math.floor(t / sd * n))]; const hh = v * h * 0.8; x.fillRect(i, h * 0.6 - hh / 2, 1.5, hh); }
-  }
-  const beats = S.plan.beats || [];
-  x.fillStyle = '#3a3a44';
-  for (const b of beats) { if (b > D) break; x.fillRect(Math.round(X(b)), h - 6 * dpr, 1, 6 * dpr); }
-  const top = h * 0.3, bot = h - 8 * dpr;
-  for (const cut of S.plan.cuts) {
-    const x0 = X(cut.start), x1 = X(cut.end);
-    const hue = layoutHue(cut.layout);
-    x.fillStyle = `hsla(${hue},70%,58%,0.28)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
-    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
-    if (x1 - x0 > 34 * dpr) {
-      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
-      x.save(); x.beginPath(); x.rect(x0, top, x1 - x0 - 3, bot - top); x.clip();
-      x.fillText((J.LAYOUTS[cut.layout] || {}).name || cut.layout, x0 + 5 * dpr, top + 13 * dpr); x.restore();
+    for (let i = 0; i < w; i += 2) {
+      const t = tlTimeFromPx(i, w);
+      if (t > sd) break;
+      const v = pk[Math.min(n - 1, Math.floor(t / sd * n))];
+      const hh = v * h * 0.7;
+      x.fillRect(i, h * 0.58 - hh / 2, 1.5, hh);
     }
   }
+
+  // beats
+  const beats = S.plan.beats || [];
+  x.fillStyle = '#3a3a44';
+  for (const b of beats) {
+    const px = Math.round(tlPxFromTime(b, w));
+    if (px >= 0 && px <= w) x.fillRect(px, h - 6 * dpr, 1, 6 * dpr);
+  }
+
+  // cuts
+  const top = h * 0.26, bot = h - 6 * dpr;
+  for (const cut of S.plan.cuts) {
+    const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
+    if (x1 < 0 || x0 > w) continue;
+    const hue = layoutHue(cut.layout);
+    x.fillStyle = `hsla(${hue},70%,58%,0.32)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
+    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
+    // handles
+    x.fillStyle = 'rgba(255,255,255,0.7)';
+    x.fillRect(x0, top, 2 * dpr, bot - top);
+    x.fillRect(Math.max(x0, x1 - 2 * dpr), top, 2 * dpr, bot - top);
+
+    if (x1 - x0 > 34 * dpr) {
+      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
+      x.save(); x.beginPath(); x.rect(x0 + 2 * dpr, top, Math.max(0, x1 - x0 - 4 * dpr), bot - top); x.clip();
+      const cutLabel = (J.LAYOUTS[cut.layout] || {}).name || cut.layout;
+      x.fillText(`${cutLabel} ${cut.text || ''}`, x0 + 5 * dpr, top + 13 * dpr); x.restore();
+    }
+  }
+
+  // line markers
   x.font = `${10 * dpr}px monospace`;
   for (const ln of S.plan.lines) {
-    const lx = X(ln.start);
-    x.fillStyle = '#5d5a63'; x.fillRect(lx, 0, 1, top);
-    x.fillStyle = '#8e8a94'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 12 * dpr);
+    const lx = Math.round(tlPxFromTime(ln.start, w));
+    if (lx >= 0 && lx <= w) {
+      x.fillStyle = '#ffb52a'; x.fillRect(lx, 0, 1.5 * dpr, top);
+      x.fillStyle = '#ffb52a'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 10 * dpr);
+    }
   }
-  const px = X(S.t);
-  x.fillStyle = '#f5a50c'; x.fillRect(Math.round(px) - dpr, 0, 2 * dpr, h);
+
+  // playhead
+  const px = Math.round(tlPxFromTime(S.t, w));
+  if (px >= 0 && px <= w) {
+    x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
+    x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
+  }
 }
+
 function timelineSeek(ev) {
-  const r = $('timeline').getBoundingClientRect();
-  seek((ev.clientX - r.left) / r.width * S.plan.duration);
+  const c = $('timeline');
+  const r = c.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const px = (ev.clientX - r.left) * dpr;
+  const w = c.width || (c.clientWidth * dpr);
+  seek(tlTimeFromPx(px, w));
 }
 
 /* ---------------- cut info ---------------- */
@@ -608,6 +711,23 @@ function tapNow() {
 function stopTap() { S.tap = null; $('tapPanel').hidden = true; $('btnTap').setAttribute('aria-pressed', 'false'); replan(); }
 function updateTap() { const ln = S.plan.lines[S.tap.i]; $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${ln.text}` : '—'; }
 
+function syncBgMediaUI() {
+  const bg = S.project.bgMedia || {};
+  if ($('bgFit')) $('bgFit').value = bg.fit || 'cover';
+  if ($('bgScale')) $('bgScale').value = bg.scale !== undefined ? bg.scale : 1.0;
+  if ($('bgX')) $('bgX').value = bg.x || 0;
+  if ($('bgY')) $('bgY').value = bg.y || 0;
+  if ($('bgOpacity')) $('bgOpacity').value = bg.opacity !== undefined ? bg.opacity : 1.0;
+  if ($('textBlendMode')) $('textBlendMode').value = bg.textBlendMode || 'normal';
+  if ($('bgBlendMode')) $('bgBlendMode').value = bg.bgBlendMode || 'normal';
+  const infoEl = $('bgMediaInfo');
+  if (infoEl) {
+    if (bg.type && bg.name) infoEl.textContent = `${bg.type === 'video' ? '動画' : '画像'}: ${bg.name}`;
+    else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element) infoEl.textContent = `${J.bgMedia.type === 'video' ? '動画' : '画像'}: 読み込み済み`;
+    else infoEl.textContent = '未選択';
+  }
+}
+
 /* ---------------- sync all inputs from project ---------------- */
 function syncUI() {
   $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
@@ -619,7 +739,7 @@ function syncUI() {
   $('snap').checked = !!S.project.timing.snap;
   document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
   document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); drawStyleGrid();
+  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); drawStyleGrid();
 }
 
 /* ---------------- wiring ---------------- */
@@ -654,10 +774,251 @@ function bind() {
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
   const tl = $('timeline');
-  let drag = false;
-  tl.addEventListener('pointerdown', e => { drag = true; tl.setPointerCapture(e.pointerId); timelineSeek(e); });
-  tl.addEventListener('pointermove', e => { if (drag) timelineSeek(e); });
-  tl.addEventListener('pointerup', () => { drag = false; });
+  let dragMode = null;
+  let dragData = null;
+
+  tl.addEventListener('pointerdown', e => {
+    if (!S.plan) return;
+    const r = tl.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const px = (e.clientX - r.left) * dpr;
+    const py = (e.clientY - r.top) * dpr;
+    const w = tl.width || (tl.clientWidth * dpr);
+    const h = tl.height || (tl.clientHeight * dpr);
+    const hit = hitTestTimeline(px, py, w, h, dpr);
+    tl.setPointerCapture(e.pointerId);
+
+    if (e.shiftKey || e.button === 1) {
+      dragMode = 'pan';
+      dragData = { startX: px, startScroll: S.timelineScroll };
+      return;
+    }
+
+    if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
+      remember();
+      dragMode = hit.type;
+      const c = hit.cut;
+      dragData = {
+        cutIndex: hit.index,
+        cut: c,
+        startX: px,
+        origStart: c.start,
+        origEnd: c.end,
+        origDur: c.end - c.start,
+        lineIdx: c.line
+      };
+      tl.style.cursor = 'ew-resize';
+    } else if (hit && hit.type === 'move') {
+      remember();
+      dragMode = 'move';
+      const c = hit.cut;
+      dragData = {
+        cutIndex: hit.index,
+        cut: c,
+        startX: px,
+        origStart: c.start,
+        origEnd: c.end,
+        origDur: c.end - c.start,
+        lineIdx: c.line,
+        startTime: tlTimeFromPx(px, w)
+      };
+      tl.style.cursor = 'grabbing';
+    } else {
+      dragMode = 'seek';
+      timelineSeek(e);
+    }
+  });
+
+  tl.addEventListener('pointermove', e => {
+    const r = tl.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const px = (e.clientX - r.left) * dpr;
+    const py = (e.clientY - r.top) * dpr;
+    const w = tl.width || (tl.clientWidth * dpr);
+    const h = tl.height || (tl.clientHeight * dpr);
+
+    if (!dragMode) {
+      const hit = hitTestTimeline(px, py, w, h, dpr);
+      if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
+        tl.style.cursor = 'ew-resize';
+      } else if (hit && hit.type === 'move') {
+        tl.style.cursor = 'grab';
+      } else {
+        tl.style.cursor = 'crosshair';
+      }
+      return;
+    }
+
+    if (dragMode === 'pan') {
+      const vis = tlVisSec();
+      const dxTime = ((px - dragData.startX) / w) * vis;
+      S.timelineScroll = Math.max(0, Math.min(dragData.startScroll - dxTime, Math.max(0, S.plan.duration - vis)));
+      drawTimeline();
+      return;
+    }
+
+    if (dragMode === 'seek') {
+      timelineSeek(e);
+      return;
+    }
+
+    const curTime = tlTimeFromPx(px, w);
+    const c = dragData.cut;
+
+    if (dragMode === 'trim-start') {
+      let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
+      c.start = ns;
+      c.dur = c.end - c.start;
+      if (c.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+        if (lnCuts.length && lnCuts[0] === c) {
+          S.project.timing.lineTimes[c.line] = c.start;
+          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        }
+      }
+      seek(c.start);
+      drawTimeline();
+    } else if (dragMode === 'trim-end') {
+      let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
+      c.end = ne;
+      c.dur = c.end - c.start;
+      seek(c.end);
+      drawTimeline();
+    } else if (dragMode === 'move') {
+      const delta = curTime - dragData.startTime;
+      let ns = dragData.origStart + delta;
+      let ne = dragData.origEnd + delta;
+      if (ns < 0) { ne -= ns; ns = 0; }
+      if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+      c.start = Math.max(0, ns);
+      c.end = Math.max(c.start + 0.1, ne);
+      c.dur = c.end - c.start;
+      if (c.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+        if (lnCuts.length && lnCuts[0] === c) {
+          S.project.timing.lineTimes[c.line] = c.start;
+          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        }
+      }
+      seek(c.start);
+      drawTimeline();
+    }
+  });
+
+  tl.addEventListener('pointerup', () => {
+    if (dragMode && dragMode !== 'pan' && dragMode !== 'seek') {
+      renderLines();
+      commit();
+      flushSave();
+    }
+    dragMode = null;
+    dragData = null;
+  });
+
+  tl.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (e.ctrlKey || e.altKey) {
+      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      const oldZoom = S.timelineZoom || 1;
+      setTlZoom(Math.max(1, Math.min(10, oldZoom * factor)));
+    } else {
+      const vis = tlVisSec();
+      const shift = (e.deltaY || e.deltaX) * (vis / 800) * 0.4;
+      S.timelineScroll = Math.max(0, Math.min(S.timelineScroll + shift, Math.max(0, S.plan.duration - vis)));
+      drawTimeline();
+    }
+  }, { passive: false });
+
+  function setTlZoom(z) {
+    const oldVis = tlVisSec();
+    const centerT = S.timelineScroll + oldVis / 2;
+    S.timelineZoom = z;
+    const inp = $('tlZoom'), val = $('tlZoomVal');
+    if (inp) inp.value = z.toFixed(1);
+    if (val) val.textContent = z.toFixed(1) + 'x';
+    const newVis = tlVisSec();
+    S.timelineScroll = Math.max(0, Math.min(centerT - newVis / 2, Math.max(0, S.plan.duration - newVis)));
+    drawTimeline();
+  }
+
+  if ($('tlZoom')) $('tlZoom').addEventListener('input', e => setTlZoom(parseFloat(e.target.value) || 1));
+  if ($('btnTlReset')) $('btnTlReset').addEventListener('click', () => {
+    S.timelineScroll = 0;
+    setTlZoom(1.0);
+  });
+
+  // 背景メディアUIイベント
+  if ($('bgMediaFile')) {
+    $('bgMediaFile').addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
+      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+      if (!isVideo && !isImg) { toast('画像または動画ファイルを選択してください'); return; }
+      const url = URL.createObjectURL(file);
+      if (isVideo) {
+        const v = document.createElement('video');
+        v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
+        await v.play().catch(() => {});
+        J.bgMedia = { type: 'video', element: v, ready: true, name: file.name, url };
+      } else {
+        const img = new Image();
+        img.src = url;
+        await new Promise(r => { img.onload = r; img.onerror = r; });
+        J.bgMedia = { type: 'image', element: img, ready: true, name: file.name, url };
+      }
+      if (!S.project.bgMedia) S.project.bgMedia = {};
+      S.project.bgMedia.enabled = true;
+      S.project.bgMedia.type = isVideo ? 'video' : 'image';
+      S.project.bgMedia.name = file.name;
+      ['fit', 'scale', 'x', 'y', 'opacity', 'bgBlendMode', 'textBlendMode'].forEach(k => {
+        if (S.project.bgMedia[k] !== undefined && J.bgMedia) J.bgMedia[k] = S.project.bgMedia[k];
+      });
+      syncBgMediaUI();
+      replan();
+      toast(`${isVideo ? '動画' : '画像'}背景を設定しました`);
+    });
+  }
+  if ($('btnBgMediaClear')) {
+    $('btnBgMediaClear').addEventListener('click', () => {
+      if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) { try { URL.revokeObjectURL(J.bgMedia.url); } catch(err){} }
+      if (typeof J !== 'undefined') J.bgMedia = null;
+      if (S.project.bgMedia) {
+        S.project.bgMedia.enabled = false;
+        S.project.bgMedia.name = '';
+        S.project.bgMedia.dataUrl = '';
+      }
+      syncBgMediaUI();
+      replan();
+      toast('背景メディアを解除しました');
+    });
+  }
+  const onBgParam = (key, parser) => e => {
+    if (!S.project.bgMedia) S.project.bgMedia = {};
+    S.project.bgMedia[key] = parser(e.target.value);
+    if (typeof J !== 'undefined' && J.bgMedia) J.bgMedia[key] = S.project.bgMedia[key];
+    replan();
+    flushSave();
+  };
+  if ($('bgFit')) $('bgFit').addEventListener('change', onBgParam('fit', String));
+  if ($('bgScale')) $('bgScale').addEventListener('input', onBgParam('scale', parseFloat));
+  if ($('bgX')) $('bgX').addEventListener('input', onBgParam('x', parseFloat));
+  if ($('bgY')) $('bgY').addEventListener('input', onBgParam('y', parseFloat));
+  if ($('bgOpacity')) $('bgOpacity').addEventListener('input', onBgParam('opacity', parseFloat));
+  if ($('textBlendMode')) $('textBlendMode').addEventListener('change', onBgParam('textBlendMode', String));
+  if ($('bgBlendMode')) $('bgBlendMode').addEventListener('change', onBgParam('bgBlendMode', String));
+  if ($('btnBgResetTransform')) {
+    $('btnBgResetTransform').addEventListener('click', () => {
+      if (!S.project.bgMedia) S.project.bgMedia = {};
+      Object.assign(S.project.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
+      if (typeof J !== 'undefined' && J.bgMedia) Object.assign(J.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
+      syncBgMediaUI();
+      replan();
+      toast('変形をリセットしました');
+    });
+  }
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.tabpane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });

@@ -81,7 +81,12 @@
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
-      <canvas id="timeline" aria-label="タイムライン（クリックで移動）"></canvas>
+      <div class="tl-toolbar">
+        <label class="tl-zoom">ズーム <input id="tlZoom" type="range" min="1" max="10" step="0.1" value="1"><span id="tlZoomVal" class="mono">1.0x</span></label>
+        <button id="btnTlReset" class="ghost small" title="ズームと位置をリセット">全体表示</button>
+        <span class="tl-hint muted">境界ドラッグ:伸縮 / 本体ドラッグ:移動 / ホイール:スクロール</span>
+      </div>
+      <canvas id="timeline" aria-label="タイムライン（ドラッグでトリム・移動）"></canvas>
       <div class="cutinfo" id="cutInfo"></div>
     </section>
 
@@ -132,6 +137,7 @@
       </div>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="style" aria-selected="true">スタイル</button>
+        <button role="tab" data-tab="bg" aria-selected="false">背景素材</button>
         <button role="tab" data-tab="fx" aria-selected="false">演出</button>
         <button role="tab" data-tab="tech" aria-selected="false">手法</button>
         <button role="tab" data-tab="out" aria-selected="false">書き出し</button>
@@ -156,6 +162,62 @@
         <h3>背景・文字色</h3>
         <label class="check"><input id="colorOn" type="checkbox"><span>メインの背景と文字を自分の色にする</span></label>
         <div class="color-row" id="colorRow"></div>
+      </div>
+
+      <div class="tabpane" data-pane="bg" hidden>
+        <h3>背景メディア（画像 / 動画）</h3>
+        <p class="hint">1枚の画像または動画を背景レイヤーとして配置し、位置・拡大率やPhotoshop風ブレンドモードを設定できます。</p>
+        <div class="row" style="margin-top:8px">
+          <label class="file" title="画像（jpg/png/webp）または動画（mp4/webm）">ファイルを選択<input id="bgMediaFile" type="file" accept="image/*,video/*,.mp4,.webm,.png,.jpg,.jpeg,.webp"></label>
+          <button id="btnBgMediaClear" class="ghost small">削除</button>
+        </div>
+        <div id="bgMediaInfo" class="muted mono" style="margin-top:4px">未選択</div>
+
+        <div class="fields" style="margin-top:12px">
+          <label class="field">フィット<select id="bgFit"><option value="cover">全体に拡大（Cover）</option><option value="contain">全体を収める（Contain）</option></select></label>
+          <label class="field">拡大率<input id="bgScale" type="number" min="0.1" max="5.0" step="0.05" value="1.0"></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field">位置 X (%)<input id="bgX" type="number" min="-100" max="100" step="1" value="0"></label>
+          <label class="field">位置 Y (%)<input id="bgY" type="number" min="-100" max="100" step="1" value="0"></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field">不透明度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
+        </div>
+
+        <h3>レイヤー合成（ブレンドモード）</h3>
+        <div class="fields">
+          <label class="field field-wide">文字演出レイヤーの合成<select id="textBlendMode">
+            <option value="normal">通常 (Normal)</option>
+            <option value="multiply">乗算 (Multiply)</option>
+            <option value="screen">スクリーン (Screen)</option>
+            <option value="overlay">オーバーレイ (Overlay)</option>
+            <option value="soft-light">ソフトライト (Soft Light)</option>
+            <option value="hard-light">ハードライト (Hard Light)</option>
+            <option value="color-dodge">覆い焼きカラー (Color Dodge)</option>
+            <option value="color-burn">焼き込みカラー (Color Burn)</option>
+            <option value="difference">差の絶対値 (Difference)</option>
+            <option value="exclusion">除外 (Exclusion)</option>
+            <option value="darken">比較(暗) (Darken)</option>
+            <option value="lighten">比較(明) (Lighten)</option>
+          </select></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field field-wide">背景メディア自体の合成<select id="bgBlendMode">
+            <option value="normal">通常 (Normal)</option>
+            <option value="multiply">乗算 (Multiply)</option>
+            <option value="screen">スクリーン (Screen)</option>
+            <option value="overlay">オーバーレイ (Overlay)</option>
+            <option value="soft-light">ソフトライト (Soft Light)</option>
+            <option value="difference">差の絶対値 (Difference)</option>
+          </select></label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="btnBgResetTransform" class="ghost small">変形をリセット</button>
+        </div>
       </div>
 
       <div class="tabpane" data-pane="fx" hidden>

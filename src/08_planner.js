@@ -24,6 +24,7 @@ J.defaultProject = () => ({
   overrides: {},
   colors: { enabled: false },
   fonts: {},
+  bgMedia: { enabled: false, type: 'image', dataUrl: '', x: 0, y: 0, scale: 1.0, opacity: 1.0, fit: 'cover', bgBlendMode: 'normal', textBlendMode: 'normal' },
 });
 
 /* the original (After Effects-implemented) sets, captured before any expression pack registers */
@@ -180,6 +181,7 @@ J.plan = (project, audio) => {
     duration: tm.duration, styleKey: project.style, style: st, fx, seed: project.seed,
     lines: [], cuts: [], events: [], beats: audio && audio.beats ? audio.beats.slice() : [],
     hud: fx.hud === 'on' ? true : fx.hud === 'off' ? false : !!st.hud,
+    bgMedia: project.bgMedia ? Object.assign({}, project.bgMedia, (typeof J !== 'undefined' ? J.bgMedia : null) || {}) : null,
   };
   const beats = plan.beats;
   const snap = (t) => {

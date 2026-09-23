@@ -130,7 +130,11 @@ button.tap { font: 700 18px/1 var(--mono); letter-spacing: 0.2em; padding: 16px;
 .transport .tc { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
 .transport input[type=range] { flex: 1 1 160px; accent-color: var(--amber); }
 button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
-#timeline { width: 100%; height: 76px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; touch-action: none; }
+.tl-toolbar { display: flex; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
+.tl-zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.tl-zoom input[type=range] { width: 110px; accent-color: var(--amber); }
+.tl-hint { margin-left: auto; font-size: 11px; }
+#timeline { width: 100%; height: 86px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: crosshair; touch-action: none; }
 .cutinfo { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 26px; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--line2); color: var(--text); background: var(--raised); }
 .chip b { font-weight: 500; color: var(--muted); margin-right: 5px; }
@@ -141,7 +145,7 @@ button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
 .hint { font-size: 12px; color: var(--muted); }
 
 /* ---------- right panel ---------- */
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 2; }
 .tabs button { border: 0; border-radius: 0; background: transparent; padding: 11px 4px; color: var(--muted); border-bottom: 2px solid transparent; }
 .tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--amber); }
 .tabpane { padding: 14px 16px 24px; }
@@ -369,7 +373,12 @@ dialog.terms a { color: var(--cyan); word-break: break-all; }
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
-      <canvas id="timeline" aria-label="タイムライン（クリックで移動）"></canvas>
+      <div class="tl-toolbar">
+        <label class="tl-zoom">ズーム <input id="tlZoom" type="range" min="1" max="10" step="0.1" value="1"><span id="tlZoomVal" class="mono">1.0x</span></label>
+        <button id="btnTlReset" class="ghost small" title="ズームと位置をリセット">全体表示</button>
+        <span class="tl-hint muted">境界ドラッグ:伸縮 / 本体ドラッグ:移動 / ホイール:スクロール</span>
+      </div>
+      <canvas id="timeline" aria-label="タイムライン（ドラッグでトリム・移動）"></canvas>
       <div class="cutinfo" id="cutInfo"></div>
     </section>
 
@@ -420,6 +429,7 @@ dialog.terms a { color: var(--cyan); word-break: break-all; }
       </div>
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="style" aria-selected="true">スタイル</button>
+        <button role="tab" data-tab="bg" aria-selected="false">背景素材</button>
         <button role="tab" data-tab="fx" aria-selected="false">演出</button>
         <button role="tab" data-tab="tech" aria-selected="false">手法</button>
         <button role="tab" data-tab="out" aria-selected="false">書き出し</button>
@@ -444,6 +454,62 @@ dialog.terms a { color: var(--cyan); word-break: break-all; }
         <h3>背景・文字色</h3>
         <label class="check"><input id="colorOn" type="checkbox"><span>メインの背景と文字を自分の色にする</span></label>
         <div class="color-row" id="colorRow"></div>
+      </div>
+
+      <div class="tabpane" data-pane="bg" hidden>
+        <h3>背景メディア（画像 / 動画）</h3>
+        <p class="hint">1枚の画像または動画を背景レイヤーとして配置し、位置・拡大率やPhotoshop風ブレンドモードを設定できます。</p>
+        <div class="row" style="margin-top:8px">
+          <label class="file" title="画像（jpg/png/webp）または動画（mp4/webm）">ファイルを選択<input id="bgMediaFile" type="file" accept="image/*,video/*,.mp4,.webm,.png,.jpg,.jpeg,.webp"></label>
+          <button id="btnBgMediaClear" class="ghost small">削除</button>
+        </div>
+        <div id="bgMediaInfo" class="muted mono" style="margin-top:4px">未選択</div>
+
+        <div class="fields" style="margin-top:12px">
+          <label class="field">フィット<select id="bgFit"><option value="cover">全体に拡大（Cover）</option><option value="contain">全体を収める（Contain）</option></select></label>
+          <label class="field">拡大率<input id="bgScale" type="number" min="0.1" max="5.0" step="0.05" value="1.0"></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field">位置 X (%)<input id="bgX" type="number" min="-100" max="100" step="1" value="0"></label>
+          <label class="field">位置 Y (%)<input id="bgY" type="number" min="-100" max="100" step="1" value="0"></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field">不透明度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
+        </div>
+
+        <h3>レイヤー合成（ブレンドモード）</h3>
+        <div class="fields">
+          <label class="field field-wide">文字演出レイヤーの合成<select id="textBlendMode">
+            <option value="normal">通常 (Normal)</option>
+            <option value="multiply">乗算 (Multiply)</option>
+            <option value="screen">スクリーン (Screen)</option>
+            <option value="overlay">オーバーレイ (Overlay)</option>
+            <option value="soft-light">ソフトライト (Soft Light)</option>
+            <option value="hard-light">ハードライト (Hard Light)</option>
+            <option value="color-dodge">覆い焼きカラー (Color Dodge)</option>
+            <option value="color-burn">焼き込みカラー (Color Burn)</option>
+            <option value="difference">差の絶対値 (Difference)</option>
+            <option value="exclusion">除外 (Exclusion)</option>
+            <option value="darken">比較(暗) (Darken)</option>
+            <option value="lighten">比較(明) (Lighten)</option>
+          </select></label>
+        </div>
+
+        <div class="fields" style="margin-top:8px">
+          <label class="field field-wide">背景メディア自体の合成<select id="bgBlendMode">
+            <option value="normal">通常 (Normal)</option>
+            <option value="multiply">乗算 (Multiply)</option>
+            <option value="screen">スクリーン (Screen)</option>
+            <option value="overlay">オーバーレイ (Overlay)</option>
+            <option value="soft-light">ソフトライト (Soft Light)</option>
+            <option value="difference">差の絶対値 (Difference)</option>
+          </select></label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="btnBgResetTransform" class="ghost small">変形をリセット</button>
+        </div>
       </div>
 
       <div class="tabpane" data-pane="fx" hidden>
@@ -1451,24 +1517,8 @@ J.resolveStyle = (project) => {
   }
   const fo = project.fonts || {};
   for (const role of ['display', 'serif', 'body']) if (fo[role] && J.FONTS[fo[role]]) st.fonts[role] = [fo[role]];
-  if (J.keyMode(project)) keyStyle(st);
   return st;
 };
-/* ---- 合成用の背景（グリーンバック / ブラックバック） ----
-   Every scheme becomes white-on-black (so every part behaves as on a dark background), textures go away,
-   and the renderer turns the finished frame monochrome and — for green — screens it onto pure green.
-   Black stays the "empty" colour, so a keyer (green) or a screen / luma blend (black) gives the same result. */
-J.KEY_BG = { green: '#00FF00', black: '#000000' };
-J.keyMode = project => (project && J.KEY_BG[project.keyBg] ? project.keyBg : null);
-function keyStyle(st) {
-  st.schemes = st.schemes.map(s => {
-    const o = { bg: '#000000', fg: '#FFFFFF', sub: '#D2D2D2', accent: '#FFFFFF', accent2: '#BDBDBD', ink: '#FFFFFF', dim: '#1E1E1E', ghostA: '#9A9A9A', ghostB: '#5E5E5E' };
-    if (s.grad) o.grad = ['#FFFFFF', '#A8A8A8'];
-    return o;
-  });
-  st.texture = { grain: 0, paper: 0, scan: 0 };
-  st.key = true;
-}
 function pickDefined(o, keys) { const r = {}; for (const k of keys) if (o[k]) r[k] = o[k]; return r; }
 })();
 
@@ -2892,7 +2942,6 @@ J.defaultProject = () => ({
   style: 'noir', mood: null,
   extra: false,                   // random picks may use the parts added after the first version (追加分)
   wa: true,                       // …and the 和風 motifs (提灯・障子・家紋…) — applied after 'extra'
-  keyBg: 'off',                   // 合成用の背景: 'off' | 'green' (グリーンバック) | 'black' (ブラックバック)
   seed: 20260922,
   aspect: '16:9', res: 1080, fps: 24,
   fx: { motion: 0.7, glitch: 0.55, chroma: 0.7, decor: 0.5, density: 0.55, texture: 0.6, flash: true, onTwos: true, koma: 12, hud: 'auto', bgSwitch: 0.35 },
@@ -2901,6 +2950,7 @@ J.defaultProject = () => ({
   overrides: {},
   colors: { enabled: false },
   fonts: {},
+  bgMedia: { enabled: false, type: 'image', dataUrl: '', x: 0, y: 0, scale: 1.0, opacity: 1.0, fit: 'cover', bgBlendMode: 'normal', textBlendMode: 'normal' },
 });
 
 /* the original (After Effects-implemented) sets, captured before any expression pack registers */
@@ -3057,7 +3107,7 @@ J.plan = (project, audio) => {
     duration: tm.duration, styleKey: project.style, style: st, fx, seed: project.seed,
     lines: [], cuts: [], events: [], beats: audio && audio.beats ? audio.beats.slice() : [],
     hud: fx.hud === 'on' ? true : fx.hud === 'off' ? false : !!st.hud,
-    keyBg: J.keyMode ? J.keyMode(project) : null,   // 'green' | 'black' | null — 合成用の背景
+    bgMedia: project.bgMedia ? Object.assign({}, project.bgMedia, (typeof J !== 'undefined' ? J.bgMedia : null) || {}) : null,
   };
   const beats = plan.beats;
   const snap = (t) => {
@@ -3466,6 +3516,25 @@ J.omakase = (project, rnd = Math.random) => {
 'use strict';
 const E = J.E;
 
+J.BLEND_MAP = {
+  normal: 'source-over',
+  multiply: 'multiply',
+  screen: 'screen',
+  overlay: 'overlay',
+  'soft-light': 'soft-light',
+  'hard-light': 'hard-light',
+  'color-dodge': 'color-dodge',
+  'color-burn': 'color-burn',
+  darken: 'darken',
+  lighten: 'lighten',
+  difference: 'difference',
+  exclusion: 'exclusion',
+  hue: 'hue',
+  saturation: 'saturation',
+  color: 'color',
+  luminosity: 'luminosity'
+};
+
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
 J.cutAt = (plan, t) => {
@@ -3533,9 +3602,7 @@ class Renderer {
     ctx.clearRect(0, 0, cw, ch);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     // ---------- background ----------
-    const key = plan.keyBg && J.KEY_BG && J.KEY_BG[plan.keyBg] ? plan.keyBg : null;   // 合成用: white-on-black, finished in keyFinish()
-    if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
-    else if (!opt.transparent) {
+    if (!opt.transparent) {
       ctx.fillStyle = sc.bg; ctx.fillRect(0, 0, W, H);
       const g = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H / 2, Math.hypot(W, H) * 0.6);
       const lift = J.lum(sc.bg) < 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.10)';
@@ -3549,6 +3616,30 @@ class Renderer {
         ctx.drawImage(this.paper(W, H), 0, 0, W, H);
         ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
+    }
+    // ---------- custom background media layer ----------
+    const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
+    if (!opt.transparent && bgm && bgm.element && (bgm.ready || bgm.element.videoWidth || bgm.element.naturalWidth)) {
+      ctx.save();
+      const el = bgm.element;
+      const mw = el.naturalWidth || el.videoWidth || el.width || W;
+      const mh = el.naturalHeight || el.videoHeight || el.height || H;
+      if (mw > 0 && mh > 0) {
+        const fit = bgm.fit || 'cover';
+        const baseScale = fit === 'contain' ? Math.min(W / mw, H / mh) : Math.max(W / mw, H / mh);
+        const finalScale = baseScale * (bgm.scale !== undefined ? bgm.scale : 1);
+        const cx = W / 2 + (bgm.x || 0) * (W / 100);
+        const cy = H / 2 + (bgm.y || 0) * (H / 100);
+        ctx.translate(cx, cy);
+        ctx.scale(finalScale, finalScale);
+        ctx.globalAlpha = Math.max(0, Math.min(1, bgm.opacity !== undefined ? bgm.opacity : 1));
+        const bmode = J.BLEND_MAP[bgm.bgBlendMode] || 'source-over';
+        ctx.globalCompositeOperation = bmode;
+        try {
+          ctx.drawImage(el, -mw / 2, -mh / 2, mw, mh);
+        } catch (e) {}
+      }
+      ctx.restore();
     }
     // ---------- camera & chroma amounts ----------
     const u = H / 1080;
@@ -3569,7 +3660,7 @@ class Renderer {
     const beatInfo = plan.beats && plan.beats.length ? beatAt(plan.beats, tq) : null;
     const energy = plan.energy ? plan.energy[Math.min(plan.energy.length - 1, Math.max(0, Math.floor(t * plan.energyRate)))] : null;
     // ---------- background graphic (per line) ----------
-    if (!opt.transparent && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
+    if (!opt.transparent && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
       const env = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo, bgOnly: true });
       ctx.save();
       try { J.BG[mainCut.bg].draw(env, mainCut.bgP || {}); } catch (e) { console.warn('bg', mainCut.bg, e); }
@@ -3588,17 +3679,18 @@ class Renderer {
     // camera blur (focus pulls etc.) is applied ONCE to the whole content layer — a blur filter on every
     // individual draw call is extremely slow when a layout draws many text rows
     let layerBlur = 0, LX = null;
+    const textBlend = (bgm && bgm.textBlendMode && bgm.textBlendMode !== 'normal') ? bgm.textBlendMode : null;
     if (allowFilter && mainCut && J.CAMERA[mainCut.cam] && mainCut.cam !== 'push') {
       try {
         const e0 = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo });
         const c0 = J.CAMERA[mainCut.cam].get(e0, mainCut.camP || {});
         if (c0 && c0.blur > 0.4) layerBlur = c0.blur;
       } catch (e) {}
-      if (layerBlur) {
-        const L = this.ensure(this.camLayer || (this.camLayer = mk(2, 2)), cw, ch);
-        LX = L.getContext('2d'); LX.setTransform(1, 0, 0, 1, 0, 0); LX.globalAlpha = 1; LX.globalCompositeOperation = 'source-over'; LX.filter = 'none';
-        LX.clearRect(0, 0, cw, ch); LX.setTransform(scale, 0, 0, scale, 0, 0);
-      }
+    }
+    if (layerBlur || textBlend) {
+      const L = this.ensure(this.camLayer || (this.camLayer = mk(2, 2)), cw, ch);
+      LX = L.getContext('2d'); LX.setTransform(1, 0, 0, 1, 0, 0); LX.globalAlpha = 1; LX.globalCompositeOperation = 'source-over'; LX.filter = 'none';
+      LX.clearRect(0, 0, cw, ch); LX.setTransform(scale, 0, 0, scale, 0, 0);
     }
     for (const P of passes) {
       if (P.pass !== 'main' && !ghostOn) continue;
@@ -3629,8 +3721,11 @@ class Renderer {
       if (P.pass === 'main') { mainEnv = env; }
     }
     if (LX) {
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-      ctx.filter = `blur(${(layerBlur * scale).toFixed(1)}px)`; ctx.drawImage(LX.canvas, 0, 0); ctx.restore();
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = textBlend ? (J.BLEND_MAP[textBlend] || 'source-over') : 'source-over';
+      if (layerBlur) ctx.filter = `blur(${(layerBlur * scale).toFixed(1)}px)`;
+      ctx.drawImage(LX.canvas, 0, 0);
+      ctx.restore();
     }
     // ---------- cut-to-cut transition: composite the previous cut's resting frame with this one ----------
     if (!opt.noTrans && mainCut && mainCut.trans && J.TRANS[mainCut.trans] && mainCut.index > 0) {
@@ -3655,33 +3750,6 @@ class Renderer {
     ctx.restore();
     // ---------- post ----------
     if (!opt.noPost) this.post(ctx, plan, t, tq, step, sc, scale, opt, allowFilter);
-    if (key && !opt.noPost) this.keyFinish(ctx, key, opt);
-  }
-
-  /* 合成用の背景: make the finished frame monochrome (white text + effects only) and put it on the key colour.
-     black: as rendered (black = empty).  green: screened onto #00FF00, so black → green, white stays white and
-     the soft greys (ghosts, glow, fades) turn into partial transparency when keyed — the same result as
-     screen-blending the black version. */
-  keyFinish(ctx, key, opt) {
-    const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.filter = 'none';
-    if (opt.transparent) {
-      // keep the alpha: desaturate through a copy
-      const S = this.ensure(this.scratch, cw, ch), sx = S.getContext('2d');
-      sx.setTransform(1, 0, 0, 1, 0, 0); sx.globalAlpha = 1; sx.globalCompositeOperation = 'copy';
-      if (this.filterOK) { sx.filter = 'grayscale(1)'; sx.drawImage(ctx.canvas, 0, 0); sx.filter = 'none'; }
-      else {
-        sx.drawImage(ctx.canvas, 0, 0); sx.globalCompositeOperation = 'saturation'; sx.fillStyle = '#808080'; sx.fillRect(0, 0, cw, ch);
-        sx.globalCompositeOperation = 'destination-in'; sx.drawImage(ctx.canvas, 0, 0);
-      }
-      sx.globalCompositeOperation = 'source-over';
-      ctx.globalCompositeOperation = 'copy'; ctx.drawImage(S, 0, 0);
-    } else {
-      // opaque frame: the 'saturation' blend with any grey keeps luminosity and drops colour
-      ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, cw, ch);
-      if (key === 'green') { ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = J.KEY_BG.green; ctx.fillRect(0, 0, cw, ch); }
-    }
-    ctx.restore();
   }
 
   makeEnv(ctx, plan, cut, sc, o) {
@@ -3828,7 +3896,7 @@ class Renderer {
       sx.filter = `blur(${Math.max(2, Math.round(sw / 160))}px)`; sx.globalCompositeOperation = 'copy'; sx.drawImage(ctx.canvas, 0, 0, sw, sh); sx.filter = 'none'; sx.globalCompositeOperation = 'source-over';
       ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = glow * 0.55; ctx.drawImage(Sm, 0, 0, cw, ch); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
-    if (!opt.transparent && !plan.keyBg) {
+    if (!opt.transparent) {
       // scanlines
       const scan = (st.texture.scan || 0) * (fx.texture ?? 0.6);
       if (scan > 0.03) {
@@ -4037,10 +4105,22 @@ J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signa
   const total = Math.max(1, Math.round(plan.duration * fps));
   const scale = w / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
+  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   try {
   for (let i = 0; i < total; i++) {
     if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
+    if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
+      const targetTime = (i / fps) % bgm.element.duration;
+      if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
+        bgm.element.currentTime = targetTime;
+        await new Promise(r => {
+          const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
+          bgm.element.addEventListener('seeked', onSeeked, { once: true });
+          setTimeout(r, 25);
+        });
+      }
+    }
     R.frame(ctx, plan, i / fps, { scale });
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
     venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
@@ -4108,8 +4188,20 @@ J.exportPNGZip = async ({ plan, project, transparent, onProgress, signal, every 
   const fps = plan.fps, total = Math.max(1, Math.round(plan.duration * fps));
   const zip = new ZipWriter();
   const scale = w / plan.W;
+  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   for (let i = 0; i < total; i += every) {
     if (signal && signal.aborted) throw new Error('キャンセルしました');
+    if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
+      const targetTime = (i / fps) % bgm.element.duration;
+      if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
+        bgm.element.currentTime = targetTime;
+        await new Promise(r => {
+          const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
+          bgm.element.addEventListener('seeked', onSeeked, { once: true });
+          setTimeout(r, 25);
+        });
+      }
+    }
     R.frame(ctx, plan, i / fps, { scale, transparent });
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     zip.add(`jizura_${String(i).padStart(5, '0')}.png`, new Uint8Array(await blob.arrayBuffer()));
@@ -4131,13 +4223,29 @@ J.AE_MAP = {
   decor: { crosshair: 'brackets', cropMarks: 'brackets', reticle: 'rings', radar: 'rings', progressRing: 'rings', timecodeBar: 'barcode', rulerEdge: 'grid', dimension: 'leaders', indexNum: 'counter', dateStamp: 'barcode', qrBlock: 'barcode', glitchRects: 'bars', concentricSquares: 'shapes', triangleSpin: 'shapes', lineBurst: 'sparks', plusGrid: 'grid', guides: 'grid', waveLine: 'waveform', spiralLine: 'rings', halftonePatch: 'shapes', checkerStrip: 'stripes', beatRing: 'rings', orbitDots: 'dots', constellation: 'sparks', confetti: 'shapes', petals: 'shapes', rainStreaks: 'slash', snow: 'dots', lightLeak: 'blobs', bokeh: 'blobs', speedCorner: 'slash', risingParticles: 'sparks', twinkle: 'sparks', brushStroke: 'bars', tapePieces: 'bars', scribbleCircle: 'rings', scribbleUnder: 'slash', crossOut: 'slash', highlightMark: 'bars', heartsStars: 'shapes', watermarkKanji: 'counter', verticalStrip: 'leaders', romajiLine: 'leaders', bracketsJP: 'brackets', seal: 'shapes' },
   fx: { rgbSplit: 'chroma', smear: 'slice', vhsRoll: 'slice', trackingNoise: 'slice', waveWarp: 'slice', pixelDrift: 'slice', tileShift: 'block', gridRepeat: 'block', mirrorFlash: 'block', strobe: 'invert', blackFrame: 'invert', whiteFrame: 'flash', filmBurn: 'flash', lightSweep: 'flash', panelWipe: 'flash', zoomPunch: 'zoom', whipBlur: 'zoom', posterize: 'mosaic', hueShift: 'chroma', irisTrans: 'zoom', doors: 'slice', blindsTrans: 'slice', splitSlide: 'slice', crtOff: 'flash' },
 };
-// The plan goes to the After Effects panel as-is (version 2): the panel builds every key it implements and
-// picks the closest counterpart itself (from the exported metadata / J.AE_MAP) for anything it lacks.
+// newer pack entries may declare their own counterpart as def.ae
+const aeKey = (g, k, dflt) => {
+  if ((J.CORE_ORDER[g] && J.CORE_ORDER[g].includes(k)) || (g === 'layout' && (k === 'title' || k === 'interlude'))) return k;
+  const D = J.registry(g)[k], own = D && D.ae;
+  return J.AE_MAP[g][k] || (own && J.CORE_ORDER[g].includes(own) ? own : null) || dflt;
+};
 J.planForAE = (plan, project) => {
   const clean = JSON.parse(JSON.stringify(plan, (k, v) => (k === 'energy' || k === 'buffer' || k === 'peaks' ? undefined : v)));
-  clean.version = 2;
+  let subs = 0;
+  for (const c of clean.cuts) {
+    const L = aeKey('layout', c.layout, 'center');
+    if (L !== c.layout) { c.webLayout = c.layout; c.layout = L; subs++; try { c.params = J.LAYOUTS[L].plan(J.rng(J.h(c.seed, 31)), { text: c.text, n: J.glyphCount(c.text) }, plan.style); } catch (e) { c.params = {}; } }
+    const en = aeKey('enter', c.enter, 'blur'); if (en !== c.enter) { c.webEnter = c.enter; c.enter = en; subs++; }
+    const ex = aeKey('exit', c.exit, 'blur'); if (ex !== c.exit) { c.webExit = c.exit; c.exit = ex; subs++; }
+    const ho = aeKey('hold', c.hold, 'still'); if (ho !== c.hold) { c.webHold = c.hold; c.hold = ho; }
+    const seen = new Set();
+    c.decor = (c.decor || []).map(d => { const id = aeKey('decor', d.id, null); if (id !== d.id) subs++; return id ? Object.assign({}, d, { id, webId: d.id }) : null; })
+      .filter(d => d && !seen.has(d.id) && seen.add(d.id));
+  }
+  const AE_FX = ['chroma', 'shake', 'slice', 'block', 'invert', 'flash', 'zoom', 'mosaic'];
+  clean.events = clean.events.map(ev => { const FX = J.FXE[ev.type]; if (!FX || FX.builtin) return ev; const t = J.AE_MAP.fx[ev.type] || (AE_FX.includes(FX.ae) ? FX.ae : null); return t ? Object.assign({}, ev, { type: t, webType: ev.type }) : null; }).filter(Boolean);
+  if (subs) clean.aeNote = `ブラウザ版の新しい表現 ${subs} 箇所を、AEパネルにある近い表現に置き換えています（文字加工・背景・カメラ・カット間のつなぎはAE版では未対応）`;
   clean.width = J.outputSize(project)[0]; clean.height = J.outputSize(project)[1];
-  clean.extra = project.extra === true; clean.wa = project.wa !== false;
   clean.fonts = {};
   for (const [role, keys] of Object.entries(plan.style.fonts)) clean.fonts[role] = keys.map(k => J.FONTS[k] ? J.FONTS[k].label : k);
   clean.fontTable = Object.fromEntries(Object.entries(J.FONTS).map(([k, f]) => [k, { label: f.label, family: f.family.replace(/"/g, ''), weight: f.weight, kind: f.kind }]));
@@ -28696,7 +28804,7 @@ const ICON = {
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
 };
 
-const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2 };
+const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null };
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
@@ -28719,6 +28827,7 @@ function mergeProject(p) {
   const o = Object.assign(d, p || {});
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
+  o.bgMedia = Object.assign(J.defaultProject().bgMedia || {}, (p && p.bgMedia) || {});
   const en = J.defaultProject().enabled;
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
@@ -28833,6 +28942,7 @@ function tick(now) {
     }
     S.t = t; S.need = true;
   }
+  if (S.playing && typeof J !== 'undefined' && J.bgMedia && J.bgMedia.type === 'video') S.need = true;
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
@@ -28843,14 +28953,25 @@ function updateTimeUI() {
 function play() {
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.play) {
+    const v = J.bgMedia.element;
+    if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
+    v.play().catch(() => {});
+  }
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
 }
 function pause() {
   S.playing = false; AP.stop();
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
+    J.bgMedia.element.pause();
+  }
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
+  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && isFinite(J.bgMedia.element.duration) && J.bgMedia.element.duration > 0) {
+    J.bgMedia.element.currentTime = S.t % J.bgMedia.element.duration;
+  }
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
   S.need = true;
@@ -28858,44 +28979,134 @@ function seek(t) {
 
 /* ---------------- timeline ---------------- */
 const layoutHue = k => (J.LAYOUT_ORDER.indexOf(k) * 37 + 30) % 360;
+
+const tlVisSec = () => Math.max(0.1, (S.plan ? S.plan.duration : 10) / Math.max(1, S.timelineZoom || 1));
+const tlTimeFromPx = (px, w) => {
+  const vis = tlVisSec();
+  return Math.max(0, Math.min(S.plan ? S.plan.duration : 0, (px / w) * vis + S.timelineScroll));
+};
+const tlPxFromTime = (t, w) => {
+  const vis = tlVisSec();
+  return ((t - S.timelineScroll) / vis) * w;
+};
+function snapStep(vis) {
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120];
+  for (const s of steps) if (vis / s <= 14) return s;
+  return 60;
+}
+function fmtTime(t) {
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+}
+
+function hitTestTimeline(px, py, w, h, dpr) {
+  if (!S.plan || !S.plan.cuts) return null;
+  const top = h * 0.26, bot = h - 6 * dpr;
+  const handleW = 6 * dpr;
+  for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
+    const cut = S.plan.cuts[i];
+    const x0 = tlPxFromTime(cut.start, w);
+    const x1 = tlPxFromTime(cut.end, w);
+    if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', cut, index: i, x: x0 };
+    if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', cut, index: i, x: x1 };
+    if (py >= top && py <= bot && px >= x0 && px <= x1) return { type: 'move', cut, index: i };
+  }
+  return { type: 'seek' };
+}
+
 function drawTimeline() {
-  const c = $('timeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const c = $('timeline');
+  if (!c || !S.plan) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration), X = t => t / D * w;
+  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration);
+  const vis = tlVisSec();
+  // clamp scroll
+  S.timelineScroll = Math.max(0, Math.min(S.timelineScroll, Math.max(0, D - vis)));
+
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
+
+  // grid & time labels
+  const step = snapStep(vis);
+  const tStart = Math.floor(S.timelineScroll / step) * step;
+  x.strokeStyle = '#22222a'; x.lineWidth = 1;
+  x.fillStyle = '#6e6a74'; x.font = `${9 * dpr}px monospace`;
+  for (let t = tStart; t <= S.timelineScroll + vis + step; t += step) {
+    const px = Math.round(tlPxFromTime(t, w));
+    if (px < 0 || px > w) continue;
+    x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h); x.stroke();
+    x.fillText(fmtTime(t), px + 2 * dpr, 10 * dpr);
+  }
+
+  // waveform peaks
   if (S.audio && S.audio.peaks) {
     const pk = S.audio.peaks, n = pk.length, sd = S.audio.duration;
     x.fillStyle = '#2b2b33';
-    for (let i = 0; i < w; i += 2) { const t = i / w * D; if (t > sd) break; const v = pk[Math.min(n - 1, Math.floor(t / sd * n))]; const hh = v * h * 0.8; x.fillRect(i, h * 0.6 - hh / 2, 1.5, hh); }
-  }
-  const beats = S.plan.beats || [];
-  x.fillStyle = '#3a3a44';
-  for (const b of beats) { if (b > D) break; x.fillRect(Math.round(X(b)), h - 6 * dpr, 1, 6 * dpr); }
-  const top = h * 0.3, bot = h - 8 * dpr;
-  for (const cut of S.plan.cuts) {
-    const x0 = X(cut.start), x1 = X(cut.end);
-    const hue = layoutHue(cut.layout);
-    x.fillStyle = `hsla(${hue},70%,58%,0.28)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
-    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
-    if (x1 - x0 > 34 * dpr) {
-      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
-      x.save(); x.beginPath(); x.rect(x0, top, x1 - x0 - 3, bot - top); x.clip();
-      x.fillText((J.LAYOUTS[cut.layout] || {}).name || cut.layout, x0 + 5 * dpr, top + 13 * dpr); x.restore();
+    for (let i = 0; i < w; i += 2) {
+      const t = tlTimeFromPx(i, w);
+      if (t > sd) break;
+      const v = pk[Math.min(n - 1, Math.floor(t / sd * n))];
+      const hh = v * h * 0.7;
+      x.fillRect(i, h * 0.58 - hh / 2, 1.5, hh);
     }
   }
+
+  // beats
+  const beats = S.plan.beats || [];
+  x.fillStyle = '#3a3a44';
+  for (const b of beats) {
+    const px = Math.round(tlPxFromTime(b, w));
+    if (px >= 0 && px <= w) x.fillRect(px, h - 6 * dpr, 1, 6 * dpr);
+  }
+
+  // cuts
+  const top = h * 0.26, bot = h - 6 * dpr;
+  for (const cut of S.plan.cuts) {
+    const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
+    if (x1 < 0 || x0 > w) continue;
+    const hue = layoutHue(cut.layout);
+    x.fillStyle = `hsla(${hue},70%,58%,0.32)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
+    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
+    // handles
+    x.fillStyle = 'rgba(255,255,255,0.7)';
+    x.fillRect(x0, top, 2 * dpr, bot - top);
+    x.fillRect(Math.max(x0, x1 - 2 * dpr), top, 2 * dpr, bot - top);
+
+    if (x1 - x0 > 34 * dpr) {
+      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
+      x.save(); x.beginPath(); x.rect(x0 + 2 * dpr, top, Math.max(0, x1 - x0 - 4 * dpr), bot - top); x.clip();
+      const cutLabel = (J.LAYOUTS[cut.layout] || {}).name || cut.layout;
+      x.fillText(`${cutLabel} ${cut.text || ''}`, x0 + 5 * dpr, top + 13 * dpr); x.restore();
+    }
+  }
+
+  // line markers
   x.font = `${10 * dpr}px monospace`;
   for (const ln of S.plan.lines) {
-    const lx = X(ln.start);
-    x.fillStyle = '#5d5a63'; x.fillRect(lx, 0, 1, top);
-    x.fillStyle = '#8e8a94'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 12 * dpr);
+    const lx = Math.round(tlPxFromTime(ln.start, w));
+    if (lx >= 0 && lx <= w) {
+      x.fillStyle = '#ffb52a'; x.fillRect(lx, 0, 1.5 * dpr, top);
+      x.fillStyle = '#ffb52a'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 10 * dpr);
+    }
   }
-  const px = X(S.t);
-  x.fillStyle = '#f5a50c'; x.fillRect(Math.round(px) - dpr, 0, 2 * dpr, h);
+
+  // playhead
+  const px = Math.round(tlPxFromTime(S.t, w));
+  if (px >= 0 && px <= w) {
+    x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
+    x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
+  }
 }
+
 function timelineSeek(ev) {
-  const r = $('timeline').getBoundingClientRect();
-  seek((ev.clientX - r.left) / r.width * S.plan.duration);
+  const c = $('timeline');
+  const r = c.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const px = (ev.clientX - r.left) * dpr;
+  const w = c.width || (c.clientWidth * dpr);
+  seek(tlTimeFromPx(px, w));
 }
 
 /* ---------------- cut info ---------------- */
@@ -29229,11 +29440,6 @@ function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
   $('eAspect').value = S.project.aspect; $('eRes').value = String(S.project.res); $('eFps').value = String(S.project.fps);
   $('outQuality').value = S.project.quality || 'high'; $('outAudio').checked = S.project.includeAudio !== false;
-  const k = J.keyMode(S.project) || 'off';
-  $('outKey').value = k; $('eKey').value = k;
-  const kb = $('keyBadge');
-  kb.hidden = k === 'off';
-  if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
 }
 async function codecNote() {
   const [w, h] = J.outputSize(S.project);
@@ -29243,10 +29449,7 @@ async function codecNote() {
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
 const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
-function baseName() {
-  const k = J.keyMode(S.project);
-  return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
-}
+function baseName() { return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura'); }
 async function runExport(kind) {
   if (S.exporting) return;
   pause();
@@ -29300,6 +29503,23 @@ function tapNow() {
 function stopTap() { S.tap = null; $('tapPanel').hidden = true; $('btnTap').setAttribute('aria-pressed', 'false'); replan(); }
 function updateTap() { const ln = S.plan.lines[S.tap.i]; $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${ln.text}` : '—'; }
 
+function syncBgMediaUI() {
+  const bg = S.project.bgMedia || {};
+  if ($('bgFit')) $('bgFit').value = bg.fit || 'cover';
+  if ($('bgScale')) $('bgScale').value = bg.scale !== undefined ? bg.scale : 1.0;
+  if ($('bgX')) $('bgX').value = bg.x || 0;
+  if ($('bgY')) $('bgY').value = bg.y || 0;
+  if ($('bgOpacity')) $('bgOpacity').value = bg.opacity !== undefined ? bg.opacity : 1.0;
+  if ($('textBlendMode')) $('textBlendMode').value = bg.textBlendMode || 'normal';
+  if ($('bgBlendMode')) $('bgBlendMode').value = bg.bgBlendMode || 'normal';
+  const infoEl = $('bgMediaInfo');
+  if (infoEl) {
+    if (bg.type && bg.name) infoEl.textContent = `${bg.type === 'video' ? '動画' : '画像'}: ${bg.name}`;
+    else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element) infoEl.textContent = `${J.bgMedia.type === 'video' ? '動画' : '画像'}: 読み込み済み`;
+    else infoEl.textContent = '未選択';
+  }
+}
+
 /* ---------------- sync all inputs from project ---------------- */
 function syncUI() {
   $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
@@ -29311,7 +29531,7 @@ function syncUI() {
   $('snap').checked = !!S.project.timing.snap;
   document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
   document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); drawStyleGrid();
+  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); drawStyleGrid();
 }
 
 /* ---------------- wiring ---------------- */
@@ -29346,10 +29566,251 @@ function bind() {
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
   const tl = $('timeline');
-  let drag = false;
-  tl.addEventListener('pointerdown', e => { drag = true; tl.setPointerCapture(e.pointerId); timelineSeek(e); });
-  tl.addEventListener('pointermove', e => { if (drag) timelineSeek(e); });
-  tl.addEventListener('pointerup', () => { drag = false; });
+  let dragMode = null;
+  let dragData = null;
+
+  tl.addEventListener('pointerdown', e => {
+    if (!S.plan) return;
+    const r = tl.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const px = (e.clientX - r.left) * dpr;
+    const py = (e.clientY - r.top) * dpr;
+    const w = tl.width || (tl.clientWidth * dpr);
+    const h = tl.height || (tl.clientHeight * dpr);
+    const hit = hitTestTimeline(px, py, w, h, dpr);
+    tl.setPointerCapture(e.pointerId);
+
+    if (e.shiftKey || e.button === 1) {
+      dragMode = 'pan';
+      dragData = { startX: px, startScroll: S.timelineScroll };
+      return;
+    }
+
+    if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
+      remember();
+      dragMode = hit.type;
+      const c = hit.cut;
+      dragData = {
+        cutIndex: hit.index,
+        cut: c,
+        startX: px,
+        origStart: c.start,
+        origEnd: c.end,
+        origDur: c.end - c.start,
+        lineIdx: c.line
+      };
+      tl.style.cursor = 'ew-resize';
+    } else if (hit && hit.type === 'move') {
+      remember();
+      dragMode = 'move';
+      const c = hit.cut;
+      dragData = {
+        cutIndex: hit.index,
+        cut: c,
+        startX: px,
+        origStart: c.start,
+        origEnd: c.end,
+        origDur: c.end - c.start,
+        lineIdx: c.line,
+        startTime: tlTimeFromPx(px, w)
+      };
+      tl.style.cursor = 'grabbing';
+    } else {
+      dragMode = 'seek';
+      timelineSeek(e);
+    }
+  });
+
+  tl.addEventListener('pointermove', e => {
+    const r = tl.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const px = (e.clientX - r.left) * dpr;
+    const py = (e.clientY - r.top) * dpr;
+    const w = tl.width || (tl.clientWidth * dpr);
+    const h = tl.height || (tl.clientHeight * dpr);
+
+    if (!dragMode) {
+      const hit = hitTestTimeline(px, py, w, h, dpr);
+      if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
+        tl.style.cursor = 'ew-resize';
+      } else if (hit && hit.type === 'move') {
+        tl.style.cursor = 'grab';
+      } else {
+        tl.style.cursor = 'crosshair';
+      }
+      return;
+    }
+
+    if (dragMode === 'pan') {
+      const vis = tlVisSec();
+      const dxTime = ((px - dragData.startX) / w) * vis;
+      S.timelineScroll = Math.max(0, Math.min(dragData.startScroll - dxTime, Math.max(0, S.plan.duration - vis)));
+      drawTimeline();
+      return;
+    }
+
+    if (dragMode === 'seek') {
+      timelineSeek(e);
+      return;
+    }
+
+    const curTime = tlTimeFromPx(px, w);
+    const c = dragData.cut;
+
+    if (dragMode === 'trim-start') {
+      let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
+      c.start = ns;
+      c.dur = c.end - c.start;
+      if (c.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+        if (lnCuts.length && lnCuts[0] === c) {
+          S.project.timing.lineTimes[c.line] = c.start;
+          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        }
+      }
+      seek(c.start);
+      drawTimeline();
+    } else if (dragMode === 'trim-end') {
+      let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
+      c.end = ne;
+      c.dur = c.end - c.start;
+      seek(c.end);
+      drawTimeline();
+    } else if (dragMode === 'move') {
+      const delta = curTime - dragData.startTime;
+      let ns = dragData.origStart + delta;
+      let ne = dragData.origEnd + delta;
+      if (ns < 0) { ne -= ns; ns = 0; }
+      if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+      c.start = Math.max(0, ns);
+      c.end = Math.max(c.start + 0.1, ne);
+      c.dur = c.end - c.start;
+      if (c.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+        if (lnCuts.length && lnCuts[0] === c) {
+          S.project.timing.lineTimes[c.line] = c.start;
+          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        }
+      }
+      seek(c.start);
+      drawTimeline();
+    }
+  });
+
+  tl.addEventListener('pointerup', () => {
+    if (dragMode && dragMode !== 'pan' && dragMode !== 'seek') {
+      renderLines();
+      commit();
+      flushSave();
+    }
+    dragMode = null;
+    dragData = null;
+  });
+
+  tl.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (e.ctrlKey || e.altKey) {
+      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      const oldZoom = S.timelineZoom || 1;
+      setTlZoom(Math.max(1, Math.min(10, oldZoom * factor)));
+    } else {
+      const vis = tlVisSec();
+      const shift = (e.deltaY || e.deltaX) * (vis / 800) * 0.4;
+      S.timelineScroll = Math.max(0, Math.min(S.timelineScroll + shift, Math.max(0, S.plan.duration - vis)));
+      drawTimeline();
+    }
+  }, { passive: false });
+
+  function setTlZoom(z) {
+    const oldVis = tlVisSec();
+    const centerT = S.timelineScroll + oldVis / 2;
+    S.timelineZoom = z;
+    const inp = $('tlZoom'), val = $('tlZoomVal');
+    if (inp) inp.value = z.toFixed(1);
+    if (val) val.textContent = z.toFixed(1) + 'x';
+    const newVis = tlVisSec();
+    S.timelineScroll = Math.max(0, Math.min(centerT - newVis / 2, Math.max(0, S.plan.duration - newVis)));
+    drawTimeline();
+  }
+
+  if ($('tlZoom')) $('tlZoom').addEventListener('input', e => setTlZoom(parseFloat(e.target.value) || 1));
+  if ($('btnTlReset')) $('btnTlReset').addEventListener('click', () => {
+    S.timelineScroll = 0;
+    setTlZoom(1.0);
+  });
+
+  // 背景メディアUIイベント
+  if ($('bgMediaFile')) {
+    $('bgMediaFile').addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
+      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+      if (!isVideo && !isImg) { toast('画像または動画ファイルを選択してください'); return; }
+      const url = URL.createObjectURL(file);
+      if (isVideo) {
+        const v = document.createElement('video');
+        v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
+        await v.play().catch(() => {});
+        J.bgMedia = { type: 'video', element: v, ready: true, name: file.name, url };
+      } else {
+        const img = new Image();
+        img.src = url;
+        await new Promise(r => { img.onload = r; img.onerror = r; });
+        J.bgMedia = { type: 'image', element: img, ready: true, name: file.name, url };
+      }
+      if (!S.project.bgMedia) S.project.bgMedia = {};
+      S.project.bgMedia.enabled = true;
+      S.project.bgMedia.type = isVideo ? 'video' : 'image';
+      S.project.bgMedia.name = file.name;
+      ['fit', 'scale', 'x', 'y', 'opacity', 'bgBlendMode', 'textBlendMode'].forEach(k => {
+        if (S.project.bgMedia[k] !== undefined && J.bgMedia) J.bgMedia[k] = S.project.bgMedia[k];
+      });
+      syncBgMediaUI();
+      replan();
+      toast(`${isVideo ? '動画' : '画像'}背景を設定しました`);
+    });
+  }
+  if ($('btnBgMediaClear')) {
+    $('btnBgMediaClear').addEventListener('click', () => {
+      if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) { try { URL.revokeObjectURL(J.bgMedia.url); } catch(err){} }
+      if (typeof J !== 'undefined') J.bgMedia = null;
+      if (S.project.bgMedia) {
+        S.project.bgMedia.enabled = false;
+        S.project.bgMedia.name = '';
+        S.project.bgMedia.dataUrl = '';
+      }
+      syncBgMediaUI();
+      replan();
+      toast('背景メディアを解除しました');
+    });
+  }
+  const onBgParam = (key, parser) => e => {
+    if (!S.project.bgMedia) S.project.bgMedia = {};
+    S.project.bgMedia[key] = parser(e.target.value);
+    if (typeof J !== 'undefined' && J.bgMedia) J.bgMedia[key] = S.project.bgMedia[key];
+    replan();
+    flushSave();
+  };
+  if ($('bgFit')) $('bgFit').addEventListener('change', onBgParam('fit', String));
+  if ($('bgScale')) $('bgScale').addEventListener('input', onBgParam('scale', parseFloat));
+  if ($('bgX')) $('bgX').addEventListener('input', onBgParam('x', parseFloat));
+  if ($('bgY')) $('bgY').addEventListener('input', onBgParam('y', parseFloat));
+  if ($('bgOpacity')) $('bgOpacity').addEventListener('input', onBgParam('opacity', parseFloat));
+  if ($('textBlendMode')) $('textBlendMode').addEventListener('change', onBgParam('textBlendMode', String));
+  if ($('bgBlendMode')) $('bgBlendMode').addEventListener('change', onBgParam('bgBlendMode', String));
+  if ($('btnBgResetTransform')) {
+    $('btnBgResetTransform').addEventListener('click', () => {
+      if (!S.project.bgMedia) S.project.bgMedia = {};
+      Object.assign(S.project.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
+      if (typeof J !== 'undefined' && J.bgMedia) Object.assign(J.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
+      syncBgMediaUI();
+      replan();
+      toast('変形をリセットしました');
+    });
+  }
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.tabpane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
@@ -29398,11 +29859,6 @@ function bind() {
   ['outRes', 'eRes'].forEach(id => $(id).addEventListener('change', e => { S.project.res = +e.target.value; syncOut(); autosave(); codecNote(); }));
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
   $('outQuality').addEventListener('change', e => { S.project.quality = e.target.value; autosave(); });
-  ['outKey', 'eKey'].forEach(id => $(id).addEventListener('change', e => {
-    S.project.keyBg = e.target.value; syncOut(); replan(); flushSave();
-    const k = J.keyMode(S.project);
-    toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
-  }));
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   $('btnPNG').addEventListener('click', () => runExport('png'));
