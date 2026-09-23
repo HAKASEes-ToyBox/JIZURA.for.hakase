@@ -12,7 +12,8 @@ const ICON = {
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
 };
 
-const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null };
+const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null, selectedBlock: null };
+window.S = S;
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
@@ -208,18 +209,54 @@ function fmtTime(t) {
   return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
 }
 
+function getTrackLayout(h, dpr) {
+  const rulerH = 16 * dpr;
+  const t0Top = 18 * dpr, t0H = 42 * dpr, t0Bot = t0Top + t0H;
+  const t1Top = 62 * dpr, t1H = 40 * dpr, t1Bot = t1Top + t1H;
+  const t2Top = 104 * dpr, t2H = 40 * dpr, t2Bot = t2Top + t2H;
+  return { rulerH, t0Top, t0Bot, t1Top, t1Bot, t2Top, t2Bot };
+}
+
 function hitTestTimeline(px, py, w, h, dpr) {
-  if (!S.plan || !S.plan.cuts) return null;
-  const top = h * 0.26, bot = h - 6 * dpr;
+  if (!S.plan) return null;
+  const L = getTrackLayout(h, dpr);
   const handleW = 6 * dpr;
-  for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
-    const cut = S.plan.cuts[i];
-    const x0 = tlPxFromTime(cut.start, w);
-    const x1 = tlPxFromTime(cut.end, w);
-    if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', cut, index: i, x: x0 };
-    if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', cut, index: i, x: x1 };
-    if (py >= top && py <= bot && px >= x0 && px <= x1) return { type: 'move', cut, index: i };
+
+  // Track 0: 文字PV cuts
+  if (py >= L.t0Top && py <= L.t0Bot && S.plan.cuts) {
+    for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
+      const cut = S.plan.cuts[i];
+      const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
+      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'cut', cut, index: i, x: x0 };
+      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'cut', cut, index: i, x: x1 };
+      if (px >= x0 && px <= x1) return { type: 'move', target: 'cut', cut, index: i };
+    }
   }
+
+  // Track 1: 背景画像
+  const images = (S.project && S.project.tracks && S.project.tracks.images) || [];
+  if (py >= L.t1Top && py <= L.t1Bot) {
+    for (let i = images.length - 1; i >= 0; i--) {
+      const b = images[i];
+      const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
+      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'block', track: 'images', block: b, index: i, x: x0 };
+      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'block', track: 'images', block: b, index: i, x: x1 };
+      if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'images', block: b, index: i };
+    }
+  }
+
+  // Track 2: 背景動画
+  const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
+  if (py >= L.t2Top && py <= L.t2Bot) {
+    for (let i = videos.length - 1; i >= 0; i--) {
+      const b = videos[i];
+      const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
+      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'block', track: 'videos', block: b, index: i, x: x0 };
+      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'block', track: 'videos', block: b, index: i, x: x1 };
+      if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'videos', block: b, index: i };
+    }
+  }
+
   return { type: 'seek' };
 }
 
@@ -234,9 +271,23 @@ function drawTimeline() {
   // clamp scroll
   S.timelineScroll = Math.max(0, Math.min(S.timelineScroll, Math.max(0, D - vis)));
 
+  const L = getTrackLayout(h, dpr);
+
+  // 背景全体
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
 
-  // grid & time labels
+  // トラック背景
+  x.fillStyle = '#17171d'; x.fillRect(0, L.t0Top, w, L.t0Bot - L.t0Top);
+  x.fillStyle = '#14181c'; x.fillRect(0, L.t1Top, w, L.t1Bot - L.t1Top);
+  x.fillStyle = '#191522'; x.fillRect(0, L.t2Top, w, L.t2Bot - L.t2Top);
+
+  // トラック境界線
+  x.strokeStyle = '#272733'; x.lineWidth = 1;
+  [L.rulerH, L.t0Bot, L.t1Bot, L.t2Bot].forEach(y => {
+    x.beginPath(); x.moveTo(0, y + 0.5); x.lineTo(w, y + 0.5); x.stroke();
+  });
+
+  // グリッド＆時間目盛り
   const step = snapStep(vis);
   const tStart = Math.floor(S.timelineScroll / step) * step;
   x.strokeStyle = '#22222a'; x.lineWidth = 1;
@@ -248,65 +299,133 @@ function drawTimeline() {
     x.fillText(fmtTime(t), px + 2 * dpr, 10 * dpr);
   }
 
-  // waveform peaks
+  // Track 0 (文字PV) 内の音声波形
   if (S.audio && S.audio.peaks) {
     const pk = S.audio.peaks, n = pk.length, sd = S.audio.duration;
-    x.fillStyle = '#2b2b33';
+    const t0Mid = (L.t0Top + L.t0Bot) / 2;
+    const maxH = (L.t0Bot - L.t0Top) * 0.7;
+    x.fillStyle = '#2b2b36';
     for (let i = 0; i < w; i += 2) {
       const t = tlTimeFromPx(i, w);
       if (t > sd) break;
       const v = pk[Math.min(n - 1, Math.floor(t / sd * n))];
-      const hh = v * h * 0.7;
-      x.fillRect(i, h * 0.58 - hh / 2, 1.5, hh);
+      const hh = v * maxH;
+      x.fillRect(i, t0Mid - hh / 2, 1.5, hh);
     }
   }
 
-  // beats
+  // Track 0 内のビート
   const beats = S.plan.beats || [];
-  x.fillStyle = '#3a3a44';
+  x.fillStyle = '#3a3a48';
   for (const b of beats) {
     const px = Math.round(tlPxFromTime(b, w));
-    if (px >= 0 && px <= w) x.fillRect(px, h - 6 * dpr, 1, 6 * dpr);
+    if (px >= 0 && px <= w) x.fillRect(px, L.t0Bot - 5 * dpr, 1, 5 * dpr);
   }
 
-  // cuts
-  const top = h * 0.26, bot = h - 6 * dpr;
-  for (const cut of S.plan.cuts) {
+  // Track 0: 文字PVカット
+  for (const cut of (S.plan.cuts || [])) {
     const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
     if (x1 < 0 || x0 > w) continue;
     const hue = layoutHue(cut.layout);
-    x.fillStyle = `hsla(${hue},70%,58%,0.32)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
-    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
+    x.fillStyle = `hsla(${hue},70%,58%,0.32)`; x.fillRect(x0, L.t0Top, Math.max(1, x1 - x0 - 1), L.t0Bot - L.t0Top);
+    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, L.t0Top, Math.max(1, 2 * dpr), L.t0Bot - L.t0Top);
     // handles
     x.fillStyle = 'rgba(255,255,255,0.7)';
-    x.fillRect(x0, top, 2 * dpr, bot - top);
-    x.fillRect(Math.max(x0, x1 - 2 * dpr), top, 2 * dpr, bot - top);
+    x.fillRect(x0, L.t0Top, 2 * dpr, L.t0Bot - L.t0Top);
+    x.fillRect(Math.max(x0, x1 - 2 * dpr), L.t0Top, 2 * dpr, L.t0Bot - L.t0Top);
 
     if (x1 - x0 > 34 * dpr) {
-      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
-      x.save(); x.beginPath(); x.rect(x0 + 2 * dpr, top, Math.max(0, x1 - x0 - 4 * dpr), bot - top); x.clip();
+      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px monospace`;
+      x.save(); x.beginPath(); x.rect(x0 + 2 * dpr, L.t0Top, Math.max(0, x1 - x0 - 4 * dpr), L.t0Bot - L.t0Top); x.clip();
       const cutLabel = (J.LAYOUTS[cut.layout] || {}).name || cut.layout;
-      x.fillText(`${cutLabel} ${cut.text || ''}`, x0 + 5 * dpr, top + 13 * dpr); x.restore();
+      x.fillText(`${cutLabel} ${cut.text || ''}`, x0 + 5 * dpr, L.t0Top + 13 * dpr); x.restore();
     }
   }
 
+  // Track 1: 背景画像ブロック
+  const imgBlocks = (S.project && S.project.tracks && S.project.tracks.images) || [];
+  for (let i = 0; i < imgBlocks.length; i++) {
+    const b = imgBlocks[i];
+    const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
+    if (x1 < 0 || x0 > w) continue;
+    const isSel = S.selectedBlock && S.selectedBlock.track === 'images' && S.selectedBlock.block === b;
+    x.fillStyle = isSel ? 'rgba(22, 244, 212, 0.25)' : 'rgba(20, 150, 180, 0.35)';
+    x.fillRect(x0, L.t1Top + 2 * dpr, Math.max(1, x1 - x0 - 1), L.t1Bot - L.t1Top - 4 * dpr);
+    x.strokeStyle = isSel ? '#16f4d4' : 'rgba(22, 210, 244, 0.8)';
+    x.lineWidth = isSel ? 2 * dpr : 1;
+    x.strokeRect(x0 + 0.5, L.t1Top + 2 * dpr + 0.5, Math.max(1, x1 - x0 - 1), L.t1Bot - L.t1Top - 4 * dpr);
+
+    // handles
+    x.fillStyle = isSel ? '#16f4d4' : 'rgba(255,255,255,0.6)';
+    x.fillRect(x0, L.t1Top + 2 * dpr, 2.5 * dpr, L.t1Bot - L.t1Top - 4 * dpr);
+    x.fillRect(Math.max(x0, x1 - 2.5 * dpr), L.t1Top + 2 * dpr, 2.5 * dpr, L.t1Bot - L.t1Top - 4 * dpr);
+
+    if (x1 - x0 > 24 * dpr) {
+      x.fillStyle = isSel ? '#ffffff' : 'rgba(210, 245, 255, 0.9)';
+      x.font = `${9.5 * dpr}px monospace`;
+      x.save(); x.beginPath(); x.rect(x0 + 3 * dpr, L.t1Top, Math.max(0, x1 - x0 - 6 * dpr), L.t1Bot - L.t1Top); x.clip();
+      x.fillText(`🖼️ ${b.name || '画像'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t1Top + 14 * dpr);
+      x.restore();
+    }
+  }
+
+  // Track 2: 背景動画ブロック
+  const vidBlocks = (S.project && S.project.tracks && S.project.tracks.videos) || [];
+  for (let i = 0; i < vidBlocks.length; i++) {
+    const b = vidBlocks[i];
+    const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
+    if (x1 < 0 || x0 > w) continue;
+    const isSel = S.selectedBlock && S.selectedBlock.track === 'videos' && S.selectedBlock.block === b;
+    x.fillStyle = isSel ? 'rgba(22, 244, 212, 0.25)' : 'rgba(160, 60, 220, 0.35)';
+    x.fillRect(x0, L.t2Top + 2 * dpr, Math.max(1, x1 - x0 - 1), L.t2Bot - L.t2Top - 4 * dpr);
+    x.strokeStyle = isSel ? '#16f4d4' : 'rgba(190, 90, 255, 0.8)';
+    x.lineWidth = isSel ? 2 * dpr : 1;
+    x.strokeRect(x0 + 0.5, L.t2Top + 2 * dpr + 0.5, Math.max(1, x1 - x0 - 1), L.t2Bot - L.t2Top - 4 * dpr);
+
+    // handles
+    x.fillStyle = isSel ? '#16f4d4' : 'rgba(255,255,255,0.6)';
+    x.fillRect(x0, L.t2Top + 2 * dpr, 2.5 * dpr, L.t2Bot - L.t2Top - 4 * dpr);
+    x.fillRect(Math.max(x0, x1 - 2.5 * dpr), L.t2Top + 2 * dpr, 2.5 * dpr, L.t2Bot - L.t2Top - 4 * dpr);
+
+    if (x1 - x0 > 24 * dpr) {
+      x.fillStyle = isSel ? '#ffffff' : 'rgba(240, 215, 255, 0.9)';
+      x.font = `${9.5 * dpr}px monospace`;
+      x.save(); x.beginPath(); x.rect(x0 + 3 * dpr, L.t2Top, Math.max(0, x1 - x0 - 6 * dpr), L.t2Bot - L.t2Top); x.clip();
+      x.fillText(`🎬 ${b.name || '動画'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t2Top + 14 * dpr);
+      x.restore();
+    }
+  }
+
+  // トラック名バッジ（左端オーバーレイ）
+  const drawTrackBadge = (label, top, bot, color) => {
+    x.fillStyle = 'rgba(10, 10, 14, 0.75)';
+    x.fillRect(0, top + 1, 56 * dpr, bot - top - 2);
+    x.fillStyle = color;
+    x.font = `bold ${9 * dpr}px sans-serif`;
+    x.fillText(label, 6 * dpr, top + 13 * dpr);
+  };
+  drawTrackBadge('文字PV', L.t0Top, L.t0Bot, '#e6a030');
+  drawTrackBadge('背景画像', L.t1Top, L.t1Bot, '#16c4e0');
+  drawTrackBadge('背景動画', L.t2Top, L.t2Bot, '#c060ee');
+
   // line markers
   x.font = `${10 * dpr}px monospace`;
-  for (const ln of S.plan.lines) {
+  for (const ln of (S.plan.lines || [])) {
     const lx = Math.round(tlPxFromTime(ln.start, w));
     if (lx >= 0 && lx <= w) {
-      x.fillStyle = '#ffb52a'; x.fillRect(lx, 0, 1.5 * dpr, top);
+      x.fillStyle = '#ffb52a'; x.fillRect(lx, 0, 1.5 * dpr, L.t0Top);
       x.fillStyle = '#ffb52a'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 10 * dpr);
     }
   }
 
-  // playhead
+  // playhead (全トラック縦断)
   const px = Math.round(tlPxFromTime(S.t, w));
   if (px >= 0 && px <= w) {
     x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
     x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
   }
 }
+window.drawTimeline = drawTimeline;
 
 function timelineSeek(ev) {
   const c = $('timeline');
@@ -728,6 +847,46 @@ function syncBgMediaUI() {
   }
 }
 
+/* ---------------- block inspector ---------------- */
+function syncBlockInspector() {
+  const bar = $('blockInspectorBar');
+  const btnDel = $('btnDelBlock');
+  if (!bar) return;
+  const sel = S.selectedBlock;
+  if (!sel || !sel.block) {
+    bar.hidden = true;
+    if (btnDel) btnDel.disabled = true;
+    return;
+  }
+  bar.hidden = false;
+  if (btnDel) btnDel.disabled = false;
+  const b = sel.block;
+  if ($('selBlockLabel')) $('selBlockLabel').textContent = `${sel.track === 'images' ? '画像' : '動画'}: ${b.name || '無題'}`;
+  if ($('selBlockX')) $('selBlockX').value = b.x != null ? b.x : 0;
+  if ($('selBlockY')) $('selBlockY').value = b.y != null ? b.y : 0;
+  if ($('selBlockScale')) $('selBlockScale').value = b.scale != null ? b.scale : 1.0;
+  if ($('selBlockOpacity')) $('selBlockOpacity').value = b.opacity != null ? b.opacity : 1.0;
+  if ($('selBlockBlend')) $('selBlockBlend').value = b.blendMode || 'normal';
+}
+
+function deleteSelectedBlock() {
+  if (!S.selectedBlock || !S.selectedBlock.block) return;
+  remember();
+  const { track, block } = S.selectedBlock;
+  const list = S.project.tracks && S.project.tracks[track];
+  if (list) {
+    const idx = list.indexOf(block);
+    if (idx >= 0) list.splice(idx, 1);
+  }
+  S.selectedBlock = null;
+  syncBlockInspector();
+  replan();
+  drawTimeline();
+  commit();
+  flushSave();
+  toast('ブロックを削除しました');
+}
+
 /* ---------------- sync all inputs from project ---------------- */
 function syncUI() {
   $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
@@ -739,7 +898,7 @@ function syncUI() {
   $('snap').checked = !!S.project.timing.snap;
   document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
   document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); drawStyleGrid();
+  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); syncBlockInspector(); drawStyleGrid();
 }
 
 /* ---------------- wiring ---------------- */
@@ -797,34 +956,76 @@ function bind() {
     if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
       remember();
       dragMode = hit.type;
-      const c = hit.cut;
-      dragData = {
-        cutIndex: hit.index,
-        cut: c,
-        startX: px,
-        origStart: c.start,
-        origEnd: c.end,
-        origDur: c.end - c.start,
-        lineIdx: c.line
-      };
+      if (hit.target === 'cut') {
+        S.selectedBlock = null;
+        syncBlockInspector();
+        const c = hit.cut;
+        dragData = {
+          target: 'cut',
+          cutIndex: hit.index,
+          cut: c,
+          startX: px,
+          origStart: c.start,
+          origEnd: c.end,
+          origDur: c.end - c.start,
+          lineIdx: c.line
+        };
+      } else {
+        S.selectedBlock = { track: hit.track, block: hit.block, index: hit.index };
+        syncBlockInspector();
+        const b = hit.block;
+        dragData = {
+          target: 'block',
+          track: hit.track,
+          block: b,
+          startX: px,
+          origStart: b.start,
+          origEnd: b.end,
+          origDur: b.end - b.start
+        };
+      }
       tl.style.cursor = 'ew-resize';
+      drawTimeline();
     } else if (hit && hit.type === 'move') {
       remember();
       dragMode = 'move';
-      const c = hit.cut;
-      dragData = {
-        cutIndex: hit.index,
-        cut: c,
-        startX: px,
-        origStart: c.start,
-        origEnd: c.end,
-        origDur: c.end - c.start,
-        lineIdx: c.line,
-        startTime: tlTimeFromPx(px, w)
-      };
+      if (hit.target === 'cut') {
+        S.selectedBlock = null;
+        syncBlockInspector();
+        const c = hit.cut;
+        dragData = {
+          target: 'cut',
+          cutIndex: hit.index,
+          cut: c,
+          startX: px,
+          origStart: c.start,
+          origEnd: c.end,
+          origDur: c.end - c.start,
+          lineIdx: c.line,
+          startTime: tlTimeFromPx(px, w)
+        };
+      } else {
+        S.selectedBlock = { track: hit.track, block: hit.block, index: hit.index };
+        syncBlockInspector();
+        const b = hit.block;
+        dragData = {
+          target: 'block',
+          track: hit.track,
+          block: b,
+          startX: px,
+          origStart: b.start,
+          origEnd: b.end,
+          origDur: b.end - b.start,
+          startTime: tlTimeFromPx(px, w)
+        };
+      }
       tl.style.cursor = 'grabbing';
+      drawTimeline();
     } else {
       dragMode = 'seek';
+      S.selectedBlock = null;
+      syncBlockInspector();
+      drawTimeline();
       timelineSeek(e);
     }
   });
@@ -863,53 +1064,79 @@ function bind() {
     }
 
     const curTime = tlTimeFromPx(px, w);
-    const c = dragData.cut;
 
-    if (dragMode === 'trim-start') {
-      let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
-      c.start = ns;
-      c.dur = c.end - c.start;
-      if (c.line >= 0) {
-        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
-        if (lnCuts.length && lnCuts[0] === c) {
-          S.project.timing.lineTimes[c.line] = c.start;
-          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+    if (dragData.target === 'cut') {
+      const c = dragData.cut;
+      if (dragMode === 'trim-start') {
+        let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
+        c.start = ns;
+        c.dur = c.end - c.start;
+        if (c.line >= 0) {
+          if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+          const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+          if (lnCuts.length && lnCuts[0] === c) {
+            S.project.timing.lineTimes[c.line] = c.start;
+            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+          }
         }
-      }
-      seek(c.start);
-      drawTimeline();
-    } else if (dragMode === 'trim-end') {
-      let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
-      c.end = ne;
-      c.dur = c.end - c.start;
-      seek(c.end);
-      drawTimeline();
-    } else if (dragMode === 'move') {
-      const delta = curTime - dragData.startTime;
-      let ns = dragData.origStart + delta;
-      let ne = dragData.origEnd + delta;
-      if (ns < 0) { ne -= ns; ns = 0; }
-      if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
-      c.start = Math.max(0, ns);
-      c.end = Math.max(c.start + 0.1, ne);
-      c.dur = c.end - c.start;
-      if (c.line >= 0) {
-        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-        const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
-        if (lnCuts.length && lnCuts[0] === c) {
-          S.project.timing.lineTimes[c.line] = c.start;
-          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        seek(c.start);
+        drawTimeline();
+      } else if (dragMode === 'trim-end') {
+        let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
+        c.end = ne;
+        c.dur = c.end - c.start;
+        seek(c.end);
+        drawTimeline();
+      } else if (dragMode === 'move') {
+        const delta = curTime - dragData.startTime;
+        let ns = dragData.origStart + delta;
+        let ne = dragData.origEnd + delta;
+        if (ns < 0) { ne -= ns; ns = 0; }
+        if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+        c.start = Math.max(0, ns);
+        c.end = Math.max(c.start + 0.1, ne);
+        c.dur = c.end - c.start;
+        if (c.line >= 0) {
+          if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+          const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+          if (lnCuts.length && lnCuts[0] === c) {
+            S.project.timing.lineTimes[c.line] = c.start;
+            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+          }
         }
+        seek(c.start);
+        drawTimeline();
       }
-      seek(c.start);
-      drawTimeline();
+    } else if (dragData.target === 'block') {
+      const b = dragData.block;
+      if (dragMode === 'trim-start') {
+        let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
+        b.start = ns;
+        seek(b.start);
+        drawTimeline();
+      } else if (dragMode === 'trim-end') {
+        let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
+        b.end = ne;
+        seek(b.end);
+        drawTimeline();
+      } else if (dragMode === 'move') {
+        const delta = curTime - dragData.startTime;
+        let ns = dragData.origStart + delta;
+        let ne = dragData.origEnd + delta;
+        if (ns < 0) { ne -= ns; ns = 0; }
+        if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+        b.start = Math.max(0, ns);
+        b.end = Math.max(b.start + 0.1, ne);
+        seek(b.start);
+        drawTimeline();
+      }
     }
   });
 
   tl.addEventListener('pointerup', () => {
     if (dragMode && dragMode !== 'pan' && dragMode !== 'seek') {
-      renderLines();
+      if (dragData && dragData.target === 'cut') renderLines();
+      replan();
       commit();
       flushSave();
     }
@@ -948,6 +1175,120 @@ function bind() {
     S.timelineScroll = 0;
     setTlZoom(1.0);
   });
+
+  // マルチトラック：ブロック追加・削除
+  if ($('btnAddImgBlock')) {
+    $('btnAddImgBlock').addEventListener('click', () => {
+      remember();
+      if (!S.project.tracks) S.project.tracks = { images: [], videos: [] };
+      if (!S.project.tracks.images) S.project.tracks.images = [];
+      const start = S.t;
+      const end = Math.min(S.plan.duration, start + 4.0);
+      const block = {
+        id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: '新規画像',
+        start,
+        end: Math.max(start + 0.5, end),
+        x: 0, y: 0, scale: 1.0, opacity: 1.0,
+        blendMode: 'normal',
+        fit: 'cover',
+        dataUrl: '',
+        ready: false
+      };
+      S.project.tracks.images.push(block);
+      S.selectedBlock = { track: 'images', block, index: S.project.tracks.images.length - 1 };
+      syncBlockInspector();
+      replan();
+      drawTimeline();
+      commit();
+      flushSave();
+      toast('画像ブロックを追加しました。素材を選択してください');
+      if ($('selBlockFile')) $('selBlockFile').click();
+    });
+  }
+
+  if ($('btnAddVidBlock')) {
+    $('btnAddVidBlock').addEventListener('click', () => {
+      remember();
+      if (!S.project.tracks) S.project.tracks = { images: [], videos: [] };
+      if (!S.project.tracks.videos) S.project.tracks.videos = [];
+      const start = S.t;
+      const end = Math.min(S.plan.duration, start + 5.0);
+      const block = {
+        id: 'vid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: '新規動画',
+        start,
+        end: Math.max(start + 0.5, end),
+        x: 0, y: 0, scale: 1.0, opacity: 1.0,
+        blendMode: 'normal',
+        fit: 'cover',
+        dataUrl: '',
+        ready: false
+      };
+      S.project.tracks.videos.push(block);
+      S.selectedBlock = { track: 'videos', block, index: S.project.tracks.videos.length - 1 };
+      syncBlockInspector();
+      replan();
+      drawTimeline();
+      commit();
+      flushSave();
+      toast('動画ブロックを追加しました。素材を選択してください');
+      if ($('selBlockFile')) $('selBlockFile').click();
+    });
+  }
+
+  if ($('btnDelBlock')) {
+    $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
+  }
+
+  // ブロックインスペクタパラメータ入力
+  const onBlockParam = (prop, parser) => e => {
+    if (!S.selectedBlock || !S.selectedBlock.block) return;
+    remember();
+    S.selectedBlock.block[prop] = parser(e.target.value);
+    replan();
+    drawTimeline();
+    flushSave();
+  };
+  if ($('selBlockX')) $('selBlockX').addEventListener('input', onBlockParam('x', parseFloat));
+  if ($('selBlockY')) $('selBlockY').addEventListener('input', onBlockParam('y', parseFloat));
+  if ($('selBlockScale')) $('selBlockScale').addEventListener('input', onBlockParam('scale', parseFloat));
+  if ($('selBlockOpacity')) $('selBlockOpacity').addEventListener('input', onBlockParam('opacity', parseFloat));
+  if ($('selBlockBlend')) $('selBlockBlend').addEventListener('change', onBlockParam('blendMode', String));
+
+  // ブロック素材ファイルの読み込み・差し替え
+  if ($('selBlockFile')) {
+    $('selBlockFile').addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file || !S.selectedBlock || !S.selectedBlock.block) return;
+      const b = S.selectedBlock.block;
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
+      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+      if (!isVideo && !isImg) { toast('画像または動画ファイルを選択してください'); return; }
+      const url = URL.createObjectURL(file);
+      b.name = file.name;
+      b.url = url;
+      if (isVideo) {
+        const v = document.createElement('video');
+        v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
+        await v.play().catch(() => {});
+        b.element = v;
+        b.ready = true;
+      } else {
+        const img = new Image();
+        img.src = url;
+        await new Promise(r => { img.onload = r; img.onerror = r; });
+        b.element = img;
+        b.ready = true;
+      }
+      syncBlockInspector();
+      replan();
+      drawTimeline();
+      flushSave();
+      toast(`素材「${file.name}」をブロックに設定しました`);
+      e.target.value = '';
+    });
+  }
 
   // 背景メディアUIイベント
   if ($('bgMediaFile')) {
@@ -1107,6 +1448,7 @@ function bind() {
     else if (e.code === 'ArrowRight') seek(S.t + (e.shiftKey ? 1 : 1 / S.plan.fps));
     else if (e.code === 'ArrowLeft') seek(S.t - (e.shiftKey ? 1 : 1 / S.plan.fps));
     else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey && !S.exporting) { e.preventDefault(); omakase(); }
+    else if ((e.code === 'Delete' || e.code === 'Backspace') && S.selectedBlock) { e.preventDefault(); deleteSelectedBlock(); }
   });
   window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); });
   if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); }).observe($('viewport'));

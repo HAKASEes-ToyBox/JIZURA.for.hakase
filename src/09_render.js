@@ -106,9 +106,59 @@ class Renderer {
         ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
     }
-    // ---------- custom background media layer ----------
+    // ---------- multitrack background layers (Track 2: Video -> Track 1: Image) ----------
+    const tr = plan.tracks || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
+    let hasTrackMedia = false;
+    if (!opt.transparent && tr) {
+      // 1. Track 2: Video blocks (active at time t)
+      const vBlocks = tr.videos || [];
+      const activeVideo = vBlocks.find(b => t >= b.start && t < b.end);
+      if (activeVideo && activeVideo.element && (activeVideo.ready || activeVideo.element.videoWidth)) {
+        hasTrackMedia = true;
+        const vel = activeVideo.element;
+        const vmw = vel.videoWidth || W, vmh = vel.videoHeight || H;
+        if (vmw > 0 && vmh > 0) {
+          ctx.save();
+          const fit = activeVideo.fit || 'cover';
+          const baseScale = fit === 'contain' ? Math.min(W / vmw, H / vmh) : Math.max(W / vmw, H / vmh);
+          const finalScale = baseScale * (activeVideo.scale !== undefined ? activeVideo.scale : 1);
+          const cx = W / 2 + (activeVideo.x || 0) * (W / 100);
+          const cy = H / 2 + (activeVideo.y || 0) * (H / 100);
+          ctx.translate(cx, cy);
+          ctx.scale(finalScale, finalScale);
+          ctx.globalAlpha = Math.max(0, Math.min(1, activeVideo.opacity !== undefined ? activeVideo.opacity : 1));
+          ctx.globalCompositeOperation = J.BLEND_MAP[activeVideo.blendMode] || 'source-over';
+          try { ctx.drawImage(vel, -vmw / 2, -vmh / 2, vmw, vmh); } catch (e) {}
+          ctx.restore();
+        }
+      }
+
+      // 2. Track 1: Image blocks (active at time t)
+      const iBlocks = tr.images || [];
+      const activeImage = iBlocks.find(b => t >= b.start && t < b.end);
+      if (activeImage && activeImage.element && (activeImage.ready || activeImage.element.naturalWidth)) {
+        hasTrackMedia = true;
+        const iel = activeImage.element;
+        const imw = iel.naturalWidth || W, imh = iel.naturalHeight || H;
+        if (imw > 0 && imh > 0) {
+          ctx.save();
+          const fit = activeImage.fit || 'cover';
+          const baseScale = fit === 'contain' ? Math.min(W / imw, H / imh) : Math.max(W / imw, H / imh);
+          const finalScale = baseScale * (activeImage.scale !== undefined ? activeImage.scale : 1);
+          const cx = W / 2 + (activeImage.x || 0) * (W / 100);
+          const cy = H / 2 + (activeImage.y || 0) * (H / 100);
+          ctx.translate(cx, cy);
+          ctx.scale(finalScale, finalScale);
+          ctx.globalAlpha = Math.max(0, Math.min(1, activeImage.opacity !== undefined ? activeImage.opacity : 1));
+          ctx.globalCompositeOperation = J.BLEND_MAP[activeImage.blendMode] || 'source-over';
+          try { ctx.drawImage(iel, -imw / 2, -imh / 2, imw, imh); } catch (e) {}
+          ctx.restore();
+        }
+      }
+    }
+    // ---------- fallback: single background media layer ----------
     const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
-    if (!opt.transparent && bgm && bgm.element && (bgm.ready || bgm.element.videoWidth || bgm.element.naturalWidth)) {
+    if (!hasTrackMedia && !opt.transparent && bgm && bgm.element && (bgm.ready || bgm.element.videoWidth || bgm.element.naturalWidth)) {
       ctx.save();
       const el = bgm.element;
       const mw = el.naturalWidth || el.videoWidth || el.width || W;
