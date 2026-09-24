@@ -36,7 +36,7 @@
   --brand: "Zen Old Mincho", "Noto Serif JP", "Yu Mincho", serif;
   --r: 4px;
 }
-html, body { height: 100%; }
+html, body { height: 100%; overflow: hidden; }
 [hidden] { display: none !important; }
 body { margin: 0; background: var(--ink); color: var(--text); font: 13px/1.5 var(--ui); -webkit-font-smoothing: antialiased; }
 * { box-sizing: border-box; }
@@ -44,10 +44,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
-#app { display: flex; flex-direction: column; min-height: 100%; }
+#app { display: flex; flex-direction: column; height: 100vh; max-height: 100vh; overflow: hidden; }
 
 /* ---------- top bar ---------- */
-.bar { display: flex; align-items: center; gap: 16px; padding-block: 10px; padding-inline: 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.bar { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding-block: 10px; padding-inline: 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand .mark { font: 900 26px/1 var(--brand); letter-spacing: 0.02em; color: var(--text); text-shadow: -2px -1px 0 rgba(22,244,212,0.85), 2px 1px 0 rgba(245,165,12,0.9); }
 .brand .word { font: 600 12px/1 var(--mono); letter-spacing: 0.34em; color: var(--text); }
@@ -97,9 +97,9 @@ h2 { font-size: 11px; letter-spacing: 0.18em; color: var(--muted); }
 h3 { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); margin-top: 18px; margin-bottom: 8px; }
 
 /* ---------- workspace ---------- */
-.work { flex: 1; display: grid; grid-template-columns: minmax(270px, 330px) minmax(0, 1fr) minmax(290px, 350px); min-height: 0; }
+.work { flex: 1 1 0; display: grid; grid-template-columns: minmax(270px, 330px) minmax(0, 1fr) minmax(290px, 350px); min-height: 0; height: calc(100vh - 54px); overflow: hidden; }
 .col { min-width: 0; min-height: 0; }
-.col-left, .col-right { background: var(--panel); overflow: auto; }
+.col-left, .col-right { background: var(--panel); overflow-y: auto; overflow-x: hidden; height: 100%; }
 .col-left { border-right: 1px solid var(--line); }
 .col-right { border-left: 1px solid var(--line); }
 .sec { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
@@ -133,7 +133,7 @@ button.tap { font: 700 18px/1 var(--mono); letter-spacing: 0.2em; padding: 16px;
 .ln .cuts span:hover { color: var(--text); border-color: var(--amber); }
 
 /* ---------- stage ---------- */
-.col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
+.col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; min-height: 0; height: 100%; overflow-y: auto; overflow-x: hidden; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
 .field-wide { grid-column: span 2; }
@@ -29473,7 +29473,7 @@ function replan() {
   S.plan = J.plan(S.project, audioLike());
   langNote();
   if (S.t > S.plan.duration) S.t = 0;
-  renderLines(); sizeViewport(); drawTimeline(); updateTimeUI();
+  renderLines(); sizeViewport(); drawTimeline(); updateTimeUI(); updateCutInfo();
   S.need = true; autosave(); ensureFonts(); drawSwatch(); showNow();
   clearTimeout(warmTimer); warmTimer = setTimeout(warm, 450);
 }
@@ -29852,10 +29852,81 @@ function drawTimeline() {
     x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
     x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
   }
+
+  // ドラッグ操作中のビジュアルオーバーレイ（入れ替えハイライト & 削除ゾーン表示）
+  if (S.tlDrag) {
+    if (S.tlDrag.isDeleting) {
+      // 削除ゾーン警告バー（タイムライン上部）
+      x.fillStyle = 'rgba(235, 45, 70, 0.92)';
+      x.fillRect(0, 0, w, 22 * dpr);
+      x.fillStyle = '#ffffff';
+      x.font = `bold ${11 * dpr}px sans-serif`;
+      x.fillText('🗑️ 離して削除（直前の要素を延長して尺を自動補間）', 12 * dpr, 15 * dpr);
+
+      // 削除対象要素の赤オーバーレイ
+      let rx0 = 0, rx1 = 0, ry0 = 0, ry1 = 0;
+      if (S.tlDrag.target === 'cut' && S.tlDrag.cut) {
+        rx0 = tlPxFromTime(S.tlDrag.cut.start, w); rx1 = tlPxFromTime(S.tlDrag.cut.end, w);
+        ry0 = L.t0Top; ry1 = L.t0Bot;
+      } else if (S.tlDrag.target === 'block' && S.tlDrag.block) {
+        rx0 = tlPxFromTime(S.tlDrag.block.start, w); rx1 = tlPxFromTime(S.tlDrag.block.end, w);
+        ry0 = S.tlDrag.track === 'images' ? L.t1Top : L.t2Top;
+        ry1 = S.tlDrag.track === 'images' ? L.t1Bot : L.t2Bot;
+      }
+      x.fillStyle = 'rgba(255, 50, 70, 0.45)';
+      x.fillRect(rx0, ry0, Math.max(2, rx1 - rx0), ry1 - ry0);
+      x.strokeStyle = '#ff334b';
+      x.lineWidth = 2 * dpr;
+      x.strokeRect(rx0 + 1, ry0 + 1, Math.max(2, rx1 - rx0 - 2), ry1 - ry0 - 2);
+    } else if (S.tlDrag.swapCandidate) {
+      // スワップ対象のハイライト
+      const sc = S.tlDrag.swapCandidate;
+      let sx0 = 0, sx1 = 0, sy0 = 0, sy1 = 0;
+      if (sc.type === 'cut' && sc.cut) {
+        sx0 = tlPxFromTime(sc.cut.start, w); sx1 = tlPxFromTime(sc.cut.end, w);
+        sy0 = L.t0Top; sy1 = L.t0Bot;
+      } else if (sc.type === 'block' && sc.block) {
+        sx0 = tlPxFromTime(sc.block.start, w); sx1 = tlPxFromTime(sc.block.end, w);
+        sy0 = S.tlDrag.track === 'images' ? L.t1Top : L.t2Top;
+        sy1 = S.tlDrag.track === 'images' ? L.t1Bot : L.t2Bot;
+      }
+      x.save();
+      x.strokeStyle = '#f5a50c';
+      x.lineWidth = 2.5 * dpr;
+      x.setLineDash([4 * dpr, 3 * dpr]);
+      x.strokeRect(sx0 + 1, sy0 + 1, Math.max(4, sx1 - sx0 - 2), sy1 - sy0 - 2);
+      x.fillStyle = 'rgba(245, 165, 12, 0.2)';
+      x.fillRect(sx0, sy0, Math.max(2, sx1 - sx0), sy1 - sy0);
+      x.fillStyle = '#f5a50c';
+      x.font = `bold ${10 * dpr}px sans-serif`;
+      x.fillText('⇄ 入れ替え', sx0 + 6 * dpr, sy0 + 14 * dpr);
+      x.restore();
+    }
+  }
+
   syncBlockInspector();
 }
 window.drawTimeline = drawTimeline;
 window.syncBlockInspector = syncBlockInspector;
+
+function focusLineInList(lineIdx, smooth = true) {
+  let targetEl = null;
+  if (lineIdx === -1 && S.titleLineEl) {
+    targetEl = S.titleLineEl;
+  } else if (lineIdx >= 0 && S.lineEls && S.lineEls[lineIdx]) {
+    targetEl = S.lineEls[lineIdx];
+  }
+  if (targetEl) {
+    if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', lineIdx === -1);
+    S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === lineIdx));
+    S.curLine = lineIdx;
+    try {
+      targetEl.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
+    } catch (e) {
+      targetEl.scrollIntoView(false);
+    }
+  }
+}
 
 function timelineSeek(ev) {
   const c = $('timeline');
@@ -29863,7 +29934,12 @@ function timelineSeek(ev) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const px = (ev.clientX - r.left) * dpr;
   const w = c.width || (c.clientWidth * dpr);
-  seek(tlTimeFromPx(px, w));
+  const t = tlTimeFromPx(px, w);
+  seek(t);
+  if (S.plan) {
+    const cut = J.cutAt(S.plan, t);
+    if (cut) focusLineInList(cut.line);
+  }
 }
 
 /* ---------------- cut info ---------------- */
@@ -29987,6 +30063,7 @@ function renderLines() {
     ol.appendChild(li); S.lineEls.push(li);
   });
   $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
+  updateCutInfo();
 }
 function setOv(i, patch) {
   const cur = Object.assign({}, S.project.overrides[i] || {}, patch);
@@ -30462,7 +30539,7 @@ function bind() {
     const w = tl.width || (tl.clientWidth * dpr);
     const h = tl.height || (tl.clientHeight * dpr);
     const hit = hitTestTimeline(px, py, w, h, dpr);
-    tl.setPointerCapture(e.pointerId);
+    try { tl.setPointerCapture(e.pointerId); } catch (_) {}
 
     if (e.shiftKey || e.button === 1) {
       dragMode = 'pan';
@@ -30477,6 +30554,8 @@ function bind() {
         S.selectedBlock = null;
         syncBlockInspector();
         const c = hit.cut;
+        seek(c.start);
+        focusLineInList(c.line);
         dragData = {
           target: 'cut',
           cutIndex: hit.index,
@@ -30502,6 +30581,7 @@ function bind() {
         };
       }
       tl.style.cursor = 'ew-resize';
+      S.tlDrag = dragData;
       drawTimeline();
     } else if (hit && hit.type === 'move') {
       remember();
@@ -30510,6 +30590,8 @@ function bind() {
         S.selectedBlock = null;
         syncBlockInspector();
         const c = hit.cut;
+        seek(c.start);
+        focusLineInList(c.line);
         dragData = {
           target: 'cut',
           cutIndex: hit.index,
@@ -30519,7 +30601,9 @@ function bind() {
           origEnd: c.end,
           origDur: c.end - c.start,
           lineIdx: c.line,
-          startTime: tlTimeFromPx(px, w)
+          startTime: tlTimeFromPx(px, w),
+          isDeleting: false,
+          swapCandidate: null
         };
       } else {
         S.selectedBlock = { track: hit.track, block: hit.block, index: hit.index };
@@ -30533,10 +30617,13 @@ function bind() {
           origStart: b.start,
           origEnd: b.end,
           origDur: b.end - b.start,
-          startTime: tlTimeFromPx(px, w)
+          startTime: tlTimeFromPx(px, w),
+          isDeleting: false,
+          swapCandidate: null
         };
       }
       tl.style.cursor = 'grabbing';
+      S.tlDrag = dragData;
       drawTimeline();
     } else {
       dragMode = 'seek';
@@ -30580,6 +30667,24 @@ function bind() {
       return;
     }
 
+    // 上外へドラッグ判定（タイムラインキャンバスの上枠より上）
+    const isAbove = py < -8 * dpr;
+    if (dragMode === 'move') {
+      if (isAbove) {
+        dragData.isDeleting = true;
+        dragData.swapCandidate = null;
+        tl.style.cursor = 'no-drop';
+        S.tlDrag = dragData;
+        drawTimeline();
+        return;
+      } else {
+        if (dragData.isDeleting) {
+          dragData.isDeleting = false;
+          tl.style.cursor = 'grabbing';
+        }
+      }
+    }
+
     const curTime = tlTimeFromPx(px, w);
 
     if (dragData.target === 'cut') {
@@ -30605,23 +30710,41 @@ function bind() {
         seek(c.end);
         drawTimeline();
       } else if (dragMode === 'move') {
-        const delta = curTime - dragData.startTime;
-        let ns = dragData.origStart + delta;
-        let ne = dragData.origEnd + delta;
-        if (ns < 0) { ne -= ns; ns = 0; }
-        if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
-        c.start = Math.max(0, ns);
-        c.end = Math.max(c.start + 0.1, ne);
-        c.dur = c.end - c.start;
-        if (c.line >= 0) {
-          if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-          const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
-          if (lnCuts.length && lnCuts[0] === c) {
-            S.project.timing.lineTimes[c.line] = c.start;
-            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        // 他のカットとのスワップ判定
+        let swapCut = null, swapIdx = -1;
+        for (let i = 0; i < S.plan.cuts.length; i++) {
+          if (i === dragData.cutIndex) continue;
+          const other = S.plan.cuts[i];
+          if (curTime >= other.start && curTime <= other.end) {
+            swapCut = other;
+            swapIdx = i;
+            break;
           }
         }
-        seek(c.start);
+        if (swapIdx >= 0) {
+          dragData.swapCandidate = { type: 'cut', index: swapIdx, cut: swapCut };
+        } else {
+          dragData.swapCandidate = null;
+          // 通常の平行移動
+          const delta = curTime - dragData.startTime;
+          let ns = dragData.origStart + delta;
+          let ne = dragData.origEnd + delta;
+          if (ns < 0) { ne -= ns; ns = 0; }
+          if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+          c.start = Math.max(0, ns);
+          c.end = Math.max(c.start + 0.1, ne);
+          c.dur = c.end - c.start;
+          if (c.line >= 0) {
+            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+            const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
+            if (lnCuts.length && lnCuts[0] === c) {
+              S.project.timing.lineTimes[c.line] = c.start;
+              if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+            }
+          }
+          seek(c.start);
+        }
+        S.tlDrag = dragData;
         drawTimeline();
       }
     } else if (dragData.target === 'block') {
@@ -30637,28 +30760,214 @@ function bind() {
         seek(b.end);
         drawTimeline();
       } else if (dragMode === 'move') {
-        const delta = curTime - dragData.startTime;
-        let ns = dragData.origStart + delta;
-        let ne = dragData.origEnd + delta;
-        if (ns < 0) { ne -= ns; ns = 0; }
-        if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
-        b.start = Math.max(0, ns);
-        b.end = Math.max(b.start + 0.1, ne);
-        seek(b.start);
+        // 同トラック内の他ブロックとのスワップ判定
+        const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
+        let swapBlock = null, swapIdx = -1;
+        for (let i = 0; i < blocks.length; i++) {
+          if (i === dragData.index) continue;
+          const other = blocks[i];
+          if (curTime >= other.start && curTime <= other.end) {
+            swapBlock = other;
+            swapIdx = i;
+            break;
+          }
+        }
+        if (swapIdx >= 0) {
+          dragData.swapCandidate = { type: 'block', index: swapIdx, block: swapBlock };
+        } else {
+          dragData.swapCandidate = null;
+          const delta = curTime - dragData.startTime;
+          let ns = dragData.origStart + delta;
+          let ne = dragData.origEnd + delta;
+          if (ns < 0) { ne -= ns; ns = 0; }
+          if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
+          b.start = Math.max(0, ns);
+          b.end = Math.max(b.start + 0.1, ne);
+          seek(b.start);
+        }
+        S.tlDrag = dragData;
         drawTimeline();
       }
     }
   });
 
   tl.addEventListener('pointerup', () => {
-    if (dragMode && dragMode !== 'pan' && dragMode !== 'seek') {
-      if (dragData && dragData.target === 'cut') renderLines();
+    if (dragMode && dragMode !== 'pan' && dragMode !== 'seek' && dragData) {
+      if (dragData.isDeleting) {
+        remember();
+        if (dragData.target === 'cut') {
+          const idx = dragData.cutIndex;
+          const cut = dragData.cut;
+          const cuts = S.plan.cuts;
+          // 1. 直前の要素の終了時間を延長して隙間を自動補間
+          if (idx > 0) {
+            const prev = cuts[idx - 1];
+            prev.end = cut.end;
+            prev.dur = prev.end - prev.start;
+          } else if (cuts.length > 1) {
+            cuts[1].start = cut.start;
+            cuts[1].dur = cuts[1].end - cuts[1].start;
+          }
+          // 2. 歌詞データの更新
+          if (cut.line === -1) {
+            S.project.title = '';
+            if ($('songTitle')) $('songTitle').value = '';
+          } else if (cut.line >= 0) {
+            const rawLines = S.project.lyrics.split('\n');
+            if (rawLines[cut.line] !== undefined) {
+              const curL = rawLines[cut.line];
+              if (curL.includes('/')) {
+                const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
+                const pIdx = parts.findIndex(p => p.includes(cut.text) || cut.text.includes(p));
+                if (pIdx >= 0 && parts.length > 1) {
+                  parts.splice(pIdx, 1);
+                  rawLines[cut.line] = parts.join('/');
+                } else {
+                  rawLines.splice(cut.line, 1);
+                }
+              } else {
+                rawLines.splice(cut.line, 1);
+              }
+              S.project.lyrics = rawLines.join('\n');
+              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+              
+              if (S.project.timing && S.project.timing.lineTimes) {
+                const oldLt = S.project.timing.lineTimes;
+                const newLt = {};
+                Object.keys(oldLt).forEach(k => {
+                  const ki = parseInt(k, 10);
+                  if (ki < cut.line) newLt[ki] = oldLt[ki];
+                  else if (ki > cut.line) newLt[ki - 1] = oldLt[ki];
+                });
+                S.project.timing.lineTimes = newLt;
+              }
+              if (S.project.overrides) {
+                const oldOv = S.project.overrides;
+                const newOv = {};
+                Object.keys(oldOv).forEach(k => {
+                  const ki = parseInt(k, 10);
+                  if (ki === -1) newOv[-1] = oldOv[-1];
+                  else if (ki < cut.line) newOv[ki] = oldOv[ki];
+                  else if (ki > cut.line) newOv[ki - 1] = oldOv[ki];
+                });
+                S.project.overrides = newOv;
+              }
+            }
+          }
+          toast('カットを削除し、前のカットで尺を補間しました');
+        } else if (dragData.target === 'block') {
+          const trackName = dragData.track;
+          const blocks = (S.project && S.project.tracks && S.project.tracks[trackName]) || [];
+          const idx = dragData.index;
+          if (idx >= 0 && idx < blocks.length) {
+            const removed = blocks[idx];
+            if (idx > 0) {
+              blocks[idx - 1].end = removed.end;
+            } else if (blocks.length > 1) {
+              blocks[1].start = removed.start;
+            }
+            blocks.splice(idx, 1);
+            S.selectedBlock = null;
+            toast('ブロックを削除し、前の要素で尺を補間しました');
+          }
+        }
+      } else if (dragData.swapCandidate) {
+        remember();
+        if (dragData.target === 'cut' && dragData.swapCandidate.type === 'cut') {
+          const idxA = dragData.cutIndex;
+          const idxB = dragData.swapCandidate.index;
+          const cA = S.plan.cuts[idxA];
+          const cB = S.plan.cuts[idxB];
+          const rawLines = S.project.lyrics.split('\n');
+
+          if (cA.line >= 0 && cB.line >= 0 && cA.line !== cB.line) {
+            // 異なる歌詞行同士のスワップ
+            if (rawLines[cA.line] !== undefined && rawLines[cB.line] !== undefined) {
+              const tmp = rawLines[cA.line];
+              rawLines[cA.line] = rawLines[cB.line];
+              rawLines[cB.line] = tmp;
+              S.project.lyrics = rawLines.join('\n');
+              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+
+              if (S.project.overrides) {
+                const ovA = S.project.overrides[cA.line];
+                const ovB = S.project.overrides[cB.line];
+                if (ovB) S.project.overrides[cA.line] = ovB; else delete S.project.overrides[cA.line];
+                if (ovA) S.project.overrides[cB.line] = ovA; else delete S.project.overrides[cB.line];
+              }
+            }
+          } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
+            // 同一行内のカット（フレーズ）同士のスワップ
+            const curL = rawLines[cA.line];
+            if (curL && curL.includes('/')) {
+              const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
+              const pIdxA = parts.findIndex(p => p.includes(cA.text) || cA.text.includes(p));
+              const pIdxB = parts.findIndex(p => p.includes(cB.text) || cB.text.includes(p));
+              if (pIdxA >= 0 && pIdxB >= 0 && pIdxA !== pIdxB) {
+                const t = parts[pIdxA];
+                parts[pIdxA] = parts[pIdxB];
+                parts[pIdxB] = t;
+                rawLines[cA.line] = parts.join('/');
+                S.project.lyrics = rawLines.join('\n');
+                if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+              }
+            }
+          } else if ((cA.line === -1 || cB.line === -1) && cA.line !== cB.line) {
+            // タイトルカードと歌詞行のスワップ
+            const lIdx = cA.line === -1 ? cB.line : cA.line;
+            if (rawLines[lIdx] !== undefined) {
+              const oldTitle = S.project.title || '';
+              const oldLyric = rawLines[lIdx];
+              S.project.title = oldLyric;
+              rawLines[lIdx] = oldTitle;
+              S.project.lyrics = rawLines.join('\n');
+              if ($('songTitle')) $('songTitle').value = S.project.title;
+              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+            }
+          } else {
+            const props = ['text', 'layout', 'enter', 'exit', 'hold', 'decor', 'treat', 'cam', 'scheme', 'seed'];
+            for (const p of props) {
+              const t = cA[p];
+              cA[p] = cB[p];
+              cB[p] = t;
+            }
+          }
+          toast('カットを入れ替えました');
+        } else if (dragData.target === 'block' && dragData.swapCandidate.type === 'block') {
+          const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
+          const bA = blocks[dragData.index];
+          const bB = blocks[dragData.swapCandidate.index];
+          const keys = ['dataUrl', 'name', 'type', 'blendMode', 'fit', 'opacity', 'scale', 'x', 'y', 'keyframes'];
+          for (const k of keys) {
+            const t = bA[k];
+            bA[k] = bB[k];
+            bB[k] = t;
+          }
+          toast('ブロックを入れ替えました');
+        }
+      }
+
+      if (dragData.target === 'cut') renderLines();
       replan();
+      if (dragData.target === 'cut' && dragData.isDeleting) {
+        const deletedCutEnd = dragData.cut.end;
+        const targetIdx = dragData.cutIndex;
+        if (targetIdx > 0 && S.plan.cuts[targetIdx - 1]) {
+          const prevCut = S.plan.cuts[targetIdx - 1];
+          if (prevCut.end < deletedCutEnd) {
+            prevCut.end = deletedCutEnd;
+            prevCut.dur = prevCut.end - prevCut.start;
+          }
+        }
+      }
       commit();
       flushSave();
     }
     dragMode = null;
     dragData = null;
+    S.tlDrag = null;
+    tl.style.cursor = 'default';
+    drawTimeline();
   });
 
   tl.addEventListener('wheel', e => {
