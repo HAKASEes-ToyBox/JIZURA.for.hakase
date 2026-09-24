@@ -57,6 +57,7 @@ function mergeProject(p) {
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
   o.overrides = (p && p.overrides) || {};
+  o.rowCache = (p && p.rowCache) || {};
   o.colors = Object.assign({ enabled: false }, (p && p.colors) || {});
   o.fonts = (p && p.fonts) || {};
   o.userFonts = (p && p.userFonts) || [];
@@ -644,8 +645,11 @@ function renderLines() {
     tli.querySelector('.dice').addEventListener('click', () => {
       const cur = ov[-1] || {};
       if (cur.lock) return;
+      remember();
+      if (S.project.rowCache) delete S.project.rowCache[-1];
       setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
       replan();
+      commit('タイトル再抽選');
       seek(0.001);
     });
     tli.querySelector('.lock').addEventListener('click', () => {
@@ -691,7 +695,16 @@ function renderLines() {
     });
     li.querySelector('.txt').addEventListener('click', () => seek(ln.start + 0.001));
     li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
-    li.querySelector('.dice').addEventListener('click', () => { const cur = ov[i] || {}; setOv(i, { seed: (cur.seed | 0) + 1, lock: false }); replan(); seek(ln.start + 0.001); });
+    li.querySelector('.dice').addEventListener('click', () => {
+      const cur = ov[i] || {};
+      if (cur.lock) return;
+      remember();
+      if (S.project.rowCache) delete S.project.rowCache[i];
+      setOv(i, { seed: (cur.seed | 0) + 1, lock: false });
+      replan();
+      commit('行' + (i + 1) + '再抽選');
+      seek(ln.start + 0.001);
+    });
     li.querySelector('.lock').addEventListener('click', () => {
       const cur = ov[i] || {};
       if (cur.lock) setOv(i, { lock: false, lockedSeed: undefined });
@@ -725,7 +738,7 @@ function drawStyleGrid() {
       const b = document.createElement('button'); b.className = 'stile'; b.dataset.k = k;
       b.title = J.STYLES[k].desc;
       b.innerHTML = `<canvas width="192" height="108"></canvas><span>${J.STYLES[k].name}</span><span class="badges">${setBadges(J.STYLES[k])}</span>`;
-      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; syncUI(); replan(); commit(); });
+      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; S.project.rowCache = {}; syncUI(); replan(); commit(); });
       g.appendChild(b);
     });
   }
@@ -908,6 +921,7 @@ const UndoRedo = {
     }
   }
 };
+window.UndoRedo = UndoRedo;
 
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
@@ -916,6 +930,7 @@ function omakase() {
   remember();
   const r = J.omakase(S.project);
   Object.assign(S.project, r);
+  S.project.rowCache = {};
   fontKey = ''; syncUI(); replan(); commit();
   toast(`おまかせ：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
@@ -931,13 +946,16 @@ function rerollPart(part) {
     if (!pool.length) pool = J.STYLE_ORDER.filter(k => k !== P.style);
     P.style = pool[Math.floor(Math.random() * pool.length)];
     P.colors.enabled = false;
+    P.rowCache = {};
     msg = `スタイル：${J.STYLES[P.style].name}`;
   } else if (part === 'mood') {
     const r = J.omakase(P);
     Object.assign(P, { mood: r.mood, fx: r.fx, enabled: r.enabled });
+    P.rowCache = {};
     msg = `雰囲気：${J.MOODS[r.mood].name}`;
   } else if (part === 'cut') {
     P.seed = (Math.random() * 1e9) | 0;
+    P.rowCache = {};
     msg = '構成：レイアウトと動きを再抽選';
   }
   fontKey = ''; syncUI(); replan(); commit();
@@ -1225,7 +1243,7 @@ function bind() {
       if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc);
     }, 600);
   };
-  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; replanSoon(260); commitTextSoon('歌詞編集'); });
+  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; S.project.rowCache = {}; replanSoon(260); commitTextSoon('歌詞編集'); });
   $('lyrics').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('歌詞確定'); });
   $('lyricLang').addEventListener('change', e => {
     remember();
@@ -1249,7 +1267,7 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnLoop').addEventListener('click', e => { S.loop = !S.loop; e.target.setAttribute('aria-pressed', String(S.loop)); });
-  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); commit(); });
+  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit(); });
   const sc = $('scrub');
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
@@ -1603,6 +1621,17 @@ function bind() {
                 });
                 S.project.overrides = newOv;
               }
+              if (S.project.rowCache) {
+                const oldRc = S.project.rowCache;
+                const newRc = {};
+                Object.keys(oldRc).forEach(k => {
+                  const ki = parseInt(k, 10);
+                  if (ki === -1) newRc[-1] = oldRc[-1];
+                  else if (ki < cut.line) newRc[ki] = oldRc[ki];
+                  else if (ki > cut.line) newRc[ki - 1] = oldRc[ki];
+                });
+                S.project.rowCache = newRc;
+              }
             }
           }
           toast('カットを削除し、前のカットで尺を補間しました');
@@ -1646,6 +1675,12 @@ function bind() {
                 if (ovB) S.project.overrides[cA.line] = ovB; else delete S.project.overrides[cA.line];
                 if (ovA) S.project.overrides[cB.line] = ovA; else delete S.project.overrides[cB.line];
               }
+              if (S.project.rowCache) {
+                const rcA = S.project.rowCache[cA.line];
+                const rcB = S.project.rowCache[cB.line];
+                if (rcB) S.project.rowCache[cA.line] = rcB; else delete S.project.rowCache[cA.line];
+                if (rcA) S.project.rowCache[cB.line] = rcA; else delete S.project.rowCache[cB.line];
+              }
             }
           } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
             // 同一行内のカット（フレーズ）同士のスワップ
@@ -1674,6 +1709,12 @@ function bind() {
               S.project.lyrics = rawLines.join('\n');
               if ($('songTitle')) $('songTitle').value = S.project.title;
               if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+              if (S.project.rowCache) {
+                const rcTitle = S.project.rowCache[-1];
+                const rcLyric = S.project.rowCache[lIdx];
+                if (rcLyric) S.project.rowCache[-1] = rcLyric; else delete S.project.rowCache[-1];
+                if (rcTitle) S.project.rowCache[lIdx] = rcTitle; else delete S.project.rowCache[lIdx];
+              }
             }
           } else {
             const props = ['text', 'layout', 'enter', 'exit', 'hold', 'decor', 'treat', 'cam', 'scheme', 'seed'];
@@ -2025,8 +2066,8 @@ function bind() {
   setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
-  $('seed').addEventListener('change', e => { S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });
-  $('btnSeed').addEventListener('click', () => { S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); });
+  $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; replan(); commit('シード変更'); });
+  $('btnSeed').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit('シード再抽選'); });
   const colorToggle = (flag, keys) => e => {
     remember();
     const c = S.project.colors; c[flag] = e.target.checked;

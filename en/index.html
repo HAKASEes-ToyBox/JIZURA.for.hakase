@@ -3501,6 +3501,8 @@ J.plan = (project, audio) => {
   let schemeIdx = 0;
   const nSchemes = st.schemes.length;
   const addEvent = (t, type, amp, dur) => plan.events.push({ t, type, amp, dur });
+  const oldRowCache = project.rowCache || {};
+  const newRowCache = {};
 
   // title card (decor, treat, cam, enter, exit フル装飾対応)
   const firstStart = tm.starts.length ? tm.starts[0] : 0;
@@ -3511,15 +3513,16 @@ J.plan = (project, audio) => {
     const rng = J.rng(titleSeed);
     const titleEnd = firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2;
     const candLayouts = (J.TITLE_LAYOUT_ORDER && J.TITLE_LAYOUT_ORDER.length) ? J.TITLE_LAYOUT_ORDER : ['title'];
-    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : rng.pick(candLayouts);
+    const cachedTitle = (oldRowCache[-1] && oldRowCache[-1][0]) || null;
+    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : (cachedTitle && cachedTitle.layout && J.LAYOUTS[cachedTitle.layout] ? cachedTitle.layout : rng.pick(candLayouts));
     const LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
-    const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']);
-    const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : rng.pick(['blur', 'drift', 'wipe']);
-    const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : 'still';
-    const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
-    const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, false, history);
+    const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : (cachedTitle && cachedTitle.enter && J.ENTER[cachedTitle.enter] ? cachedTitle.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']));
+    const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : (cachedTitle && cachedTitle.exit && J.EXIT[cachedTitle.exit] ? cachedTitle.exit : rng.pick(['blur', 'drift', 'wipe']));
+    const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : (cachedTitle && cachedTitle.hold && J.HOLD[cachedTitle.hold] ? cachedTitle.hold : 'still');
+    const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cachedTitle && cachedTitle.decor ? cachedTitle.decor : pickDecor(rng, st, en, fx, layout, history));
+    const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cachedTitle && cachedTitle.treat && J.TREAT[cachedTitle.treat] ? cachedTitle.treat : pickTreat(rng, st, en, fx, LD, false, history));
     const treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
-    const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, false, history);
+    const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cachedTitle && cachedTitle.cam && J.CAMERA[cachedTitle.cam] ? cachedTitle.cam : pickCam(rng, st, en, fx, LD, false, history));
     const camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
     const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - 0.1 }, st) : {};
     const titleCut = makeCut({
@@ -3530,6 +3533,7 @@ J.plan = (project, audio) => {
     plan.cuts.push(titleCut);
     history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
     plan.titleLine = { index: -1, text: title, note: artist, start: 0.1, end: titleEnd, seed: titleSeed, cut: titleCut };
+    newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, cam }];
   }
 
   parsed.lines.forEach((ln, li) => {
@@ -3567,15 +3571,17 @@ J.plan = (project, audio) => {
     let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : pickBg(rng, st, en, fx, bgHistory);
     bgHistory.push(lineBg);
     let lineBgP = J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
+    if (!newRowCache[li]) newRowCache[li] = [];
     units.forEach((u, k) => {
       const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
       const txt = u.text;
       const nn = [...txt.replace(/\s+/g, '')].length;
       const emph = ln.impact && (k === 0 || u.recap) || ln.emph.some(w => txt.includes(w));
-      const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, H > W);
-      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
-      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
-      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : pickHold(rng, en, fx, history);
+      const cached = (oldRowCache[li] && oldRowCache[li][k]) || null;
+      const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : (cached && cached.layout && J.LAYOUTS[cached.layout] ? cached.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, H > W));
+      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : (cached && cached.enter && J.ENTER[cached.enter] ? cached.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn));
+      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : (cached && cached.exit && J.EXIT[cached.exit] ? cached.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history));
+      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : (cached && cached.hold && J.HOLD[cached.hold] ? cached.hold : pickHold(rng, en, fx, history));
       let inDur = J.clamp(dur * 0.36, 0.12, 0.6);
       if (enter === 'type') inDur = J.clamp(nn * 0.055 + 0.1, 0.15, dur * 0.65);
       if (enter === 'assemble') inDur = J.clamp(dur * 0.45, 0.22, 0.75);
@@ -3589,19 +3595,19 @@ J.plan = (project, audio) => {
       if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
       const LD = J.LAYOUTS[layout];
       const params = LD.plan(rng, { text: txt, n: nn, W, H, dur }, st);
-      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
-      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, emph, history);
+      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cached && cached.decor ? cached.decor : pickDecor(rng, st, en, fx, layout, history));
+      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cached && cached.treat && J.TREAT[cached.treat] ? cached.treat : pickTreat(rng, st, en, fx, LD, emph, history));
       const treatP = J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
       if (!ov.bg && k > 0 && rng.chance(0.18 * fx.bgSwitch + 0.04)) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
-      const bg = LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg;
-      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, emph, history);
+      const bg = ov.bg && J.BG[ov.bg] ? ov.bg : (cached && cached.bg && J.BG[cached.bg] ? cached.bg : (LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg));
+      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cached && cached.cam && J.CAMERA[cached.cam] ? cached.cam : pickCam(rng, st, en, fx, LD, emph, history));
       const camP = J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
       // cut-to-cut transition (replaces the previous cut's exit and this cut's entrance)
       const prevCut = plan.cuts[plan.cuts.length - 1];
       let trans = null, transP = {}, transDur = 0;
       const canTrans = prevCut && Math.abs(prevCut.end - cs) < 0.06 && prevCut.layout !== 'interlude' && dur > 0.5;
       if (canTrans) {
-        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : pickTrans(rng, st, en, fx, emph, history);
+        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : (cached && cached.trans !== undefined ? cached.trans : pickTrans(rng, st, en, fx, emph, history));
         if (trans) {
           const TD = J.TRANS[trans];
           transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
@@ -3614,6 +3620,7 @@ J.plan = (project, audio) => {
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
+      newRowCache[li].push({ layout, enter, exit, hold, decor, treat, cam, bg, trans });
       // events at cut start
       // events at cut start — durations are on a 24fps timebase so every output rate looks the same
       const g = fx.glitch * (st.glitchBoost || 1);
@@ -3642,6 +3649,7 @@ J.plan = (project, audio) => {
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
   });
+  project.rowCache = newRowCache;
   plan.cuts.sort((a, b) => a.start - b.start);
   plan.cuts.forEach((c, i) => { c.index = i; });
   plan.events.sort((a, b) => a.t - b.t);
@@ -29669,6 +29677,7 @@ function mergeProject(p) {
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
   o.overrides = (p && p.overrides) || {};
+  o.rowCache = (p && p.rowCache) || {};
   o.colors = Object.assign({ enabled: false }, (p && p.colors) || {});
   o.fonts = (p && p.fonts) || {};
   o.userFonts = (p && p.userFonts) || [];
@@ -30256,8 +30265,11 @@ function renderLines() {
     tli.querySelector('.dice').addEventListener('click', () => {
       const cur = ov[-1] || {};
       if (cur.lock) return;
+      remember();
+      if (S.project.rowCache) delete S.project.rowCache[-1];
       setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
       replan();
+      commit('タイトル再抽選');
       seek(0.001);
     });
     tli.querySelector('.lock').addEventListener('click', () => {
@@ -30303,7 +30315,16 @@ function renderLines() {
     });
     li.querySelector('.txt').addEventListener('click', () => seek(ln.start + 0.001));
     li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
-    li.querySelector('.dice').addEventListener('click', () => { const cur = ov[i] || {}; setOv(i, { seed: (cur.seed | 0) + 1, lock: false }); replan(); seek(ln.start + 0.001); });
+    li.querySelector('.dice').addEventListener('click', () => {
+      const cur = ov[i] || {};
+      if (cur.lock) return;
+      remember();
+      if (S.project.rowCache) delete S.project.rowCache[i];
+      setOv(i, { seed: (cur.seed | 0) + 1, lock: false });
+      replan();
+      commit('line ' + (i + 1) + '再抽選');
+      seek(ln.start + 0.001);
+    });
     li.querySelector('.lock').addEventListener('click', () => {
       const cur = ov[i] || {};
       if (cur.lock) setOv(i, { lock: false, lockedSeed: undefined });
@@ -30337,7 +30358,7 @@ function drawStyleGrid() {
       const b = document.createElement('button'); b.className = 'stile'; b.dataset.k = k;
       b.title = J.STYLES[k].desc;
       b.innerHTML = `<canvas width="192" height="108"></canvas><span>${J.STYLES[k].name}</span><span class="badges">${setBadges(J.STYLES[k])}</span>`;
-      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; syncUI(); replan(); commit(); });
+      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; S.project.rowCache = {}; syncUI(); replan(); commit(); });
       g.appendChild(b);
     });
   }
@@ -30520,6 +30541,7 @@ const UndoRedo = {
     }
   }
 };
+window.UndoRedo = UndoRedo;
 
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
@@ -30528,6 +30550,7 @@ function omakase() {
   remember();
   const r = J.omakase(S.project);
   Object.assign(S.project, r);
+  S.project.rowCache = {};
   fontKey = ''; syncUI(); replan(); commit();
   toast(`Randomized: ${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
@@ -30543,13 +30566,16 @@ function rerollPart(part) {
     if (!pool.length) pool = J.STYLE_ORDER.filter(k => k !== P.style);
     P.style = pool[Math.floor(Math.random() * pool.length)];
     P.colors.enabled = false;
+    P.rowCache = {};
     msg = `Style：${J.STYLES[P.style].name}`;
   } else if (part === 'mood') {
     const r = J.omakase(P);
     Object.assign(P, { mood: r.mood, fx: r.fx, enabled: r.enabled });
+    P.rowCache = {};
     msg = `Mood：${J.MOODS[r.mood].name}`;
   } else if (part === 'cut') {
     P.seed = (Math.random() * 1e9) | 0;
+    P.rowCache = {};
     msg = 'Arrangement: rerolled layout and motion';
   }
   fontKey = ''; syncUI(); replan(); commit();
@@ -30837,7 +30863,7 @@ function bind() {
       if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc);
     }, 600);
   };
-  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; replanSoon(260); commitTextSoon('歌詞編集'); });
+  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; S.project.rowCache = {}; replanSoon(260); commitTextSoon('歌詞編集'); });
   $('lyrics').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('歌詞確定'); });
   $('lyricLang').addEventListener('change', e => {
     remember();
@@ -30861,7 +30887,7 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnLoop').addEventListener('click', e => { S.loop = !S.loop; e.target.setAttribute('aria-pressed', String(S.loop)); });
-  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); commit(); });
+  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit(); });
   const sc = $('scrub');
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
@@ -31215,6 +31241,17 @@ function bind() {
                 });
                 S.project.overrides = newOv;
               }
+              if (S.project.rowCache) {
+                const oldRc = S.project.rowCache;
+                const newRc = {};
+                Object.keys(oldRc).forEach(k => {
+                  const ki = parseInt(k, 10);
+                  if (ki === -1) newRc[-1] = oldRc[-1];
+                  else if (ki < cut.line) newRc[ki] = oldRc[ki];
+                  else if (ki > cut.line) newRc[ki - 1] = oldRc[ki];
+                });
+                S.project.rowCache = newRc;
+              }
             }
           }
           toast('cutsを削除し、前のcutsで尺を補間しました');
@@ -31258,6 +31295,12 @@ function bind() {
                 if (ovB) S.project.overrides[cA.line] = ovB; else delete S.project.overrides[cA.line];
                 if (ovA) S.project.overrides[cB.line] = ovA; else delete S.project.overrides[cB.line];
               }
+              if (S.project.rowCache) {
+                const rcA = S.project.rowCache[cA.line];
+                const rcB = S.project.rowCache[cB.line];
+                if (rcB) S.project.rowCache[cA.line] = rcB; else delete S.project.rowCache[cA.line];
+                if (rcA) S.project.rowCache[cB.line] = rcA; else delete S.project.rowCache[cB.line];
+              }
             }
           } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
             // 同一line 内のcuts（フレーズ）同士のスワップ
@@ -31286,6 +31329,12 @@ function bind() {
               S.project.lyrics = rawLines.join('\n');
               if ($('songTitle')) $('songTitle').value = S.project.title;
               if ($('lyrics')) $('lyrics').value = S.project.lyrics;
+              if (S.project.rowCache) {
+                const rcTitle = S.project.rowCache[-1];
+                const rcLyric = S.project.rowCache[lIdx];
+                if (rcLyric) S.project.rowCache[-1] = rcLyric; else delete S.project.rowCache[-1];
+                if (rcTitle) S.project.rowCache[lIdx] = rcTitle; else delete S.project.rowCache[lIdx];
+              }
             }
           } else {
             const props = ['text', 'layout', 'enter', 'exit', 'hold', 'decor', 'treat', 'cam', 'scheme', 'seed'];
@@ -31637,8 +31686,8 @@ function bind() {
   setSwitch('wa-toggle', 'wa', true, 'Japanese motifs: on', 'Japanese motifs: off for random picks');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
-  $('seed').addEventListener('change', e => { S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });
-  $('btnSeed').addEventListener('click', () => { S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); });
+  $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; replan(); commit('シード変更'); });
+  $('btnSeed').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit('シード再抽選'); });
   const colorToggle = (flag, keys) => e => {
     remember();
     const c = S.project.colors; c[flag] = e.target.checked;
