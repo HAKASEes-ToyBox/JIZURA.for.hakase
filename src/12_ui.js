@@ -922,6 +922,7 @@ const UndoRedo = {
   }
 };
 window.UndoRedo = UndoRedo;
+window.replan = replan;
 
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
@@ -931,6 +932,7 @@ function omakase() {
   const r = J.omakase(S.project);
   Object.assign(S.project, r);
   S.project.rowCache = {};
+  if (S.project.timing) S.project.timing.cutTimes = null;
   fontKey = ''; syncUI(); replan(); commit();
   toast(`おまかせ：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
@@ -956,6 +958,7 @@ function rerollPart(part) {
   } else if (part === 'cut') {
     P.seed = (Math.random() * 1e9) | 0;
     P.rowCache = {};
+    if (P.timing) P.timing.cutTimes = null;
     msg = '構成：レイアウトと動きを再抽選';
   }
   fontKey = ''; syncUI(); replan(); commit();
@@ -1243,7 +1246,7 @@ function bind() {
       if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc);
     }, 600);
   };
-  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; S.project.rowCache = {}; replanSoon(260); commitTextSoon('歌詞編集'); });
+  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replanSoon(260); commitTextSoon('歌詞編集'); });
   $('lyrics').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('歌詞確定'); });
   $('lyricLang').addEventListener('change', e => {
     remember();
@@ -1267,7 +1270,7 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnLoop').addEventListener('click', e => { S.loop = !S.loop; e.target.setAttribute('aria-pressed', String(S.loop)); });
-  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit(); });
+  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit(); });
   const sc = $('scrub');
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
@@ -1568,73 +1571,49 @@ function bind() {
           const idx = dragData.cutIndex;
           const cut = dragData.cut;
           const cuts = S.plan.cuts;
-          // 1. 直前の要素の終了時間を延長して隙間を自動補間
+          // 1. 直前の要素の終了時間を延長して隙間を自動補間（または直後要素の開始時間を前倒し）
           if (idx > 0) {
             const prev = cuts[idx - 1];
             prev.end = cut.end;
             prev.dur = prev.end - prev.start;
+            // 歌詞テキストの合流（同一行ならテキストを直前カットに結合）
+            if (prev.line === cut.line && cut.text) {
+              if (!prev.text.includes(cut.text)) {
+                prev.text = (prev.text + ' ' + cut.text).trim();
+              }
+            }
           } else if (cuts.length > 1) {
             cuts[1].start = cut.start;
             cuts[1].dur = cuts[1].end - cuts[1].start;
-          }
-          // 2. 歌詞データの更新
-          if (cut.line === -1) {
-            S.project.title = '';
-            if ($('songTitle')) $('songTitle').value = '';
-          } else if (cut.line >= 0) {
-            const rawLines = S.project.lyrics.split('\n');
-            if (rawLines[cut.line] !== undefined) {
-              const curL = rawLines[cut.line];
-              if (curL.includes('/')) {
-                const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
-                const pIdx = parts.findIndex(p => p.includes(cut.text) || cut.text.includes(p));
-                if (pIdx >= 0 && parts.length > 1) {
-                  parts.splice(pIdx, 1);
-                  rawLines[cut.line] = parts.join('/');
-                } else {
-                  rawLines.splice(cut.line, 1);
-                }
-              } else {
-                rawLines.splice(cut.line, 1);
-              }
-              S.project.lyrics = rawLines.join('\n');
-              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
-              
-              if (S.project.timing && S.project.timing.lineTimes) {
-                const oldLt = S.project.timing.lineTimes;
-                const newLt = {};
-                Object.keys(oldLt).forEach(k => {
-                  const ki = parseInt(k, 10);
-                  if (ki < cut.line) newLt[ki] = oldLt[ki];
-                  else if (ki > cut.line) newLt[ki - 1] = oldLt[ki];
-                });
-                S.project.timing.lineTimes = newLt;
-              }
-              if (S.project.overrides) {
-                const oldOv = S.project.overrides;
-                const newOv = {};
-                Object.keys(oldOv).forEach(k => {
-                  const ki = parseInt(k, 10);
-                  if (ki === -1) newOv[-1] = oldOv[-1];
-                  else if (ki < cut.line) newOv[ki] = oldOv[ki];
-                  else if (ki > cut.line) newOv[ki - 1] = oldOv[ki];
-                });
-                S.project.overrides = newOv;
-              }
-              if (S.project.rowCache) {
-                const oldRc = S.project.rowCache;
-                const newRc = {};
-                Object.keys(oldRc).forEach(k => {
-                  const ki = parseInt(k, 10);
-                  if (ki === -1) newRc[-1] = oldRc[-1];
-                  else if (ki < cut.line) newRc[ki] = oldRc[ki];
-                  else if (ki > cut.line) newRc[ki - 1] = oldRc[ki];
-                });
-                S.project.rowCache = newRc;
+            if (cuts[1].line === cut.line && cut.text) {
+              if (!cuts[1].text.includes(cut.text)) {
+                cuts[1].text = (cut.text + ' ' + cuts[1].text).trim();
               }
             }
           }
-          toast('カットを削除し、前のカットで尺を補間しました');
+          // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
+          cuts.splice(idx, 1);
+
+          // 3. タイトルカード削除時の特別処理
+          if (cut.line === -1) {
+            if (S.plan.titleLine) S.plan.titleLine = null;
+          }
+
+          // 4. 残存カットリストを永続データとして記録
+          if (!S.project.timing) S.project.timing = {};
+          S.project.timing.cutTimes = cuts.map(c => ({
+            start: +c.start.toFixed(3),
+            end: +c.end.toFixed(3),
+            line: c.line,
+            text: c.text
+          }));
+
+          // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
+          if (S.project.rowCache && S.project.rowCache[cut.line]) {
+            delete S.project.rowCache[cut.line];
+          }
+
+          toast('演出を1つ削除し、前の演出で尺とテキストを補間しました');
         } else if (dragData.target === 'block') {
           const trackName = dragData.track;
           const blocks = (S.project && S.project.tracks && S.project.tracks[trackName]) || [];
@@ -1740,8 +1719,12 @@ function bind() {
       }
 
       if (dragData.target === 'cut') {
-        if (!S.project.timing) S.project.timing = {};
-        S.project.timing.cutTimes = S.plan.cuts.map(c => ({ start: c.start, end: c.end, line: c.line }));
+        S.project.timing.cutTimes = S.plan.cuts.map(c => ({
+          start: +c.start.toFixed(3),
+          end: +c.end.toFixed(3),
+          line: c.line,
+          text: c.text
+        }));
         if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
         if (S.plan.lines) {
           S.plan.lines.forEach(ln => {
@@ -2066,8 +2049,8 @@ function bind() {
   setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
-  $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; replan(); commit('シード変更'); });
-  $('btnSeed').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; replan(); commit('シード再抽選'); });
+  $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード変更'); });
+  $('btnSeed').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード再抽選'); });
   const colorToggle = (flag, keys) => e => {
     remember();
     const c = S.project.colors; c[flag] = e.target.checked;

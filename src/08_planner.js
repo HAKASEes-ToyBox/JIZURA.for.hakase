@@ -235,7 +235,9 @@ J.plan = (project, audio) => {
     const ov = (project.overrides || {})[-1] || {};
     const titleSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, 999, ov.seed | 0);
     const rng = J.rng(titleSeed);
-    const titleEnd = firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2;
+    const manualTitleCut = (project.timing && project.timing.cutTimes) ? project.timing.cutTimes.find(c => c.line === -1) : null;
+    const titleStart = manualTitleCut ? manualTitleCut.start : 0.1;
+    const titleEnd = manualTitleCut ? manualTitleCut.end : (firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2);
     const candLayouts = (J.TITLE_LAYOUT_ORDER && J.TITLE_LAYOUT_ORDER.length) ? J.TITLE_LAYOUT_ORDER : ['title'];
     const cachedTitle = (oldRowCache[-1] && oldRowCache[-1][0]) || null;
     const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : (cachedTitle && cachedTitle.layout && J.LAYOUTS[cachedTitle.layout] ? cachedTitle.layout : rng.pick(candLayouts));
@@ -248,15 +250,15 @@ J.plan = (project, audio) => {
     const treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
     const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cachedTitle && cachedTitle.cam && J.CAMERA[cachedTitle.cam] ? cachedTitle.cam : pickCam(rng, st, en, fx, LD, false, history));
     const camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
-    const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - 0.1 }, st) : {};
+    const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - titleStart }, st) : {};
     const titleCut = makeCut({
       text: title, note: artist, lineText: title, line: -1,
-      start: 0.1, end: titleEnd, layout, enter, exit, hold,
+      start: titleStart, end: titleEnd, layout, enter, exit, hold,
       params, decor, treat, treatP, cam, camP, scheme: 0, seed: J.h(titleSeed, 17)
     });
     plan.cuts.push(titleCut);
     history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
-    plan.titleLine = { index: -1, text: title, note: artist, start: 0.1, end: titleEnd, seed: titleSeed, cut: titleCut };
+    plan.titleLine = { index: -1, text: title, note: artist, start: titleStart, end: titleEnd, seed: titleSeed, cut: titleCut };
     newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, cam }];
   }
 
@@ -271,23 +273,42 @@ J.plan = (project, audio) => {
     plan.lines.push({ index: li, text: ln.text, start: s, end: e, visEnd, note: ln.note, impact: ln.impact, emph: ln.emph, chunks: null, seed: lineSeed });
     const chunks = ln.manual || (plan.lang === 'en' ? J.phraseChunks(J.chunkText(ln.text)) : J.chunkText(ln.text));
     plan.lines[li].chunks = chunks;
-    const L = J.lerp(1.3, 0.5, fx.density);
-    let nC = Math.round(D / L);
-    const maxC = chunks.length + (chunks.length >= 2 && D > 2.0 ? 1 : 0);
-    nC = J.clamp(nC, 1, Math.max(1, maxC));
-    if (ov.single) nC = 1;
-    // groups of chunks
-    let groups;
-    const nG = Math.min(nC, chunks.length);
-    if (nG <= 1) groups = [ln.text];
-    else groups = partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
-    const recap = nC > groups.length && groups.length >= 2;
-    const units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
-    if (recap) units.push({ text: ln.text, w: (units.reduce((a, u) => a + u.w, 0) / units.length) * 1.25, recap: true });
-    const tot = units.reduce((a, u) => a + u.w, 0);
-    let acc = s; const bounds = [s];
-    units.forEach((u, k) => { acc += D * u.w / tot; bounds.push(k === units.length - 1 ? visEnd : acc); });
-    for (let k = 1; k < bounds.length - 1; k++) bounds[k] = J.clamp(snap(bounds[k]), bounds[k - 1] + 0.22, bounds[k + 1] - 0.22);
+
+    const manualCuts = (project.timing && project.timing.cutTimes) ? project.timing.cutTimes.filter(c => c.line === li) : null;
+    let units, bounds;
+
+    if (manualCuts && manualCuts.length > 0) {
+      bounds = [manualCuts[0].start];
+      manualCuts.forEach(mc => bounds.push(mc.end));
+      const hasTexts = manualCuts.every(mc => mc.text && mc.text.trim());
+      if (hasTexts) {
+        units = manualCuts.map(mc => ({ text: mc.text, w: [...mc.text].length + 1.6 }));
+      } else {
+        const nG = Math.min(manualCuts.length, chunks.length);
+        const groups = (nG <= 1) ? [ln.text] : partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
+        units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
+        while (units.length < manualCuts.length) {
+          units.push({ text: ln.text, w: [...ln.text].length + 1.6 });
+        }
+      }
+    } else {
+      const L = J.lerp(1.3, 0.5, fx.density);
+      let nC = Math.round(D / L);
+      const maxC = chunks.length + (chunks.length >= 2 && D > 2.0 ? 1 : 0);
+      nC = J.clamp(nC, 1, Math.max(1, maxC));
+      if (ov.single) nC = 1;
+      let groups;
+      const nG = Math.min(nC, chunks.length);
+      if (nG <= 1) groups = [ln.text];
+      else groups = partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
+      const recap = nC > groups.length && groups.length >= 2;
+      units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
+      if (recap) units.push({ text: ln.text, w: (units.reduce((a, u) => a + u.w, 0) / units.length) * 1.25, recap: true });
+      const tot = units.reduce((a, u) => a + u.w, 0);
+      let acc = s; bounds = [s];
+      units.forEach((u, k) => { acc += D * u.w / tot; bounds.push(k === units.length - 1 ? visEnd : acc); });
+      for (let k = 1; k < bounds.length - 1; k++) bounds[k] = J.clamp(snap(bounds[k]), bounds[k - 1] + 0.22, bounds[k + 1] - 0.22);
+    }
     // scheme per line
     if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
     const emphLine = ln.impact || ln.emph.length > 0;
