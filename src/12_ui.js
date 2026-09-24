@@ -92,6 +92,30 @@ function langNote() {
 }
 function replan() {
   S.plan = J.plan(S.project, audioLike());
+  if (S.project.timing && Array.isArray(S.project.timing.cutTimes) && S.project.timing.cutTimes.length > 0) {
+    const ct = S.project.timing.cutTimes;
+    S.plan.cuts.forEach((cut, i) => {
+      if (ct[i] && typeof ct[i].start === 'number' && typeof ct[i].end === 'number') {
+        cut.start = ct[i].start;
+        cut.end = ct[i].end;
+        cut.dur = Math.max(0.01, cut.end - cut.start);
+      }
+    });
+    if (S.plan.lines) {
+      S.plan.lines.forEach(ln => {
+        const lnCuts = S.plan.cuts.filter(c => c.line === ln.index);
+        if (lnCuts.length) {
+          ln.start = lnCuts[0].start;
+          ln.end = lnCuts[lnCuts.length - 1].end;
+          ln.visEnd = ln.end;
+        }
+      });
+    }
+    if (S.plan.titleLine && S.plan.cuts.length && S.plan.cuts[0].line === -1) {
+      S.plan.titleLine.start = S.plan.cuts[0].start;
+      S.plan.titleLine.end = S.plan.cuts[0].end;
+    }
+  }
   langNote();
   if (S.t > S.plan.duration) S.t = 0;
   renderLines(); sizeViewport(); drawTimeline(); updateTimeUI(); updateCutInfo();
@@ -790,11 +814,12 @@ function remember() {            // call before changing the look: makes sure th
   if (H.i >= 0 && H.list[H.i] === s) return;
   H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1;
 }
-function commit() {              // call after changing the look
+function commit(desc) {              // call after changing the look
   const s = lookSnap();
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
   updateHist();
+  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定・デザイン変更');
 }
 function histGo(d) {
   if (S.exporting) return;
@@ -812,6 +837,77 @@ function updateHist() {
   ['btnNext', 'btnNext2'].forEach(id => { $(id).disabled = !canF; });
   $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
+
+/* ---------------- undo / redo (Ctrl+Z / Ctrl+Y) ---------------- */
+const UndoRedo = {
+  stack: [],
+  index: -1,
+  max: 15,
+  isApplying: false,
+
+  init(proj) {
+    if (!proj) return;
+    this.stack = [{ project: JSON.parse(JSON.stringify(proj)), desc: '初期状態' }];
+    this.index = 0;
+  },
+
+  commit(desc = '変更') {
+    if (this.isApplying || !S.project) return;
+    const snap = JSON.parse(JSON.stringify(S.project));
+    if (this.index >= 0 && this.stack[this.index]) {
+      if (JSON.stringify(this.stack[this.index].project) === JSON.stringify(snap)) {
+        return;
+      }
+    }
+    if (this.index < this.stack.length - 1) {
+      this.stack = this.stack.slice(0, this.index + 1);
+    }
+    this.stack.push({ project: snap, desc, timestamp: Date.now() });
+    if (this.stack.length > this.max) {
+      this.stack.shift();
+    } else {
+      this.index++;
+    }
+  },
+
+  undo() {
+    if (!this.canUndo()) {
+      toast('これ以上戻せません');
+      return;
+    }
+    const curDesc = this.stack[this.index]?.desc || '操作';
+    this.index--;
+    this.apply(this.stack[this.index]);
+    toast(`元に戻しました: ${curDesc}（残り ${this.index} 件）`);
+  },
+
+  redo() {
+    if (!this.canRedo()) {
+      toast('これ以上やり直せません');
+      return;
+    }
+    this.index++;
+    const nextDesc = this.stack[this.index]?.desc || '操作';
+    this.apply(this.stack[this.index]);
+    toast(`やり直しました: ${nextDesc}`);
+  },
+
+  canUndo() { return this.index > 0; },
+  canRedo() { return this.index < this.stack.length - 1; },
+
+  apply(entry) {
+    if (!entry || !entry.project) return;
+    this.isApplying = true;
+    try {
+      S.project = JSON.parse(JSON.stringify(entry.project));
+      fontKey = '';
+      syncUI();
+      replan();
+    } finally {
+      this.isApplying = false;
+    }
+  }
+};
 
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
@@ -1122,15 +1218,25 @@ function syncUI() {
 
 /* ---------------- wiring ---------------- */
 function bind() {
-  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; replanSoon(260); });
+  let textCommitTimer = 0;
+  const commitTextSoon = (desc) => {
+    clearTimeout(textCommitTimer);
+    textCommitTimer = setTimeout(() => {
+      if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc);
+    }, 600);
+  };
+  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; replanSoon(260); commitTextSoon('歌詞編集'); });
+  $('lyrics').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('歌詞確定'); });
   $('lyricLang').addEventListener('change', e => {
     remember();
     S.project.lang = e.target.value; replan(); renderFontRoles(); commit(); flushSave();
     const l = J.resolveLang(S.project);
     toast((S.project.lang === 'auto' ? '歌詞の言語：自動判定 → ' : '歌詞の言語：') + J.LANG_LABEL[l]);
   });
-  $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; replanSoon(300); });
-  $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; replanSoon(300); });
+  $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; replanSoon(300); commitTextSoon('タイトル編集'); });
+  $('songTitle').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('タイトル確定'); });
+  $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; replanSoon(300); commitTextSoon('アーティスト編集'); });
+  $('songArtist').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('アーティスト確定'); });
   $('btnSyntax').addEventListener('click', e => { const s = $('syntax'); s.hidden = !s.hidden; e.target.setAttribute('aria-expanded', String(!s.hidden)); });
   $('bpm').addEventListener('change', e => { S.project.timing.bpm = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
   $('offset').addEventListener('change', e => { S.project.timing.offset = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
@@ -1310,24 +1416,48 @@ function bind() {
 
     if (dragData.target === 'cut') {
       const c = dragData.cut;
+      const idx = dragData.cutIndex;
+      const cuts = S.plan.cuts;
+      const minDur = 0.08;
+
       if (dragMode === 'trim-start') {
-        let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
-        c.start = ns;
-        c.dur = c.end - c.start;
-        if (c.line >= 0) {
+        const prevCut = idx > 0 ? cuts[idx - 1] : null;
+        let minT = prevCut ? prevCut.start + minDur : 0;
+        let maxT = dragData.origEnd - minDur;
+        let newT = Math.max(minT, Math.min(curTime, maxT));
+
+        c.start = newT;
+        c.dur = Math.max(minDur, c.end - c.start);
+
+        if (prevCut) {
+          prevCut.end = newT;
+          prevCut.dur = Math.max(minDur, prevCut.end - prevCut.start);
+        }
+        if (c.line >= 0 && (!prevCut || prevCut.line !== c.line)) {
           if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-          const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
-          if (lnCuts.length && lnCuts[0] === c) {
-            S.project.timing.lineTimes[c.line] = c.start;
-            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
-          }
+          S.project.timing.lineTimes[c.line] = c.start;
+          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
         }
         seek(c.start);
         drawTimeline();
       } else if (dragMode === 'trim-end') {
-        let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
-        c.end = ne;
-        c.dur = c.end - c.start;
+        const nextCut = idx < cuts.length - 1 ? cuts[idx + 1] : null;
+        let minT = dragData.origStart + minDur;
+        let maxT = nextCut ? nextCut.end - minDur : S.plan.duration;
+        let newT = Math.max(minT, Math.min(curTime, maxT));
+
+        c.end = newT;
+        c.dur = Math.max(minDur, c.end - c.start);
+
+        if (nextCut) {
+          nextCut.start = newT;
+          nextCut.dur = Math.max(minDur, nextCut.end - nextCut.start);
+          if (nextCut.line >= 0 && nextCut.line !== c.line) {
+            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+            S.project.timing.lineTimes[nextCut.line] = nextCut.start;
+            if (S.plan.lines[nextCut.line]) S.plan.lines[nextCut.line].start = nextCut.start;
+          }
+        }
         seek(c.end);
         drawTimeline();
       } else if (dragMode === 'move') {
@@ -1568,20 +1698,29 @@ function bind() {
         }
       }
 
-      if (dragData.target === 'cut') renderLines();
-      replan();
-      if (dragData.target === 'cut' && dragData.isDeleting) {
-        const deletedCutEnd = dragData.cut.end;
-        const targetIdx = dragData.cutIndex;
-        if (targetIdx > 0 && S.plan.cuts[targetIdx - 1]) {
-          const prevCut = S.plan.cuts[targetIdx - 1];
-          if (prevCut.end < deletedCutEnd) {
-            prevCut.end = deletedCutEnd;
-            prevCut.dur = prevCut.end - prevCut.start;
-          }
+      if (dragData.target === 'cut') {
+        if (!S.project.timing) S.project.timing = {};
+        S.project.timing.cutTimes = S.plan.cuts.map(c => ({ start: c.start, end: c.end, line: c.line }));
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        if (S.plan.lines) {
+          S.plan.lines.forEach(ln => {
+            const lnCuts = S.plan.cuts.filter(c => c.line === ln.index);
+            if (lnCuts.length) {
+              S.project.timing.lineTimes[ln.index] = lnCuts[0].start;
+            }
+          });
         }
+        renderLines();
       }
-      commit();
+
+      let actDesc = 'タイムライン操作';
+      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? 'カット削除' : 'ブロック削除';
+      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? 'カット入れ替え' : 'ブロック入れ替え';
+      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? 'カット境界調整' : 'ブロックトリミング';
+      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? 'カット移動' : 'ブロック移動';
+
+      replan();
+      commit(actDesc);
       flushSave();
     }
     dragMode = null;
@@ -1952,6 +2091,19 @@ function bind() {
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
+    const isCtrl = e.ctrlKey || e.metaKey;
+    if (isCtrl) {
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        UndoRedo.undo();
+        return;
+      } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        UndoRedo.redo();
+        return;
+      }
+    }
     const tag = (e.target && e.target.tagName) || '';
     const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
@@ -1983,6 +2135,7 @@ async function loadAudioFile(f) {
 /* ---------------- boot ---------------- */
 function boot() {
   S.project = loadLocal();
+  if (typeof UndoRedo !== 'undefined') UndoRedo.init(S.project);
   bind(); initVolume(); syncUI(); replan();
   let mode = 'easy'; try { mode = localStorage.getItem('jizura.mode') || 'easy'; } catch (e) {}
   setMode(mode); commit();
@@ -1994,5 +2147,5 @@ function boot() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
 // hooks for hosts that embed the app (the After Effects CEP panel)
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview };
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo };
 })();
