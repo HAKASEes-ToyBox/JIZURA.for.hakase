@@ -137,7 +137,7 @@ function draw() {
   S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: S.playing && S.slow });
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo();
+  updateTimeUI(); drawTimeline(); updateCutInfo(); syncBlockInspector();
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -342,6 +342,29 @@ function drawTimeline() {
     }
   }
 
+  const drawKeyframeMarkers = (kfs, top, bot, isSel) => {
+    if (!kfs || !kfs.length) return;
+    const midY = (top + bot) / 2;
+    for (const kf of kfs) {
+      const kx = Math.round(tlPxFromTime(kf.t, w));
+      if (kx < 0 || kx > w) continue;
+      const isCur = Math.abs(S.t - kf.t) <= 0.06;
+      x.save();
+      x.fillStyle = isCur ? '#ffffff' : (isSel ? '#16f4d4' : '#ffcf40');
+      x.strokeStyle = '#101014';
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(kx, midY - 4 * dpr);
+      x.lineTo(kx + 4 * dpr, midY);
+      x.lineTo(kx, midY + 4 * dpr);
+      x.lineTo(kx - 4 * dpr, midY);
+      x.closePath();
+      x.fill();
+      x.stroke();
+      x.restore();
+    }
+  };
+
   // Track 1: 背景画像ブロック
   const imgBlocks = (S.project && S.project.tracks && S.project.tracks.images) || [];
   for (let i = 0; i < imgBlocks.length; i++) {
@@ -367,6 +390,7 @@ function drawTimeline() {
       x.fillText(`🖼️ ${b.name || '画像'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t1Top + 14 * dpr);
       x.restore();
     }
+    drawKeyframeMarkers(b.keyframes, L.t1Top, L.t1Bot, isSel);
   }
 
   // Track 2: 背景動画ブロック
@@ -394,6 +418,7 @@ function drawTimeline() {
       x.fillText(`🎬 ${b.name || '動画'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t2Top + 14 * dpr);
       x.restore();
     }
+    drawKeyframeMarkers(b.keyframes, L.t2Top, L.t2Bot, isSel);
   }
 
   // トラック名バッジ（左端オーバーレイ）
@@ -424,8 +449,10 @@ function drawTimeline() {
     x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
     x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
   }
+  syncBlockInspector();
 }
 window.drawTimeline = drawTimeline;
+window.syncBlockInspector = syncBlockInspector;
 
 function timelineSeek(ev) {
   const c = $('timeline');
@@ -441,8 +468,12 @@ let lastCutIdx = -2;
 function updateCutInfo() {
   const cut = J.cutAt(S.plan, S.t);
   const idx = cut ? cut.index : -1;
-  const li = cut ? cut.line : -1;
-  if (li !== S.curLine) { S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li)); S.curLine = li; }
+  const li = cut ? cut.line : -2;
+  if (li !== S.curLine) {
+    if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', li === -1);
+    S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li));
+    S.curLine = li;
+  }
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
   const el = $('cutInfo');
@@ -450,7 +481,7 @@ function updateCutInfo() {
   const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
   const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
   el.innerHTML = [
-    `<span class="chip mono">#${String(cut.index + 1).padStart(2, '0')}</span>`,
+    `<span class="chip mono">${cut.line === -1 ? '#00 (タイトル)' : '#' + String(cut.index + 1).padStart(2, '0')}</span>`,
     chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
     cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
     cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
@@ -462,9 +493,61 @@ function updateCutInfo() {
 
 /* ---------------- line list ---------------- */
 function renderLines() {
-  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2;
+  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
   const ov = S.project.overrides;
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
+
+  // 先頭の曲タイトル行 (#00)
+  if (S.plan && S.plan.titleLine) {
+    const tln = S.plan.titleLine;
+    const to = ov[-1] || {};
+    const tli = document.createElement('li');
+    tli.className = 'ln ln-title';
+    tli.innerHTML = `<span class="no">#00</span>
+      <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始秒" style="opacity:0.6;cursor:default">
+      <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
+      <div class="meta"><span class="cuts"></span>
+      <span class="tools">
+        <select aria-label="タイトルレイアウト指定">
+          <option value="">自動</option>
+          <option value="title">標準タイトル</option>
+          <option value="huge">特大フォント</option>
+          <option value="cinema">シネマ風</option>
+          <option value="split">左右分割</option>
+        </select>
+        <button class="icon ghost dice" title="タイトルの装飾・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの装飾構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+      </span></div>`;
+    tli.querySelector('select').value = to.layout || '';
+    tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
+    tli.querySelector('select').addEventListener('change', e => { setOv(-1, { layout: e.target.value || undefined }); replan(); });
+    tli.querySelector('.dice').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) return;
+      setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
+      replan();
+      seek(0.001);
+    });
+    tli.querySelector('.lock').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) setOv(-1, { lock: false, lockedSeed: undefined });
+      else setOv(-1, { lock: true, lockedSeed: tln.seed });
+      replan();
+    });
+    const tcutsEl = tli.querySelector('.cuts');
+    S.plan.cuts.filter(c => c.line === -1).forEach(c => {
+      const sp = document.createElement('span');
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : 'タイトル';
+      sp.textContent = `装飾: ${decorNames}`;
+      sp.title = `レイアウト: ${c.layout}｜${decorNames}`;
+      sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
+      sp.addEventListener('click', () => seek(0.001));
+      tcutsEl.appendChild(sp);
+    });
+    ol.appendChild(tli);
+    S.titleLineEl = tli;
+  }
+
   S.plan.lines.forEach((ln, i) => {
     const o = ov[i] || {};
     const li = document.createElement('li'); li.className = 'ln';
@@ -862,11 +945,37 @@ function syncBlockInspector() {
   if (btnDel) btnDel.disabled = false;
   const b = sel.block;
   if ($('selBlockLabel')) $('selBlockLabel').textContent = `${sel.track === 'images' ? '画像' : '動画'}: ${b.name || '無題'}`;
-  if ($('selBlockX')) $('selBlockX').value = b.x != null ? b.x : 0;
-  if ($('selBlockY')) $('selBlockY').value = b.y != null ? b.y : 0;
-  if ($('selBlockScale')) $('selBlockScale').value = b.scale != null ? b.scale : 1.0;
-  if ($('selBlockOpacity')) $('selBlockOpacity').value = b.opacity != null ? b.opacity : 1.0;
+
+  // 現在時刻 S.t における補間値を取得
+  const curTrans = (typeof J !== 'undefined' && J.getBlockTransform)
+    ? J.getBlockTransform(b, S.t)
+    : { x: b.x || 0, y: b.y || 0, scale: b.scale != null ? b.scale : 1.0, opacity: b.opacity != null ? b.opacity : 1.0 };
+
+  // ユーザーが入力フィールドを編集中でなければ入力欄を更新
+  const active = document.activeElement;
+  const inInspector = bar.contains(active);
+  if (!inInspector) {
+    if ($('selBlockX')) $('selBlockX').value = Math.round(curTrans.x);
+    if ($('selBlockY')) $('selBlockY').value = Math.round(curTrans.y);
+    if ($('selBlockScale')) $('selBlockScale').value = parseFloat(curTrans.scale.toFixed(2));
+    if ($('selBlockOpacity')) $('selBlockOpacity').value = parseFloat(curTrans.opacity.toFixed(2));
+  }
   if ($('selBlockBlend')) $('selBlockBlend').value = b.blendMode || 'normal';
+
+  // キーフレーム判定（現在時刻 S.t 近傍にキーフレームがあるか）
+  const curT = S.t;
+  const hasKey = b.keyframes && b.keyframes.some(k => Math.abs(k.t - curT) <= 0.05);
+  const btnAddKey = $('btnBlockAddKey');
+  const btnDelKey = $('btnBlockDelKey');
+  if (btnAddKey) {
+    btnAddKey.textContent = hasKey ? '◆更新' : '◆＋キー';
+    btnAddKey.classList.toggle('active', !!hasKey);
+    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを追加`;
+  }
+  if (btnDelKey) {
+    btnDelKey.disabled = !hasKey;
+    btnDelKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレームを削除` : '現在位置にキーフレームがありません';
+  }
 }
 
 function deleteSelectedBlock() {
@@ -1241,11 +1350,71 @@ function bind() {
     $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
   }
 
-  // ブロックインスペクタパラメータ入力
+  // キーフレーム追加・更新
+  if ($('btnBlockAddKey')) {
+    $('btnBlockAddKey').addEventListener('click', () => {
+      if (!S.selectedBlock || !S.selectedBlock.block) return;
+      remember();
+      const b = S.selectedBlock.block;
+      if (!b.keyframes) b.keyframes = [];
+      const curT = parseFloat(S.t.toFixed(3));
+      const curVal = J.getBlockTransform(b, S.t);
+      let kf = b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
+      const isUpdate = !!kf;
+      if (!kf) {
+        kf = { t: curT, x: curVal.x, y: curVal.y, scale: curVal.scale, opacity: curVal.opacity };
+        b.keyframes.push(kf);
+        b.keyframes.sort((p, q) => p.t - q.t);
+      } else {
+        kf.t = curT;
+        kf.x = curVal.x;
+        kf.y = curVal.y;
+        kf.scale = curVal.scale;
+        kf.opacity = curVal.opacity;
+      }
+      syncBlockInspector();
+      replan();
+      drawTimeline();
+      commit();
+      flushSave();
+      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを追加しました (${curT.toFixed(2)}s)`);
+    });
+  }
+
+  // キーフレーム削除
+  if ($('btnBlockDelKey')) {
+    $('btnBlockDelKey').addEventListener('click', () => {
+      if (!S.selectedBlock || !S.selectedBlock.block) return;
+      const b = S.selectedBlock.block;
+      if (!b.keyframes || !b.keyframes.length) return;
+      const curT = S.t;
+      const idx = b.keyframes.findIndex(k => Math.abs(k.t - curT) <= 0.05);
+      if (idx >= 0) {
+        remember();
+        b.keyframes.splice(idx, 1);
+        syncBlockInspector();
+        replan();
+        drawTimeline();
+        commit();
+        flushSave();
+        toast('キーフレームを削除しました');
+      }
+    });
+  }
+
+  // ブロックインスペクタパラメータ入力（キーフレーム位置での直接編集 or ベース値編集）
   const onBlockParam = (prop, parser) => e => {
     if (!S.selectedBlock || !S.selectedBlock.block) return;
     remember();
-    S.selectedBlock.block[prop] = parser(e.target.value);
+    const b = S.selectedBlock.block;
+    const val = parser(e.target.value);
+    const curT = S.t;
+    const kf = b.keyframes && b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
+    if (kf && prop !== 'blendMode') {
+      kf[prop] = val;
+    } else {
+      b[prop] = val;
+    }
     replan();
     drawTimeline();
     flushSave();

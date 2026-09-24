@@ -122,6 +122,8 @@ button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
 .block-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; background: var(--raised); padding: 4px 8px; border-radius: var(--r); border: 1px solid var(--line); flex-wrap: wrap; }
 .block-bar .param { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
 .block-bar input, .block-bar select { padding: 2px 4px; font-size: 11px; }
+#btnBlockAddKey.active { background: var(--amber); color: var(--ink); font-weight: 700; border-color: var(--amber); }
+.ln-title { border-left: 3px solid var(--cyan) !important; background: rgba(22, 244, 212, 0.05); }
 .cutinfo { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 26px; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--line2); color: var(--text); background: var(--raised); }
 .chip b { font-weight: 500; color: var(--muted); margin-right: 5px; }

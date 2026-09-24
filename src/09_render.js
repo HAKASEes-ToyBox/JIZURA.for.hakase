@@ -24,6 +24,60 @@ J.BLEND_MAP = {
   luminosity: 'luminosity'
 };
 
+J.getBlockTransform = function(block, t) {
+  const fallback = {
+    x: block.x || 0,
+    y: block.y || 0,
+    scale: block.scale !== undefined ? block.scale : 1.0,
+    opacity: block.opacity !== undefined ? block.opacity : 1.0
+  };
+  const kfs = block.keyframes;
+  if (!kfs || !Array.isArray(kfs) || kfs.length === 0) return fallback;
+  if (kfs.length === 1) {
+    const k = kfs[0];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  const sorted = kfs.slice().sort((a, b) => a.t - b.t);
+  if (t <= sorted[0].t) {
+    const k = sorted[0];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  if (t >= sorted[sorted.length - 1].t) {
+    const k = sorted[sorted.length - 1];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const k0 = sorted[i], k1 = sorted[i + 1];
+    if (t >= k0.t && t <= k1.t) {
+      const dt = k1.t - k0.t;
+      const p = dt > 0.0001 ? (t - k0.t) / dt : 0;
+      const lerp = (a, b) => a + (b - a) * p;
+      return {
+        x: lerp(k0.x != null ? k0.x : fallback.x, k1.x != null ? k1.x : fallback.x),
+        y: lerp(k0.y != null ? k0.y : fallback.y, k1.y != null ? k1.y : fallback.y),
+        scale: lerp(k0.scale != null ? k0.scale : fallback.scale, k1.scale != null ? k1.scale : fallback.scale),
+        opacity: lerp(k0.opacity != null ? k0.opacity : fallback.opacity, k1.opacity != null ? k1.opacity : fallback.opacity)
+      };
+    }
+  }
+  return fallback;
+};
+
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
 J.cutAt = (plan, t) => {
@@ -110,7 +164,7 @@ class Renderer {
     const tr = plan.tracks || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
     let hasTrackMedia = false;
     if (!opt.transparent && tr) {
-      // 1. Track 2: Video blocks (active at time t)
+      // 1. Track 2: Video blocks (active at time t, lerp keyframes)
       const vBlocks = tr.videos || [];
       const activeVideo = vBlocks.find(b => t >= b.start && t < b.end);
       if (activeVideo && activeVideo.element && (activeVideo.ready || activeVideo.element.videoWidth)) {
@@ -119,21 +173,22 @@ class Renderer {
         const vmw = vel.videoWidth || W, vmh = vel.videoHeight || H;
         if (vmw > 0 && vmh > 0) {
           ctx.save();
+          const trV = J.getBlockTransform(activeVideo, t);
           const fit = activeVideo.fit || 'cover';
           const baseScale = fit === 'contain' ? Math.min(W / vmw, H / vmh) : Math.max(W / vmw, H / vmh);
-          const finalScale = baseScale * (activeVideo.scale !== undefined ? activeVideo.scale : 1);
-          const cx = W / 2 + (activeVideo.x || 0) * (W / 100);
-          const cy = H / 2 + (activeVideo.y || 0) * (H / 100);
+          const finalScale = baseScale * trV.scale;
+          const cx = W / 2 + trV.x * (W / 100);
+          const cy = H / 2 + trV.y * (H / 100);
           ctx.translate(cx, cy);
           ctx.scale(finalScale, finalScale);
-          ctx.globalAlpha = Math.max(0, Math.min(1, activeVideo.opacity !== undefined ? activeVideo.opacity : 1));
+          ctx.globalAlpha = Math.max(0, Math.min(1, trV.opacity));
           ctx.globalCompositeOperation = J.BLEND_MAP[activeVideo.blendMode] || 'source-over';
           try { ctx.drawImage(vel, -vmw / 2, -vmh / 2, vmw, vmh); } catch (e) {}
           ctx.restore();
         }
       }
 
-      // 2. Track 1: Image blocks (active at time t)
+      // 2. Track 1: Image blocks (active at time t, lerp keyframes)
       const iBlocks = tr.images || [];
       const activeImage = iBlocks.find(b => t >= b.start && t < b.end);
       if (activeImage && activeImage.element && (activeImage.ready || activeImage.element.naturalWidth)) {
@@ -142,14 +197,15 @@ class Renderer {
         const imw = iel.naturalWidth || W, imh = iel.naturalHeight || H;
         if (imw > 0 && imh > 0) {
           ctx.save();
+          const trI = J.getBlockTransform(activeImage, t);
           const fit = activeImage.fit || 'cover';
           const baseScale = fit === 'contain' ? Math.min(W / imw, H / imh) : Math.max(W / imw, H / imh);
-          const finalScale = baseScale * (activeImage.scale !== undefined ? activeImage.scale : 1);
-          const cx = W / 2 + (activeImage.x || 0) * (W / 100);
-          const cy = H / 2 + (activeImage.y || 0) * (H / 100);
+          const finalScale = baseScale * trI.scale;
+          const cx = W / 2 + trI.x * (W / 100);
+          const cy = H / 2 + trI.y * (H / 100);
           ctx.translate(cx, cy);
           ctx.scale(finalScale, finalScale);
-          ctx.globalAlpha = Math.max(0, Math.min(1, activeImage.opacity !== undefined ? activeImage.opacity : 1));
+          ctx.globalAlpha = Math.max(0, Math.min(1, trI.opacity));
           ctx.globalCompositeOperation = J.BLEND_MAP[activeImage.blendMode] || 'source-over';
           try { ctx.drawImage(iel, -imw / 2, -imh / 2, imw, imh); } catch (e) {}
           ctx.restore();

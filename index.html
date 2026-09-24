@@ -138,6 +138,8 @@ button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
 .block-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; background: var(--raised); padding: 4px 8px; border-radius: var(--r); border: 1px solid var(--line); flex-wrap: wrap; }
 .block-bar .param { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
 .block-bar input, .block-bar select { padding: 2px 4px; font-size: 11px; }
+#btnBlockAddKey.active { background: var(--amber); color: var(--ink); font-weight: 700; border-color: var(--amber); }
+.ln-title { border-left: 3px solid var(--cyan) !important; background: rgba(22, 244, 212, 0.05); }
 .cutinfo { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 26px; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 2px; border: 1px solid var(--line2); color: var(--text); background: var(--raised); }
 .chip b { font-weight: 500; color: var(--muted); margin-right: 5px; }
@@ -402,6 +404,9 @@ dialog.terms a { color: var(--cyan); word-break: break-all; }
           <option value="difference">差の絶対値</option>
           <option value="color-dodge">覆い焼き</option>
         </select></label>
+        <span class="param-divider" style="opacity:0.3;margin:0 2px">|</span>
+        <button id="btnBlockAddKey" class="small ghost icon-txt" title="現在の再生位置にキーフレーム(◆)を追加または更新" style="padding:2px 6px;font-size:11px">◆＋キー</button>
+        <button id="btnBlockDelKey" class="small ghost icon-txt" title="現在の再生位置のキーフレーム(◆)を削除" style="padding:2px 6px;font-size:11px" disabled>◆－キー</button>
       </div>
       <div class="cutinfo" id="cutInfo"></div>
     </section>
@@ -2961,7 +2966,7 @@ J.SAMPLE_LYRICS = `夜明けの色を/覚えてる
 
 J.defaultProject = () => ({
   version: 1,
-  title: '', artist: '',
+  title: '夜明けの色', artist: 'JIZURA',
   lyrics: J.SAMPLE_LYRICS,
   style: 'noir', mood: null,
   extra: false,                   // random picks may use the parts added after the first version (追加分)
@@ -3149,11 +3154,33 @@ J.plan = (project, audio) => {
   const nSchemes = st.schemes.length;
   const addEvent = (t, type, amp, dur) => plan.events.push({ t, type, amp, dur });
 
-  // title card
+  // title card (decor, treat, cam, enter, exit フル装飾対応)
   const firstStart = tm.starts.length ? tm.starts[0] : 0;
-  if (title && firstStart >= 1.1) {
-    const rng = J.rng(J.h(project.seed, 999));
-    plan.cuts.push(makeCut({ text: title, note: artist, lineText: title, line: -1, start: 0.1, end: firstStart - 0.04, layout: 'title', enter: rng.pick(['blur', 'type', 'wipe', 'assemble']), exit: rng.pick(['blur', 'drift', 'wipe']), hold: 'still', params: J.LAYOUTS.title.plan(rng, {}, st), decor: [], scheme: 0, seed: J.h(project.seed, 999, 1) }));
+  const showTitle = !!title;
+  if (showTitle) {
+    const ov = (project.overrides || {})[-1] || {};
+    const titleSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, 999, ov.seed | 0);
+    const rng = J.rng(titleSeed);
+    const titleEnd = firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2;
+    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : 'title';
+    const LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
+    const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']);
+    const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : rng.pick(['blur', 'drift', 'wipe']);
+    const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : 'still';
+    const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
+    const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, false, history);
+    const treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+    const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, false, history);
+    const camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
+    const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - 0.1 }, st) : {};
+    const titleCut = makeCut({
+      text: title, note: artist, lineText: title, line: -1,
+      start: 0.1, end: titleEnd, layout, enter, exit, hold,
+      params, decor, treat, treatP, cam, camP, scheme: 0, seed: J.h(titleSeed, 17)
+    });
+    plan.cuts.push(titleCut);
+    history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
+    plan.titleLine = { index: -1, text: title, note: artist, start: 0.1, end: titleEnd, seed: titleSeed, cut: titleCut };
   }
 
   parsed.lines.forEach((ln, li) => {
@@ -3561,6 +3588,60 @@ J.BLEND_MAP = {
   luminosity: 'luminosity'
 };
 
+J.getBlockTransform = function(block, t) {
+  const fallback = {
+    x: block.x || 0,
+    y: block.y || 0,
+    scale: block.scale !== undefined ? block.scale : 1.0,
+    opacity: block.opacity !== undefined ? block.opacity : 1.0
+  };
+  const kfs = block.keyframes;
+  if (!kfs || !Array.isArray(kfs) || kfs.length === 0) return fallback;
+  if (kfs.length === 1) {
+    const k = kfs[0];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  const sorted = kfs.slice().sort((a, b) => a.t - b.t);
+  if (t <= sorted[0].t) {
+    const k = sorted[0];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  if (t >= sorted[sorted.length - 1].t) {
+    const k = sorted[sorted.length - 1];
+    return {
+      x: k.x != null ? k.x : fallback.x,
+      y: k.y != null ? k.y : fallback.y,
+      scale: k.scale != null ? k.scale : fallback.scale,
+      opacity: k.opacity != null ? k.opacity : fallback.opacity
+    };
+  }
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const k0 = sorted[i], k1 = sorted[i + 1];
+    if (t >= k0.t && t <= k1.t) {
+      const dt = k1.t - k0.t;
+      const p = dt > 0.0001 ? (t - k0.t) / dt : 0;
+      const lerp = (a, b) => a + (b - a) * p;
+      return {
+        x: lerp(k0.x != null ? k0.x : fallback.x, k1.x != null ? k1.x : fallback.x),
+        y: lerp(k0.y != null ? k0.y : fallback.y, k1.y != null ? k1.y : fallback.y),
+        scale: lerp(k0.scale != null ? k0.scale : fallback.scale, k1.scale != null ? k1.scale : fallback.scale),
+        opacity: lerp(k0.opacity != null ? k0.opacity : fallback.opacity, k1.opacity != null ? k1.opacity : fallback.opacity)
+      };
+    }
+  }
+  return fallback;
+};
+
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
 J.cutAt = (plan, t) => {
@@ -3647,7 +3728,7 @@ class Renderer {
     const tr = plan.tracks || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
     let hasTrackMedia = false;
     if (!opt.transparent && tr) {
-      // 1. Track 2: Video blocks (active at time t)
+      // 1. Track 2: Video blocks (active at time t, lerp keyframes)
       const vBlocks = tr.videos || [];
       const activeVideo = vBlocks.find(b => t >= b.start && t < b.end);
       if (activeVideo && activeVideo.element && (activeVideo.ready || activeVideo.element.videoWidth)) {
@@ -3656,21 +3737,22 @@ class Renderer {
         const vmw = vel.videoWidth || W, vmh = vel.videoHeight || H;
         if (vmw > 0 && vmh > 0) {
           ctx.save();
+          const trV = J.getBlockTransform(activeVideo, t);
           const fit = activeVideo.fit || 'cover';
           const baseScale = fit === 'contain' ? Math.min(W / vmw, H / vmh) : Math.max(W / vmw, H / vmh);
-          const finalScale = baseScale * (activeVideo.scale !== undefined ? activeVideo.scale : 1);
-          const cx = W / 2 + (activeVideo.x || 0) * (W / 100);
-          const cy = H / 2 + (activeVideo.y || 0) * (H / 100);
+          const finalScale = baseScale * trV.scale;
+          const cx = W / 2 + trV.x * (W / 100);
+          const cy = H / 2 + trV.y * (H / 100);
           ctx.translate(cx, cy);
           ctx.scale(finalScale, finalScale);
-          ctx.globalAlpha = Math.max(0, Math.min(1, activeVideo.opacity !== undefined ? activeVideo.opacity : 1));
+          ctx.globalAlpha = Math.max(0, Math.min(1, trV.opacity));
           ctx.globalCompositeOperation = J.BLEND_MAP[activeVideo.blendMode] || 'source-over';
           try { ctx.drawImage(vel, -vmw / 2, -vmh / 2, vmw, vmh); } catch (e) {}
           ctx.restore();
         }
       }
 
-      // 2. Track 1: Image blocks (active at time t)
+      // 2. Track 1: Image blocks (active at time t, lerp keyframes)
       const iBlocks = tr.images || [];
       const activeImage = iBlocks.find(b => t >= b.start && t < b.end);
       if (activeImage && activeImage.element && (activeImage.ready || activeImage.element.naturalWidth)) {
@@ -3679,14 +3761,15 @@ class Renderer {
         const imw = iel.naturalWidth || W, imh = iel.naturalHeight || H;
         if (imw > 0 && imh > 0) {
           ctx.save();
+          const trI = J.getBlockTransform(activeImage, t);
           const fit = activeImage.fit || 'cover';
           const baseScale = fit === 'contain' ? Math.min(W / imw, H / imh) : Math.max(W / imw, H / imh);
-          const finalScale = baseScale * (activeImage.scale !== undefined ? activeImage.scale : 1);
-          const cx = W / 2 + (activeImage.x || 0) * (W / 100);
-          const cy = H / 2 + (activeImage.y || 0) * (H / 100);
+          const finalScale = baseScale * trI.scale;
+          const cx = W / 2 + trI.x * (W / 100);
+          const cy = H / 2 + trI.y * (H / 100);
           ctx.translate(cx, cy);
           ctx.scale(finalScale, finalScale);
-          ctx.globalAlpha = Math.max(0, Math.min(1, activeImage.opacity !== undefined ? activeImage.opacity : 1));
+          ctx.globalAlpha = Math.max(0, Math.min(1, trI.opacity));
           ctx.globalCompositeOperation = J.BLEND_MAP[activeImage.blendMode] || 'source-over';
           try { ctx.drawImage(iel, -imw / 2, -imh / 2, imw, imh); } catch (e) {}
           ctx.restore();
@@ -29005,7 +29088,7 @@ function draw() {
   S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: S.playing && S.slow });
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo();
+  updateTimeUI(); drawTimeline(); updateCutInfo(); syncBlockInspector();
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -29210,6 +29293,29 @@ function drawTimeline() {
     }
   }
 
+  const drawKeyframeMarkers = (kfs, top, bot, isSel) => {
+    if (!kfs || !kfs.length) return;
+    const midY = (top + bot) / 2;
+    for (const kf of kfs) {
+      const kx = Math.round(tlPxFromTime(kf.t, w));
+      if (kx < 0 || kx > w) continue;
+      const isCur = Math.abs(S.t - kf.t) <= 0.06;
+      x.save();
+      x.fillStyle = isCur ? '#ffffff' : (isSel ? '#16f4d4' : '#ffcf40');
+      x.strokeStyle = '#101014';
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(kx, midY - 4 * dpr);
+      x.lineTo(kx + 4 * dpr, midY);
+      x.lineTo(kx, midY + 4 * dpr);
+      x.lineTo(kx - 4 * dpr, midY);
+      x.closePath();
+      x.fill();
+      x.stroke();
+      x.restore();
+    }
+  };
+
   // Track 1: 背景画像ブロック
   const imgBlocks = (S.project && S.project.tracks && S.project.tracks.images) || [];
   for (let i = 0; i < imgBlocks.length; i++) {
@@ -29235,6 +29341,7 @@ function drawTimeline() {
       x.fillText(`🖼️ ${b.name || '画像'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t1Top + 14 * dpr);
       x.restore();
     }
+    drawKeyframeMarkers(b.keyframes, L.t1Top, L.t1Bot, isSel);
   }
 
   // Track 2: 背景動画ブロック
@@ -29262,6 +29369,7 @@ function drawTimeline() {
       x.fillText(`🎬 ${b.name || '動画'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t2Top + 14 * dpr);
       x.restore();
     }
+    drawKeyframeMarkers(b.keyframes, L.t2Top, L.t2Bot, isSel);
   }
 
   // トラック名バッジ（左端オーバーレイ）
@@ -29292,8 +29400,10 @@ function drawTimeline() {
     x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
     x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
   }
+  syncBlockInspector();
 }
 window.drawTimeline = drawTimeline;
+window.syncBlockInspector = syncBlockInspector;
 
 function timelineSeek(ev) {
   const c = $('timeline');
@@ -29309,8 +29419,12 @@ let lastCutIdx = -2;
 function updateCutInfo() {
   const cut = J.cutAt(S.plan, S.t);
   const idx = cut ? cut.index : -1;
-  const li = cut ? cut.line : -1;
-  if (li !== S.curLine) { S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li)); S.curLine = li; }
+  const li = cut ? cut.line : -2;
+  if (li !== S.curLine) {
+    if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', li === -1);
+    S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li));
+    S.curLine = li;
+  }
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
   const el = $('cutInfo');
@@ -29318,7 +29432,7 @@ function updateCutInfo() {
   const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
   const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
   el.innerHTML = [
-    `<span class="chip mono">#${String(cut.index + 1).padStart(2, '0')}</span>`,
+    `<span class="chip mono">${cut.line === -1 ? '#00 (タイトル)' : '#' + String(cut.index + 1).padStart(2, '0')}</span>`,
     chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
     cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
     cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
@@ -29330,9 +29444,61 @@ function updateCutInfo() {
 
 /* ---------------- line list ---------------- */
 function renderLines() {
-  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2;
+  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
   const ov = S.project.overrides;
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
+
+  // 先頭の曲タイトル行 (#00)
+  if (S.plan && S.plan.titleLine) {
+    const tln = S.plan.titleLine;
+    const to = ov[-1] || {};
+    const tli = document.createElement('li');
+    tli.className = 'ln ln-title';
+    tli.innerHTML = `<span class="no">#00</span>
+      <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始秒" style="opacity:0.6;cursor:default">
+      <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
+      <div class="meta"><span class="cuts"></span>
+      <span class="tools">
+        <select aria-label="タイトルレイアウト指定">
+          <option value="">自動</option>
+          <option value="title">標準タイトル</option>
+          <option value="huge">特大フォント</option>
+          <option value="cinema">シネマ風</option>
+          <option value="split">左右分割</option>
+        </select>
+        <button class="icon ghost dice" title="タイトルの装飾・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの装飾構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+      </span></div>`;
+    tli.querySelector('select').value = to.layout || '';
+    tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
+    tli.querySelector('select').addEventListener('change', e => { setOv(-1, { layout: e.target.value || undefined }); replan(); });
+    tli.querySelector('.dice').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) return;
+      setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
+      replan();
+      seek(0.001);
+    });
+    tli.querySelector('.lock').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) setOv(-1, { lock: false, lockedSeed: undefined });
+      else setOv(-1, { lock: true, lockedSeed: tln.seed });
+      replan();
+    });
+    const tcutsEl = tli.querySelector('.cuts');
+    S.plan.cuts.filter(c => c.line === -1).forEach(c => {
+      const sp = document.createElement('span');
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : 'タイトル';
+      sp.textContent = `装飾: ${decorNames}`;
+      sp.title = `レイアウト: ${c.layout}｜${decorNames}`;
+      sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
+      sp.addEventListener('click', () => seek(0.001));
+      tcutsEl.appendChild(sp);
+    });
+    ol.appendChild(tli);
+    S.titleLineEl = tli;
+  }
+
   S.plan.lines.forEach((ln, i) => {
     const o = ov[i] || {};
     const li = document.createElement('li'); li.className = 'ln';
@@ -29730,11 +29896,37 @@ function syncBlockInspector() {
   if (btnDel) btnDel.disabled = false;
   const b = sel.block;
   if ($('selBlockLabel')) $('selBlockLabel').textContent = `${sel.track === 'images' ? '画像' : '動画'}: ${b.name || '無題'}`;
-  if ($('selBlockX')) $('selBlockX').value = b.x != null ? b.x : 0;
-  if ($('selBlockY')) $('selBlockY').value = b.y != null ? b.y : 0;
-  if ($('selBlockScale')) $('selBlockScale').value = b.scale != null ? b.scale : 1.0;
-  if ($('selBlockOpacity')) $('selBlockOpacity').value = b.opacity != null ? b.opacity : 1.0;
+
+  // 現在時刻 S.t における補間値を取得
+  const curTrans = (typeof J !== 'undefined' && J.getBlockTransform)
+    ? J.getBlockTransform(b, S.t)
+    : { x: b.x || 0, y: b.y || 0, scale: b.scale != null ? b.scale : 1.0, opacity: b.opacity != null ? b.opacity : 1.0 };
+
+  // ユーザーが入力フィールドを編集中でなければ入力欄を更新
+  const active = document.activeElement;
+  const inInspector = bar.contains(active);
+  if (!inInspector) {
+    if ($('selBlockX')) $('selBlockX').value = Math.round(curTrans.x);
+    if ($('selBlockY')) $('selBlockY').value = Math.round(curTrans.y);
+    if ($('selBlockScale')) $('selBlockScale').value = parseFloat(curTrans.scale.toFixed(2));
+    if ($('selBlockOpacity')) $('selBlockOpacity').value = parseFloat(curTrans.opacity.toFixed(2));
+  }
   if ($('selBlockBlend')) $('selBlockBlend').value = b.blendMode || 'normal';
+
+  // キーフレーム判定（現在時刻 S.t 近傍にキーフレームがあるか）
+  const curT = S.t;
+  const hasKey = b.keyframes && b.keyframes.some(k => Math.abs(k.t - curT) <= 0.05);
+  const btnAddKey = $('btnBlockAddKey');
+  const btnDelKey = $('btnBlockDelKey');
+  if (btnAddKey) {
+    btnAddKey.textContent = hasKey ? '◆更新' : '◆＋キー';
+    btnAddKey.classList.toggle('active', !!hasKey);
+    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを追加`;
+  }
+  if (btnDelKey) {
+    btnDelKey.disabled = !hasKey;
+    btnDelKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレームを削除` : '現在位置にキーフレームがありません';
+  }
 }
 
 function deleteSelectedBlock() {
@@ -30109,11 +30301,71 @@ function bind() {
     $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
   }
 
-  // ブロックインスペクタパラメータ入力
+  // キーフレーム追加・更新
+  if ($('btnBlockAddKey')) {
+    $('btnBlockAddKey').addEventListener('click', () => {
+      if (!S.selectedBlock || !S.selectedBlock.block) return;
+      remember();
+      const b = S.selectedBlock.block;
+      if (!b.keyframes) b.keyframes = [];
+      const curT = parseFloat(S.t.toFixed(3));
+      const curVal = J.getBlockTransform(b, S.t);
+      let kf = b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
+      const isUpdate = !!kf;
+      if (!kf) {
+        kf = { t: curT, x: curVal.x, y: curVal.y, scale: curVal.scale, opacity: curVal.opacity };
+        b.keyframes.push(kf);
+        b.keyframes.sort((p, q) => p.t - q.t);
+      } else {
+        kf.t = curT;
+        kf.x = curVal.x;
+        kf.y = curVal.y;
+        kf.scale = curVal.scale;
+        kf.opacity = curVal.opacity;
+      }
+      syncBlockInspector();
+      replan();
+      drawTimeline();
+      commit();
+      flushSave();
+      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを追加しました (${curT.toFixed(2)}s)`);
+    });
+  }
+
+  // キーフレーム削除
+  if ($('btnBlockDelKey')) {
+    $('btnBlockDelKey').addEventListener('click', () => {
+      if (!S.selectedBlock || !S.selectedBlock.block) return;
+      const b = S.selectedBlock.block;
+      if (!b.keyframes || !b.keyframes.length) return;
+      const curT = S.t;
+      const idx = b.keyframes.findIndex(k => Math.abs(k.t - curT) <= 0.05);
+      if (idx >= 0) {
+        remember();
+        b.keyframes.splice(idx, 1);
+        syncBlockInspector();
+        replan();
+        drawTimeline();
+        commit();
+        flushSave();
+        toast('キーフレームを削除しました');
+      }
+    });
+  }
+
+  // ブロックインスペクタパラメータ入力（キーフレーム位置での直接編集 or ベース値編集）
   const onBlockParam = (prop, parser) => e => {
     if (!S.selectedBlock || !S.selectedBlock.block) return;
     remember();
-    S.selectedBlock.block[prop] = parser(e.target.value);
+    const b = S.selectedBlock.block;
+    const val = parser(e.target.value);
+    const curT = S.t;
+    const kf = b.keyframes && b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
+    if (kf && prop !== 'blendMode') {
+      kf[prop] = val;
+    } else {
+      b[prop] = val;
+    }
     replan();
     drawTimeline();
     flushSave();
