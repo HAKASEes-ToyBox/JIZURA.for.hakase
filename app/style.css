@@ -37,6 +37,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .proj { display: flex; gap: 8px; flex: 1 1 280px; min-width: 0; }
 .proj input { flex: 1 1 0; min-width: 0; }
 .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.lang-switch { display: inline-flex; align-items: center; gap: 3px; flex: none; font: 500 11px var(--mono); border: 1px solid var(--line2); border-radius: var(--r); padding: 3px; }
+.lang-switch a, .lang-switch span { display: inline-block; padding: 3px 7px; color: var(--muted); text-decoration: none; border-radius: 2px; }
+.lang-switch a:hover { color: var(--text); background: var(--raised2); }
+.lang-switch [aria-current=page] { color: var(--ink); background: var(--amber); }
+html[lang=en] { --ui: system-ui, -apple-system, "Segoe UI", sans-serif; --brand: Georgia, "Times New Roman", serif; }
+html[lang=en] .work { grid-template-columns: minmax(315px, 365px) minmax(0, 1fr) minmax(350px, 395px); }
+html[lang=en] .slider { grid-template-columns: 124px minmax(0, 1fr) 36px; }
+html[lang=en] .now-row { grid-template-columns: 105px minmax(0, 1fr); }
+html[lang=en] .font-row { grid-template-columns: 95px minmax(0, 1fr); }
+html[lang=en] .ln .tools select { max-width: 130px; }
+html[lang=en] .fields .field { overflow-wrap: anywhere; }
+html[lang=en] .easy-grid button, html[lang=en] .tabs button { white-space: normal; line-height: 1.2; }
 
 /* ---------- controls ---------- */
 input[type=text], input[type=number], input:not([type]), select, textarea {
@@ -107,10 +119,14 @@ button.tap { font: 700 18px/1 var(--mono); letter-spacing: 0.2em; padding: 16px;
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
 .field-wide { grid-column: span 2; }
+.lang-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.lang-row select { width: auto; }
 .key-badge { position: absolute; right: 10px; top: 10px; background: rgba(12,12,14,0.78); border: 1px solid var(--line2); color: #fff; padding: 3px 8px; border-radius: var(--r); font-size: 11px; pointer-events: none; letter-spacing: .04em; }
 .key-badge i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.5); }
 .overlay-msg { position: absolute; left: 12px; bottom: 12px; background: rgba(12,12,14,0.85); border: 1px solid var(--line2); padding: 6px 10px; border-radius: var(--r); font-size: 12px; }
 .transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.transport .vol { display: inline-flex; align-items: center; gap: 4px; }
+.transport .vol input[type=range] { flex: 0 0 80px; width: 80px; }
 .transport .tc { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
 .transport input[type=range] { flex: 1 1 160px; accent-color: var(--amber); }
 button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
@@ -247,12 +263,14 @@ dialog.terms a { color: var(--cyan); word-break: break-all; }
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
   .work { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  html[lang=en] .work { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .col-stage { grid-column: 1 / -1; order: -1; }
   .col-left { border-right: 1px solid var(--line); }
   .col-right { border-left: 0; }
 }
 @media (max-width: 760px) {
   .work { grid-template-columns: minmax(0, 1fr); }
+  html[lang=en] .work { grid-template-columns: minmax(0, 1fr); }
   .col-left, .col-right { border: 0; border-top: 1px solid var(--line); }
   .bar { gap: 10px; }
   .brand .tag { display: none; }

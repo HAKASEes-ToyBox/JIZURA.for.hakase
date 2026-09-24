@@ -9,7 +9,7 @@ function jzUI(thisObj) {
     var win = (thisObj instanceof Panel) ? thisObj : new Window('palette', 'JIZURA', undefined, { resizeable: true });
     win.orientation = 'column'; win.alignChildren = ['fill', 'top']; win.spacing = 6; win.margins = 10;
     var head = win.add('group'); head.alignChildren = ['left', 'center'];
-    var ttl = head.add('statictext', undefined, 'JIZURA 字面  lyric motion'); try { ttl.graphics.font = ScriptUI.newFont(ttl.graphics.font.name, 'BOLD', 14); } catch (e) {}
+    var ttl = head.add('statictext', undefined, 'JIZURA 字面  lyric motion  v' + JZ_PANEL_VERSION + '（' + jzPartsCount() + ' 部品）'); try { ttl.graphics.font = ScriptUI.newFont(ttl.graphics.font.name, 'BOLD', 14); } catch (e) {}
 
     var tp = win.add('tabbedpanel'); tp.alignChildren = ['fill', 'top'];
     // ---------------- tab 1: from lyrics
@@ -26,7 +26,11 @@ function jzUI(thisObj) {
     cExtra.helpTip = 'オフのときは最初の公開版の演出（356部品・スタイル12種）だけを使います。オンにすると、あとから追加した演出・スタイル・書体も候補になります';
     var cWa = gSw.add('checkbox', undefined, '和風の演出も使う'); cWa.value = jzGet('wa', '1') === '1';
     cWa.helpTip = '提灯・はがき・障子・扇・家紋・青海波・桜の花びらなどの和風グラフィックと、和風のスタイル。オフにすると自動では選ばれません（追加分の判定のあとに適用）';
-    function switches() { return { extra: cExtra.value, wa: cWa.value }; }
+    var gLang = gSw.add('group'); gLang.spacing = 4; gLang.add('statictext', undefined, '歌詞の言語');
+    var JZ_LANG_KEYS = ['auto', 'ja', 'zh-Hant', 'zh-Hans', 'ko', 'en'];
+    var ddLang = gLang.add('dropdownlist', undefined, ['自動判定', '日本語', '繁體中文', '简体中文', '한국어', 'English']); ddLang.selection = parseInt(jzGet('lang', '0'), 10) || 0;
+    ddLang.helpTip = '中国語（繁体字・簡体字）や韓国語の歌詞は、その文字を持つ書体で組みます（各スタイルの書体の雰囲気に近いものに置き換え）。自動判定はかな・ハングル・繁体字／簡体字に特有の字から判断します';
+    function switches() { return { extra: cExtra.value, wa: cWa.value, lang: JZ_LANG_KEYS[ddLang.selection ? ddLang.selection.index : 0] }; }
     var gS = t1.add('group'); gS.add('statictext', undefined, 'スタイル');
     var styleNames = [], i;
     for (i = 0; i < JZ_DATA.styleOrder.length; i++) { var stI = JZ_DATA.styles[JZ_DATA.styleOrder[i]]; styleNames.push(stI.name + (stI.extra || stI.wa ? '  〔' + (stI.extra ? '追加' : '') + (stI.extra && stI.wa ? '・' : '') + (stI.wa ? '和' : '') + '〕' : '')); }
@@ -111,6 +115,8 @@ function jzUI(thisObj) {
     t2.add('statictext', undefined, '同じタイミング・レイアウト・演出で編集可能なコンポを組みます。', undefined, { multiline: true });
     var cAudio2 = t2.add('checkbox', undefined, '選択中の音声レイヤーも入れる'); cAudio2.value = true;
     var bJson = t2.add('button', undefined, 'JSONを選んで生成…');
+    t2.add('statictext', undefined, '思ったとおりにできないときは、下のボタンで診断レポート（JIZURA_report.txt）を保存して送ってください。', undefined, { multiline: true });
+    var bDiag = t2.add('button', undefined, '診断レポートを保存（最後に作ったコンポ）');
 
     // ---------------- tab 3: fonts
     var t3 = tp.add('tab', undefined, 'フォント'); t3.orientation = 'column'; t3.alignChildren = ['fill', 'top']; t3.margins = 8;
@@ -140,9 +146,23 @@ function jzUI(thisObj) {
         try { if (L.hasAudio && L.source) return { item: L.source, start: L.startTime }; } catch (e) {}
         return null;
     }
+    var fontNoted = false, lastComp = null, lastPlan = null;
     function report(comp, t0, label) {
         var s = (label ? label + '  ' : '') + (comp ? comp.name : '') + ' — ' + ((new Date().getTime() - t0) / 1000).toFixed(1) + 's';
         if (JZLOG.length) { s += ' / 注意 ' + JZLOG.length + '件'; alert('JIZURA：生成しましたが、一部に注意があります：\n\n' + JZLOG.slice(0, 14).join('\n')); }
+        var mf = comp ? jzMissingFonts() : [];
+        if (mf.length) {
+            s += ' / 書体の代用 ' + mf.length; status.helpTip = 'この PC に無い書体: ' + mf.join(', ');
+            if (!fontNoted) {
+                fontNoted = true;
+                alert('JIZURA：次の書体がこの PC に無いため、近い書体で作りました。\n\n' + mf.join('\n') +
+                    '\n\nどれも Google Fonts（fonts.google.com）から無料で入れられます。入れて After Effects を再起動し、作り直すと、ブラウザ版と同じ書体になります。');
+            }
+        }
+        if (comp && JZ_FONT_NOAPI && !fontNoted) {
+            fontNoted = true;
+            alert('JIZURA：この After Effects では書体が入っているかを確認できないため（AE 2024 より前）、「フォント」タブで指定した書体で作りました。\n\nブラウザ版と同じ書体にするには、使われている書体（Google Fonts）を入れて「フォント」タブで指定するか、AE 2024 以降で作ってください。');
+        }
         status.text = s;
     }
 
@@ -155,7 +175,7 @@ function jzUI(thisObj) {
         jzPut('size', ddSize.selection.index); jzPut('fps', ddFps.selection.index); jzPut('timing', rLayer.value ? 'layer' : rComp.value ? 'comp' : 'auto');
         jzPut('bpm', eBpm.text); jzPut('lineScale', eScale.text); jzPut('audio', cAudio.value ? '1' : '0'); jzPut('seed', eSeed.text);
         jzPut('twos', cTwos.value ? '1' : '0'); jzPut('flash', cFlash.value ? '1' : '0'); jzPut('hud', ddHud.selection.index);
-        jzPut('extra', cExtra.value ? '1' : '0'); jzPut('wa', cWa.value ? '1' : '0'); jzPut('key', ddKey.selection.index);
+        jzPut('extra', cExtra.value ? '1' : '0'); jzPut('wa', cWa.value ? '1' : '0'); jzPut('key', ddKey.selection.index); jzPut('lang', ddLang.selection ? ddLang.selection.index : 0);
         var sl = [sMotion, sGlitch, sChroma, sDecor, sDensity, sTexture, sBg]; for (var k = 0; k < sl.length; k++) jzPut(sl[k].key, sl[k].value);
         var active = app.project.activeItem, W = 1920, H = 1080, fps = [24, 30, 60][ddFps.selection.index], dur = null;
         var sz = ddSize.selection.index;
@@ -178,7 +198,7 @@ function jzUI(thisObj) {
             lyrics: lyr.text, title: eTitle.text, artist: eArtist.text, style: JZ_DATA.styleOrder[ddStyle.selection.index], seed: parseInt(eSeed.text, 10) || 1,
             fx: { motion: sMotion.value / 100, glitch: sGlitch.value / 100, chroma: sChroma.value / 100, decor: sDecor.value / 100, density: sDensity.value / 100, texture: sTexture.value / 100, bgSwitch: sBg.value / 100, onTwos: cTwos.value, flash: cFlash.value, hud: false },
             width: W, height: H, fps: fps, bpm: parseFloat(eBpm.text) || 0, starts: starts, enabled: en, offset: 0.4, lineScale: parseFloat(eScale.text) || 1, duration: dur,
-            extra: sw.extra, wa: sw.wa
+            extra: sw.extra, wa: sw.wa, lang: sw.lang
         };
         var st = JZ_DATA.styles[o.style];
         o.fx.hud = ddHud.selection.index === 1 ? true : ddHud.selection.index === 2 ? false : !!st.hud;
@@ -199,6 +219,7 @@ function jzUI(thisObj) {
         try { comp = jzBuild(plan, { roles: roles(), audioItem: au ? au.item : null, audioStart: au ? au.start : 0 }); }
         catch (e2) { alert('生成中にエラー: ' + e2.toString() + (e2.line ? ' (line ' + e2.line + ')' : '')); }
         finally { app.endUndoGroup(); }
+        if (comp) { lastComp = comp; lastPlan = plan; }
         report(comp, t0, label);
     }
     bBuild.onClick = function () { doBuild(''); };
@@ -231,9 +252,24 @@ function jzUI(thisObj) {
         try { comp = jzBuild(plan, { roles: roles(), audioItem: au ? au.item : null, audioStart: au ? au.start : 0 }); }
         catch (e2) { alert('生成中にエラー: ' + e2.toString() + (e2.line ? ' (line ' + e2.line + ')' : '')); }
         finally { app.endUndoGroup(); }
-        if (JZ_FALLBACKS > 0) note = (note ? note + ' / ' : '') + 'このパネルに無い表現 ' + JZ_FALLBACKS + ' 箇所を、近い表現で作りました';
+        if (comp) { lastComp = comp; lastPlan = plan; }
+        if (JZ_FALLBACKS > 0) {
+            note = (note ? note + ' / ' : '') + 'このパネルに無い表現 ' + JZ_FALLBACKS + ' 箇所を、近い表現で作りました';
+            alert('JIZURA：この JSON には、このパネルが作れない表現が ' + JZ_FALLBACKS + ' 箇所あり、近い表現に置き換えました。\n\n' + JZ_FALLBACK_KEYS.slice(0, 12).join(', ') +
+                '\n\nブラウザ版より古いパネルを使っている可能性があります。最新の JIZURA_AE.jsx（v' + JZ_PANEL_VERSION + '・707 部品）に差し替えて、After Effects を再起動してください。');
+        }
         report(comp, t0, note ? '置換あり' : '');
         if (note) status.helpTip = note;
+    };
+    bDiag.onClick = function () {
+        if (!lastComp) { alert('先にコンポを作ってください（このパネルで最後に作ったコンポを調べます）'); return; }
+        var ok = false; try { ok = !!lastComp.name; } catch (e) { ok = false; }
+        if (!ok) { alert('最後に作ったコンポが見つかりません（削除された可能性があります）'); return; }
+        status.text = '診断中…（数十秒かかることがあります）';
+        var r = jzDiagnose(lastComp, lastPlan, 120), path = jzSaveReport(r.text);
+        status.text = '診断：エクスプレッションのエラー ' + r.errors + ' / ' + r.expressions + (r.partial ? '（途中まで）' : '');
+        alert('JIZURA 診断：エクスプレッション ' + r.expressions + ' 個のうち、エラー ' + r.errors + ' 個' + (r.partial ? '（時間の上限で途中まで）' : '') + '\n\n' +
+            (path ? 'レポートを保存しました：\n' + path : 'レポートを保存できませんでした（環境設定 → スクリプトとエクスプレッション →「スクリプトによるファイルへの書き込みとネットワークへのアクセスを許可」をオンにしてください）。\n\n' + r.text.substr(0, 1500)));
     };
 
     win.onResizing = win.onResize = function () { try { this.layout.resize(); } catch (e) {} };
