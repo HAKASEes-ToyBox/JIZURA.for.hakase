@@ -1155,8 +1155,19 @@ function startTap(targetLineIdx = null) {
   const ln = S.plan.lines[startIdx];
   if (!ln) return;
 
+  remember();
+
   S.tap = { i: startIdx, startIdx };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+
+  // startIdx 以降の古いカット境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
+  if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
+    S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line < startIdx);
+  }
+  // startIdx 以降の古い lineTimes もクリア（上書き開始）
+  for (let k = startIdx; k < S.plan.lines.length; k++) {
+    delete S.project.timing.lineTimes[k];
+  }
 
   $('tapPanel').hidden = false;
   $('btnTap').setAttribute('aria-pressed', 'true');
@@ -1185,6 +1196,11 @@ function tapNow() {
     if (tVal <= prevT) {
       tVal = +(prevT + 0.05).toFixed(3);
     }
+  }
+
+  // 該当行のカット境界を確実にクリアして新タイミングで再導出
+  if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
+    S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== curIdx);
   }
 
   S.project.timing.lineTimes[curIdx] = tVal;
