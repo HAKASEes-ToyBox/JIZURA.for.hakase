@@ -683,6 +683,7 @@ function renderLines() {
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
         <select aria-label="レイアウト指定">${layoutOpts}</select>
+        <button class="icon ghost tap-from-here" title="この行からタップ同期を開始">⏱️</button>
         <button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>
         <button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
@@ -693,8 +694,12 @@ function renderLines() {
       if (isFinite(v)) S.project.timing.lineTimes[i] = Math.max(0, v); else delete S.project.timing.lineTimes[i];
       replan();
     });
-    li.querySelector('.txt').addEventListener('click', () => seek(ln.start + 0.001));
+    li.querySelector('.txt').addEventListener('click', () => { S.curLine = i; seek(ln.start + 0.001); });
     li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
+    li.querySelector('.tap-from-here').addEventListener('click', (e) => {
+      e.stopPropagation();
+      startTap(i);
+    });
     li.querySelector('.dice').addEventListener('click', () => {
       const cur = ov[i] || {};
       if (cur.lock) return;
@@ -923,6 +928,7 @@ const UndoRedo = {
 };
 window.UndoRedo = UndoRedo;
 window.replan = replan;
+window.seek = seek;
 
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
@@ -1121,23 +1127,97 @@ async function runExport(kind) {
 }
 
 /* ---------------- tap sync ---------------- */
-function startTap() {
+function inferTapStartLine() {
+  const lines = S.plan && S.plan.lines;
+  if (!lines || !lines.length) return 0;
+  if (S.curLine >= 0 && S.curLine < lines.length) {
+    return S.curLine;
+  }
+  const curT = S.t || 0;
+  if (curT <= 0.3) return 0;
+  let bestIdx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (curT >= ln.start - 0.5 && curT <= ln.end) {
+      return i;
+    }
+    if (ln.start > curT) {
+      return i;
+    }
+    bestIdx = i;
+  }
+  return bestIdx;
+}
+
+function startTap(targetLineIdx = null) {
   if (!S.plan.lines.length) return;
-  S.tap = { i: 0 };
+  const startIdx = targetLineIdx != null ? targetLineIdx : inferTapStartLine();
+  const ln = S.plan.lines[startIdx];
+  if (!ln) return;
+
+  S.tap = { i: startIdx, startIdx };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-  $('tapPanel').hidden = false; $('btnTap').setAttribute('aria-pressed', 'true');
-  seek(0); play(); updateTap();
+
+  $('tapPanel').hidden = false;
+  $('btnTap').setAttribute('aria-pressed', 'true');
+
+  const lineStart = ln.start || 0;
+  const preRoll = startIdx > 0 ? 1.2 : 0;
+  const seekT = Math.max(0, lineStart - preRoll);
+
+  seek(seekT);
+  play();
+  updateTap();
+
+  if (startIdx > 0) {
+    toast(`第 ${startIdx + 1} 行「${ln.text.slice(0, 12)}…」からタップ同期を開始（${seekT.toFixed(1)}秒へ移動）`);
+  }
   $('tapBtn').focus();
 }
+
 function tapNow() {
   if (!S.tap) return;
-  S.project.timing.lineTimes[S.tap.i] = +S.t.toFixed(3);
+  const curIdx = S.tap.i;
+  let tVal = +S.t.toFixed(3);
+
+  if (curIdx > 0 && S.project.timing.lineTimes && S.project.timing.lineTimes[curIdx - 1] != null) {
+    const prevT = S.project.timing.lineTimes[curIdx - 1];
+    if (tVal <= prevT) {
+      tVal = +(prevT + 0.05).toFixed(3);
+    }
+  }
+
+  S.project.timing.lineTimes[curIdx] = tVal;
   S.tap.i++;
   replan();
-  if (S.tap.i >= S.plan.lines.length) stopTap(); else updateTap();
+
+  if (S.tap.i >= S.plan.lines.length) {
+    stopTap();
+    toast('全行のタップ同期が完了しました');
+  } else {
+    updateTap();
+  }
 }
-function stopTap() { S.tap = null; $('tapPanel').hidden = true; $('btnTap').setAttribute('aria-pressed', 'false'); replan(); }
-function updateTap() { const ln = S.plan.lines[S.tap.i]; $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${ln.text}` : '—'; }
+
+function stopTap() {
+  if (S.tap) {
+    commit('タップ同期');
+  }
+  S.tap = null;
+  $('tapPanel').hidden = true;
+  $('btnTap').setAttribute('aria-pressed', 'false');
+  replan();
+}
+
+function updateTap() {
+  if (!S.tap) return;
+  const ln = S.plan.lines[S.tap.i];
+  const total = S.plan.lines.length;
+  $('tapLine').textContent = ln ? `${S.tap.i + 1}/${total}. ${ln.text}` : '—';
+}
+window.startTap = startTap;
+window.tapNow = tapNow;
+window.stopTap = stopTap;
 
 function syncBgMediaUI() {
   const bg = S.project.bgMedia || {};
@@ -1268,6 +1348,7 @@ function bind() {
   $('btnTap').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
+  if ($('tapFromStart')) $('tapFromStart').addEventListener('click', () => startTap(0));
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnLoop').addEventListener('click', e => { S.loop = !S.loop; e.target.setAttribute('aria-pressed', String(S.loop)); });
   $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit(); });
