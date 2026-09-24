@@ -1540,41 +1540,51 @@ function bind() {
 
       if (dragMode === 'trim-start') {
         const prevCut = idx > 0 ? cuts[idx - 1] : null;
-        let minT = prevCut ? prevCut.start + minDur : 0;
+        const isSameLine = prevCut && prevCut.line === c.line;
+
+        let minT = 0;
+        if (isSameLine) {
+          minT = prevCut.start + minDur;
+        } else if (prevCut) {
+          minT = prevCut.end + 0.04;
+        }
         let maxT = dragData.origEnd - minDur;
         let newT = Math.max(minT, Math.min(curTime, maxT));
 
         c.start = newT;
         c.dur = Math.max(minDur, c.end - c.start);
 
-        if (prevCut) {
+        if (isSameLine) {
           prevCut.end = newT;
           prevCut.dur = Math.max(minDur, prevCut.end - prevCut.start);
-        }
-        if (c.line >= 0 && (!prevCut || prevCut.line !== c.line)) {
-          if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-          S.project.timing.lineTimes[c.line] = c.start;
-          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        } else {
+          if (c.line >= 0) {
+            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+            S.project.timing.lineTimes[c.line] = c.start;
+            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+          }
         }
         seek(c.start);
         drawTimeline();
       } else if (dragMode === 'trim-end') {
         const nextCut = idx < cuts.length - 1 ? cuts[idx + 1] : null;
+        const isSameLine = nextCut && nextCut.line === c.line;
+
         let minT = dragData.origStart + minDur;
-        let maxT = nextCut ? nextCut.end - minDur : S.plan.duration;
+        let maxT = S.plan.duration;
+        if (isSameLine) {
+          maxT = nextCut.end - minDur;
+        } else if (nextCut) {
+          maxT = Math.max(minT, nextCut.start - 0.04);
+        }
         let newT = Math.max(minT, Math.min(curTime, maxT));
 
         c.end = newT;
         c.dur = Math.max(minDur, c.end - c.start);
 
-        if (nextCut) {
+        if (isSameLine) {
           nextCut.start = newT;
           nextCut.dur = Math.max(minDur, nextCut.end - nextCut.start);
-          if (nextCut.line >= 0 && nextCut.line !== c.line) {
-            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-            S.project.timing.lineTimes[nextCut.line] = nextCut.start;
-            if (S.plan.lines[nextCut.line]) S.plan.lines[nextCut.line].start = nextCut.start;
-          }
         }
         seek(c.end);
         drawTimeline();
@@ -1660,57 +1670,85 @@ function bind() {
     }
   });
 
+  function deleteCutSafe(idx) {
+    const cuts = S.plan.cuts;
+    if (idx < 0 || idx >= cuts.length) return false;
+    const cut = cuts[idx];
+
+    // 同一行内のカット一覧
+    const sameLineCuts = cuts.filter(c => c.line === cut.line);
+
+    // その行にカットが1つしか残っていない（最後の1カット）場合は誤削除を安全にブロック
+    if (sameLineCuts.length <= 1) {
+      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '行の最後の演出は削除できません（行を削除したい場合は歌詞を編集してください）');
+      return false;
+    }
+
+    remember();
+
+    // 同一行内の直前カット（prevInLine）と直後カット（nextInLine）を検索
+    const prevInLine = cuts.slice(0, idx).reverse().find(c => c.line === cut.line);
+    const nextInLine = cuts.slice(idx + 1).find(c => c.line === cut.line);
+
+    if (prevInLine) {
+      prevInLine.end = cut.end;
+      prevInLine.dur = prevInLine.end - prevInLine.start;
+      if (cut.text && !prevInLine.text.includes(cut.text)) {
+        prevInLine.text = (prevInLine.text + ' ' + cut.text).trim();
+      }
+    } else if (nextInLine) {
+      nextInLine.start = cut.start;
+      nextInLine.dur = nextInLine.end - nextInLine.start;
+      if (cut.text && !nextInLine.text.includes(cut.text)) {
+        nextInLine.text = (cut.text + ' ' + nextInLine.text).trim();
+      }
+      if (cut.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        S.project.timing.lineTimes[cut.line] = nextInLine.start;
+      }
+    }
+
+    // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
+    cuts.splice(idx, 1);
+
+    // 3. タイトルカード削除時の特別処理
+    if (cut.line === -1 && S.plan.titleLine) {
+      S.plan.titleLine.cut = prevInLine || nextInLine || null;
+    }
+
+    // 4. 残存カットリストを永続データとして記録
+    if (!S.project.timing) S.project.timing = {};
+    S.project.timing.cutTimes = cuts.map(c => ({
+      start: +c.start.toFixed(3),
+      end: +c.end.toFixed(3),
+      line: c.line,
+      text: c.text
+    }));
+
+    // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
+    if (S.project.rowCache && S.project.rowCache[cut.line]) {
+      delete S.project.rowCache[cut.line];
+    }
+
+    replan();
+    commit('カット削除');
+    flushSave();
+    drawTimeline();
+    toast('演出を1つ削除し、行内の演出で尺とテキストを補間しました');
+    return true;
+  }
+  window.deleteCutSafe = deleteCutSafe;
+
   tl.addEventListener('pointerup', () => {
     if (dragMode && dragMode !== 'pan' && dragMode !== 'seek' && dragData) {
       if (dragData.isDeleting) {
-        remember();
         if (dragData.target === 'cut') {
-          const idx = dragData.cutIndex;
-          const cut = dragData.cut;
-          const cuts = S.plan.cuts;
-          // 1. 直前の要素の終了時間を延長して隙間を自動補間（または直後要素の開始時間を前倒し）
-          if (idx > 0) {
-            const prev = cuts[idx - 1];
-            prev.end = cut.end;
-            prev.dur = prev.end - prev.start;
-            // 歌詞テキストの合流（同一行ならテキストを直前カットに結合）
-            if (prev.line === cut.line && cut.text) {
-              if (!prev.text.includes(cut.text)) {
-                prev.text = (prev.text + ' ' + cut.text).trim();
-              }
-            }
-          } else if (cuts.length > 1) {
-            cuts[1].start = cut.start;
-            cuts[1].dur = cuts[1].end - cuts[1].start;
-            if (cuts[1].line === cut.line && cut.text) {
-              if (!cuts[1].text.includes(cut.text)) {
-                cuts[1].text = (cut.text + ' ' + cuts[1].text).trim();
-              }
-            }
-          }
-          // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
-          cuts.splice(idx, 1);
-
-          // 3. タイトルカード削除時の特別処理
-          if (cut.line === -1) {
-            if (S.plan.titleLine) S.plan.titleLine = null;
-          }
-
-          // 4. 残存カットリストを永続データとして記録
-          if (!S.project.timing) S.project.timing = {};
-          S.project.timing.cutTimes = cuts.map(c => ({
-            start: +c.start.toFixed(3),
-            end: +c.end.toFixed(3),
-            line: c.line,
-            text: c.text
-          }));
-
-          // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
-          if (S.project.rowCache && S.project.rowCache[cut.line]) {
-            delete S.project.rowCache[cut.line];
-          }
-
-          toast('演出を1つ削除し、前の演出で尺とテキストを補間しました');
+          deleteCutSafe(dragData.cutIndex);
+          dragMode = null;
+          dragData = null;
+          S.tlDrag = null;
+          tl.style.cursor = 'default';
+          return;
         } else if (dragData.target === 'block') {
           const trackName = dragData.track;
           const blocks = (S.project && S.project.tracks && S.project.tracks[trackName]) || [];

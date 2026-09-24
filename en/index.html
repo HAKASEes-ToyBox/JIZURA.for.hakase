@@ -3557,19 +3557,24 @@ J.plan = (project, audio) => {
     let units, bounds;
 
     if (manualCuts && manualCuts.length > 0) {
-      bounds = [manualCuts[0].start];
-      manualCuts.forEach(mc => bounds.push(mc.end));
       const hasTexts = manualCuts.every(mc => mc.text && mc.text.trim());
+      let texts = [];
       if (hasTexts) {
-        units = manualCuts.map(mc => ({ text: mc.text, w: [...mc.text].length + 1.6 }));
+        texts = manualCuts.map(mc => mc.text);
       } else {
         const nG = Math.min(manualCuts.length, chunks.length);
         const groups = (nG <= 1) ? [ln.text] : partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
-        units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
-        while (units.length < manualCuts.length) {
-          units.push({ text: ln.text, w: [...ln.text].length + 1.6 });
+        texts = groups.slice();
+        while (texts.length < manualCuts.length) {
+          texts.push(ln.text);
         }
       }
+      units = manualCuts.map((mc, k) => {
+        const txt = texts[k] || ln.text;
+        const mcStart = mc.start;
+        const mcEnd = Math.max(mcStart + 0.08, mc.end);
+        return { text: txt, w: [...txt].length + 1.6, start: mcStart, end: mcEnd };
+      });
     } else {
       const L = J.lerp(1.3, 0.5, fx.density);
       let nC = Math.round(D / L);
@@ -3587,6 +3592,10 @@ J.plan = (project, audio) => {
       let acc = s; bounds = [s];
       units.forEach((u, k) => { acc += D * u.w / tot; bounds.push(k === units.length - 1 ? visEnd : acc); });
       for (let k = 1; k < bounds.length - 1; k++) bounds[k] = J.clamp(snap(bounds[k]), bounds[k - 1] + 0.22, bounds[k + 1] - 0.22);
+      units.forEach((u, k) => {
+        u.start = bounds[k];
+        u.end = bounds[k + 1];
+      });
     }
     // scheme per line
     if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
@@ -3597,7 +3606,8 @@ J.plan = (project, audio) => {
     let lineBgP = J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
     if (!newRowCache[li]) newRowCache[li] = [];
     units.forEach((u, k) => {
-      const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
+      const cs = u.start, ce = u.end, dur = ce - cs;
+      if (dur <= 0.04) return;
       const txt = u.text;
       const nn = [...txt.replace(/\s+/g, '')].length;
       const emph = ln.impact && (k === 0 || u.recap) || ln.emph.some(w => txt.includes(w));
@@ -31184,41 +31194,51 @@ function bind() {
 
       if (dragMode === 'trim-start') {
         const prevCut = idx > 0 ? cuts[idx - 1] : null;
-        let minT = prevCut ? prevCut.start + minDur : 0;
+        const isSameLine = prevCut && prevCut.line === c.line;
+
+        let minT = 0;
+        if (isSameLine) {
+          minT = prevCut.start + minDur;
+        } else if (prevCut) {
+          minT = prevCut.end + 0.04;
+        }
         let maxT = dragData.origEnd - minDur;
         let newT = Math.max(minT, Math.min(curTime, maxT));
 
         c.start = newT;
         c.dur = Math.max(minDur, c.end - c.start);
 
-        if (prevCut) {
+        if (isSameLine) {
           prevCut.end = newT;
           prevCut.dur = Math.max(minDur, prevCut.end - prevCut.start);
-        }
-        if (c.line >= 0 && (!prevCut || prevCut.line !== c.line)) {
-          if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-          S.project.timing.lineTimes[c.line] = c.start;
-          if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+        } else {
+          if (c.line >= 0) {
+            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+            S.project.timing.lineTimes[c.line] = c.start;
+            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
+          }
         }
         seek(c.start);
         drawTimeline();
       } else if (dragMode === 'trim-end') {
         const nextCut = idx < cuts.length - 1 ? cuts[idx + 1] : null;
+        const isSameLine = nextCut && nextCut.line === c.line;
+
         let minT = dragData.origStart + minDur;
-        let maxT = nextCut ? nextCut.end - minDur : S.plan.duration;
+        let maxT = S.plan.duration;
+        if (isSameLine) {
+          maxT = nextCut.end - minDur;
+        } else if (nextCut) {
+          maxT = Math.max(minT, nextCut.start - 0.04);
+        }
         let newT = Math.max(minT, Math.min(curTime, maxT));
 
         c.end = newT;
         c.dur = Math.max(minDur, c.end - c.start);
 
-        if (nextCut) {
+        if (isSameLine) {
           nextCut.start = newT;
           nextCut.dur = Math.max(minDur, nextCut.end - nextCut.start);
-          if (nextCut.line >= 0 && nextCut.line !== c.line) {
-            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-            S.project.timing.lineTimes[nextCut.line] = nextCut.start;
-            if (S.plan.lines[nextCut.line]) S.plan.lines[nextCut.line].start = nextCut.start;
-          }
         }
         seek(c.end);
         drawTimeline();
@@ -31304,57 +31324,85 @@ function bind() {
     }
   });
 
+  function deleteCutSafe(idx) {
+    const cuts = S.plan.cuts;
+    if (idx < 0 || idx >= cuts.length) return false;
+    const cut = cuts[idx];
+
+    // 同一line 内のcuts一覧
+    const sameLineCuts = cuts.filter(c => c.line === cut.line);
+
+    // そのline にcutsが1つしか残っていない（最後の1cuts）場合は誤削除を安全にブロック
+    if (sameLineCuts.length <= 1) {
+      toast(cut.line === -1 ? 'タイトルカードは削除できません' : 'line の最後のEffectsは削除できません（line を削除したい場合は歌詞を編集してください）');
+      return false;
+    }
+
+    remember();
+
+    // 同一line 内の直前cuts（prevInLine）と直後cuts（nextInLine）を検索
+    const prevInLine = cuts.slice(0, idx).reverse().find(c => c.line === cut.line);
+    const nextInLine = cuts.slice(idx + 1).find(c => c.line === cut.line);
+
+    if (prevInLine) {
+      prevInLine.end = cut.end;
+      prevInLine.dur = prevInLine.end - prevInLine.start;
+      if (cut.text && !prevInLine.text.includes(cut.text)) {
+        prevInLine.text = (prevInLine.text + ' ' + cut.text).trim();
+      }
+    } else if (nextInLine) {
+      nextInLine.start = cut.start;
+      nextInLine.dur = nextInLine.end - nextInLine.start;
+      if (cut.text && !nextInLine.text.includes(cut.text)) {
+        nextInLine.text = (cut.text + ' ' + nextInLine.text).trim();
+      }
+      if (cut.line >= 0) {
+        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
+        S.project.timing.lineTimes[cut.line] = nextInLine.start;
+      }
+    }
+
+    // 2. タイムラインcuts配列から対象cutsを削除（※ 歌詞テキスト lyrics には一切触れない！）
+    cuts.splice(idx, 1);
+
+    // 3. タイトルカード削除時の特別処理
+    if (cut.line === -1 && S.plan.titleLine) {
+      S.plan.titleLine.cut = prevInLine || nextInLine || null;
+    }
+
+    // 4. 残存cutsリストを永続データとして記録
+    if (!S.project.timing) S.project.timing = {};
+    S.project.timing.cutTimes = cuts.map(c => ({
+      start: +c.start.toFixed(3),
+      end: +c.end.toFixed(3),
+      line: c.line,
+      text: c.text
+    }));
+
+    // 5. 該当line のrowCache整合（cuts数が減ったため安全に再抽選）
+    if (S.project.rowCache && S.project.rowCache[cut.line]) {
+      delete S.project.rowCache[cut.line];
+    }
+
+    replan();
+    commit('cuts削除');
+    flushSave();
+    drawTimeline();
+    toast('Effectsを1つ削除し、line 内のEffectsで尺とテキストを補間しました');
+    return true;
+  }
+  window.deleteCutSafe = deleteCutSafe;
+
   tl.addEventListener('pointerup', () => {
     if (dragMode && dragMode !== 'pan' && dragMode !== 'seek' && dragData) {
       if (dragData.isDeleting) {
-        remember();
         if (dragData.target === 'cut') {
-          const idx = dragData.cutIndex;
-          const cut = dragData.cut;
-          const cuts = S.plan.cuts;
-          // 1. 直前の要素の終了時間を延長して隙間をAuto補間（または直後要素の開始時間を前倒し）
-          if (idx > 0) {
-            const prev = cuts[idx - 1];
-            prev.end = cut.end;
-            prev.dur = prev.end - prev.start;
-            // 歌詞テキストの合流（同一line ならテキストを直前cutsに結合）
-            if (prev.line === cut.line && cut.text) {
-              if (!prev.text.includes(cut.text)) {
-                prev.text = (prev.text + ' ' + cut.text).trim();
-              }
-            }
-          } else if (cuts.length > 1) {
-            cuts[1].start = cut.start;
-            cuts[1].dur = cuts[1].end - cuts[1].start;
-            if (cuts[1].line === cut.line && cut.text) {
-              if (!cuts[1].text.includes(cut.text)) {
-                cuts[1].text = (cut.text + ' ' + cuts[1].text).trim();
-              }
-            }
-          }
-          // 2. タイムラインcuts配列から対象cutsを削除（※ 歌詞テキスト lyrics には一切触れない！）
-          cuts.splice(idx, 1);
-
-          // 3. タイトルカード削除時の特別処理
-          if (cut.line === -1) {
-            if (S.plan.titleLine) S.plan.titleLine = null;
-          }
-
-          // 4. 残存cutsリストを永続データとして記録
-          if (!S.project.timing) S.project.timing = {};
-          S.project.timing.cutTimes = cuts.map(c => ({
-            start: +c.start.toFixed(3),
-            end: +c.end.toFixed(3),
-            line: c.line,
-            text: c.text
-          }));
-
-          // 5. 該当line のrowCache整合（cuts数が減ったため安全に再抽選）
-          if (S.project.rowCache && S.project.rowCache[cut.line]) {
-            delete S.project.rowCache[cut.line];
-          }
-
-          toast('Effectsを1つ削除し、前のEffectsで尺とテキストを補間しました');
+          deleteCutSafe(dragData.cutIndex);
+          dragMode = null;
+          dragData = null;
+          S.tlDrag = null;
+          tl.style.cursor = 'default';
+          return;
         } else if (dragData.target === 'block') {
           const trackName = dragData.track;
           const blocks = (S.project && S.project.tracks && S.project.tracks[trackName]) || [];

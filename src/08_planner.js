@@ -278,19 +278,24 @@ J.plan = (project, audio) => {
     let units, bounds;
 
     if (manualCuts && manualCuts.length > 0) {
-      bounds = [manualCuts[0].start];
-      manualCuts.forEach(mc => bounds.push(mc.end));
       const hasTexts = manualCuts.every(mc => mc.text && mc.text.trim());
+      let texts = [];
       if (hasTexts) {
-        units = manualCuts.map(mc => ({ text: mc.text, w: [...mc.text].length + 1.6 }));
+        texts = manualCuts.map(mc => mc.text);
       } else {
         const nG = Math.min(manualCuts.length, chunks.length);
         const groups = (nG <= 1) ? [ln.text] : partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
-        units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
-        while (units.length < manualCuts.length) {
-          units.push({ text: ln.text, w: [...ln.text].length + 1.6 });
+        texts = groups.slice();
+        while (texts.length < manualCuts.length) {
+          texts.push(ln.text);
         }
       }
+      units = manualCuts.map((mc, k) => {
+        const txt = texts[k] || ln.text;
+        const mcStart = mc.start;
+        const mcEnd = Math.max(mcStart + 0.08, mc.end);
+        return { text: txt, w: [...txt].length + 1.6, start: mcStart, end: mcEnd };
+      });
     } else {
       const L = J.lerp(1.3, 0.5, fx.density);
       let nC = Math.round(D / L);
@@ -308,6 +313,10 @@ J.plan = (project, audio) => {
       let acc = s; bounds = [s];
       units.forEach((u, k) => { acc += D * u.w / tot; bounds.push(k === units.length - 1 ? visEnd : acc); });
       for (let k = 1; k < bounds.length - 1; k++) bounds[k] = J.clamp(snap(bounds[k]), bounds[k - 1] + 0.22, bounds[k + 1] - 0.22);
+      units.forEach((u, k) => {
+        u.start = bounds[k];
+        u.end = bounds[k + 1];
+      });
     }
     // scheme per line
     if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
@@ -318,7 +327,8 @@ J.plan = (project, audio) => {
     let lineBgP = J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
     if (!newRowCache[li]) newRowCache[li] = [];
     units.forEach((u, k) => {
-      const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
+      const cs = u.start, ce = u.end, dur = ce - cs;
+      if (dur <= 0.04) return;
       const txt = u.text;
       const nn = [...txt.replace(/\s+/g, '')].length;
       const emph = ln.impact && (k === 0 || u.recap) || ln.emph.some(w => txt.includes(w));
