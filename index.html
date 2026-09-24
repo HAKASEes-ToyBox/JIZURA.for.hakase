@@ -2836,15 +2836,155 @@ J.LAYOUTS = {
     },
   },
 
-  /* ------------------------------------------------ special: title card */
+  /* ------------------------------------------------ special: title cards (ボカロ・アニメ楽曲PV風 大胆レイアウト群) */
   title: {
-    name: 'タイトル', special: true, fits: () => false,
+    name: 'タイトル中央', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])), sx: rng.pick([1, 1, 1.15, 0.9]) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const text = J.splitLines(env.cut.text, W < H ? 6 : 10);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.85, H * 0.45, { track: 0.06, lead: 1.15 }), H * 0.24);
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: W / 2, y: H / 2 - (env.cut.note ? size * 0.3 : 0), track: 0.06, lead: 1.15, color: sc.fg });
+      if (env.cut.note && bb) {
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.032, 16, 36), x: W / 2, y: bb.y1 + size * 0.45, track: 0.28, color: sc.sub, alpha: E.outCubic(J.clamp((env.lt - 0.25) / 0.4)) * (1 - env.pOut), ghost: false });
+      }
+      return bb;
+    },
+  },
+
+  title_l: {
+    name: 'タイトルL字', special: true, fits: () => false,
     plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])) }),
     render(env) {
       const { W, H, sc } = env, P = env.cut.params;
-      const size = Math.min(J.fitSize(env.cut.text, P.font, W * 0.7, H * 0.2, { track: 0.08 }), H * 0.16);
-      const bb = J.mainDraw(env, { text: env.cut.text, font: P.font, size, x: W / 2, y: H / 2, track: 0.08, color: sc.fg });
-      if (env.cut.note) env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.03, 16, 32), x: W / 2, y: H / 2 + size * 0.95, track: 0.3, color: sc.sub, alpha: E.outCubic(J.clamp((env.lt - 0.3) / 0.4)) * (1 - env.pOut), ghost: false });
+      const text = J.splitLines(env.cut.text, W < H ? 5 : 8);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.78, H * 0.5, { track: 0.05, lead: 1.12 }), H * 0.26);
+      const startX = W * 0.08, startY = H * 0.28;
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: startX, y: startY, align: 'left', track: 0.05, lead: 1.12, color: sc.fg });
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.25) / 0.4)) * (1 - env.pOut);
+        const subSize = J.clamp(H * 0.035, 16, 40);
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: subSize, x: W * 0.92, y: H * 0.86, align: 'right', track: 0.25, color: sc.accent, alpha: a, ghost: false });
+        env.line([[W * 0.65, H * 0.91], [W * 0.92, H * 0.91]], sc.accent, Math.max(1.5, H * 0.003), a * 0.6);
+      }
+      return bb;
+    },
+  },
+
+  title_huge: {
+    name: 'タイトル超巨大', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display'])) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const text = J.splitLines(env.cut.text, W < H ? 3 : 6);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.94, H * 0.75, { track: -0.02, lead: 0.98 }), H * 0.45);
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: W / 2, y: H / 2, track: -0.02, lead: 0.98, color: sc.fg });
+      if (env.cut.note && bb) {
+        const a = E.outCubic(J.clamp((env.lt - 0.3) / 0.4)) * (1 - env.pOut);
+        const subSize = J.clamp(H * 0.028, 14, 30);
+        env.draw({ text: `— ${env.cut.note} —`, font: env.st.fonts.body[0], size: subSize, x: W / 2, y: H * 0.92, track: 0.35, color: sc.sub, alpha: a, ghost: false });
+      }
+      return bb;
+    },
+  },
+
+  title_vsplit: {
+    name: 'タイトル縦書き', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['serif', 'display'])) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const chars = [...env.cut.text.replace(/\s+/g, '')];
+      const n = chars.length;
+      const cols = n > 8 ? 2 : 1;
+      const perCol = Math.ceil(n / cols);
+      const size = Math.min(H * 0.75 / perCol, W * 0.2, 180);
+      const startX = W * 0.72;
+      let bb = null;
+      for (let c = 0; c < cols; c++) {
+        const colChars = chars.slice(c * perCol, (c + 1) * perCol).join('\n');
+        const cx = startX - c * size * 1.35;
+        const cy = H / 2;
+        const r = J.mainDraw(env, { text: colChars, font: P.font, size, x: cx, y: cy, lead: 1.08, color: sc.fg });
+        bb = J.unionBB(bb, r);
+      }
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.3) / 0.4)) * (1 - env.pOut);
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.035, 16, 36), x: W * 0.22, y: H * 0.78, align: 'left', track: 0.25, color: sc.accent, alpha: a, ghost: false });
+        env.line([[W * 0.22, H * 0.83], [W * 0.45, H * 0.83]], sc.sub, 1.5, a * 0.6);
+      }
+      return bb;
+    },
+  },
+
+  title_cinema: {
+    name: 'タイトルシネマ', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])), sx: rng.pick([1.1, 1.25, 1.35]) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const text = J.splitLines(env.cut.text, W < H ? 6 : 12);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.88, H * 0.3, { sx: P.sx, track: 0.12 }), H * 0.2);
+      const posY = H * 0.76;
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.2) / 0.35)) * (1 - env.pOut);
+        env.draw({ text: env.cut.note.toUpperCase(), font: env.st.fonts.body[0], size: J.clamp(H * 0.026, 14, 28), x: W / 2, y: posY - size * 0.9, track: 0.4, color: sc.accent, alpha: a, ghost: false });
+      }
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: W / 2, y: posY, sx: P.sx, track: 0.12, color: sc.fg });
+      return bb;
+    },
+  },
+
+  title_stack: {
+    name: 'タイトルスタック', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display'])) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const chunks = (env.cut.words && env.cut.words.length >= 2) ? env.cut.words : J.splitLines(env.cut.text, 5).split('\n');
+      const lines = chunks.slice(0, 4);
+      const k = lines.length;
+      const size = Math.min(H * 0.65 / (k * 1.15), W * 0.65, 190);
+      let bb = null;
+      lines.forEach((ln, i) => {
+        const y = H / 2 + (i - (k - 1) / 2) * size * 1.18;
+        const x = W / 2 + ((i % 2 === 0 ? -1 : 1) * W * 0.04);
+        const r = J.mainDraw(env, { text: ln, font: P.font, size, x, y, track: 0.04, color: i === 0 ? sc.accent : sc.fg, mi: i });
+        bb = J.unionBB(bb, r);
+      });
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.3) / 0.4)) * (1 - env.pOut);
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.03, 14, 30), x: W * 0.88, y: H * 0.9, align: 'right', track: 0.22, color: sc.sub, alpha: a, ghost: false });
+      }
+      return bb;
+    },
+  },
+
+  title_slash: {
+    name: 'タイトル斜角', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display'])), rot: rng.pick([-5, -4, 4, 5]) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const text = J.splitLines(env.cut.text, W < H ? 5 : 8);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.82, H * 0.45, { track: 0.08 }), H * 0.26);
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: W / 2, y: H / 2, rot: P.rot, track: 0.08, color: sc.fg });
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.25) / 0.4)) * (1 - env.pOut);
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.03, 14, 32), x: W * 0.85, y: H * 0.82, rot: P.rot, align: 'right', track: 0.3, color: sc.accent, alpha: a, ghost: false });
+      }
+      return bb;
+    },
+  },
+
+  title_corner: {
+    name: 'タイトル左下', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])) }),
+    render(env) {
+      const { W, H, sc } = env, P = env.cut.params;
+      const text = J.splitLines(env.cut.text, W < H ? 5 : 9);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.72, H * 0.38, { track: 0.04, lead: 1.15 }), H * 0.22);
+      const bb = J.mainDraw(env, { text, font: P.font, size, x: W * 0.08, y: H * 0.72, align: 'left', track: 0.04, lead: 1.15, color: sc.fg });
+      if (env.cut.note) {
+        const a = E.outCubic(J.clamp((env.lt - 0.2) / 0.35)) * (1 - env.pOut);
+        env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.032, 16, 36), x: W * 0.08, y: H * 0.84, align: 'left', track: 0.2, color: sc.accent, alpha: a, ghost: false });
+      }
       return bb;
     },
   },
@@ -2867,6 +3007,7 @@ J.LAYOUTS = {
   },
 };
 J.LAYOUT_ORDER = ['center', 'mixed', 'vcols', 'marquee', 'tile', 'scatter', 'ring', 'wave', 'huge', 'labels', 'condensed', 'gloss', 'type', 'diag', 'circle', 'stack', 'pill'];
+J.TITLE_LAYOUT_ORDER = ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
 J.ENTER_ORDER = ['cut', 'assemble', 'slice', 'type', 'pop', 'drop', 'stretch', 'wipe', 'blur', 'spin', 'flicker', 'scramble', 'zoom'];
 J.HOLD_ORDER = ['still', 'jitter', 'drift', 'breathe', 'wave', 'glitchtick'];
 J.EXIT_ORDER = ['cut', 'explode', 'fall', 'drift', 'slice', 'wipe', 'shrink', 'blur', 'stretch', 'scatter', 'glitch'];
@@ -3369,7 +3510,8 @@ J.plan = (project, audio) => {
     const titleSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, 999, ov.seed | 0);
     const rng = J.rng(titleSeed);
     const titleEnd = firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2;
-    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : 'title';
+    const candLayouts = (J.TITLE_LAYOUT_ORDER && J.TITLE_LAYOUT_ORDER.length) ? J.TITLE_LAYOUT_ORDER : ['title'];
+    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : rng.pick(candLayouts);
     const LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
     const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']);
     const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : rng.pick(['blur', 'drift', 'wipe']);
@@ -29762,6 +29904,8 @@ function renderLines() {
   if (S.plan && S.plan.titleLine) {
     const tln = S.plan.titleLine;
     const to = ov[-1] || {};
+    const titleLayoutKeys = J.TITLE_LAYOUT_ORDER || ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
+    const titleLayoutOpts = '<option value="">自動（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
     const tli = document.createElement('li');
     tli.className = 'ln ln-title';
     tli.innerHTML = `<span class="no">#00</span>
@@ -29769,15 +29913,9 @@ function renderLines() {
       <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <select aria-label="タイトルレイアウト指定">
-          <option value="">自動</option>
-          <option value="title">標準タイトル</option>
-          <option value="huge">特大フォント</option>
-          <option value="cinema">シネマ風</option>
-          <option value="split">左右分割</option>
-        </select>
-        <button class="icon ghost dice" title="タイトルの装飾・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
-        <button class="icon ghost lock" title="タイトルの装飾構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+        <select aria-label="タイトルレイアウト指定">${titleLayoutOpts}</select>
+        <button class="icon ghost dice" title="タイトルの装飾・配置・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
     tli.querySelector('select').value = to.layout || '';
     tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
@@ -29798,9 +29936,10 @@ function renderLines() {
     const tcutsEl = tli.querySelector('.cuts');
     S.plan.cuts.filter(c => c.line === -1).forEach(c => {
       const sp = document.createElement('span');
-      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : 'タイトル';
-      sp.textContent = `装飾: ${decorNames}`;
-      sp.title = `レイアウト: ${c.layout}｜${decorNames}`;
+      const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
+      sp.textContent = `${layName} [${decorNames}]`;
+      sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
       sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
       sp.addEventListener('click', () => seek(0.001));
       tcutsEl.appendChild(sp);

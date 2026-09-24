@@ -525,6 +525,8 @@ function renderLines() {
   if (S.plan && S.plan.titleLine) {
     const tln = S.plan.titleLine;
     const to = ov[-1] || {};
+    const titleLayoutKeys = J.TITLE_LAYOUT_ORDER || ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
+    const titleLayoutOpts = '<option value="">自動（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
     const tli = document.createElement('li');
     tli.className = 'ln ln-title';
     tli.innerHTML = `<span class="no">#00</span>
@@ -532,15 +534,9 @@ function renderLines() {
       <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <select aria-label="タイトルレイアウト指定">
-          <option value="">自動</option>
-          <option value="title">標準タイトル</option>
-          <option value="huge">特大フォント</option>
-          <option value="cinema">シネマ風</option>
-          <option value="split">左右分割</option>
-        </select>
-        <button class="icon ghost dice" title="タイトルの装飾・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
-        <button class="icon ghost lock" title="タイトルの装飾構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+        <select aria-label="タイトルレイアウト指定">${titleLayoutOpts}</select>
+        <button class="icon ghost dice" title="タイトルの装飾・配置・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
     tli.querySelector('select').value = to.layout || '';
     tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
@@ -561,9 +557,10 @@ function renderLines() {
     const tcutsEl = tli.querySelector('.cuts');
     S.plan.cuts.filter(c => c.line === -1).forEach(c => {
       const sp = document.createElement('span');
-      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : 'タイトル';
-      sp.textContent = `装飾: ${decorNames}`;
-      sp.title = `レイアウト: ${c.layout}｜${decorNames}`;
+      const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
+      sp.textContent = `${layName} [${decorNames}]`;
+      sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
       sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
       sp.addEventListener('click', () => seek(0.001));
       tcutsEl.appendChild(sp);

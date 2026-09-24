@@ -234,7 +234,8 @@ J.plan = (project, audio) => {
     const titleSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, 999, ov.seed | 0);
     const rng = J.rng(titleSeed);
     const titleEnd = firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2;
-    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : 'title';
+    const candLayouts = (J.TITLE_LAYOUT_ORDER && J.TITLE_LAYOUT_ORDER.length) ? J.TITLE_LAYOUT_ORDER : ['title'];
+    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : rng.pick(candLayouts);
     const LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
     const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']);
     const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : rng.pick(['blur', 'drift', 'wipe']);
