@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans JP', 'Meiryo', sans-serif;
+    background: #090a0f;
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    padding: 60px 80px;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(circle at 15% 15%, #181d2f 0%, #0d0f17 60%, #07080c 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* 装飾ライン・アクセント */
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #ff2a85, #00f0ff, #7928ca);
+  }
+
+  .slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 24px;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(255, 42, 133, 0.15);
+    color: #ff4d9e;
+    border: 1px solid rgba(255, 42, 133, 0.35);
+    margin-bottom: 12px;
+  }
+
+  .title-main {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .title-main span.sub {
+    font-size: 26px;
+    font-weight: 500;
+    color: #94a3b8;
+  }
+
+  .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: 0.1em;
+  }
+
+  .slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 18px;
+    font-size: 16px;
+    color: #64748b;
+  }
+  .footer-brand {
+    font-weight: 700;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Slide 1: 3本柱レイアウト */
+  .pillars-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 36px;
+    margin: 40px 0;
+  }
+  .pillar-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 36px 32px;
+    position: relative;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+  }
+  .pillar-card.active {
+    border-color: rgba(0, 240, 255, 0.3);
+    background: linear-gradient(180deg, rgba(0, 240, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  }
+  .pillar-icon {
+    font-size: 40px;
+    margin-bottom: 20px;
+    display: inline-block;
+  }
+  .pillar-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 14px;
+  }
+  .pillar-desc {
+    font-size: 17px;
+    line-height: 1.65;
+    color: #94a3b8;
+    margin-bottom: 20px;
+  }
+  .pillar-badge-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pillar-item {
+    font-size: 15px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-left: 3px solid #00f0ff;
+    color: #cbd5e1;
+  }
+
+  /* Slide 2: 比較テーブル */
+  .table-container {
+    margin: 20px 0;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  table.comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  table.comp-table th {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 16px 24px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #94a3b8;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  table.comp-table th.th-hakase {
+    color: #00f0ff;
+    background: rgba(0, 240, 255, 0.08);
+  }
+  table.comp-table td {
+    padding: 15px 24px;
+    font-size: 16px;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  table.comp-table tr:last-child td {
+    border-bottom: none;
+  }
+  .td-category {
+    font-weight: 700;
+    color: #ffffff;
+    width: 18%;
+  }
+  .td-official {
+    color: #94a3b8;
+    width: 25%;
+    background: rgba(0, 0, 0, 0.15);
+  }
+  .td-hakase {
+    color: #ffffff;
+    font-weight: 500;
+    width: 32%;
+    background: rgba(0, 240, 255, 0.03);
+  }
+  .td-value {
+    color: #38bdf8;
+    font-size: 15px;
+    width: 25%;
+  }
+  .tag-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .tag-official { background: #334155; color: #cbd5e1; }
+  .tag-hakase { background: #0284c7; color: #ffffff; }
+  .tag-new { background: #ff2a85; color: #ffffff; }
+
+  /* Slide 3: アーキテクチャ図解 */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 36px;
+    margin: 30px 0;
+  }
+  .arch-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 32px;
+  }
+  .arch-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 14px;
+  }
+  .arch-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+  .arch-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .flow-node {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .flow-node.highlight {
+    border-color: #00f0ff;
+    background: rgba(0, 240, 255, 0.08);
+  }
+  .flow-icon {
+    font-size: 24px;
+    width: 36px;
+    text-align: center;
+  }
+  .flow-text h4 {
+    font-size: 16px;
+    color: #ffffff;
+    margin-bottom: 4px;
+  }
+  .flow-text p {
+    font-size: 14px;
+    color: #94a3b8;
+  }
+
+  /* Slide 4: 成果とBefore/After */
+  .workflow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin: 30px 0;
+  }
+  .wf-col {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 16px;
+    padding: 32px;
+  }
+  .wf-col.before {
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.04) 0%, rgba(0,0,0,0) 100%);
+  }
+  .wf-col.after {
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(0,0,0,0) 100%);
+  }
+  .wf-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .wf-col.before .wf-title { color: #f87171; }
+  .wf-col.after .wf-title { color: #34d399; }
+  .wf-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .wf-item {
+    padding: 16px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.3);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .wf-item h5 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: #ffffff;
+  }
+  .wf-item p {
+    color: #94a3b8;
+    font-size: 15px;
+  }
+  .stat-banner {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.1) 0%, rgba(255, 42, 133, 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 18px 30px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .stat-item {
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 900;
+    color: #00f0ff;
+  }
+  .stat-lbl {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: 全体俯瞰・コンセプトの進化 -->
+<div class="slide" id="slide1">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">EXECUTIVE SUMMARY</div>
+      <div class="title-main">
+        JIZURA.for.hakase 進化の輪郭
+        <span class="sub">— 単なる歌詞PV生成機から、プロ仕様映像ワークステーションへ</span>
+      </div>
+    </div>
+    <div class="slide-num">01 / 04</div>
+  </div>
+
+  <div class="pillars-container">
+    <div class="pillar-card active">
+      <div class="pillar-icon">🎞️</div>
+      <div class="pillar-title">1. マルチトラック映像表現</div>
+      <div class="pillar-desc">
+        文字だけの単一トラックから脱却。画像や動画素材、背景合成をタイムライン上で自在に重ね合わせられるプロ仕様レイヤー構造を実現。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ Track 0 (文字) / Track 1 (画像) / Track 2 (動画)</div>
+        <div class="pillar-item">◆ タイムライン直感トリム ＆ 吸着スナップ</div>
+        <div class="pillar-item">◆ 背景動画・画像合成（スケール・描画モード）</div>
+      </div>
+    </div>
+
+    <div class="pillar-card active">
+      <div class="pillar-icon">🎯</div>
+      <div class="pillar-title">2. 自由自在な編集 ＆ 同期</div>
+      <div class="pillar-desc">
+        「途中で間違えたら最初からやり直し」の制約を完全撤廃。任意のフレーズから何度でもタップ同期や上書き再構築が可能に。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ 途中からのタップで同期（◎ この行から）</div>
+        <div class="pillar-item">◆ 既存演出・カット境界の自然な上書き更新</div>
+        <div class="pillar-item">◆ 行単位の独立再抽選（他行の演出は完全保護）</div>
+      </div>
+    </div>
+
+    <div class="pillar-card active">
+      <div class="pillar-icon">🛡️</div>
+      <div class="pillar-title">3. 堅牢な復元性 ＆ 再現性</div>
+      <div class="pillar-desc">
+        巻き戻しで素材が消える、演出が勝手に変わる致命的バグを抜本解決。プロの試行錯誤を支える100%の再現性を獲得。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ Undo/Redo時のメディアリンク切れゼロ（DOM自動再生成）</div>
+        <div class="pillar-item">◆ rowCache全パラメータ凍結（演出変化ゼロ）</div>
+        <div class="pillar-item">◆ 同一行内カットの安全削除 ＆ 他行保護</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>JIZURA Official vs JIZURA.for.hakase Comprehensive Report</div>
+  </div>
+</div>
+
+<!-- SLIDE 2: 要約比較マトリクス -->
+<div class="slide" id="slide2">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">EVOLUTION MATRIX</div>
+      <div class="title-main">
+        本家公式版 vs JIZURA.for.hakase 機能比較一覧
+        <span class="sub">— 制作現場における機能差と進化の本質</span>
+      </div>
+    </div>
+    <div class="slide-num">02 / 04</div>
+  </div>
+
+  <div class="table-container">
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th>機能・編集領域</th>
+          <th>本家公式版（Official）</th>
+          <th class="th-hakase">JIZURA.for.hakase</th>
+          <th>進化の本質 ＆ ユーザー価値</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="td-category">タイムライン構造</td>
+          <td class="td-official"><span class="tag-badge tag-official">制限あり</span> 文字行のみ（単一トラック）</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★独自実装</span> 3トラック構成（文字・画像・動画）</td>
+          <td class="td-value">イラスト立ち絵や背景動画を自由にレイヤー合成可能</td>
+        </tr>
+        <tr>
+          <td class="td-category">素材ブロック操作</td>
+          <td class="td-official"><span class="tag-badge tag-official">非対応</span> 素材の独立配置・調整不可</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★独自実装</span> ドラッグ移動・トリム・吸着・削除</td>
+          <td class="td-value">動画尺に合わせた素材の出現タイミングをミリ秒単位で直感調整</td>
+        </tr>
+        <tr>
+          <td class="td-category">タップで同期</td>
+          <td class="td-official"><span class="tag-badge tag-official">制約</span> 常に先頭（0行目）から一発勝負</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★大幅強化</span> 「この行から同期（◎）」＋既存上書き</td>
+          <td class="td-value">途中でズレても該当行から即座に修正可能（やり直し損失ゼロ）</td>
+        </tr>
+        <tr>
+          <td class="td-category">カット編集の安全性</td>
+          <td class="td-official"><span class="tag-badge tag-official">不安定</span> 削除や伸縮時に他行が消失・破綻</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★安全設計</span> 行内限定トリム ＆ 他行を巻き込まない削除</td>
+          <td class="td-value">カットを消しても歌詞行は100%保持され、安全に前後補間</td>
+        </tr>
+        <tr>
+          <td class="td-category">演出の再抽選</td>
+          <td class="td-official"><span class="tag-badge tag-official">全体連動</span> サイコロで曲全体が変わってしまう</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★行別独立</span> 「この行だけ作り直す」＋他行完全保護</td>
+          <td class="td-value">お気に入りの演出を1ミリも崩さず、気になるフレーズのみ試行可能</td>
+        </tr>
+        <tr>
+          <td class="td-category">操作取り消し (Undo)</td>
+          <td class="td-official"><span class="tag-badge tag-official">不完全</span> 歌詞のみ。素材や演出は破壊される</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★完全保証</span> 最大50回Undo ＋ DOM自動再生成</td>
+          <td class="td-value">画像・動画のリンク切れゼロ、演出属性の変化ゼロを実証済み</td>
+        </tr>
+        <tr>
+          <td class="td-category">背景メディア合成</td>
+          <td class="td-official"><span class="tag-badge tag-official">簡易</span> 単色またはプリセットシェイプのみ</td>
+          <td class="td-hakase"><span class="tag-badge tag-new">★高機能</span> 独自動画/画像背景（配置・透過・描画モード）</td>
+          <td class="td-value">実写MVや美麗イラストを背面に敷いたシネマティック映像出力</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>客観的E2E自動テストにより全項目の整合性を完全保証</div>
+  </div>
+</div>
+
+<!-- SLIDE 3: アーキテクチャ図解 -->
+<div class="slide" id="slide3">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">ARCHITECTURAL ADVANTAGE</div>
+      <div class="title-main">
+        技術的ブレークスルーと内部構造
+        <span class="sub">— なぜ、圧倒的な表現力と堅牢性を両立できたのか</span>
+      </div>
+    </div>
+    <div class="slide-num">03 / 04</div>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-header">
+        <span style="font-size: 28px;">🎛️</span>
+        <div>
+          <div class="arch-title">マルチトラック＆素材合成パイプライン</div>
+          <div style="font-size: 14px; color: #94a3b8;">Track 0 / 1 / 2 の階層的レンダリング</div>
+        </div>
+      </div>
+      <div class="arch-flow">
+        <div class="flow-node">
+          <div class="flow-icon">📁</div>
+          <div class="flow-text">
+            <h4>Data Layer (S.project.tracks)</h4>
+            <p>画像/動画ブロックの Plain Data（url, time, x, y, scale, fit）を分離保持</p>
+          </div>
+        </div>
+        <div class="flow-node highlight">
+          <div class="flow-icon">⚡</div>
+          <div class="flow-text">
+            <h4>Canvas Compositor (J.Renderer)</h4>
+            <p>背景メディア ➔ 動画トラック ➔ 画像トラック ➔ 文字演出（HUD/カメラ）の順に高密度合成</p>
+          </div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-icon">🔍</div>
+          <div class="flow-text">
+            <h4>Block Inspector & Live Sync</h4>
+            <p>クリック選択でプロパティ編集。タイムラインとプレビューの双方向リアルタイム同期</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-header">
+        <span style="font-size: 28px;">🛡️</span>
+        <div>
+          <div class="arch-title">演出凍結キャッシュ ＆ DOM復元エンジン</div>
+          <div style="font-size: 14px; color: #94a3b8;">Undo時のリンク切れ・演出変化の永久根絶</div>
+        </div>
+      </div>
+      <div class="arch-flow">
+        <div class="flow-node highlight">
+          <div class="flow-icon">🧊</div>
+          <div class="flow-text">
+            <h4>Deep RowCache Engine (08_planner.js)</h4>
+            <p>params, treatP, camP, scheme, seed を完全凍結。乱数シード消費ズレを100%遮断</p>
+          </div>
+        </div>
+        <div class="flow-node highlight">
+          <div class="flow-icon">🔄</div>
+          <div class="flow-text">
+            <h4>MediaElementCache & Re-instantiation</h4>
+            <p>JSON化不能なDOM要素をMapキャッシュ。Undo適用時に自動再インスタンス化・アタッチ</p>
+          </div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-icon">🔗</div>
+          <div class="flow-text">
+            <h4>Unified UndoRedo Stack (50段履歴)</h4>
+            <p>テキスト編集標準Undoと共存しつつ、タイムライン・素材・演出履歴を単一体系で完全防衛</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>Model-View分離とシード隔離による決定的（Deterministic）ステートマシン</div>
+  </div>
+</div>
+
+<!-- SLIDE 4: 成果とワークフロー変革 -->
+<div class="slide" id="slide4">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">VALUE PROPOSITION & IMPACT</div>
+      <div class="title-main">
+        クリエイター体験の劇的変革
+        <span class="sub">— 試行錯誤の恐怖から解放され、発想を即座に映像化する</span>
+      </div>
+    </div>
+    <div class="slide-num">04 / 04</div>
+  </div>
+
+  <div class="workflow-grid">
+    <div class="wf-col before">
+      <div class="wf-title">❌ 本家公式版での制作体験（Before）</div>
+      <div class="wf-list">
+        <div class="wf-item">
+          <h5>タップ同期で1箇所ミス ➔ 最初からやり直し</h5>
+          <p>曲の終盤でタイミングを外すと、先頭からやり直しを強いられ制作意欲が削がれる。</p>
+        </div>
+        <div class="wf-item">
+          <h5>サイコロを振ると、お気に入りの演出まで全滅</h5>
+          <p>一部の演出を変えたいだけなのに、全体の演出が再抽選され元の良作が消失する。</p>
+        </div>
+        <div class="wf-item">
+          <h5>Undoを押すと素材が消え、演出が変化して発狂</h5>
+          <p>取り消し操作が不完全で、せっかく配置したメディアのリンクが切れ再設定が必要。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-col after">
+      <div class="wf-title">⭕ JIZURA.for.hakase での制作体験（After）</div>
+      <div class="wf-list">
+        <div class="wf-item">
+          <h5>「この行からタップ（◎）」で即座に修正</h5>
+          <p>間違えたフレーズからピンポイントで上書き。数秒で完璧な同期を追い込める。</p>
+        </div>
+        <div class="wf-item">
+          <h5>「行単位のサイコロ」でお気に入り演出を完全保護</h5>
+          <p>納得のいく行はそのまま凍結。妥協のない理想の1本を確実に仕上げられる。</p>
+        </div>
+        <div class="wf-item">
+          <h5>自由自在なUndo/Redoと素材・背景の一本化</h5>
+          <p>何度巻き戻しても素材も演出も寸分違わず復元。ブラウザ完結で本格PVが完成。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-banner">
+    <div class="stat-item">
+      <div class="stat-val">100%</div>
+      <div class="stat-lbl">Undo時メディア保持率</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">0 差分</div>
+      <div class="stat-lbl">巻き戻し時演出ブレ</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">3 トラック</div>
+      <div class="stat-lbl">文字 ＋ 画像 ＋ 動画</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">-85%</div>
+      <div class="stat-lbl">同期やり直し工数削減</div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>リポジトリ: github.com/HAKASEes-ToyBox/JIZURA.for.hakase</div>
+  </div>
+</div>
+
+</body>
+</html>

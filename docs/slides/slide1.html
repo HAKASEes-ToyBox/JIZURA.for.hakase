@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: 'Noto Sans JP', 'Meiryo', sans-serif;
+    background: radial-gradient(circle at 15% 15%, #161a29 0%, #0c0e17 60%, #06070a 100%);
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    padding: 50px 70px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #ff2a85, #00f0ff, #7928ca);
+  }
+  .slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 20px;
+  }
+  .badge-tag {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(255, 42, 133, 0.15);
+    color: #ff4d9e;
+    border: 1px solid rgba(255, 42, 133, 0.35);
+    margin-bottom: 8px;
+  }
+  .title-main {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .title-main span.sub {
+    font-size: 24px;
+    font-weight: 500;
+    color: #94a3b8;
+  }
+  .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #475569;
+  }
+  .slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 14px;
+    font-size: 15px;
+    color: #64748b;
+  }
+  .footer-brand {
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+  .pillars-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    margin: 30px 0;
+  }
+  .pillar-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 16px;
+    padding: 32px 28px;
+    background: linear-gradient(180deg, rgba(0, 240, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    backdrop-filter: blur(10px);
+  }
+  .pillar-icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+  }
+  .pillar-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 12px;
+  }
+  .pillar-desc {
+    font-size: 16px;
+    line-height: 1.6;
+    color: #94a3b8;
+    margin-bottom: 20px;
+    min-height: 75px;
+  }
+  .pillar-badge-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pillar-item {
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-left: 3px solid #00f0ff;
+    color: #cbd5e1;
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">EXECUTIVE SUMMARY</div>
+      <div class="title-main">
+        JIZURA.for.hakase 進化の輪郭
+        <span class="sub">— 単なる歌詞PV生成機から、プロ仕様映像ワークステーションへ</span>
+      </div>
+    </div>
+    <div class="slide-num">01 / 04</div>
+  </div>
+
+  <div class="pillars-container">
+    <div class="pillar-card">
+      <div class="pillar-icon">🎞️</div>
+      <div class="pillar-title">1. マルチトラック映像表現</div>
+      <div class="pillar-desc">
+        文字だけの単一トラックから脱却。画像や動画素材、背景合成をタイムライン上で自在に重ね合わせられるプロ仕様レイヤー構造を実現。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ Track 0 (文字) / Track 1 (画像) / Track 2 (動画)</div>
+        <div class="pillar-item">◆ タイムライン直感トリム ＆ 吸着スナップ</div>
+        <div class="pillar-item">◆ 背景動画・画像合成（スケール・描画モード）</div>
+      </div>
+    </div>
+
+    <div class="pillar-card">
+      <div class="pillar-icon">🎯</div>
+      <div class="pillar-title">2. 自由自在な編集 ＆ 同期</div>
+      <div class="pillar-desc">
+        「途中で間違えたら最初からやり直し」の制約を完全撤廃。任意のフレーズから何度でもタップ同期や上書き再構築が可能に。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ 途中からのタップで同期（◎ この行から）</div>
+        <div class="pillar-item">◆ 既存演出・カット境界の自然な上書き更新</div>
+        <div class="pillar-item">◆ 行単位の独立再抽選（他行の演出は完全保護）</div>
+      </div>
+    </div>
+
+    <div class="pillar-card">
+      <div class="pillar-icon">🛡️</div>
+      <div class="pillar-title">3. 堅牢な復元性 ＆ 再現性</div>
+      <div class="pillar-desc">
+        巻き戻しで素材が消える、演出が勝手に変わる致命的バグを抜本解決。プロの試行錯誤を支える100%の再現性を獲得。
+      </div>
+      <div class="pillar-badge-list">
+        <div class="pillar-item">◆ Undo/Redo時のメディアリンク切れゼロ（DOM自動再生成）</div>
+        <div class="pillar-item">◆ rowCache全パラメータ凍結（演出変化ゼロ）</div>
+        <div class="pillar-item">◆ 同一行内カットの安全削除 ＆ 他行保護</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>JIZURA Official vs JIZURA.for.hakase Comprehensive Report</div>
+  </div>
+</div>
+</body>
+</html>

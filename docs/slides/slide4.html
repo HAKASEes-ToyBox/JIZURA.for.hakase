@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: 'Noto Sans JP', 'Meiryo', sans-serif;
+    background: radial-gradient(circle at 15% 15%, #161a29 0%, #0c0e17 60%, #06070a 100%);
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    padding: 50px 70px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #ff2a85, #00f0ff, #7928ca);
+  }
+  .slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 16px;
+  }
+  .badge-tag {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    margin-bottom: 8px;
+  }
+  .title-main {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .title-main span.sub {
+    font-size: 24px;
+    font-weight: 500;
+    color: #94a3b8;
+  }
+  .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #475569;
+  }
+  .slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 14px;
+    font-size: 15px;
+    color: #64748b;
+  }
+  .footer-brand {
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  .workflow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+    margin: 20px 0;
+  }
+  .wf-col {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 16px;
+    padding: 28px 32px;
+  }
+  .wf-col.before {
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.04) 0%, rgba(0,0,0,0) 100%);
+  }
+  .wf-col.after {
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(0,0,0,0) 100%);
+  }
+  .wf-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .wf-col.before .wf-title { color: #f87171; }
+  .wf-col.after .wf-title { color: #34d399; }
+  .wf-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .wf-item {
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.35);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wf-item h5 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: #ffffff;
+  }
+  .wf-item p {
+    color: #94a3b8;
+    font-size: 14px;
+  }
+  .stat-banner {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.08) 0%, rgba(255, 42, 133, 0.08) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px 28px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .stat-item {
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 900;
+    color: #00f0ff;
+  }
+  .stat-lbl {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">VALUE PROPOSITION & IMPACT</div>
+      <div class="title-main">
+        クリエイター体験の劇的変革
+        <span class="sub">— 試行錯誤の恐怖から解放され、発想を即座に映像化する</span>
+      </div>
+    </div>
+    <div class="slide-num">04 / 04</div>
+  </div>
+
+  <div class="workflow-grid">
+    <div class="wf-col before">
+      <div class="wf-title">❌ 本家公式版での制作体験（Before）</div>
+      <div class="wf-list">
+        <div class="wf-item">
+          <h5>タップ同期で1箇所ミス ➔ 最初からやり直し</h5>
+          <p>曲の終盤でタイミングを外すと、先頭からやり直しを強いられ制作意欲が削がれる。</p>
+        </div>
+        <div class="wf-item">
+          <h5>サイコロを振ると、お気に入りの演出まで全滅</h5>
+          <p>一部の演出を変えたいだけなのに、全体の演出が再抽選され元の良作が消失する。</p>
+        </div>
+        <div class="wf-item">
+          <h5>Undoを押すと素材が消え、演出が変化して発狂</h5>
+          <p>取り消し操作が不完全で、せっかく配置したメディアのリンクが切れ再設定が必要。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wf-col after">
+      <div class="wf-title">⭕ JIZURA.for.hakase での制作体験（After）</div>
+      <div class="wf-list">
+        <div class="wf-item">
+          <h5>「この行からタップ（◎）」で即座に修正</h5>
+          <p>間違えたフレーズからピンポイントで上書き。数秒で完璧な同期を追い込める。</p>
+        </div>
+        <div class="wf-item">
+          <h5>「行単位のサイコロ」でお気に入り演出を完全保護</h5>
+          <p>納得のいく行はそのまま凍結。妥協のない理想の1本を確実に仕上げられる。</p>
+        </div>
+        <div class="wf-item">
+          <h5>自由自在なUndo/Redoと素材・背景の一本化</h5>
+          <p>何度巻き戻しても素材も演出も寸分違わず復元。ブラウザ完結で本格PVが完成。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-banner">
+    <div class="stat-item">
+      <div class="stat-val">100%</div>
+      <div class="stat-lbl">Undo時メディア保持率</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">0 差分</div>
+      <div class="stat-lbl">巻き戻し時演出ブレ</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">3 トラック</div>
+      <div class="stat-lbl">文字 ＋ 画像 ＋ 動画</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-val">-85%</div>
+      <div class="stat-lbl">同期やり直し工数削減</div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>リポジトリ: github.com/HAKASEes-ToyBox/JIZURA.for.hakase</div>
+  </div>
+</div>
+</body>
+</html>

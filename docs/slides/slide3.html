@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: 'Noto Sans JP', 'Meiryo', sans-serif;
+    background: radial-gradient(circle at 15% 15%, #161a29 0%, #0c0e17 60%, #06070a 100%);
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    padding: 50px 70px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #ff2a85, #00f0ff, #7928ca);
+  }
+  .slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 16px;
+  }
+  .badge-tag {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(121, 40, 202, 0.2);
+    color: #c084fc;
+    border: 1px solid rgba(121, 40, 202, 0.4);
+    margin-bottom: 8px;
+  }
+  .title-main {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .title-main span.sub {
+    font-size: 24px;
+    font-weight: 500;
+    color: #94a3b8;
+  }
+  .slide-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #475569;
+  }
+  .slide-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 14px;
+    font-size: 15px;
+    color: #64748b;
+  }
+  .footer-brand {
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 36px;
+    margin: 24px 0;
+  }
+  .arch-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 28px 32px;
+  }
+  .arch-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 14px;
+  }
+  .arch-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+  .arch-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .flow-node {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .flow-node.highlight {
+    border-color: #00f0ff;
+    background: rgba(0, 240, 255, 0.08);
+  }
+  .flow-node.highlight-pink {
+    border-color: #ff2a85;
+    background: rgba(255, 42, 133, 0.08);
+  }
+  .flow-icon {
+    font-size: 24px;
+    width: 36px;
+    text-align: center;
+  }
+  .flow-text h4 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+  }
+  .flow-text p {
+    font-size: 14px;
+    color: #94a3b8;
+    line-height: 1.45;
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="badge-tag">ARCHITECTURAL ADVANTAGE</div>
+      <div class="title-main">
+        技術的ブレークスルーと内部構造
+        <span class="sub">— なぜ、圧倒的な表現力と堅牢性を両立できたのか</span>
+      </div>
+    </div>
+    <div class="slide-num">03 / 04</div>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <div class="arch-header">
+        <span style="font-size: 30px;">🎛️</span>
+        <div>
+          <div class="arch-title">マルチトラック＆素材合成パイプライン</div>
+          <div style="font-size: 14px; color: #94a3b8;">Track 0 / 1 / 2 の階層的リアルタイム描画</div>
+        </div>
+      </div>
+      <div class="arch-flow">
+        <div class="flow-node">
+          <div class="flow-icon">📁</div>
+          <div class="flow-text">
+            <h4>Data Layer (S.project.tracks)</h4>
+            <p>画像/動画ブロックの Plain Data（url, time, x, y, scale, fit）を独立分離保持</p>
+          </div>
+        </div>
+        <div class="flow-node highlight">
+          <div class="flow-icon">⚡</div>
+          <div class="flow-text">
+            <h4>Canvas Compositor (J.Renderer)</h4>
+            <p>背景メディア ➔ 動画トラック ➔ 画像トラック ➔ 文字演出（HUD/カメラ）の順に高密度合成</p>
+          </div>
+        </div>
+        <div class="flow-node highlight-pink">
+          <div class="flow-icon">🔍</div>
+          <div class="flow-text">
+            <h4>Block Inspector & Live Sync</h4>
+            <p>選択素材のスケール・不透明度・位置を即時反映。タイムラインとプレビューの双方向連動</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-header">
+        <span style="font-size: 30px;">🛡️</span>
+        <div>
+          <div class="arch-title">演出凍結キャッシュ ＆ DOM復元エンジン</div>
+          <div style="font-size: 14px; color: #94a3b8;">Undo時のリンク切れ・演出変化の永久根絶</div>
+        </div>
+      </div>
+      <div class="arch-flow">
+        <div class="flow-node highlight">
+          <div class="flow-icon">🧊</div>
+          <div class="flow-text">
+            <h4>Deep RowCache Engine (08_planner.js)</h4>
+            <p>params, treatP, camP, scheme, seed を完全凍結。乱数シード消費ズレを100%遮断</p>
+          </div>
+        </div>
+        <div class="flow-node highlight-pink">
+          <div class="flow-icon">🔄</div>
+          <div class="flow-text">
+            <h4>MediaElementCache & Re-instantiation</h4>
+            <p>JSON化不能なDOM要素をMapキャッシュ。Undo適用時に自動再インスタンス化・アタッチ</p>
+          </div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-icon">🔗</div>
+          <div class="flow-text">
+            <h4>Unified UndoRedo Stack (50段履歴)</h4>
+            <p>テキスト編集標準Undoと共存しつつ、タイムライン・素材・演出履歴を単一体系で完全防衛</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-brand">🦢🤍 人類究明探求室 / 白真理（シロマリ）設計</div>
+    <div>Model-View分離とシード隔離による決定的（Deterministic）ステートマシン</div>
+  </div>
+</div>
+</body>
+</html>
