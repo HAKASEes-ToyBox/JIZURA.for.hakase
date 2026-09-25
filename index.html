@@ -5342,6 +5342,55 @@ class BlockStore {                    // positioned writes into a list of blocks
   blob(type) { return new Blob(this.blocks.map(b => b.u), { type }); }
 }
 
+function seekVideoElement(video, targetSec) {
+  return new Promise(resolve => {
+    const dur = video.duration;
+    if (!isFinite(dur) || dur <= 0) return resolve();
+    // ended 状態への突入を防ぐため、動画末尾の0.04秒前で安全にクランプ
+    const safeSec = Math.max(0, Math.min(targetSec, Math.max(0, dur - 0.04)));
+    if (Math.abs(video.currentTime - safeSec) <= 0.015 && !video.ended && !video.seeking) {
+      return resolve();
+    }
+    // ended 状態に入ってしまっていた場合は強制的に先頭へ戻す
+    if (video.ended) {
+      try { video.currentTime = 0; } catch (e) {}
+    }
+    let done = false;
+    let timer = null;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      video.removeEventListener('seeked', finish);
+      video.removeEventListener('error', finish);
+      resolve();
+    };
+    video.addEventListener('seeked', finish, { once: true });
+    video.addEventListener('error', finish, { once: true });
+    timer = setTimeout(finish, 200);
+    try {
+      video.currentTime = safeSec;
+    } catch (e) {
+      finish();
+    }
+  });
+}
+
+function pauseAllVideos(plan, project) {
+  const tr = (plan && plan.tracks) || (project && project.tracks) || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
+  if (tr && tr.videos) {
+    tr.videos.forEach(b => {
+      if (b.element && b.element.pause && !b.element.paused) {
+        try { b.element.pause(); } catch (e) {}
+      }
+    });
+  }
+  const bgm = (plan && plan.bgMedia) || (project && project.bgMedia) || (typeof J !== 'undefined' ? J.bgMedia : null);
+  if (bgm && bgm.type === 'video' && bgm.element && bgm.element.pause && !bgm.element.paused) {
+    try { bgm.element.pause(); } catch (e) {}
+  }
+}
+
 async function syncVideosForFrame(t, plan, project) {
   const promises = [];
   // 1. タイムライン上の動画トラック（tracks.videos）
@@ -5351,14 +5400,7 @@ async function syncVideosForFrame(t, plan, project) {
       if (b.element && isFinite(b.element.duration) && b.element.duration > 0) {
         if (t >= b.start && t < b.end) {
           const targetTime = (t - b.start) % b.element.duration;
-          if (Math.abs(b.element.currentTime - targetTime) > 0.02) {
-            b.element.currentTime = targetTime;
-            promises.push(new Promise(r => {
-              const onSeeked = () => { b.element.removeEventListener('seeked', onSeeked); r(); };
-              b.element.addEventListener('seeked', onSeeked, { once: true });
-              setTimeout(r, 25);
-            }));
-          }
+          promises.push(seekVideoElement(b.element, targetTime));
         }
       }
     }
@@ -5367,19 +5409,15 @@ async function syncVideosForFrame(t, plan, project) {
   const bgm = (plan && plan.bgMedia) || (project && project.bgMedia) || (typeof J !== 'undefined' ? J.bgMedia : null);
   if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
     const targetTime = t % bgm.element.duration;
-    if (Math.abs(bgm.element.currentTime - targetTime) > 0.02) {
-      bgm.element.currentTime = targetTime;
-      promises.push(new Promise(r => {
-        const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
-        bgm.element.addEventListener('seeked', onSeeked, { once: true });
-        setTimeout(r, 25);
-      }));
-    }
+    promises.push(seekVideoElement(bgm.element, targetTime));
   }
   if (promises.length > 0) {
     await Promise.all(promises);
   }
 }
+J.seekVideoElement = seekVideoElement;
+J.pauseAllVideos = pauseAllVideos;
+J.syncVideosForFrame = syncVideosForFrame;
 
 J.exportMP4 = async (o) => {
   const { plan, project, audio, quality = 'high', onProgress, signal, range, file = null } = o;
@@ -5426,6 +5464,7 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
   const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   const closeEnc = () => { try { if (venc.state !== 'closed') venc.close(); } catch (e) {} };
+  pauseAllVideos(plan, project);
   try {
     for (let i = 0; i < total; i++) {
       if (signal && signal.aborted) { closeEnc(); throw new Error('キャンセルしました'); }
@@ -5518,13 +5557,14 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
   const zip = new ZipWriter();
   const scale = w / plan.W;
   const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
+  pauseAllVideos(plan, project);
   for (let i = 0; i < total; i += every) {
     if (signal && signal.aborted) throw new Error('キャンセルしました');
     const curT = span.t0 + i / fps;
     await syncVideosForFrame(curT, plan, project);
     const name = `jizura_${String(i).padStart(5, '0')}.png`;
     for (const layer of layers ? ['back', 'front'] : [null]) {
-      R.frame(ctx, plan, span.t0 + i / fps, { scale, transparent: transparent || !!layers, layer });
+      R.frame(ctx, plan, curT, { scale, transparent: transparent || !!layers, layer });
       const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
       zip.add((layer ? layer + '/' : '') + name, new Uint8Array(await blob.arrayBuffer()));
     }
