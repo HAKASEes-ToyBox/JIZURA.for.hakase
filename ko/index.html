@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>JIZURA 字面</title>
-<meta name="description" content="歌詞を入れると文字PV（リリックモーション）を自動で組み立てて MP4 に書き出すブラウザアプリ">
-<link rel="canonical" href="https://852wa.github.io/JIZURA/">
+<title>JIZURA — 가사 모션 영상 메이커</title>
+<meta name="description" content="브라우저에서 가사를 움직이는 가사 영상으로 만들고 MP4로 내보내세요.">
+<link rel="canonical" href="https://852wa.github.io/JIZURA/ko/">
 <link rel="alternate" hreflang="ja" href="https://852wa.github.io/JIZURA/">
 <link rel="alternate" hreflang="en" href="https://852wa.github.io/JIZURA/en/">
 <link rel="alternate" hreflang="zh-Hant" href="https://852wa.github.io/JIZURA/zh-hant/">
@@ -13,9 +13,9 @@
 <link rel="alternate" hreflang="ko" href="https://852wa.github.io/JIZURA/ko/">
 <link rel="alternate" hreflang="id-ID" href="https://852wa.github.io/JIZURA/id/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="JIZURA 字面">
-<meta property="og:description" content="歌詞を入れると文字PV（リリックモーション）を自動で組み立てて MP4 に書き出すブラウザアプリ">
-<meta property="og:url" content="https://852wa.github.io/JIZURA/">
+<meta property="og:title" content="JIZURA — 가사 모션 영상 메이커">
+<meta property="og:description" content="브라우저에서 가사를 움직이는 가사 영상으로 만들고 MP4로 내보내세요.">
+<meta property="og:url" content="https://852wa.github.io/JIZURA/ko/">
 <meta name="twitter:card" content="summary">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -374,110 +374,110 @@ button.small.primary { padding: 4px 12px; }
     <div class="tour-step mono muted"></div>
     <h3 id="tourTitle" class="tour-title"></h3>
     <p class="tour-text"></p>
-    <div class="tour-nav"><button class="tour-skip ghost small">スキップ</button><span class="tour-sp"></span><button class="tour-prev ghost small">戻る</button><button class="tour-next primary small">次へ</button></div>
+    <div class="tour-nav"><button class="tour-skip ghost small">건너뛰기</button><span class="tour-sp"></span><button class="tour-prev ghost small">이전</button><button class="tour-next primary small">다음</button></div>
   </div>
 </div>
 <div id="app">
   <header class="bar">
     <div class="brand"><span class="mark" aria-hidden="true">字面</span><span class="word">JIZURA</span><span class="tag">lyric motion engine</span></div>
     <div class="proj">
-      <input id="songTitle" type="text" placeholder="曲名（タイトルカード・HUDに表示）" aria-label="曲名">
-      <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
+      <input id="songTitle" type="text" placeholder="곡 제목 (타이틀 카드와 HUD에 표시)" aria-label="곡 제목">
+      <input id="songArtist" type="text" placeholder="아티스트" aria-label="아티스트">
     </div>
-    <div class="modes" role="group" aria-label="表示モード">
-      <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
-      <button id="modePro" aria-pressed="true" title="すべての設定を表示">詳細</button>
-      <button id="btnTour" class="ghost tour-btn" title="かんたんモードの使い方を案内します" aria-label="使い方の案内">？</button>
+    <div class="modes" role="group" aria-label="편집 모드">
+      <button id="modeEasy" aria-pressed="false" title="자동 생성 중심의 간단한 화면">간단</button>
+      <button id="modePro" aria-pressed="true" title="모든 설정 표시">고급</button>
+      <button id="btnTour" class="ghost tour-btn" title="간단 모드 사용법을 안내합니다" aria-label="사용법 안내">？</button>
     </div>
-    <label class="lang-switch"><span class="sr-only">Language</span><select aria-label="Language" onchange="if(this.value)location.href=this.value"><option value="index.html" lang="ja" selected>日本語</option><option value="en/index.html" lang="en">English</option><option value="zh-hant/index.html" lang="zh-Hant">繁體中文</option><option value="zh-hans/index.html" lang="zh-Hans">简体中文</option><option value="ko/index.html" lang="ko">한국어</option><option value="id/index.html" lang="id-ID">Bahasa Indonesia</option></select></label>
+    <label class="lang-switch"><span class="sr-only">Language</span><select aria-label="Language" onchange="if(this.value)location.href=this.value"><option value="../index.html" lang="ja">日本語</option><option value="../en/index.html" lang="en">English</option><option value="../zh-hant/index.html" lang="zh-Hant">繁體中文</option><option value="../zh-hans/index.html" lang="zh-Hans">简体中文</option><option value="../ko/index.html" lang="ko" selected>한국어</option><option value="../id/index.html" lang="id-ID">Bahasa Indonesia</option></select></label>
     <div class="acts">
-      <label class="file" title="保存したプロジェクト(.json)を開く">開く<input id="fileProject" type="file" accept=".json,application/json"></label>
-      <button id="btnSave" title="プロジェクトを .json で保存">保存</button>
-      <button id="btnAE" title="After Effects パネル用の構成データを書き出す">AE用に書き出し</button>
-      <button id="btnReset" class="ghost" title="歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します">初期化</button>
-      <button id="btnTerms" class="ghost terms-open" title="出力物の権利とライセンス">利用について</button>
+      <label class="file" title="저장한 프로젝트(.json) 열기">열기<input id="fileProject" type="file" accept=".json,application/json"></label>
+      <button id="btnSave" title="프로젝트를 .json으로 저장">저장</button>
+      <button id="btnAE" title="After Effects 패널용 구성 데이터 내보내기">AE용 내보내기</button>
+      <button id="btnReset" class="ghost" title="가사·음원·설정·기록을 모두 지우고 처음 상태로 되돌립니다">초기화</button>
+      <button id="btnTerms" class="ghost terms-open" title="출력물의 권리와 라이선스">이용 안내</button>
     </div>
   </header>
 
   <main class="work">
     <!-- ================= left: lyrics & timing ================= -->
-    <section class="col col-left" aria-label="歌詞とタイミング">
+    <section class="col col-left" aria-label="가사와 타이밍">
       <div class="sec">
-        <div class="sec-h"><h2>歌詞</h2><span class="sec-btns"><button id="btnClearLyrics" class="ghost small" title="歌詞と、行ごとのタイミング・指定・書き出す範囲を消します（「元に戻す」か Ctrl+Z で戻せます）">歌詞を消す</button><button id="btnSyntax" class="ghost small" aria-expanded="false">記法</button></span></div>
-        <textarea id="lyrics" rows="9" spellcheck="false" aria-label="歌詞（1行 = 1フレーズ）"></textarea>
-        <label class="lang-row">歌詞の言語<select id="lyricLang"><option value="auto">自動判定</option><option value="ja">日本語</option><option value="zh-Hant">繁體中文</option><option value="zh-Hans">简体中文</option><option value="ko">한국어</option><option value="en">English</option></select><span id="langNote" class="muted"></span></label>
+        <div class="sec-h"><h2>가사</h2><span class="sec-btns"><button id="btnClearLyrics" class="ghost small" title="가사와 줄별 타이밍·설정·내보낼 범위를 지웁니다(‘되돌리기’나 Ctrl+Z로 복구 가능)">가사 지우기</button><button id="btnSyntax" class="ghost small" aria-expanded="false">표기법</button></span></div>
+        <textarea id="lyrics" rows="9" spellcheck="false" aria-label="가사 (한 줄 = 한 프레이즈)"></textarea>
+        <label class="lang-row">가사 언어<select id="lyricLang"><option value="auto">자동 감지</option><option value="ja">日本語</option><option value="zh-Hant">繁體中文</option><option value="zh-Hans">简体中文</option><option value="ko">한국어</option><option value="en">English</option></select><span id="langNote" class="muted"></span></label>
         <div id="syntax" class="syntax" hidden>
           <ul>
-            <li>1行が1フレーズ。空行は少し間を空けます</li>
-            <li><code>夜明けの色を/覚えてる</code> … <code>/</code> でカットの切れ目を指定</li>
-            <li><code>*透明*</code> … 強調（大きく・インパクト寄りの演出）</li>
-            <li>行末の <code>!</code> … フラッシュと揺れを入れる</li>
-            <li><code>歌詞|ruby or note</code> … 注釈レイアウトの小さな文字</li>
-            <li><code>[01:23.45]歌詞</code> … LRC のタイムスタンプをそのまま使用</li>
-            <li><code>[間奏 8]</code> … 8秒の間奏（歌詞は出さず、背景と装飾だけ）。秒数を省くと4秒、タップ同期やマーカーで長さを合わせられます</li>
-            <li><code>#</code> で始まる行 … コメント（無視）</li>
+            <li>한 줄을 한 프레이즈로 처리합니다. 빈 줄은 짧은 간격을 만듭니다.</li>
+            <li><code>새벽의 색을/기억하고 있어</code> … <code>/</code>로 컷 경계를 지정</li>
+            <li><code>*투명*</code> … 강조 (더 크고 강한 연출)</li>
+            <li>줄 끝의 <code>!</code> … 플래시와 흔들림 추가</li>
+            <li><code>가사|읽는 법 또는 메모</code> … 주석 레이아웃의 작은 글자</li>
+            <li><code>[01:23.45]가사</code> … LRC 타임스탬프를 그대로 사용</li>
+            <li><code>[간주 8]</code> … 8초 간주(가사 없이 배경과 장식만). 숫자를 생략하면 4초이며, 탭 동기화나 마커로 길이를 맞출 수 있습니다</li>
+            <li><code>#</code>로 시작하는 줄 … 주석(무시)</li>
           </ul>
         </div>
       </div>
 
       <div class="sec">
-        <div class="sec-h"><h2>曲とタイミング</h2></div>
-        <div id="audioName" class="muted audio-name">曲なし（読み込むと拍を検出してカットを合わせます）</div>
+        <div class="sec-h"><h2>음원과 타이밍</h2></div>
+        <div id="audioName" class="muted audio-name">음원 없음 (불러오면 박자를 감지해 컷을 맞춥니다)</div>
         <div class="row">
-          <label class="file" title="mp3 / wav / m4a など">曲を読み込む<input id="audioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"></label>
-          <button id="btnTap" title="曲を再生しながら各行の頭でタップ">タップで同期</button>
+          <label class="file" title="MP3 / WAV / M4A 등">음원 불러오기<input id="audioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"></label>
+          <button id="btnTap" title="음원을 재생하며 각 줄이 시작될 때 탭">탭으로 동기화</button>
         </div>
         <div class="fields pro-only">
-          <label class="field">BPM<input id="bpm" type="number" min="0" max="300" step="0.1" placeholder="自動"></label>
-          <label class="field">開始(秒)<input id="offset" type="number" min="0" step="0.05"></label>
-          <label class="field">行の長さ<input id="lineScale" type="number" min="0.4" max="3" step="0.05"></label>
+          <label class="field">BPM<input id="bpm" type="number" min="0" max="300" step="0.1" placeholder="자동"></label>
+          <label class="field">시작(초)<input id="offset" type="number" min="0" step="0.05"></label>
+          <label class="field">줄 길이<input id="lineScale" type="number" min="0.4" max="3" step="0.05"></label>
         </div>
         <div class="row pro-only">
-          <label class="row" style="gap:6px"><input id="snap" type="checkbox"> 拍にスナップ</label>
-          <button id="btnResetTimes" class="ghost small">手動タイミングを消す</button>
+          <label class="row" style="gap:6px"><input id="snap" type="checkbox"> 박자에 스냅</label>
+          <button id="btnResetTimes" class="ghost small">수동 타이밍 지우기</button>
         </div>
         <div id="tapPanel" class="tapbox" hidden>
-          <div class="hint">曲に合わせて、各行が始まる瞬間に <span class="kbd">Space</span> かボタンを押してください。押し間違えたら <span class="kbd">Backspace</span> か「1つ戻る」。途中の行からやり直すときは、行一覧の ◎ を押します。</div>
-          <div class="next">次: <b id="tapLine">—</b></div>
+          <div class="hint">음원에 맞춰 각 줄이 시작되는 순간 <span class="kbd">Space</span> 또는 버튼을 누르세요. 잘못 눌렀다면 <span class="kbd">Backspace</span> 또는 ‘한 번 되돌리기’. 중간 줄부터 다시 하려면 줄 목록의 ◎를 누르세요.</div>
+          <div class="next">다음: <b id="tapLine">—</b></div>
           <button id="tapBtn" class="tap">TAP</button>
           <div class="row" style="gap:6px;margin-top:6px">
             <button id="tapBack" class="ghost small">1つ戻る</button>
             <button id="tapFromStart" class="ghost small" title="曲の最初（第1行）からタップし直す">最初から</button>
-            <button id="tapStop" class="ghost small" style="flex:1">終了する</button>
+            <button id="tapStop" class="ghost small" style="flex:1">종료</button>
           </div>
         </div>
       </div>
 
       <div class="sec">
-        <div class="sec-h"><h2>行とカット</h2><span id="linesInfo" class="muted mono"></span></div>
+        <div class="sec-h"><h2>줄과 컷</h2><span id="linesInfo" class="muted mono"></span></div>
         <ol id="lineList"></ol>
       </div>
     </section>
 
     <!-- ================= center: stage ================= -->
-    <section class="col col-stage" aria-label="プレビュー">
+    <section class="col col-stage" aria-label="미리보기">
       <div class="viewport" id="viewport"><canvas id="view" width="1280" height="720"></canvas><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
       <div class="transport">
-        <button id="btnPlay" class="play" aria-label="再生">▶</button>
+        <button id="btnPlay" class="play" aria-label="재생">▶</button>
         <span id="timeNow" class="tc">00:00.00</span><span class="tc muted">/</span><span id="timeDur" class="tc muted">00:00.00</span>
-        <input id="scrub" type="range" min="0" max="10000" value="0" aria-label="再生位置">
-        <button id="btnLoop" class="ghost small" aria-pressed="true">ループ</button>
-        <span class="vol"><button id="btnMute" class="ghost small" aria-pressed="false" title="クリックで消音／解除（プレビューだけ。書き出しの音量は変わりません）">音量</button><input id="vol" type="range" min="0" max="100" value="80" aria-label="プレビューの音量"></span>
+        <input id="scrub" type="range" min="0" max="10000" value="0" aria-label="재생 위치">
+        <button id="btnLoop" class="ghost small" aria-pressed="true">반복</button>
+        <span class="vol"><button id="btnMute" class="ghost small" aria-pressed="false" title="클릭하여 음소거/해제 (미리보기 전용이며 내보내기 음량은 바뀌지 않습니다)">음량</button><input id="vol" type="range" min="0" max="100" value="80" aria-label="미리보기 음량"></span>
         <span class="hist-btns">
-          <button id="btnPrev" class="ghost small icon-txt" title="前の案に戻る" aria-label="前の案">◀</button>
-          <button id="btnNext" class="ghost small icon-txt" title="次の案へ進む" aria-label="次の案">▶</button>
+          <button id="btnPrev" class="ghost small icon-txt" title="이전 버전으로" aria-label="이전">◀</button>
+          <button id="btnNext" class="ghost small icon-txt" title="다음 버전으로" aria-label="다음">▶</button>
         </span>
-        <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
-        <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
+        <button id="btnShuffle" class="accent" title="설정은 유지하고 구성만 다시 추첨 (잠근 줄은 유지)">셔플</button>
+        <button id="btnOmakase" class="primary" title="스타일·분위기·연출·배색을 모두 랜덤으로 변경 (R 키)">자동 생성</button>
       </div>
       <div class="tl-toolbar">
         <label class="tl-zoom">ズーム <input id="tlZoom" type="range" min="1" max="10" step="0.1" value="1"><span id="tlZoomVal" class="mono">1.0x</span></label>
-        <button id="tlOut" class="ghost small icon-txt" title="縮小" aria-label="タイムラインを縮小">−</button>
-        <button id="tlIn" class="ghost small icon-txt" title="拡大（タイムライン上でホイールでも）" aria-label="タイムラインを拡大">＋</button>
+        <button id="tlOut" class="ghost small icon-txt" title="축소" aria-label="타임라인 축소">−</button>
+        <button id="tlIn" class="ghost small icon-txt" title="확대(타임라인에서 휠로도 가능)" aria-label="타임라인 확대">＋</button>
         <button id="btnTlReset" class="ghost small" title="ズームと位置をリセット">全体表示</button>
-        <button id="btnUndoEdit" class="ghost small" title="歌詞・タイミングの変更を元に戻す（Ctrl+Z）" disabled>元に戻す</button>
-        <button id="btnAddImgBlock" class="small accent" title="現在の再生位置に背景画像ブロックを追加">＋画像ブロック</button>
-        <button id="btnAddVidBlock" class="small accent" title="現在の再生位置に背景動画ブロックを追加">＋動画ブロック</button>
+        <button id="btnUndoEdit" class="ghost small" title="가사·타이밍 변경 되돌리기(Ctrl+Z)" disabled>되돌리기</button>
+        <button id="btnAddImgBlock" class="small accent" title="現在の재생 위치に배경画像ブロックを추가">＋画像ブロック</button>
+        <button id="btnAddVidBlock" class="small accent" title="現在の재생 위치に배경動画ブロックを추가">＋動画ブロック</button>
         <button id="btnDelBlock" class="ghost small" title="選択中のブロックを削除" disabled>削除</button>
         <span class="tl-hint muted">Track 0:文字 / Track 1:画像 / Track 2:動画（ドラッグで境界調整・Shiftで吸着無効）</span>
       </div>
@@ -488,7 +488,7 @@ button.small.primary { padding: 4px 12px; }
         <label class="param">X <input id="selBlockX" type="number" min="-100" max="100" step="1" style="width:52px"></label>
         <label class="param">Y <input id="selBlockY" type="number" min="-100" max="100" step="1" style="width:52px"></label>
         <label class="param">倍率 <input id="selBlockScale" type="number" min="0.1" max="5" step="0.05" style="width:54px"></label>
-        <label class="param">不透明度 <input id="selBlockOpacity" type="range" min="0" max="1" step="0.01" style="width:64px"></label>
+        <label class="param">不투명度 <input id="selBlockOpacity" type="range" min="0" max="1" step="0.01" style="width:64px"></label>
         <label class="param">合成 <select id="selBlockBlend">
           <option value="normal">通常</option>
           <option value="multiply">乗算</option>
@@ -500,94 +500,94 @@ button.small.primary { padding: 4px 12px; }
           <option value="color-dodge">覆い焼き</option>
         </select></label>
         <span class="param-divider" style="opacity:0.3;margin:0 2px">|</span>
-        <button id="btnBlockAddKey" class="small ghost icon-txt" title="現在の再生位置にキーフレーム(◆)を追加または更新" style="padding:2px 6px;font-size:11px">◆＋キー</button>
-        <button id="btnBlockDelKey" class="small ghost icon-txt" title="現在の再生位置のキーフレーム(◆)を削除" style="padding:2px 6px;font-size:11px" disabled>◆－キー</button>
+        <button id="btnBlockAddKey" class="small ghost icon-txt" title="現在の재생 위치にキーフレーム(◆)を추가または更新" style="padding:2px 6px;font-size:11px">◆＋キー</button>
+        <button id="btnBlockDelKey" class="small ghost icon-txt" title="現在の재생 위치のキーフレーム(◆)を削除" style="padding:2px 6px;font-size:11px" disabled>◆－キー</button>
       </div>
       <div class="cutinfo" id="cutInfo"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
-    <section class="col col-right" aria-label="スタイルと書き出し">
+    <section class="col col-right" aria-label="스타일과 내보내기">
       <div id="easyPanel" class="easy" hidden>
         <div class="easy-hero">
-          <button id="btnOmakaseBig" class="omakase">おまかせで作る</button>
-          <p class="hint">押すたびに、スタイル・雰囲気・動き・配色・構成がまるごと変わります。キーボードの <span class="kbd">R</span> でも実行できます。</p>
+          <button id="btnOmakaseBig" class="omakase">자동으로 만들기</button>
+          <p class="hint">누를 때마다 스타일, 분위기, 움직임, 배색, 구성이 모두 바뀝니다. 키보드의 <span class="kbd">R</span> 로도 실행할 수 있습니다.</p>
           <div class="hist-row">
-            <button id="btnPrev2" class="ghost">◀ 前の案</button>
+            <button id="btnPrev2" class="ghost">◀ 이전</button>
             <span id="histPos" class="muted mono"></span>
-            <button id="btnNext2" class="ghost">次の案 ▶</button>
+            <button id="btnNext2" class="ghost">다음 ▶</button>
           </div>
           <div class="pick-sets">
-            <label class="check"><input id="eExtra" class="extra-toggle" type="checkbox"><span>追加分の演出も使う<small>最初の公開版のあとに追加した約350の演出・配色セット12・書体6も、おまかせやシャッフルの候補にします（オフのときは最初の公開版の演出だけ）</small></span></label>
-            <label class="check"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>和風の演出も使う<small>提灯・はがき・障子・扇・家紋・青海波・桜の花びらなどの和風グラフィック。オフにすると、おまかせやシャッフルで選ばれません</small></span></label>
-            <label class="check"><input class="unify-toggle" type="checkbox"><span>統一感</span></label>
-            <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字整列</span></label>
+            <label class="check"><input id="eExtra" class="extra-toggle" type="checkbox"><span>추가 연출도 사용<small>첫 공개 이후 추가된 약 350개 연출, 12개 스타일, 6개 글꼴도 자동 생성과 셔플 후보에 포함합니다. 끄면 초기 공개판의 연출만 사용합니다.</small></span></label>
+            <label class="check"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>일본풍 연출도 사용<small>초롱, 엽서, 쇼지, 부채, 가문 문양, 세이가이하, 벚꽃잎 등의 일본풍 그래픽입니다. 끄면 자동 생성과 셔플에서 선택되지 않습니다.</small></span></label>
+            <label class="check"><input class="unify-toggle" type="checkbox"><span>통일감</span></label>
+            <label class="check"><input class="typeset-toggle" type="checkbox"><span>문자 정렬</span></label>
           </div>
         </div>
         <div class="easy-sec">
-          <h3>いまの案</h3>
+          <h3>현재 버전</h3>
           <div id="easyNow" class="now"></div>
         </div>
         <div class="easy-sec">
-          <h3>ここだけ変える</h3>
+          <h3>이 부분만 변경</h3>
           <div class="easy-grid">
-            <button id="eStyle" title="スタイルだけ別のものに">スタイル</button>
-            <button id="ePalette" title="アクセント・ズレ色A/Bをランダムに">配色</button>
-            <button id="eMood" title="動き・グリッチ・使う手法の雰囲気だけ">雰囲気</button>
-            <button id="eCut" title="レイアウトと動きの組み合わせだけ">構成</button>
+            <button id="eStyle" title="스타일만 변경">스타일</button>
+            <button id="ePalette" title="강조색·오프셋 색 A/B를 랜덤 변경">배색</button>
+            <button id="eMood" title="움직임·글리치·사용 기법의 분위기만 변경">분위기</button>
+            <button id="eCut" title="레이아웃과 움직임 조합만 변경">구성</button>
           </div>
         </div>
         <div class="easy-sec">
-          <h3>書き出し</h3>
+          <h3>내보내기</h3>
           <div class="fields">
-            <label class="field">画面比<select id="eAspect"><option value="16:9">16:9</option><option value="9:16">9:16 縦</option><option value="4:3">4:3</option><option value="3:4">3:4 縦</option><option value="1:1">1:1</option><option value="4:5">4:5 縦</option><option value="21:9">21:9</option></select></label>
-            <label class="field">解像度<select id="eRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
+            <label class="field">화면비<select id="eAspect"><option value="16:9">16:9</option><option value="9:16">9:16 세로</option><option value="4:3">4:3</option><option value="3:4">3:4 세로</option><option value="1:1">1:1</option><option value="4:5">4:5 세로</option><option value="21:9">21:9</option></select></label>
+            <label class="field">해상도<select id="eRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
             <label class="field">fps<select id="eFps"><option>24</option><option>30</option><option>60</option></select></label>
-            <label class="field field-wide">背景<select id="eKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
+            <label class="field field-wide">배경<select id="eKey"><option value="off">일반 (스타일 배경)</option><option value="green">그린 스크린 (합성용)</option><option value="black">블랙 배경 (합성용)</option></select></label>
           </div>
-          <label class="check center-free"><input id="eCenter" class="center-toggle" type="checkbox"><span>中央を空ける（キャラクター用）<small>中央にキャラクターなどを重ねる前提で、文字と演出を横長の画面では左右、縦長の画面では上下に、行ごとに交互に置きます。背景と画面効果は全体のままです（プレビューには空ける範囲を点線で表示）</small></span></label>
-          <label class="row center-dir" hidden>縦長のとき<select class="centerDirSel" aria-label="縦長の画面での分け方"><option value="tb">上下に分ける</option><option value="lr">左右に分ける</option></select></label>
-          <div class="rng-row"><span class="rng-lab">書き出す範囲</span><select class="rngFrom" aria-label="書き出す範囲の最初の行"></select><span class="muted">〜</span><select class="rngTo" aria-label="書き出す範囲の最後の行"></select><span class="rngInfo muted mono"></span></div>
-          <div class="outbtns"><button id="eMP4" class="primary">MP4 を書き出す</button><button id="eMP4File" class="ghost mp4file" hidden title="保存先のファイルを先に選び、そこへ直接書き込みます。長い曲・1080p 以上でブラウザのメモリが足りずに失敗するときに使ってください（Chrome / Edge）">大きな動画用（ファイルに直接保存）</button></div>
-          <button class="terms-open linkish">書き出した動画の権利について</button>
+          <label class="check center-free"><input id="eCenter" class="center-toggle" type="checkbox"><span>가운데 비우기(캐릭터용)<small>가운데에 캐릭터 등을 겹칠 것을 전제로, 가로 화면에서는 좌우, 세로 화면에서는 위아래에 문자와 연출을 줄마다 번갈아 배치합니다. 배경과 화면 효과는 화면 전체 그대로입니다(미리보기에는 비우는 범위를 점선으로 표시)</small></span></label>
+          <label class="row center-dir" hidden>세로 화면일 때<select class="centerDirSel" aria-label="세로 화면에서 나누는 방법"><option value="tb">위아래로 나누기</option><option value="lr">좌우로 나누기</option></select></label>
+          <div class="rng-row"><span class="rng-lab">내보낼 범위</span><select class="rngFrom" aria-label="내보낼 범위의 첫 줄"></select><span class="muted">〜</span><select class="rngTo" aria-label="내보낼 범위의 마지막 줄"></select><span class="rngInfo muted mono"></span></div>
+          <div class="outbtns"><button id="eMP4" class="primary">MP4 내보내기</button><button id="eMP4File" class="ghost mp4file" hidden title="저장할 파일을 먼저 고르고 거기에 바로 기록합니다. 긴 곡이나 1080p 이상에서 브라우저 메모리가 부족해 실패할 때 사용하세요(Chrome / Edge)">큰 동영상용(파일에 바로 저장)</button></div>
+          <button class="terms-open linkish">내보낸 동영상의 권리</button>
           <div class="exp-box" hidden>
             <div class="progress"><i class="exp-bar"></i></div>
-            <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
+            <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">취소</button></div>
           </div>
         </div>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="style" aria-selected="true">スタイル</button>
-        <button role="tab" data-tab="bg" aria-selected="false">背景素材</button>
-        <button role="tab" data-tab="fx" aria-selected="false">演出</button>
-        <button role="tab" data-tab="tech" aria-selected="false">手法</button>
-        <button role="tab" data-tab="out" aria-selected="false">書き出し</button>
+        <button role="tab" data-tab="style" aria-selected="true">스타일</button>
+        <button role="tab" data-tab="bg" aria-selected="false">배경素材</button>
+        <button role="tab" data-tab="fx" aria-selected="false">연출</button>
+        <button role="tab" data-tab="tech" aria-selected="false">기법</button>
+        <button role="tab" data-tab="out" aria-selected="false">내보내기</button>
       </nav>
 
       <div class="tabpane" data-pane="style">
         <div id="styleGrid" class="style-grid"></div>
-        <h3>フォントの役割</h3>
+        <h3>글꼴 역할</h3>
         <div id="fontRoles"></div>
         <div class="row" style="margin-top:8px">
-          <input id="localFont" type="text" placeholder="PCのフォント名（例: 游明朝）" style="flex:1">
-          <button id="btnAddFont">追加</button>
+          <input id="localFont" type="text" placeholder="PC 글꼴 이름 (예: 맑은 고딕)" style="flex:1">
+          <button id="btnAddFont">추가</button>
         </div>
-        <div class="row" style="margin-top:8px"><label class="file">フォントファイル（.ttf/.otf）<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
-        <h3>アクセント・ズレ色</h3>
-        <label class="check"><input id="accentOn" type="checkbox"><span>自分の色で上書き<small>全シーンに適用。背景に合わせて明るさを自動調整します</small></span></label>
+        <div class="row" style="margin-top:8px"><label class="file">글꼴 파일 (.ttf/.otf)<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
+        <h3>강조색·오프셋 색</h3>
+        <label class="check"><input id="accentOn" type="checkbox"><span>사용자 색상으로 덮어쓰기<small>모든 장면에 적용합니다. 배경에 맞춰 밝기를 자동 조정합니다.</small></span></label>
         <div class="color-row" id="colorRowAccent"></div>
         <div class="row" style="margin-top:10px">
-          <button id="btnRandPalette" class="accent">ランダムに配色</button>
+          <button id="btnRandPalette" class="accent">랜덤 배색</button>
           <div id="paletteSwatch" class="swatches" aria-hidden="true"></div>
         </div>
-        <h3>背景・文字色</h3>
-        <label class="check"><input id="colorOn" type="checkbox"><span>メインの背景と文字を自分の色にする</span></label>
+        <h3>배경·글자색</h3>
+        <label class="check"><input id="colorOn" type="checkbox"><span>메인 배경과 글자를 사용자 색상으로 설정</span></label>
         <div class="color-row" id="colorRow"></div>
       </div>
 
       <div class="tabpane" data-pane="bg" hidden>
-        <h3>背景メディア（画像 / 動画）</h3>
-        <p class="hint">1枚の画像または動画を背景レイヤーとして配置し、位置・拡大率やPhotoshop風ブレンドモードを設定できます。</p>
+        <h3>배경メディア（画像 / 動画）</h3>
+        <p class="hint">1枚の画像または動画を배경レイヤーとして配置し、位置・拡大率やPhotoshop風ブレンドモードを設定できます。</p>
         <div class="row" style="margin-top:8px">
           <label class="file" title="画像（jpg/png/webp）または動画（mp4/webm）">ファイルを選択<input id="bgMediaFile" type="file" accept="image/*,video/*,.mp4,.webm,.png,.jpg,.jpeg,.webp"></label>
           <button id="btnBgMediaClear" class="ghost small">削除</button>
@@ -605,12 +605,12 @@ button.small.primary { padding: 4px 12px; }
         </div>
 
         <div class="fields" style="margin-top:8px">
-          <label class="field">不透明度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
+          <label class="field">不투명度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
         </div>
 
         <h3>レイヤー合成（ブレンドモード）</h3>
         <div class="fields">
-          <label class="field field-wide">文字演出レイヤーの合成<select id="textBlendMode">
+          <label class="field field-wide">文字연출レイヤーの合成<select id="textBlendMode">
             <option value="normal">通常 (Normal)</option>
             <option value="multiply">乗算 (Multiply)</option>
             <option value="screen">スクリーン (Screen)</option>
@@ -627,7 +627,7 @@ button.small.primary { padding: 4px 12px; }
         </div>
 
         <div class="fields" style="margin-top:8px">
-          <label class="field field-wide">背景メディア自体の合成<select id="bgBlendMode">
+          <label class="field field-wide">배경メディア自体の合成<select id="bgBlendMode">
             <option value="normal">通常 (Normal)</option>
             <option value="multiply">乗算 (Multiply)</option>
             <option value="screen">スクリーン (Screen)</option>
@@ -643,57 +643,57 @@ button.small.primary { padding: 4px 12px; }
 
       <div class="tabpane" data-pane="fx" hidden>
         <div class="unify-box">
-          <label class="check"><input class="unify-toggle" type="checkbox"><span>統一感</span></label>
-          <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字整列</span></label>
+          <label class="check"><input class="unify-toggle" type="checkbox"><span>통일감</span></label>
+          <label class="check"><input class="typeset-toggle" type="checkbox"><span>문자 정렬</span></label>
         </div>
         <div id="fxSliders"></div>
         <div class="row" style="margin-top:6px">
-          <label class="row" style="gap:6px"><input id="fxFlash" type="checkbox"> フラッシュ</label>
-          <label class="row" style="gap:6px">コマ打ち <select id="fxKoma" title="動きを何枚/秒で描くか（出力fpsとは別）"><option value="0">フル（出力fpsのまま）</option><option value="12">2コマ打ち（12枚/秒）</option><option value="8">3コマ打ち（8枚/秒）</option></select></label>
+          <label class="row" style="gap:6px"><input id="fxFlash" type="checkbox"> 플래시</label>
+          <label class="row" style="gap:6px">프레임 홀드 <select id="fxKoma" title="움직임을 초당 몇 장으로 그릴지 설정 (출력 fps와 별개)"><option value="0">전체 (출력 fps 그대로)</option><option value="12">2프레임 홀드 (초당 12장)</option><option value="8">3프레임 홀드 (초당 8장)</option></select></label>
         </div>
         <div class="fields" style="margin-top:12px">
-          <label class="field">HUD<select id="fxHud"><option value="auto">スタイル次第</option><option value="on">常に表示</option><option value="off">表示しない</option></select></label>
-          <label class="field">シード<input id="seed" type="number" step="1"></label>
-          <label class="field">&nbsp;<button id="btnSeed" class="ghost">新しいシード</button></label>
+          <label class="field">HUD<select id="fxHud"><option value="auto">스타일에 따라</option><option value="on">항상 표시</option><option value="off">표시 안 함</option></select></label>
+          <label class="field">시드<input id="seed" type="number" step="1"></label>
+          <label class="field">&nbsp;<button id="btnSeed" class="ghost">새 시드</button></label>
         </div>
-        <p class="note">同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。</p>
+        <p class="note">같은 시드는 같은 구성을 만듭니다. 줄별 다시 추첨과 잠금은 왼쪽 줄 목록에서 설정합니다.</p>
       </div>
 
       <div class="tabpane" data-pane="tech" hidden>
         <div class="pick-sets">
-          <label class="check"><input id="tExtra" class="extra-toggle" type="checkbox"><span>追加分の演出も使う<small>「追加」印の手法・スタイル・書体。オフのときは、おまかせやシャッフルで最初の公開版の演出だけを使います</small></span></label>
-          <label class="check"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>和風の演出も使う<small>「和」印の手法とスタイル。オフにすると、おまかせやシャッフルでは選ばれません（追加分の判定のあとに適用。行ごとに手動で指定した場合は使えます）</small></span></label>
+          <label class="check"><input id="tExtra" class="extra-toggle" type="checkbox"><span>추가 연출도 사용<small>「추가」 표시가 있는 기법·스타일·글꼴입니다. 끄면 자동 생성과 셔플에서 초기 공개판의 연출만 사용합니다.</small></span></label>
+          <label class="check"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>일본풍 연출도 사용<small>「일」 표시가 있는 일본풍 기법과 스타일입니다. 끄면 자동 생성과 셔플에서는 선택되지 않지만 줄별 수동 지정은 가능합니다.</small></span></label>
         </div>
-        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="手法を名前で絞り込み" style="flex:1" aria-label="手法を名前で絞り込み"><span id="techTotal" class="muted mono"></span></div>
+        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="기법 이름으로 필터" style="flex:1" aria-label="기법 이름으로 필터"><span id="techTotal" class="muted mono"></span></div>
         <div id="techLists"></div>
       </div>
 
       <div class="tabpane" data-pane="out" hidden>
         <div class="fields">
-          <label class="field">画面比<select id="outAspect"><option value="16:9">16:9</option><option value="9:16">9:16 縦</option><option value="4:3">4:3</option><option value="3:4">3:4 縦</option><option value="1:1">1:1</option><option value="4:5">4:5 縦</option><option value="21:9">21:9</option></select></label>
-          <label class="field">解像度<select id="outRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
+          <label class="field">화면비<select id="outAspect"><option value="16:9">16:9</option><option value="9:16">9:16 세로</option><option value="4:3">4:3</option><option value="3:4">3:4 세로</option><option value="1:1">1:1</option><option value="4:5">4:5 세로</option><option value="21:9">21:9</option></select></label>
+          <label class="field">해상도<select id="outRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
           <label class="field">fps<select id="outFps"><option>24</option><option>30</option><option>60</option></select></label>
-          <label class="field">画質<select id="outQuality"><option value="standard">標準</option><option value="high">高</option><option value="max">最高</option></select></label>
-          <label class="field field-wide">背景<select id="outKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
+          <label class="field">화질<select id="outQuality"><option value="standard">표준</option><option value="high">높음</option><option value="max">최고</option></select></label>
+          <label class="field field-wide">배경<select id="outKey"><option value="off">일반 (스타일 배경)</option><option value="green">그린 스크린 (합성용)</option><option value="black">블랙 배경 (합성용)</option></select></label>
         </div>
-        <p class="note key-note">グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。</p>
-        <label class="check center-free"><input id="outCenter" class="center-toggle" type="checkbox"><span>中央を空ける（キャラクター用）<small>中央にキャラクターなどを重ねる前提で、文字と演出を横長の画面では左右、縦長の画面では上下に、行ごとに交互に置きます。背景と画面効果は全体のままです（プレビューには空ける範囲を点線で表示）</small></span></label>
-          <label class="row center-dir" hidden>縦長のとき<select class="centerDirSel" aria-label="縦長の画面での分け方"><option value="tb">上下に分ける</option><option value="lr">左右に分ける</option></select></label>
-        <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
-        <div class="rng-row"><span class="rng-lab">書き出す範囲</span><select class="rngFrom" aria-label="書き出す範囲の最初の行"></select><span class="muted">〜</span><select class="rngTo" aria-label="書き出す範囲の最後の行"></select><span class="rngInfo muted mono"></span></div>
+        <p class="note key-note">그린 스크린/블랙 배경에서는 단색 배경 위에 흰 글자와 연출만 그립니다. 배경 무늬, 종이 질감, 입자, 비네트는 제외됩니다. 미리보기에도 그대로 반영되며 그린은 크로마키, 블랙은 스크린 합성이나 루마 키로 다른 영상 위에 합성할 수 있습니다.</p>
+        <label class="check center-free"><input id="outCenter" class="center-toggle" type="checkbox"><span>가운데 비우기(캐릭터용)<small>가운데에 캐릭터 등을 겹칠 것을 전제로, 가로 화면에서는 좌우, 세로 화면에서는 위아래에 문자와 연출을 줄마다 번갈아 배치합니다. 배경과 화면 효과는 화면 전체 그대로입니다(미리보기에는 비우는 범위를 점선으로 표시)</small></span></label>
+          <label class="row center-dir" hidden>세로 화면일 때<select class="centerDirSel" aria-label="세로 화면에서 나누는 방법"><option value="tb">위아래로 나누기</option><option value="lr">좌우로 나누기</option></select></label>
+        <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 동영상에 음원 포함</label>
+        <div class="rng-row"><span class="rng-lab">내보낼 범위</span><select class="rngFrom" aria-label="내보낼 범위의 첫 줄"></select><span class="muted">〜</span><select class="rngTo" aria-label="내보낼 범위의 마지막 줄"></select><span class="rngInfo muted mono"></span></div>
         <div class="outbtns">
-          <button id="btnMP4" class="primary">MP4 を書き出す</button>
-          <button id="btnMP4File" class="mp4file" hidden title="保存先のファイルを先に選び、そこへ直接書き込みます。長い曲・1080p 以上でブラウザのメモリが足りずに失敗するときに使ってください（Chrome / Edge）">MP4（大きな動画用・ファイルに直接保存）</button>
-          <button id="btnPNG">連番PNG（ZIP）</button>
-          <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
-          <button id="btnPNGL" title="後景（背景のグラフィックと歌詞の後ろの装飾）と前景（歌詞とその装飾・ゴースト）を、別々のフォルダ（back / front）に透過PNGで書き出します。画面全体の演出は両方にかかるので、前景を後景の上に重ねると通常の見た目になります">透過PNG 前景／後景（ZIP）</button>
+          <button id="btnMP4" class="primary">MP4 내보내기</button>
+          <button id="btnMP4File" class="mp4file" hidden title="저장할 파일을 먼저 고르고 거기에 바로 기록합니다. 긴 곡이나 1080p 이상에서 브라우저 메모리가 부족해 실패할 때 사용하세요(Chrome / Edge)">MP4(큰 동영상용·파일에 바로 저장)</button>
+          <button id="btnPNG">PNG 시퀀스 (ZIP)</button>
+          <button id="btnPNGA">투명 PNG (ZIP·배경 없음)</button>
+          <button id="btnPNGL" title="후경(배경 그래픽과 가사 뒤 장식)과 전경(가사, 장식, 고스트)을 각각 back / front 폴더에 투명 PNG로 내보냅니다. 화면 전체 효과는 양쪽에 적용되므로 전경을 후경 위에 겹치면 일반 화면과 같은 모습이 됩니다.">투명 PNG 전경/후경 (ZIP)</button>
         </div>
         <div class="exp-box" hidden style="margin-top:12px">
           <div class="progress"><i class="exp-bar"></i></div>
-          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
+          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">취소</button></div>
         </div>
-        <button class="terms-open linkish" style="margin-top:10px">書き出した動画・画像の権利とライセンスについて</button>
-        <p class="note" id="codecNote">書き出しはこのブラウザの中で行われます（Chrome / Edge 推奨）。</p>
+        <button class="terms-open linkish" style="margin-top:10px">내보낸 동영상·이미지의 권리와 라이선스</button>
+        <p class="note" id="codecNote">내보내기는 이 브라우저 안에서 처리됩니다 (Chrome / Edge 권장).</p>
       </div>
     </section>
   </main>
@@ -701,33 +701,33 @@ button.small.primary { padding: 4px 12px; }
 
 <dialog id="resetDlg" class="terms" aria-labelledby="resetTitle">
   <form method="dialog">
-    <h2 id="resetTitle">初期化</h2>
-    <p>次のものをすべて消して、最初の状態に戻します。<strong>元に戻すことはできません。</strong></p>
+    <h2 id="resetTitle">초기화</h2>
+    <p>아래 항목을 모두 지우고 처음 상태로 되돌립니다. <strong>되돌릴 수 없습니다.</strong></p>
     <ul class="reset-list">
-      <li>歌詞・曲名・アーティスト</li>
-      <li>読み込んだ曲（このブラウザに残していた分も）</li>
-      <li>タイミング・行ごとの指定・書き出す範囲</li>
-      <li>スタイル・演出・配色・書体などの設定</li>
-      <li>案の履歴（◀ ▶）と、歌詞・タイミングの「元に戻す」の履歴</li>
+      <li>가사·곡명·아티스트</li>
+      <li>불러온 음원(이 브라우저에 보관된 파일 포함)</li>
+      <li>타이밍·줄별 설정·내보낼 범위</li>
+      <li>스타일·연출·배색·글꼴 등의 설정</li>
+      <li>버전 기록(◀ ▶)과 가사·타이밍의 ‘되돌리기’ 기록</li>
     </ul>
-    <p class="terms-sub">表示モード（かんたん／詳細）・プレビューの音量・画面の言語はそのままです。保存したプロジェクトファイル（.json）も消えません。</p>
-    <div class="terms-foot"><span></span><span class="row"><button value="cancel" class="ghost">やめる</button><button value="reset" class="danger">初期化する</button></span></div>
+    <p class="terms-sub">표시 모드(간단/상세), 미리보기 음량, 화면 언어는 그대로입니다. 저장한 프로젝트 파일(.json)도 지워지지 않습니다.</p>
+    <div class="terms-foot"><span></span><span class="row"><button value="cancel" class="ghost">취소</button><button value="reset" class="danger">초기화</button></span></div>
   </form>
 </dialog>
 <dialog id="termsDlg" class="terms" aria-labelledby="termsTitle">
   <form method="dialog">
-    <h2 id="termsTitle">利用について</h2>
+    <h2 id="termsTitle">이용 안내</h2>
     <div class="terms-main">
-      <p class="terms-big">このツールで作った<strong>動画や画像（出力物）の権利は、作った人</strong>に帰属します。</p>
-      <p class="terms-sub">※ 使った歌詞や曲の権利は、それぞれの権利者に帰属します。</p>
+      <p class="terms-big">이 도구로 만든<strong>동영상과 이미지(출력물)의 권리는 제작자</strong>에게 있습니다.</p>
+      <p class="terms-sub">※ 사용한 가사와 음원의 권리는 각각의 권리자에게 있습니다.</p>
     </div>
-    <p>ツール本体は <strong>MIT ライセンス</strong>で公開しています。詳細なライセンスはこちら：</p>
+    <p>도구 자체는 <strong>MIT 라이선스</strong>로 공개되어 있습니다. 자세한 라이선스:</p>
     <p><a href="https://github.com/852wa/JIZURA" target="_blank" rel="noopener">https://github.com/852wa/JIZURA</a></p>
-    <p class="muted terms-note">入力した歌詞や曲は、このブラウザの中だけで処理され、サーバーには送信されません。</p>
-    <details class="terms-oss"><summary>使用しているオープンソース</summary>
-      <p>MP4 書き出し：mp4-muxer（MIT License）<br>フォント：Google Fonts 配布の各書体（SIL Open Font License 1.1）</p>
+    <p class="muted terms-note">입력한 가사와 음원은 이 브라우저 안에서만 처리되며 서버로 전송되지 않습니다.</p>
+    <details class="terms-oss"><summary>사용 중인 오픈소스</summary>
+      <p>MP4 내보내기: mp4-muxer (MIT License)<br>글꼴: Google Fonts 배포 서체 (SIL Open Font License 1.1)</p>
     </details>
-    <div class="terms-foot"><span class="muted mono">© 2026 hakoniwa · MIT</span><button value="close" class="primary" autofocus>閉じる</button></div>
+    <div class="terms-foot"><span class="muted mono">© 2026 hakoniwa · MIT</span><button value="close" class="primary" autofocus>닫기</button></div>
   </form>
 </dialog>
 
@@ -5350,22 +5350,22 @@ J.exportMP4 = async (o) => {
   const [w, h] = J.outputSize(project);
   const fps = plan.fps, bitrate = J.videoBitrate(w, h, fps, quality);
   const attempts = await J.videoAttempts(w, h, fps, bitrate);
-  if (!attempts.length) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
+  if (!attempts.length) throw new Error('이 브라우저는 동영상 인코딩(WebCodecs)을 지원하지 않습니다. 최신 Chrome 또는 Edge로 열어 주세요.');
   const tried = [];
   for (let k = 0; k < attempts.length; k++) {
     const vc = attempts[k];
     try {
       if (file && k > 0) { await file.seek(0); await file.truncate(0); }
-      const r = await encodeMP4(Object.assign({}, o, { w, h, vc, note: k > 0 ? `（${vc.label}・ソフトウェアで再試行 ${k}）` : '' }));
+      const r = await encodeMP4(Object.assign({}, o, { w, h, vc, note: k > 0 ? `(${vc.label}·소프트웨어로 재시도 ${k})` : '' }));
       r.tried = tried; return r;
     } catch (e) {
-      if (signal && signal.aborted) throw new Error('キャンセルしました');
+      if (signal && signal.aborted) throw new Error('취소했습니다');
       if (e && e.jzFatal) throw e;
       tried.push(`${vc.label}/${vc.hw}: ${e && e.message ? e.message : e}`);
       console.warn('MP4 export attempt failed', vc.codec, vc.hw, e);
     }
   }
-  const err = new Error('MP4 を書き出せませんでした。' + (file ? '' : '「大きな動画用（ファイルに直接保存）」か、') + '解像度・fps・画質を下げて試してください。詳細：' + tried.join(' ／ '));
+  const err = new Error('MP4를 내보낼 수 없습니다. ' + (file ? '' : '「큰 동영상용(파일에 바로 저장)」을 쓰거나, ') + '해상도·fps·화질을 낮춰 보세요. 자세히: ' + tried.join(' ／ '));
   err.detail = tried; throw err;
 };
 async function encodeMP4({ plan, project, audio, onProgress, signal, range, file, w, h, vc, note }) {
@@ -5392,9 +5392,9 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
   const closeEnc = () => { try { if (venc.state !== 'closed') venc.close(); } catch (e) {} };
   try {
     for (let i = 0; i < total; i++) {
-      if (signal && signal.aborted) { closeEnc(); throw new Error('キャンセルしました'); }
+      if (signal && signal.aborted) { closeEnc(); throw new Error('취소했습니다'); }
       if (err) throw err;
-      if (venc.state === 'closed') throw new Error('エンコーダーが停止しました');
+      if (venc.state === 'closed') throw new Error('인코더가 멈췄습니다');
       if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
         const targetTime = (span.t0 + i / fps) % bgm.element.duration;
         if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
@@ -5410,19 +5410,19 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
       const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
       try { venc.encode(vf, { keyFrame: i % (fps * 2) === 0 }); } finally { vf.close(); }
       let spins = 0;
-      while (venc.encodeQueueSize > 4 && !err) { await new Promise(r => setTimeout(r, 2)); if (++spins > 15000) throw new Error('エンコーダーが応答しません'); }
+      while (venc.encodeQueueSize > 4 && !err) { await new Promise(r => setTimeout(r, 2)); if (++spins > 15000) throw new Error('인코더가 응답하지 않습니다'); }
       // an encoder that accepts frames but never returns any has failed silently (seen with some GPU drivers)
-      if (i === Math.min(total - 1, fps * 3) && outFrames === 0) { await venc.flush(); if (!outFrames) throw new Error('エンコーダーが出力を返しません'); }
-      if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}${note || ''}`); await new Promise(r => setTimeout(r, 0)); }
+      if (i === Math.min(total - 1, fps * 3) && outFrames === 0) { await venc.flush(); if (!outFrames) throw new Error('인코더가 출력을 반환하지 않습니다'); }
+      if (i % 3 === 0) { onProgress && onProgress(i / total, `프레임 ${i + 1}/${total}${note || ''}`); await new Promise(r => setTimeout(r, 0)); }
     }
     await venc.flush();
     if (err) throw err;
   } catch (e) { closeEnc(); throw e; }
   finally { J.glyphs.maxRes = prevRes; }
   closeEnc();
-  if (outFrames < total * 0.98) throw new Error(`動画のフレームが足りません（${outFrames}/${total}）`);
+  if (outFrames < total * 0.98) throw new Error(`프레임이 부족합니다(${outFrames}/${total})`);
   if (ac) {
-    onProgress && onProgress(0.99, '音声をエンコード中');
+    onProgress && onProgress(0.99, '오디오 인코딩 중');
     const rs = await resample(audio.buffer, ac.sr, span.dur, span.t0);
     const chn = rs.numberOfChannels;
     let aChunks = 0, aEnd = 0, aErr = null;
@@ -5440,16 +5440,16 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
     }
     await aenc.flush(); aenc.close();
     const fatal = m => { const e = new Error(m); e.jzFatal = true; return e; };    // audio problems: another video encoder won't help
-    if (aErr) throw fatal('音声のエンコードに失敗しました: ' + (aErr.message || aErr));
+    if (aErr) throw fatal('오디오 인코딩 실패: ' + (aErr.message || aErr));
     // the encoder must have produced the whole soundtrack — otherwise report it instead of writing a silent file
-    if (!aChunks || aEnd < (Math.min(span.dur, audio.buffer.duration - span.t0) - 0.5) * 1e6) throw fatal('音声のエンコードが途中で止まりました（' + aChunks + '）。もう一度書き出してください');
+    if (!aChunks || aEnd < (Math.min(span.dur, audio.buffer.duration - span.t0) - 0.5) * 1e6) throw fatal('오디오 인코딩이 도중에 멈췄습니다(' + aChunks + '). 다시 내보내 주세요');
   }
-  onProgress && onProgress(0.995, 'ファイルを仕上げ中');
+  onProgress && onProgress(0.995, '파일을 마무리하는 중');
   muxer.finalize();
   if (file) await file.close();
-  onProgress && onProgress(1, '完了');
+  onProgress && onProgress(1, '완료');
   const size = file ? null : store.end;
-  return { blob: file ? null : store.blob('video/mp4'), size, codec: vc.label + (vc.hw === 'prefer-software' ? '（ソフトウェア）' : ''), audio: ac ? ac.mux : null, audioWanted: !!(audio && audio.buffer && project.includeAudio !== false), width: w, height: h, toFile: !!file };
+  return { blob: file ? null : store.blob('video/mp4'), size, codec: vc.label + (vc.hw === 'prefer-software' ? '(소프트웨어)' : ''), audio: ac ? ac.mux : null, audioWanted: !!(audio && audio.buffer && project.includeAudio !== false), width: w, height: h, toFile: !!file };
 }
 
 /* ---------- PNG sequence as ZIP (store, no compression) ---------- */
@@ -5492,7 +5492,7 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
   const scale = w / plan.W;
   const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   for (let i = 0; i < total; i += every) {
-    if (signal && signal.aborted) throw new Error('キャンセルしました');
+    if (signal && signal.aborted) throw new Error('취소했습니다');
     if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
       const targetTime = (i / fps) % bgm.element.duration;
       if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
@@ -5512,7 +5512,7 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
     }
     onProgress && onProgress(i / total, `PNG ${i + 1}/${total}`);
   }
-  onProgress && onProgress(1, '完了');
+  onProgress && onProgress(1, '완료');
   return zip.finish();
 };
 
@@ -30099,6 +30099,508 @@ J.randomOk = (project, g, k) => {
 };
 })();
 
+/* English labels are applied after all expression packs register, before the editor starts.
+   Internal IDs and project JSON remain language independent. */
+(() => {
+  'use strict';
+  const titles = {
+    layout: {
+      vcols: 'Vertical text', marquee: 'Scrolling banner', tile: 'Tiled text',
+      huge: 'Oversized text', gloss: 'Annotation', diag: 'Diagonal band',
+      stack: 'Echo stack', lowerThird: 'Lower third', corners: 'Opposite corners',
+      arcTop: 'Rainbow arc', gridCells: 'Grid cells', dropCap: 'Drop cap',
+      frameBox: 'Picture frame', subtitleBar: 'Subtitle bar',
+      sideways: 'Sideways text', edgeFrame: 'Edge frame', hanko: 'Signature seal',
+      genkou: 'Manuscript paper', panels: 'Comic panels', ruler: 'Dimension lines',
+      rain: 'Letter rain', bounceLine: 'Bouncing line', crossBands: 'Crossing bands',
+      stickerBomb: 'Sticker collage', credits: 'End credits',
+      columnsBig: 'Contrasting columns', circleWords: 'Concentric words',
+      typeSpecimen: 'Type specimen', kanjiFocus: 'Character focus',
+      halfVertical: 'Mixed vertical type', magazine: 'Magazine spread',
+      headlineDeck: 'Headline and deck', proofread: 'Proof sheet',
+      ema: 'Ema wish plaque', ransom: 'Cutout letters', vinyl: 'Vinyl record',
+      bookSpine: 'Book spine', stampSheet: 'Stamp sheet',
+      chochin: 'Paper lantern', noren: 'Noren curtain',
+      tanzaku: 'Wish strip', omikuji: 'Fortune slip',
+      kakejiku: 'Hanging scroll', shoji: 'Shoji screen',
+      clapper: 'Clapperboard', karuta: 'Karuta card',
+      flipCards: 'Flipping cards', pile: 'Letter pile', balloons: 'Letter balloons',
+      tiles: 'Letter tiles', bulbs: 'Marquee bulbs', ledScroll: 'LED ticker',
+      crowdBubbles: 'Speech bubble crowd', wordSearch: 'Word search',
+      shadowPlay: 'Shadow puppets', kaleido: 'Kaleidoscope',
+      fisheye: 'Fisheye lens', wall: 'Perspective wall',
+      sliceStack: 'Sliced layers', maskReveal: 'Text window',
+      halftoneBig: 'Oversized halftone text'
+    },
+    enter: {
+      assemble: 'Break apart and assemble', riseMask: 'Reveal from below',
+      dropMask: 'Reveal from above', slideL: 'Slide from left', slideR: 'Slide from right',
+      slideWhole: 'Slide in together', flipX: 'Flip on vertical axis',
+      flipY: 'Flip on horizontal axis', strokeDraw: 'Draw outlines, then fill',
+      outlineFill: 'Outline to fill', splitJoin: 'Join from top and bottom',
+      vSlice: 'Vertical slices', diagWipe: 'Diagonal wipe',
+      randomOrder: 'Random letter order', bounceBig: 'Big bounce',
+      squashDrop: 'Squash landing', echoIn: 'Echoes converge',
+      trackIn: 'Tighten letter spacing', trackOut: 'Expand letter spacing',
+      blurStagger: 'Staggered blur', fadeStagger: 'Letter by letter fade',
+      spiralIn: 'Spiral assembly', zoomOut: 'Oversized to normal',
+      cursorSweep: 'Cursor sweep', rockSettle: 'Wobble to rest',
+      snapRail: 'Snap into alignment', fanOpen: 'Folding fan opens',
+      stickerPeel: 'Apply sticker', crumple: 'Uncrumple',
+      noteUnfold: 'Unfold letter', tornJoin: 'Join torn pieces',
+      splitFlap: 'Split flap display', crtOn: 'CRT powers on',
+      odometer: 'Rolling number drum', matrixRain: 'Data rain',
+      brushReveal: 'Brush reveal', quarters: 'Converge from four sides',
+      printRegister: 'Color plates align', echoCount: 'Count in',
+      liquidFill: 'Liquid rises', strokeOrder: 'Stroke by stroke',
+      shadowFirst: 'Shadow first', tokoroten: 'Extruded noodles'
+    },
+    hold: {
+      still: 'Still', breathe: 'Breathe', glitchtick: 'Glitch tick',
+      colorRun: 'Traveling color', trackBreathe: 'Breathing letter spacing',
+      beatHop: 'Hop to the beat', hWave: 'Horizontal wave',
+      orbitSmall: 'Small orbit', scanBand: 'Scanning band',
+      noiseDrift: 'Drifting noise', zoomSlow: 'Slow push',
+      stretchPulse: 'Stretch to the beat', glitchJump: 'Occasional glitch jump',
+      echoTrail: 'Echo trail', glowFlicker: 'Flickering glow',
+      windGust: 'Wind gust', eqBounce: 'Audio level bounce',
+      flashBox: 'Invert to the beat', glintSweep: 'Passing highlight',
+      flipSwap: 'Occasional flip', shadowSway: 'Swaying shadow',
+      typeRattle: 'Typewriter rattle', focusRack: 'Rack focus',
+      pluckString: 'Plucked string'
+    },
+    exit: {
+      fall: 'Crumble and fall', drift: 'Drift away', sinkMask: 'Sink out',
+      riseOut: 'Rise out', slideOutL: 'Slide left', slideOutR: 'Slide right',
+      flipOutX: 'Doors close', flipOutY: 'Flip down',
+      trackOutWide: 'Spread letter spacing', collapse: 'Collapse inward',
+      zoomThrough: 'Zoom through', zoomFar: 'Recede into distance',
+      spinOut: 'Spin away', blurOutStagger: 'Blur letters in sequence',
+      undraw: 'Return to outlines', outlineOut: 'Fill fades to outline',
+      irisClose: 'Iris closes', splitApart: 'Split top and bottom',
+      vSliceDrop: 'Vertical slices fall', dissolve: 'Crumble away',
+      scrambleOut: 'Become symbols', glitchDissolve: 'Glitch into blocks',
+      gravity: 'Fall with gravity', burn: 'Burn away',
+      sweepCover: 'Covered by a bar', shatterLite: 'Shatter into quarters',
+      peelOff: 'Peel off sticker', crumpleOut: 'Crumple and toss',
+      tearOut: 'Tear away', scorchOut: 'Scorch away',
+      overexposeOut: 'Blow out to white', scanOut: 'Scanline erase',
+      halftoneOut: 'Dissolve to halftone', eraserOut: 'Chalkboard erase',
+      vacuumOut: 'Vacuum to a point', sandOut: 'Scatter as sand',
+      hingeOut: 'Loose hinge', rocketOff: 'Rocket away',
+      balloonOff: 'Float off like a balloon', deflateOut: 'Deflate and fly',
+      glassBreak: 'Break like glass', clapShut: 'Close at center',
+      lampOff: 'Lights out', matrixOut: 'Digital rain',
+      tornadoOut: 'Tornado', snakeOut: 'Leave in a line',
+      flutterOut: 'Flutter down', fanClose: 'Folding fan closes',
+      rgbSplitOut: 'Split into RGB', shockOut: 'Shockwave',
+      floodOut: 'Submerge', slashOut: 'Sliced in two',
+      scribbleOut: 'Scribble away', candleOut: 'Blow out'
+    },
+    decor: {
+      brackets: 'Corner marks', rings: 'Coordinate rings', dots: 'Dotted ring',
+      leaders: 'Leader lines', blobs: 'Ink stains', bars: 'Rough bands',
+      counter: 'Large numbers', cropMarks: 'Crop marks',
+      indexNum: 'Sequence number', dateStamp: 'Photo date stamp',
+      qrBlock: 'QR inspired blocks', guides: 'Guide lines',
+      checkerStrip: 'Checker strip', beatRing: 'Beat ring',
+      speedCorner: 'Speed lines', risingParticles: 'Rising particles',
+      brushStroke: 'Brush stroke', tapePieces: 'Masking tape',
+      scribbleUnder: 'Hand drawn underline', crossOut: 'Editorial marks',
+      watermarkKanji: 'Large watermark character',
+      verticalStrip: 'Vertical text strip', romajiLine: 'Romanized line',
+      bracketsJP: 'Japanese corner brackets', seal: 'Red seal',
+      kamon: 'Family crest', seigaiha: 'Seigaiha wave pattern',
+      asanoha: 'Asanoha hemp leaf pattern', hanabi: 'Fireworks',
+      chochin: 'Paper lantern', shimenawa: 'Sacred rope', sensu: 'Folding fan',
+      tsukiKumo: 'Moon and clouds', momiji: 'Maple leaves',
+      namiGashira: 'Wave crest', kasumi: 'Mist',
+      registration: 'Registration marks', ruledLines: 'Ruled notebook',
+      indexTabs: 'Index tabs', moonPhases: 'Moon phases',
+      dandelion: 'Dandelion seeds', tally: 'Tally marks',
+      windowChrome: 'Window frame', notifBell: 'Notification bell',
+      likeCounter: 'Like counter', mediaControls: 'Playback controls'
+    },
+    treat: {
+      none: 'None', outline: 'Hollow letters', outlineFill: 'Outlined text',
+      doubleOutline: 'Double outline', extrude: 'Extruded text',
+      marker: 'Marker highlight', strike: 'Strikethrough',
+      boxed: 'Boxed text', gradientV: 'Vertical gradient',
+      splitColor: 'Two tone split', halftone: 'Halftone',
+      dotted: 'Dotted outline', alternate: 'Alternating colors',
+      wide: 'Wide letters', tall: 'Tall letters',
+      echoOutline: 'Echoed outline', emphasisDots: 'Emphasis dots',
+      neonOutline: 'Neon tubing', glitchSplit: 'Misregistered colors',
+      stencilGap: 'Stencil gaps', sizeWave: 'Rhythmic letter sizes',
+      rotateAlt: 'Alternating angles', baselineShift: 'Staggered baseline',
+      fauxBold: 'Extra bold', circled: 'Circled letters',
+      bracketsQuote: 'Quotation marks', reflection: 'Reflection',
+      sticker: 'Sticker outline', kerningWide: 'Wide letter spacing',
+      monoGrid: 'Manuscript grid', outlineOffset: 'Offset outline',
+      toneShadow: 'Halftone shadow', fadeChars: 'Fading letters',
+      cutShift: 'Offset cut', focusPull: 'Focus shift',
+      spotChar: 'Highlighted character', ransom: 'Cutout letters'
+    },
+    bg: {
+      none: 'Solid color', seigaiha: 'Seigaiha waves',
+      asanoha: 'Asanoha pattern', topoLines: 'Contour lines',
+      ridgePlot: 'Mountain ridges', nightMoon: 'Moonlit night',
+      filmStrip: 'Filmstrip', vhsBand: 'VHS noise band',
+      godRays: 'Light rays', vignettePulse: 'Pulsing vignette',
+      paperCut: 'Paper cutout', bigChar: 'Oversized letters',
+      splitV: 'Vertical color split', splitH: 'Horizontal color split',
+      splitDiag: 'Diagonal color split', tvBars: 'TV color bars',
+      speedLines: 'Speed lines', bokehBg: 'Bokeh',
+      particlesBg: 'Floating particles', eqBars: 'Equalizer bars',
+      letterbox: 'Cinema letterbox', noiseField: 'Moving noise'
+    },
+    cam: {
+      push: 'Slow push in', rackFocus: 'Rack focus',
+      floatNoise: 'Floating camera', vertigo: 'Dolly zoom',
+      spiralIn: 'Spiral zoom', jelly: 'Elastic wobble',
+      pullOut: 'Pull out', panL: 'Pan left', panR: 'Pan right',
+      dutch: 'Dutch angle', beatPunch: 'Zoom on beat',
+      driftDiag: 'Diagonal drift', shakeHard: 'Strong shake',
+      stepZoom: 'Stepped zoom'
+    },
+    fx: {
+      chroma: 'Chromatic jump', slice: 'Slice glitch', block: 'Block glitch',
+      zoom: 'Zoom blur', radialChroma: 'Radial color fringing',
+      bulge: 'Fisheye distortion', macroBlock: 'Compression blocks',
+      ditherBit: '1 bit dither', rotateSnap: 'Angle snap',
+      echoFrames: 'Frame echoes', kaleido: 'Kaleidoscope',
+      bandInvert: 'Inverted band', anamorphic: 'Anamorphic flare',
+      tvStatic: 'TV static', dustScratches: 'Film scratches',
+      filmAdvance: 'Film advance', perspectiveTilt: 'Perspective tilt',
+      focusLines: 'Focus lines', starGlint: 'Star glint',
+      negativeRing: 'Inverted ring', shatter: 'Glass shatter',
+      defocus: 'Out of focus', rgbSplit: 'RGB separation',
+      vhsRoll: 'VHS roll', trackingNoise: 'Tracking noise',
+      posterize: 'Posterization', filmBurn: 'Film burn',
+      crtOff: 'CRT powers off'
+    },
+    trans: {
+      wipe: 'Edge wipe', diagonalWipe: 'Diagonal band wipe',
+      irisOpen: 'Iris opens', pushSlide: 'Push',
+      doorsOpen: 'Double doors', checker: 'Checkerboard',
+      blockDissolve: 'Block dissolve', inkBlob: 'Ink blot',
+      shatterTiles: 'Shattering tiles', sliceShift: 'Sliding strips',
+      cubeTurn: 'Cube turn', flashCross: 'Flash cut', pixelate: 'Pixel transition'
+    }
+  };
+  const acronym = { rgb: 'RGB', crt: 'CRT', vhs: 'VHS', qr: 'QR', tv: 'TV', led: 'LED', hud: 'HUD', jp: 'JP' };
+  const label = key => key.replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/_/g, ' ').split(' ').map((part, i) => acronym[part.toLowerCase()] || (i ? part.toLowerCase() : part.charAt(0).toUpperCase() + part.slice(1))).join(' ');
+  for (const group of J.GROUP_KEYS) {
+    for (const key of J.order(group)) {
+      const item = J.registry(group)[key];
+      if (item) item.name = (titles[group] || {})[key] || label(key);
+    }
+  }
+  const styles = {
+    noir: ['Noir Chroma', 'Black and white with cyan and amber color offsets'],
+    crimson: ['Crimson Signal', 'Deep red, monochrome type and damaged data'],
+    caution: ['Caution', 'Yellow, red and blue with instrument graphics'],
+    magenta: ['Pop Magenta', 'Hot pink, round bold type and callout lines'],
+    paper: ['Paper and Ink', 'Paper texture, indigo, magenta and serif echoes'],
+    hud: ['Dark HUD', 'Charcoal, fine frames, orange accents and eclipses'],
+    mint: ['Mint Terminal', 'Black, teal and lime with scan effects'],
+    specimen: ['Type Specimen', 'Ink colored background with serif annotations'],
+    transit: ['Transit', 'Olive and yellow with signage and halftone'],
+    blueprint: ['Blueprint', 'Blue, white and black graphic collage'],
+    rouge: ['Rouge Gradient', 'Light gray and red gradients with capsules'],
+    mono: ['Mono RGB', 'Gray space, white serif and bold RGB separation'],
+    sakura: ['Sakura', 'Soft cherry pink and plum with rounded and serif type'],
+    ocean: ['Deep Sea', 'Navy, glowing cyan, bubbles and light sans type'],
+    sunset: ['Sunset Gradient', 'Orange to violet, bold serif and backlight'],
+    forest: ['Forest Notebook', 'Moss, natural paper and pencil lettering'],
+    vapor: ['Vaporwave', 'Pastel pink and blue with VHS bloom'],
+    newsprint: ['Newsprint', 'Gray paper, black and red with halftone registration'],
+    synth80: ['Synth 80s', 'Black with neon magenta, cyan and scanlines'],
+    kraft: ['Kraft Paper', 'Warm paper, red and indigo stamps and washi tape'],
+    candy: ['Candy', 'Mint and fruit pastel colors with bouncing letters'],
+    acid: ['Acid', 'Black, acid green and magenta with distressed type'],
+    sumi: ['Ink and Vermilion', 'Japanese paper, brush lettering and red seals'],
+    gold: ['Golden Night', 'Deep black, gold foil, ivory serif and glints']
+  };
+  for (const [key, [name, desc]] of Object.entries(styles)) {
+    J.STYLES[key].name = name; J.STYLES[key].desc = desc;
+  }
+  for (const [key, name] of Object.entries({glitch:'Glitch', calm:'Gentle', pop:'Pop', graphic:'Graphic', editorial:'Editorial', emotional:'Emotional', chaos:'Anything goes'})) J.MOODS[key].name = name;
+  J.SAMPLE_LYRICS = 'I remember/the color of dawn\nA voice faded into the distance\nCan we still make it in time?\n*Transparent* is not how this ends!';
+})();
+
+(() => {
+  const S = {"noir": ["누아르 크로마", "흑백에 시안과 앰버의 색 어긋남"], "crimson": ["크림슨 시그널", "짙은 빨강, 모노크롬 서체와 깨진 데이터"], "caution": ["코션", "노랑·빨강·파랑과 계기판 그래픽"], "magenta": ["팝 마젠타", "핫핑크, 둥글고 굵은 서체와 지시선"], "paper": ["종이와 잉크", "종이 질감, 남색·마젠타와 세리프 잔상"], "hud": ["다크 HUD", "차콜, 가는 프레임, 오렌지 포인트와 일식"], "mint": ["민트 터미널", "검정·청록·라임과 스캔 효과"], "specimen": ["타입 스페시멘", "잉크색 배경과 세리프 주석"], "transit": ["트랜짓", "올리브와 노랑, 안내 표지와 망점"], "blueprint": ["블루프린트", "파랑·흰색·검정의 그래픽 콜라주"], "rouge": ["루주 그라데이션", "밝은 회색과 빨강 그라데이션, 캡슐"], "mono": ["모노 RGB", "회색 공간, 흰 세리프와 강한 RGB 분리"], "sakura": ["벚꽃", "부드러운 벚꽃색과 자두색, 둥근 서체와 세리프"], "ocean": ["심해", "네이비, 빛나는 시안, 물방울과 가는 산세리프"], "sunset": ["선셋 그라데이션", "오렌지에서 보라로, 굵은 세리프와 역광"], "forest": ["숲의 노트", "이끼색, 내추럴한 종이와 연필 글씨"], "vapor": ["베이퍼웨이브", "파스텔 핑크와 블루, VHS 번짐"], "newsprint": ["신문지", "회색 종이, 검정과 빨강, 망점과 인쇄 어긋남"], "synth80": ["신스 80s", "검정 바탕에 네온 마젠타·시안과 주사선"], "kraft": ["크라프트지", "따뜻한 종이, 빨강·남색 도장과 마스킹 테이프"], "candy": ["캔디", "민트와 과일 파스텔 색, 통통 튀는 글자"], "acid": ["애시드", "검정, 애시드 그린과 마젠타, 거친 서체"], "sumi": ["먹과 주홍", "화지, 붓글씨와 붉은 낙관"], "gold": ["골든 나이트", "깊은 검정, 금박, 아이보리 세리프와 반짝임"]};
+  for (const [k, [n, d]] of Object.entries(S)) if (J.STYLES[k]) { J.STYLES[k].name = n; J.STYLES[k].desc = d; }
+  const M = {"glitch": "글리치", "calm": "잔잔함", "pop": "팝", "graphic": "그래픽", "editorial": "에디토리얼", "emotional": "감성", "chaos": "자유분방"};
+  for (const [k, n] of Object.entries(M)) if (J.MOODS[k]) J.MOODS[k].name = n;
+  J.SAMPLE_LYRICS = "새벽의 색을/기억해\n멀어진 목소리가 아득히 울렸어\n아직 늦지 않았을까\n*투명*한 채로는 끝낼 수 없어!";
+})();
+
+/* Korean labels are applied after all expression packs register, before the editor starts.
+   Internal IDs and project JSON remain language independent. */
+(() => {
+  'use strict';
+  const titles = {
+    layout: {
+      vcols: '세로쓰기', marquee: '흐르는 배너', tile: '타일 텍스트',
+      huge: '초대형 텍스트', gloss: '주석', diag: '대각선 띠',
+      stack: '잔상 스택', lowerThird: '로어 서드', corners: '양쪽 모서리',
+      arcTop: '무지개 아치', gridCells: '그리드 셀', dropCap: '드롭 캡',
+      frameBox: '액자 프레임', subtitleBar: '자막 바',
+      sideways: '가로 회전 텍스트', edgeFrame: '테두리 프레임', hanko: '낙관',
+      genkou: '원고지', panels: '만화 패널', ruler: '치수선',
+      rain: '글자 비', bounceLine: '바운드 라인', crossBands: '교차 띠',
+      stickerBomb: '스티커 콜라주', credits: '엔드 크레딧',
+      columnsBig: '대비 컬럼', circleWords: '동심원 텍스트',
+      typeSpecimen: '타이포 견본', kanjiFocus: '한 글자 강조',
+      halfVertical: '혼합 세로쓰기', magazine: '매거진 스프레드',
+      headlineDeck: '헤드라인과 덱', proofread: '교정지',
+      ema: '에마 소원패', ransom: '오려붙인 글자', vinyl: '바이닐 레코드',
+      bookSpine: '책등', stampSheet: '우표 시트',
+      chochin: '종이 초롱', noren: '노렌 커튼',
+      tanzaku: '소원 띠', omikuji: '오미쿠지',
+      kakejiku: '족자', shoji: '쇼지 문',
+      clapper: '클래퍼보드', karuta: '카루타 카드',
+      flipCards: '플립 카드', pile: '글자 더미', balloons: '글자 풍선',
+      tiles: '글자 타일', bulbs: '전구 간판', ledScroll: 'LED 티커',
+      crowdBubbles: '말풍선 군중', wordSearch: '단어 찾기',
+      shadowPlay: '그림자극', kaleido: '만화경',
+      fisheye: '어안 렌즈', wall: '원근 벽면',
+      sliceStack: '슬라이스 레이어', maskReveal: '텍스트 창',
+      halftoneBig: '대형 하프톤 텍스트'
+    },
+    enter: {
+      assemble: '분해 후 조립', riseMask: '아래에서 나타나기',
+      dropMask: '위에서 나타나기', slideL: '왼쪽에서 슬라이드', slideR: '오른쪽에서 슬라이드',
+      slideWhole: '전체 슬라이드 인', flipX: '세로축 플립',
+      flipY: '가로축 플립', strokeDraw: '윤곽선 그린 뒤 채우기',
+      outlineFill: '윤곽선에서 채움', splitJoin: '위아래에서 합치기',
+      vSlice: '세로 슬라이스', diagWipe: '대각선 와이프',
+      randomOrder: '글자 랜덤 순서', bounceBig: '큰 바운스',
+      squashDrop: '찌그러지며 착지', echoIn: '잔상 수렴',
+      trackIn: '자간 좁히기', trackOut: '자간 넓히기',
+      blurStagger: '순차 블러', fadeStagger: '글자별 페이드',
+      spiralIn: '나선 조립', zoomOut: '초대형에서 정상 크기',
+      cursorSweep: '커서 스윕', rockSettle: '흔들리며 정착',
+      snapRail: '정렬선에 스냅', fanOpen: '부채 펼치기',
+      stickerPeel: '스티커 붙이기', crumple: '구겨짐 펴기',
+      noteUnfold: '편지 펼치기', tornJoin: '찢긴 조각 합치기',
+      splitFlap: '스플릿 플랩', crtOn: 'CRT 켜짐',
+      odometer: '숫자 드럼 회전', matrixRain: '데이터 비',
+      brushReveal: '붓으로 나타내기', quarters: '네 방향에서 수렴',
+      printRegister: '색판 정합', echoCount: '카운트 인',
+      liquidFill: '액체 차오르기', strokeOrder: '획순대로',
+      shadowFirst: '그림자 먼저', tokoroten: '압출 면발'
+    },
+    hold: {
+      still: '정지', breathe: '호흡', glitchtick: '글리치 틱',
+      colorRun: '색상 이동', trackBreathe: '자간 호흡',
+      beatHop: '비트에 점프', hWave: '가로 웨이브',
+      orbitSmall: '작은 공전', scanBand: '스캔 밴드',
+      noiseDrift: '노이즈 드리프트', zoomSlow: '천천히 줌 인',
+      stretchPulse: '비트에 늘어나기', glitchJump: '간헐적 글리치 점프',
+      echoTrail: '잔상 트레일', glowFlicker: '글로우 깜빡임',
+      windGust: '돌풍', eqBounce: '음압 바운스',
+      flashBox: '비트 반전', glintSweep: '광택 스윕',
+      flipSwap: '간헐적 뒤집기', shadowSway: '그림자 흔들림',
+      typeRattle: '타자기 떨림', focusRack: '포커스 이동',
+      pluckString: '현 진동'
+    },
+    exit: {
+      fall: '무너져 낙하', drift: '흩어져 사라짐', sinkMask: '아래로 잠기기',
+      riseOut: '위로 퇴장', slideOutL: '왼쪽으로 슬라이드', slideOutR: '오른쪽으로 슬라이드',
+      flipOutX: '문 닫힘', flipOutY: '아래로 플립',
+      trackOutWide: '자간 벌어짐', collapse: '안쪽으로 붕괴',
+      zoomThrough: '줌 통과', zoomFar: '멀리 후퇴',
+      spinOut: '회전하며 퇴장', blurOutStagger: '글자별 블러 퇴장',
+      undraw: '윤곽선으로 되돌리기', outlineOut: '채움이 윤곽선으로',
+      irisClose: '아이리스 닫힘', splitApart: '위아래로 분리',
+      vSliceDrop: '세로 조각 낙하', dissolve: '부서져 사라짐',
+      scrambleOut: '기호로 변환', glitchDissolve: '블록 글리치로 해체',
+      gravity: '중력 낙하', burn: '타서 사라짐',
+      sweepCover: '바로 덮기', shatterLite: '네 조각으로 파손',
+      peelOff: '스티커 떼기', crumpleOut: '구겨서 버리기',
+      tearOut: '찢어 버리기', scorchOut: '그을려 사라짐',
+      overexposeOut: '과노출로 소멸', scanOut: '스캔라인 삭제',
+      halftoneOut: '하프톤으로 분해', eraserOut: '칠판 지우기',
+      vacuumOut: '한 점으로 흡입', sandOut: '모래처럼 흩어짐',
+      hingeOut: '힌지 풀림', rocketOff: '로켓처럼 퇴장',
+      balloonOff: '풍선처럼 떠남', deflateOut: '바람 빠져 날아감',
+      glassBreak: '유리 파손', clapShut: '중앙으로 닫힘',
+      lampOff: '불 꺼짐', matrixOut: '디지털 비',
+      tornadoOut: '토네이도', snakeOut: '한 줄로 퇴장',
+      flutterOut: '팔랑이며 낙하', fanClose: '부채 닫기',
+      rgbSplitOut: 'RGB 분리', shockOut: '충격파',
+      floodOut: '물에 잠김', slashOut: '두 조각으로 베기',
+      scribbleOut: '낙서로 지우기', candleOut: '불어 끄기'
+    },
+    decor: {
+      brackets: '모서리 마크', rings: '좌표 링', dots: '점선 링',
+      leaders: '인출선', blobs: '잉크 얼룩', bars: '거친 띠',
+      counter: '큰 숫자', cropMarks: '재단선',
+      indexNum: '순번', dateStamp: '사진 날짜 스탬프',
+      qrBlock: 'QR풍 블록', guides: '가이드선',
+      checkerStrip: '체커 스트립', beatRing: '비트 링',
+      speedCorner: '속도선', risingParticles: '상승 입자',
+      brushStroke: '붓 터치', tapePieces: '마스킹 테이프',
+      scribbleUnder: '손그림 밑줄', crossOut: '교정 마크',
+      watermarkKanji: '대형 워터마크 문자',
+      verticalStrip: '세로 텍스트 띠', romajiLine: '로마자 라인',
+      bracketsJP: '일본식 괄호', seal: '붉은 낙관',
+      kamon: '가문 문양', seigaiha: '세이가이하 파도무늬',
+      asanoha: '아사노하 무늬', hanabi: '불꽃놀이',
+      chochin: '종이 초롱', shimenawa: '시메나와', sensu: '부채',
+      tsukiKumo: '달과 구름', momiji: '단풍잎',
+      namiGashira: '파도 마루', kasumi: '안개',
+      registration: '정합 마크', ruledLines: '노트 줄',
+      indexTabs: '인덱스 탭', moonPhases: '달의 위상',
+      dandelion: '민들레 씨앗', tally: '계수표',
+      windowChrome: '창 프레임', notifBell: '알림 벨',
+      likeCounter: '좋아요 카운터', mediaControls: '재생 컨트롤'
+    },
+    treat: {
+      none: '없음', outline: '속 빈 글자', outlineFill: '외곽선 글자',
+      doubleOutline: '이중 외곽선', extrude: '입체 글자',
+      marker: '마커 강조', strike: '취소선',
+      boxed: '박스 글자', gradientV: '세로 그라디언트',
+      splitColor: '2색 분할', halftone: '하프톤',
+      dotted: '점선 외곽선', alternate: '교대 색상',
+      wide: '넓은 글자', tall: '긴 글자',
+      echoOutline: '잔상 외곽선', emphasisDots: '강조점',
+      neonOutline: '네온 튜브', glitchSplit: '색판 어긋남',
+      stencilGap: '스텐실 틈', sizeWave: '글자 크기 리듬',
+      rotateAlt: '교대 회전', baselineShift: '기준선 엇갈림',
+      fauxBold: '초굵게', circled: '원형 글자',
+      bracketsQuote: '인용부호', reflection: '반사',
+      sticker: '스티커 외곽선', kerningWide: '넓은 자간',
+      monoGrid: '원고지 그리드', outlineOffset: '오프셋 외곽선',
+      toneShadow: '하프톤 그림자', fadeChars: '글자별 페이드',
+      cutShift: '절단 오프셋', focusPull: '포커스 전환',
+      spotChar: '한 글자 강조', ransom: '오려붙인 글자'
+    },
+    bg: {
+      none: '단색', seigaiha: '세이가이하 파도',
+      asanoha: '아사노하 무늬', topoLines: '등고선',
+      ridgePlot: '산 능선', nightMoon: '달밤',
+      filmStrip: '필름 스트립', vhsBand: 'VHS 노이즈 밴드',
+      godRays: '빛줄기', vignettePulse: '비네트 펄스',
+      paperCut: '종이 오리기', bigChar: '대형 글자',
+      splitV: '세로 색상 분할', splitH: '가로 색상 분할',
+      splitDiag: '대각선 색상 분할', tvBars: 'TV 컬러바',
+      speedLines: '속도선', bokehBg: '보케',
+      particlesBg: '부유 입자', eqBars: '이퀄라이저 바',
+      letterbox: '시네마 레터박스', noiseField: '움직이는 노이즈'
+    },
+    cam: {
+      push: '천천히 줌 인', rackFocus: '포커스 이동',
+      floatNoise: '부유 카메라', vertigo: '돌리 줌',
+      spiralIn: '나선 줌', jelly: '탄성 흔들림',
+      pullOut: '줌 아웃', panL: '왼쪽 팬', panR: '오른쪽 팬',
+      dutch: '더치 앵글', beatPunch: '비트 줌',
+      driftDiag: '대각선 드리프트', shakeHard: '강한 흔들림',
+      stepZoom: '계단식 줌'
+    },
+    fx: {
+      chroma: '색수차 점프', slice: '슬라이스 글리치', block: '블록 글리치',
+      zoom: '줌 블러', radialChroma: '방사형 색수차',
+      bulge: '어안 왜곡', macroBlock: '압축 블록',
+      ditherBit: '1비트 디더', rotateSnap: '각도 스냅',
+      echoFrames: '프레임 잔상', kaleido: '만화경',
+      bandInvert: '반전 밴드', anamorphic: '아나모픽 플레어',
+      tvStatic: 'TV 노이즈', dustScratches: '필름 스크래치',
+      filmAdvance: '필름 이동', perspectiveTilt: '원근 틸트',
+      focusLines: '집중선', starGlint: '별빛 반짝임',
+      negativeRing: '반전 링', shatter: '유리 파손',
+      defocus: '초점 흐림', rgbSplit: 'RGB 분리',
+      vhsRoll: 'VHS 롤', trackingNoise: '트래킹 노이즈',
+      posterize: '포스터라이즈', filmBurn: '필름 번',
+      crtOff: 'CRT 꺼짐'
+    },
+    trans: {
+      wipe: '에지 와이프', diagonalWipe: '대각선 띠 와이프',
+      irisOpen: '아이리스 열기', pushSlide: '푸시',
+      doorsOpen: '양문 열기', checker: '체커보드',
+      blockDissolve: '블록 디졸브', inkBlob: '잉크 번짐',
+      shatterTiles: '타일 파손', sliceShift: '슬라이스 이동',
+      cubeTurn: '큐브 회전', flashCross: '플래시 컷', pixelate: '픽셀 전환'
+    }
+  };
+
+  // For newer pack entries that do not have an explicit Korean title yet,
+  // build a readable label from the language-independent camelCase key.
+  const words = {
+    big:'대형', small:'소형', text:'텍스트', line:'라인', lines:'라인', grid:'그리드',
+    frame:'프레임', box:'박스', circle:'원형', ring:'링', dot:'점', dots:'점',
+    wave:'웨이브', split:'분할', wipe:'와이프', slide:'슬라이드', zoom:'줌',
+    blur:'블러', glow:'글로우', shadow:'그림자', color:'색상', rgb:'RGB',
+    noise:'노이즈', film:'필름', paper:'종이', ink:'잉크', light:'빛',
+    flash:'플래시', beat:'비트', pulse:'펄스', rotate:'회전', spin:'회전',
+    fall:'낙하', drop:'낙하', rise:'상승', float:'부유', drift:'드리프트',
+    mask:'마스크', reveal:'리빌', focus:'포커스', camera:'카메라',
+    vertical:'세로', horizontal:'가로', diagonal:'대각선', random:'랜덤',
+    letter:'글자', letters:'글자', word:'단어', words:'단어', type:'타이포',
+    stamp:'스탬프', sticker:'스티커', brush:'붓', neon:'네온', glass:'유리',
+    cut:'컷', tile:'타일', tiles:'타일', block:'블록', blocks:'블록',
+    screen:'화면', scan:'스캔', retro:'레트로', star:'별', moon:'달',
+    rain:'비', cloud:'구름', clouds:'구름', smoke:'연기', fire:'불',
+    bounce:'바운스', pop:'팝', stretch:'늘이기', squash:'찌그러짐',
+    fold:'접기', unfold:'펼치기', open:'열기', close:'닫기', out:'아웃',
+    in:'인', slow:'느리게', fast:'빠르게', hard:'강하게', soft:'부드럽게'
+  };
+  const acronym = { rgb: 'RGB', crt: 'CRT', vhs: 'VHS', qr: 'QR', tv: 'TV', led: 'LED', hud: 'HUD', jp: '일본풍' };
+  const label = key => key.replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/_/g, ' ').split(' ').map(part => acronym[part.toLowerCase()] || words[part.toLowerCase()] || part).join(' ');
+
+  for (const group of J.GROUP_KEYS) {
+    for (const key of J.order(group)) {
+      const item = J.registry(group)[key];
+      if (item) item.name = (titles[group] || {})[key] || label(key);
+    }
+  }
+
+  const styles = {
+    noir: ['누아르 크로마', '흑백 화면에 시안과 앰버 색 어긋남'],
+    crimson: ['크림슨 시그널', '짙은 빨강, 모노크롬 타이포와 손상된 데이터'],
+    caution: ['코션', '노랑·빨강·파랑과 계기판 그래픽'],
+    magenta: ['팝 마젠타', '강한 핑크, 둥근 굵은 글자와 콜아웃 라인'],
+    paper: ['종이와 잉크', '종이 질감, 남색·마젠타와 명조 잔상'],
+    hud: ['다크 HUD', '차콜, 얇은 프레임, 주황 포인트와 이클립스'],
+    mint: ['민트 터미널', '검정, 틸, 라임과 스캔 효과'],
+    specimen: ['타이포 견본', '잉크색 배경과 명조 주석'],
+    transit: ['트랜짓', '올리브와 노랑, 사인 그래픽과 하프톤'],
+    blueprint: ['블루프린트', '파랑·흰색·검정 그래픽 콜라주'],
+    rouge: ['루주 그라디언트', '밝은 회색과 빨강 그라디언트, 캡슐'],
+    mono: ['모노 RGB', '회색 공간, 흰 명조와 강한 RGB 분리'],
+    sakura: ['사쿠라', '부드러운 벚꽃색과 자주색, 둥근 글자와 명조'],
+    ocean: ['심해', '남색, 빛나는 시안, 거품과 가는 고딕'],
+    sunset: ['선셋 그라디언트', '주황에서 보라, 굵은 명조와 역광'],
+    forest: ['숲 노트', '이끼색, 자연 종이와 연필 느낌 글자'],
+    vapor: ['베이퍼웨이브', '파스텔 핑크·블루와 VHS 블룸'],
+    newsprint: ['신문 인쇄', '회색 종이, 검정·빨강과 하프톤 정합'],
+    synth80: ['신스 80s', '검정 바탕의 네온 마젠타·시안과 스캔라인'],
+    kraft: ['크라프트지', '따뜻한 종이, 빨강·남색 스탬프와 와시 테이프'],
+    candy: ['캔디', '민트와 과일 파스텔, 튀는 글자'],
+    acid: ['애시드', '검정, 애시드 그린과 마젠타, 거친 타이포'],
+    sumi: ['먹과 주홍', '일본 종이, 붓글씨와 붉은 낙관'],
+    gold: ['골든 나이트', '깊은 검정, 금박, 아이보리 명조와 반짝임']
+  };
+  for (const [key, [name, desc]] of Object.entries(styles)) {
+    J.STYLES[key].name = name; J.STYLES[key].desc = desc;
+  }
+  for (const [key, name] of Object.entries({
+    glitch:'글리치', calm:'차분함', pop:'팝', graphic:'그래픽',
+    editorial:'에디토리얼', emotional:'감성', chaos:'전부 사용'
+  })) J.MOODS[key].name = name;
+
+  J.SAMPLE_LYRICS = '새벽의 색을/기억하고 있어\n멀리서 풀려 버린 목소리\n있잖아, 아직 늦지 않았을까\n*투명*한 채로 끝낼 수는 없어!';
+})();
+
 /* ============================================================
    JIZURA — editor UI
    ============================================================ */
@@ -30107,7 +30609,7 @@ J.randomOk = (project, g, k) => {
 if (!document.getElementById('app')) return;          // engine-only pages (tests)
 const $ = id => document.getElementById(id);
 const LS_KEY = 'jizura.project.v1';
-const HUD_CHARS = '0123456789:./-_()【】・No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
+const HUD_CHARS = '0123456789:./-_()【】 · No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
 const ICON = {
   dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1" fill="currentColor"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/><circle cx="5.5" cy="10.5" r="1" fill="currentColor"/></svg>',
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
@@ -30143,7 +30645,7 @@ function initVolume() {
   let v = 0.8, m = false;
   try { const o = JSON.parse(localStorage.getItem('jizura.previewVolume') || 'null'); if (o) { v = +o.v; m = !!o.m; } } catch (e) {}
   if (!(v >= 0 && v <= 1)) v = 0.8;
-  const show = () => { el.value = Math.round(AP.vol * 100); mb.textContent = AP.muted || AP.vol === 0 ? '消音' : '音量'; mb.setAttribute('aria-pressed', String(AP.muted)); el.title = '音量 ' + Math.round(AP.vol * 100) + '%'; };
+  const show = () => { el.value = Math.round(AP.vol * 100); mb.textContent = AP.muted || AP.vol === 0 ? '음소거' : '음량'; mb.setAttribute('aria-pressed', String(AP.muted)); el.title = '음량 ' + Math.round(AP.vol * 100) + '%'; };
   const save = () => { try { localStorage.setItem('jizura.previewVolume', JSON.stringify({ v: AP.vol, m: AP.muted })); } catch (e) {} };
   AP.setVol(v, m); show();
   el.addEventListener('input', () => { AP.setVol(el.value / 100, false); show(); save(); });
@@ -30169,7 +30671,7 @@ function mergeProject(p) {
   return o;
 }
 function setBadges(d) {
-  return (d && d.extra ? '<span class="set-badge ex" title="最初の公開版のあとに追加">追加</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
+  return (d && d.extra ? '<span class="set-badge ex" title="첫 공개 이후 추가">추가</span>' : '') + (d && d.wa ? '<span class="set-badge" title="일본풍 연출">일</span>' : '');
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
 let saveTimer = 0;
@@ -30188,7 +30690,7 @@ function audioLike() {
   if (T.bpm > 0) return { beats: J.beatGrid(T.bpm, T.beatOffset || 0, 600) };
   return null;
 }
-/* 自動判定のとき、判定結果を言語欄の横に出す */
+/* 자동判定のとき、判定結果を言語欄の横に出す */
 function langNote() {
   const el = $('langNote'); if (!el) return;
   el.textContent = (S.project.lang || 'auto') === 'auto' ? '→ ' + J.LANG_LABEL[J.resolveLang(S.project)] : '';
@@ -30260,14 +30762,14 @@ async function ensureFonts() {
   const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length + '|' + J.lang;   // the lyric language changes the faces
   if (key === fontKey) return;
   fontKey = key;
-  showMsg('フォントを読み込み中…');
+  showMsg('글꼴 불러오는 중…');
   try { await J.ensureFonts(txt, keys); } catch (e) {}
   showMsg(null); S.need = true; drawStyleGrid(); loadThumbFonts();
 }
 // style thumbnails need two glyphs of every style's display face — fetched only once the style grid is actually shown
 function loadThumbFonts() {
   if (thumbFonts || !$('styleGrid').offsetParent) return;
-  thumbFonts = J.ensureFonts('字面', [...new Set(J.STYLE_ORDER.map(k => J.STYLES[k].fonts.display[0]))]).then(() => drawStyleGrid()).catch(() => {});
+  thumbFonts = J.ensureFonts('JIZURA', [...new Set(J.STYLE_ORDER.map(k => J.STYLES[k].fonts.display[0]))]).then(() => drawStyleGrid()).catch(() => {});
 }
 function showMsg(m) { const el = $('viewMsg'); if (!m) { el.hidden = true; return; } el.textContent = m; el.hidden = false; }
 
@@ -30335,14 +30837,14 @@ function play() {
     if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
     v.play().catch(() => {});
   }
-  S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
+  S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '일시정지');
 }
 function pause() {
   S.playing = false; AP.stop();
   if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
     J.bgMedia.element.pause();
   }
-  $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
+  $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '재생'); S.need = true;
 }
 function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
@@ -30395,7 +30897,7 @@ function hitTestTimeline(px, py, w, h, dpr) {
   const L = getTrackLayout(h, dpr);
   const handleW = 6 * dpr;
 
-  // Track 0: 文字PV cuts
+  // Track 0: 글자PV cuts
   if (py >= L.t0Top && py <= L.t0Bot && S.plan.cuts) {
     for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
       const cut = S.plan.cuts[i];
@@ -30406,7 +30908,7 @@ function hitTestTimeline(px, py, w, h, dpr) {
     }
   }
 
-  // Track 1: 背景画像
+  // Track 1: 배경画像
   const images = (S.project && S.project.tracks && S.project.tracks.images) || [];
   if (py >= L.t1Top && py <= L.t1Bot) {
     for (let i = images.length - 1; i >= 0; i--) {
@@ -30419,7 +30921,7 @@ function hitTestTimeline(px, py, w, h, dpr) {
   }
   }
 
-  // Track 2: 背景動画
+  // Track 2: 배경動画
   const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
   if (py >= L.t2Top && py <= L.t2Bot) {
     for (let i = videos.length - 1; i >= 0; i--) {
@@ -30446,10 +30948,10 @@ function drawTimeline() {
 
   const L = getTrackLayout(h, dpr);
 
-  // 背景全体
+  // 배경全体
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
 
-  // トラック背景
+  // トラック배경
   x.fillStyle = '#17171d'; x.fillRect(0, L.t0Top, w, L.t0Bot - L.t0Top);
   x.fillStyle = '#14181c'; x.fillRect(0, L.t1Top, w, L.t1Bot - L.t1Top);
   x.fillStyle = '#191522'; x.fillRect(0, L.t2Top, w, L.t2Bot - L.t2Top);
@@ -30483,7 +30985,7 @@ function drawTimeline() {
     x.fillText(fmtTime(t), px + 2 * dpr, 10 * dpr);
   }
 
-  // Track 0 (文字PV) 内の音声波形
+  // Track 0 (글자PV) 内の音声波形
   if (S.audio && S.audio.peaks) {
     const pk = S.audio.peaks, n = pk.length, sd = S.audio.duration;
     const t0Mid = (L.t0Top + L.t0Bot) / 2;
@@ -30506,7 +31008,7 @@ function drawTimeline() {
     if (px >= 0 && px <= w) x.fillRect(px, L.t0Bot - 5 * dpr, 1, 5 * dpr);
   }
 
-  // Track 0: 文字PVカット
+  // Track 0: 글자PV컷
   for (const cut of (S.plan.cuts || [])) {
     const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
     if (x1 < 0 || x0 > w) continue;
@@ -30549,7 +31051,7 @@ function drawTimeline() {
     }
   };
 
-  // Track 1: 背景画像ブロック
+  // Track 1: 배경画像ブロック
   const imgBlocks = (S.project && S.project.tracks && S.project.tracks.images) || [];
   for (let i = 0; i < imgBlocks.length; i++) {
     const b = imgBlocks[i];
@@ -30577,7 +31079,7 @@ function drawTimeline() {
     drawKeyframeMarkers(b.keyframes, L.t1Top, L.t1Bot, isSel);
   }
 
-  // Track 2: 背景動画ブロック
+  // Track 2: 배경動画ブロック
   const vidBlocks = (S.project && S.project.tracks && S.project.tracks.videos) || [];
   for (let i = 0; i < vidBlocks.length; i++) {
     const b = vidBlocks[i];
@@ -30613,9 +31115,9 @@ function drawTimeline() {
     x.font = `bold ${9 * dpr}px sans-serif`;
     x.fillText(label, 6 * dpr, top + 13 * dpr);
   };
-  drawTrackBadge('文字PV', L.t0Top, L.t0Bot, '#e6a030');
-  drawTrackBadge('背景画像', L.t1Top, L.t1Bot, '#16c4e0');
-  drawTrackBadge('背景動画', L.t2Top, L.t2Bot, '#c060ee');
+  drawTrackBadge('글자PV', L.t0Top, L.t0Bot, '#e6a030');
+  drawTrackBadge('배경画像', L.t1Top, L.t1Bot, '#16c4e0');
+  drawTrackBadge('배경動画', L.t2Top, L.t2Bot, '#c060ee');
 
   // line markers
   x.font = `${10 * dpr}px monospace`;
@@ -30642,7 +31144,7 @@ function drawTimeline() {
       x.fillRect(0, 0, w, 22 * dpr);
       x.fillStyle = '#ffffff';
       x.font = `bold ${11 * dpr}px sans-serif`;
-      x.fillText('🗑️ 離して削除（直前の要素を延長して尺を自動補間）', 12 * dpr, 15 * dpr);
+      x.fillText('🗑️ 離して削除（直前の要素を延長して尺を자동補間）', 12 * dpr, 15 * dpr);
 
       // 削除対象要素の赤オーバーレイ
       let rx0 = 0, rx1 = 0, ry0 = 0, ry1 = 0;
@@ -30755,17 +31257,17 @@ function updateCutInfo() {
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
   const el = $('cutInfo');
-  if (!cut) { el.innerHTML = '<span class="hint">この位置にカットはありません</span>'; return; }
+  if (!cut) { el.innerHTML = '<span class="hint">이 위치에는 컷이 없습니다</span>'; return; }
   const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
   const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
   el.innerHTML = [
     `<span class="chip mono">${cut.line === -1 ? '#00 (タイトル)' : '#' + String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
-    cut.bg && cut.bg !== 'none' ? chip('b', '背景', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'カメラ', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'つなぎ', n(J.TRANS, cut.trans)) : '',
+    chip('l', '레이아웃', n(J.LAYOUTS, cut.layout)), chip('e', '등장', n(J.ENTER, cut.enter)), chip('h', '유지', n(J.HOLD, cut.hold)), chip('x', '퇴장', n(J.EXIT, cut.exit)),
+    cut.decor && cut.decor.length ? chip('', '장식', cut.decor.map(d => n(J.DECOR, d.id)).join(' · ')) : '',
+    cut.treat && cut.treat !== 'none' ? chip('t', '글자 효과', n(J.TREAT, cut.treat)) : '',
+    cut.bg && cut.bg !== 'none' ? chip('b', '배경', n(J.BG, cut.bg)) : '',
+    cut.cam && cut.cam !== 'push' ? chip('c', '카메라', n(J.CAMERA, cut.cam)) : '',
+    cut.trans ? chip('c', '전환', n(J.TRANS, cut.trans)) : '',
   ].join('');
 }
 
@@ -30773,25 +31275,25 @@ function updateCutInfo() {
 function renderLines() {
   const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
   const ov = S.project.overrides, R = typeof exportRangeLines === 'function' ? exportRangeLines() : null;
-  const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
-  const cutOpts = '<option value="">カット 自動</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">カット ${n}</option>`).join('');
+  const layoutOpts = '<option value="">자동</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
+  const cutOpts = '<option value="">컷: 자동</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">컷: ${n}</option>`).join('');
 
-  // 先頭の曲タイトル行 (#00)
+  // 先頭の曲タイトル줄  (#00)
   if (S.plan && S.plan.titleLine) {
     const tln = S.plan.titleLine;
     const to = ov[-1] || {};
     const titleLayoutKeys = J.TITLE_LAYOUT_ORDER || ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
-    const titleLayoutOpts = '<option value="">自動（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
+    const titleLayoutOpts = '<option value="">자동（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
     const tli = document.createElement('li');
     tli.className = 'ln ln-title';
     tli.innerHTML = `<span class="no">#00</span>
-      <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始秒" style="opacity:0.6;cursor:default">
+      <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始초" style="opacity:0.6;cursor:default">
       <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <select aria-label="タイトルレイアウト指定">${titleLayoutOpts}</select>
-        <button class="icon ghost dice" title="タイトルの装飾・配置・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
-        <button class="icon ghost lock" title="タイトルの構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+        <select aria-label="タイトル레이아웃 선택">${titleLayoutOpts}</select>
+        <button class="icon ghost dice" title="タイトルの장식 · 配置 · 연출を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの구성をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
     tli.querySelector('select').value = to.layout || '';
     tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
@@ -30816,9 +31318,9 @@ function renderLines() {
     S.plan.cuts.filter(c => c.line === -1).forEach(c => {
       const sp = document.createElement('span');
       const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
-      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join(' · ') : '장식없음';
       sp.textContent = `${layName} [${decorNames}]`;
-      sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
+      sp.title = `레이아웃: ${layName}｜장식: ${decorNames}`;
       sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
       sp.addEventListener('click', () => seek(0.001));
       tcutsEl.appendChild(sp);
@@ -30830,19 +31332,19 @@ function renderLines() {
     const o = ov[i] || {};
     const li = document.createElement('li'); li.className = 'ln' + (ln.interlude ? ' is-inter' : '') + (R && i >= R.from && i <= R.to ? ' in-range' : '');
     const manual = S.project.timing.lineTimes && S.project.timing.lineTimes[i] != null;
-    const label = ln.interlude ? `〔間奏${ln.secs ? ' ' + ln.secs + '秒' : ''}〕` : ln.text;
+    const label = ln.interlude ? `[간주${ln.secs ? ' ' + ln.secs + '초' : ''}]` : ln.text;
     li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span>
-      <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="開始（秒）${manual ? '・手動' : '・自動'}" aria-label="${i + 1}行目の開始秒" style="${manual ? 'border-color:var(--cyan)' : ''}">
+      <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="시작(초)${manual ? ' · 수동' : ' · 자동'}" aria-label="${i + 1}번째 줄 시작(초)" style="${manual ? 'border-color:var(--cyan)' : ''}">
       <span class="txt" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <button class="icon ghost edit" title="この行の歌詞を直す" aria-label="${i + 1}行目の歌詞を直す">${ICON.pen}</button>
-        ${ln.interlude ? '' : `<select class="ncut" aria-label="${i + 1}行目のカット数">${cutOpts}</select>`}
-        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="レイアウト指定">${layoutOpts}</select>`}
-        <button class="icon ghost tapfrom tap-from-here" title="この行からタップで同期し直す" aria-label="${i + 1}行目からタップ">${ICON.tap || '⏱️'}</button>
-        <button class="icon ghost rng" title="書き出す範囲にする（Shift+クリックで範囲を広げる）" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="${i + 1}行目を書き出す範囲に">${ICON.range}</button>
-        ${ln.interlude ? '' : `<button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>`}
-        ${ln.interlude ? '' : `<button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
+        <button class="icon ghost edit" title="이 줄의 가사 고치기" aria-label="${i + 1}줄 가사 고치기">${ICON.pen}</button>
+        ${ln.interlude ? '' : `<select class="ncut" aria-label="${i + 1}줄의 컷 수">${cutOpts}</select>`}
+        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="레이아웃 선택">${layoutOpts}</select>`}
+        <button class="icon ghost tapfrom tap-from-here" title="이 줄부터 탭으로 동기화 다시 하기" aria-label="${i + 1}줄부터 탭">${ICON.tap || '⏱️'}</button>
+        <button class="icon ghost rng" title="내보낼 범위로 지정(Shift+클릭으로 범위 확장)" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="${i + 1}줄을 내보낼 범위로">${ICON.range}</button>
+        ${ln.interlude ? '' : `<button class="icon ghost dice" title="이 줄 다시 추첨">${ICON.dice}</button>`}
+        ${ln.interlude ? '' : `<button class="icon ghost lock" title="이 줄의 구성 잠금" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
       </span></div>`;
     const q = sel => li.querySelector(sel);
     if (q('.lay')) q('.lay').value = o.layout || '';
@@ -30863,7 +31365,7 @@ function renderLines() {
       if (S.project.rowCache) delete S.project.rowCache[i];
       setOv(i, { cuts: +e.target.value || undefined, single: undefined });
       replan();
-      commit('行' + (i + 1) + 'カット数変更');
+      commit('줄 ' + (i + 1) + '컷数変更');
       seek(ln.start + 0.001);
     });
     const tapBtn = q('.tapfrom') || q('.tap-from-here');
@@ -30876,7 +31378,7 @@ function renderLines() {
       if (S.project.rowCache) delete S.project.rowCache[i];
       setOv(i, { seed: (cur.seed | 0) + 1, lock: false });
       replan();
-      commit('行' + (i + 1) + '再抽選');
+      commit('줄 ' + (i + 1) + '再抽選');
       seek(ln.start + 0.001);
     });
     if (q('.lock')) q('.lock').addEventListener('click', () => {
@@ -30894,12 +31396,12 @@ function renderLines() {
     });
     ol.appendChild(li); S.lineEls.push(li);
   });
-  $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
+  $('linesInfo').textContent = `${S.plan.lines.length}줄 / ${S.plan.cuts.length}컷`;
   updateCutInfo();
   if (typeof syncRangeUI === 'function') syncRangeUI();
 }
 
-/* ---------------- 行から歌詞を直す ---------------- */
+/* ---------------- 줄 から歌詞を直す ---------------- */
 // the lyrics text is the source: a plan line knows the row it came from (ln.src); LRC time tags on that row are kept
 const LRC_PREFIX = /^\s*(?:\[\d+:\d+(?:[.:]\d+)?\])*/;
 function editLine(li, ln) {
@@ -30907,8 +31409,8 @@ function editLine(li, ln) {
   const rows = S.project.lyrics.replace(/\r/g, '').split('\n'), row = rows[ln.src] || '';
   const pre = (row.match(LRC_PREFIX) || [''])[0], body = row.slice(pre.length).trim();
   const txt = li.querySelector('.txt'), inp = document.createElement('input');
-  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `${ln.index + 1}行目の歌詞`);
-  inp.title = '記法（/ 区切り・*強調*・行末の ! ・| 注釈・[間奏 8]）もそのまま使えます。Enter で確定、Esc で取り消し';
+  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `${ln.index + 1}줄 가사`);
+  inp.title = '문법(/ 구분, *강조*, 줄 끝의 !, | 메모, [간주 8])도 그대로 쓸 수 있습니다. Enter로 확정, Esc로 취소';
   txt.replaceWith(inp); inp.focus(); inp.select();
   let done = false;
   const finish = ok => {
@@ -30922,14 +31424,14 @@ function editLine(li, ln) {
       if (S.project.timing && S.project.timing.cutTimes) {
         S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== ln.index);
       }
-      replan(); flushSave(); toast(`${ln.index + 1}行目の歌詞を直しました`);
+      replan(); flushSave(); toast(`${ln.index + 1}줄 가사를 고쳤습니다`);
     } else renderLines();
   };
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
   inp.addEventListener('blur', () => finish(true));
 }
 
-/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z） ---------------- */
+/* ---------------- 歌詞 · タイミングの取り消し（Ctrl+Z） ---------------- */
 // separate from the ◀ ▶ history of looks: lyric edits, dragged / typed / tapped line times
 const ED = { undo: [], redo: [] };
 const edSnap = () => JSON.stringify({ lyrics: S.project.lyrics, lineTimes: S.project.timing.lineTimes || {} });
@@ -30943,7 +31445,7 @@ function edGo(d) {
   S.project.lyrics = o.lyrics; S.project.timing.lineTimes = o.lineTimes; $('lyrics').value = o.lyrics;
   if ('ov' in o) { S.project.overrides = o.ov || {}; S.project.exportRange = o.range || null; }
   replan(); flushSave(); updateEditBtns();
-  toast(d < 0 ? '元に戻しました' : 'やり直しました');
+  toast(d < 0 ? '되돌렸습니다' : '다시 실줄했습니다');
 }
 // 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
 function clearLyrics() {
@@ -30955,7 +31457,7 @@ function clearLyrics() {
   pause();
   P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
   replan(); flushSave(); updateEditBtns(); seek(0);
-  toast('歌詞を消しました（「元に戻す」か Ctrl+Z で戻せます）');
+  toast('가사를 지웠습니다(‘되돌리기’나 Ctrl+Z로 복구 가능)');
 }
 // 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
 let audioNameDefault = '';
@@ -30971,11 +31473,11 @@ async function resetAll() {
   TL.z = 1; TL.off = 0;
   $('lyrics').value = ''; fontKey = '';
   syncUI(); replan(); commit(); updateEditBtns(); flushSave(); seek(0);
-  toast('初期化しました');
+  toast('초기화했습니다');
 }
 function updateEditBtns() { const u = $('btnUndoEdit'); if (u) u.disabled = !ED.undo.length; }
 
-/* ---------------- 書き出す範囲（選んだ行だけ） ---------------- */
+/* ---------------- 書き出す範囲（選んだ줄 だけ） ---------------- */
 function exportRangeLines() {
   const r = S.project.exportRange, n = S.plan ? S.plan.lines.length : 0;
   if (!r || !n || !(r.from >= 0)) return null;
@@ -30997,15 +31499,15 @@ function setExportRange(i, extend) {
   else S.project.exportRange = { from: i, to: i };
   flushSave(); renderLines();
   const R2 = exportRangeLines();
-  toast(R2 ? `書き出す範囲：${R2.from + 1}${R2.to > R2.from ? '〜' + (R2.to + 1) : ''}行目` : '書き出す範囲：全体');
+  toast(R2 ? `내보낼 범위: ${R2.from + 1}${R2.to > R2.from ? '~' + (R2.to + 1) : ''}줄` : '내보낼 범위: 전체');
 }
 function syncRangeUI() {
   const R = exportRangeLines(), n = S.plan.lines.length;
-  const opts = (sel, first) => `<option value="-1">${first}</option>` + S.plan.lines.map((ln, i) => `<option value="${i}">${String(i + 1).padStart(2, '0')} ${escapeHtml((ln.interlude ? '〔間奏〕' : ln.text).slice(0, 14))}</option>`).join('');
-  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '全体'); el.value = R ? String(R.from) : '-1'; });
+  const opts = (sel, first) => `<option value="-1">${first}</option>` + S.plan.lines.map((ln, i) => `<option value="${i}">${String(i + 1).padStart(2, '0')} ${escapeHtml((ln.interlude ? '[간주]' : ln.text).slice(0, 14))}</option>`).join('');
+  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '전체'); el.value = R ? String(R.from) : '-1'; });
   document.querySelectorAll('.rngTo').forEach(el => { el.innerHTML = opts(el, '—'); el.value = R ? String(R.to) : '-1'; el.disabled = !R; });
   const r = exportRange();
-  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} 〜 ${J.fmtTime(r.t1)}（${(r.t1 - r.t0).toFixed(1)}秒）` : `全体（${S.plan.duration.toFixed(1)}秒）`; });
+  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} ~ ${J.fmtTime(r.t1)} (${(r.t1 - r.t0).toFixed(1)}초)` : `전체 (${S.plan.duration.toFixed(1)}초)`; });
 }
 function bindRangeUI() {
   document.querySelectorAll('.rngFrom').forEach(el => el.addEventListener('change', () => {
@@ -31043,35 +31545,35 @@ function drawStyleGrid() {
     b.setAttribute('aria-pressed', S.project.style === k ? 'true' : 'false');
     const off = !J.randomOk(S.project, 'style', k);
     b.classList.toggle('set-off', off);
-    b.title = st.desc + (off ? (st.extra && S.project.extra !== true ? '（追加分がオフのため、おまかせでは選ばれません）' : '（和風の演出がオフのため、おまかせでは選ばれません）') : '');
+    b.title = st.desc + (off ? (st.extra && S.project.extra !== true ? ' (추가 연출이 꺼져 있어 자동 생성에서는 선택되지 않음)' : ' (일본풍 연출이 꺼져 있어 자동 생성에서는 선택되지 않음)') : '');
     x.fillStyle = sc.bg; x.fillRect(0, 0, 192, 108);
     st.schemes.slice(1, 4).forEach((s2, i) => { x.fillStyle = s2.bg; x.fillRect(192 - 14 * (i + 1), 0, 14, 10); });
     const f = st.fonts.display[0];
     x.font = J.fontCSS(f, 46); x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillStyle = sc.ghostB; x.fillText('字面', 96 - 3, 54 - 1);
-    x.fillStyle = sc.ghostA; x.fillText('字面', 96 + 3, 54 + 2);
-    x.fillStyle = sc.fg; x.fillText('字面', 96, 54);
+    x.fillStyle = sc.ghostB; x.fillText('JIZURA', 96 - 3, 54 - 1);
+    x.fillStyle = sc.ghostA; x.fillText('JIZURA', 96 + 3, 54 + 2);
+    x.fillStyle = sc.fg; x.fillText('JIZURA', 96, 54);
     x.fillStyle = sc.accent; x.fillRect(12, 90, 30, 4);
     x.font = J.fontCSS('mono', 9); x.textAlign = 'left'; x.fillStyle = sc.sub; x.fillText(k.toUpperCase(), 48, 93);
   });
 }
 function fontSelectOptions(sel) {
-  return '<option value="">スタイルの既定</option>' + Object.entries(J.FONTS).map(([k, f]) => {
+  return '<option value="">스타일 기본값</option>' + Object.entries(J.FONTS).map(([k, f]) => {
     const g = J.faceOf ? J.faceOf(k) : f, alt = g.label && g.label !== f.label ? ' → ' + g.label : '';   // the face actually used for the lyric language
     return `<option value="${k}" ${sel === k ? 'selected' : ''}>${escapeHtml(f.label + alt)}</option>`;
   }).join('');
 }
 function renderFontRoles() {
   const box = $('fontRoles'); box.innerHTML = '';
-  [['display', '見出し'], ['serif', '明朝枠'], ['body', '小さな文字']].forEach(([role, label]) => {
+  [['display', '제목'], ['serif', '명조 계열'], ['body', '작은 글자']].forEach(([role, label]) => {
     const row = document.createElement('div'); row.className = 'font-row';
-    row.innerHTML = `<span class="muted">${label}</span><select aria-label="${label}のフォント">${fontSelectOptions(S.project.fonts[role])}</select>`;
+    row.innerHTML = `<span class="muted">${label}</span><select aria-label="${label} 글꼴">${fontSelectOptions(S.project.fonts[role])}</select>`;
     row.querySelector('select').addEventListener('change', e => { if (e.target.value) S.project.fonts[role] = e.target.value; else delete S.project.fonts[role]; fontKey = ''; replan(); });
     box.appendChild(row);
   });
 }
-const BASE_KEYS = [['bg', '背景'], ['fg', '文字'], ['sub', '補助']];
-const ACCENT_KEYS = [['accent', 'アクセント'], ['ghostA', 'ズレ色A'], ['ghostB', 'ズレ色B']];
+const BASE_KEYS = [['bg', '배경'], ['fg', '글자'], ['sub', '보조']];
+const ACCENT_KEYS = [['accent', '강조색'], ['ghostA', '오프셋 색 A'], ['ghostB', '오프셋 색 B']];
 function renderColors() {
   const st = J.STYLES[S.project.style] || J.STYLES.noir, sc = st.schemes[0];
   const c = S.project.colors;
@@ -31110,7 +31612,7 @@ function randomPalette() {
   do { p = J.randomPalette(bg); } while (guard++ < 6 && p.ghostA === c.ghostA && p.ghostB === c.ghostB);
   Object.assign(c, { accent: p.accent, ghostA: p.ghostA, ghostB: p.ghostB, accentOn: true });
   renderColors(); replan(); commit();
-  toast('配色：アクセント・ズレ色A/Bを変更', [p.accent, p.ghostA, p.ghostB]);
+  toast('배색: 강조색·오프셋 색 A/B 변경', [p.accent, p.ghostA, p.ghostB]);
 }
 
 /* ---------------- history of looks (◀ ▶) ---------------- */
@@ -31128,7 +31630,7 @@ function commit(desc) {              // call after changing the look
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
   updateHist();
-  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定・デザイン変更');
+  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定 · デザイン変更');
 }
 function histGo(d) {
   if (S.exporting) return;
@@ -31137,7 +31639,7 @@ function histGo(d) {
   H.i = j;
   Object.assign(S.project, JSON.parse(H.list[j]));
   fontKey = ''; syncUI(); replan(); updateHist();
-  toast(`${j + 1} / ${H.list.length} 案目`);
+  toast(`${H.list.length}개 중 ${j + 1}번째 안`);
   restartPreview();
 }
 function updateHist() {
@@ -31231,7 +31733,7 @@ function omakase() {
   S.project.rowCache = {};
   if (S.project.timing) S.project.timing.cutTimes = null;
   fontKey = ''; syncUI(); replan(); commit();
-  toast(`おまかせ：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
+  toast(`자동 생성: ${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
 }
 // change just one aspect of the current look
@@ -31246,17 +31748,17 @@ function rerollPart(part) {
     P.style = pool[Math.floor(Math.random() * pool.length)];
     P.colors.enabled = false;
     P.rowCache = {};
-    msg = `スタイル：${J.STYLES[P.style].name}`;
+    msg = `스타일: ${J.STYLES[P.style].name}`;
   } else if (part === 'mood') {
     const r = J.omakase(P);
     Object.assign(P, { mood: r.mood, fx: r.fx, enabled: r.enabled });
     P.rowCache = {};
-    msg = `雰囲気：${J.MOODS[r.mood].name}`;
+    msg = `분위기: ${J.MOODS[r.mood].name}`;
   } else if (part === 'cut') {
     P.seed = (Math.random() * 1e9) | 0;
     P.rowCache = {};
     if (P.timing) P.timing.cutTimes = null;
-    msg = '構成：レイアウトと動きを再抽選';
+    msg = '구성: 레이아웃과 움직임 다시 추첨';
   }
   fontKey = ''; syncUI(); replan(); commit();
   toast(msg);
@@ -31265,18 +31767,18 @@ function rerollPart(part) {
 function showNow() {
   const el = $('easyNow'); if (!el || !S.plan || el.closest('[hidden]')) return;
   const P = S.project, sc = S.plan.style.schemes[0];
-  const moodName = P.mood && J.MOODS[P.mood] ? J.MOODS[P.mood].name : 'カスタム';
+  const moodName = P.mood && J.MOODS[P.mood] ? J.MOODS[P.mood].name : '사용자 설정';
   const fk = S.plan.style.fonts.display[0];
   const fontName = J.FONTS[fk] ? J.FONTS[fk].label : fk;
   const cuts = S.plan.cuts.filter(c => c.line >= 0 && c.layout !== 'interlude');
   const kinds = new Set(cuts.map(c => c.layout)).size;
   const row = (k, v) => `<div class="now-row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-  el.innerHTML = row('スタイル', `<b>${escapeHtml(J.STYLES[P.style].name)}</b>`)
-    + row('雰囲気', escapeHtml(moodName))
-    + row('配色', `<span class="swatches">${swatchHTML([sc.bg, sc.fg, sc.accent, sc.ghostA, sc.ghostB])}</span>${P.colors.accentOn ? '<span class="tagl">ランダム</span>' : ''}`)
-    + row('見出し書体', escapeHtml(fontName))
-    + row('構成', `${cuts.length} カット・レイアウト ${kinds} 種`)
-    + row('演出', `加工 ${cuts.filter(c => c.treat && c.treat !== 'none').length}・背景 ${new Set(cuts.map(c => c.bg).filter(b => b && b !== 'none')).size}種・カメラ ${cuts.filter(c => c.cam && c.cam !== 'push').length}`);
+  el.innerHTML = row('스타일', `<b>${escapeHtml(J.STYLES[P.style].name)}</b>`)
+    + row('분위기', escapeHtml(moodName))
+    + row('배색', `<span class="swatches">${swatchHTML([sc.bg, sc.fg, sc.accent, sc.ghostA, sc.ghostB])}</span>${P.colors.accentOn ? '<span class="tagl">랜덤</span>' : ''}`)
+    + row('제목 글꼴', escapeHtml(fontName))
+    + row('구성', `컷 ${cuts.length}개 · 레이아웃 ${kinds}종`)
+    + row('연출', `글자 효과 ${cuts.filter(c => c.treat && c.treat !== 'none').length} · 배경 ${new Set(cuts.map(c => c.bg).filter(b => b && b !== 'none')).size}종 · 카메라 ${cuts.filter(c => c.cam && c.cam !== 'push').length}`);
 }
 let toastTimer = 0;
 function toast(m, cols) {
@@ -31301,7 +31803,7 @@ function setMode(m) {
 }
 
 /* ---------------- fx tab ---------------- */
-const FX = [['motion', '動きの強さ'], ['glitch', 'グリッチ'], ['chroma', '色ズレ'], ['decor', '装飾の量'], ['density', 'カットの細かさ'], ['texture', '質感'], ['bgSwitch', '背景の切替']];
+const FX = [['motion', '움직임 강도'], ['glitch', '글리치'], ['chroma', '색 오프셋'], ['decor', '장식 양'], ['density', '컷 세분화'], ['texture', '질감'], ['bgSwitch', '배경 전환']];
 function renderFx() {
   const box = $('fxSliders'); box.innerHTML = '';
   FX.forEach(([k, label]) => {
@@ -31319,7 +31821,7 @@ function renderFx() {
 }
 
 /* ---------------- technique tab ---------------- */
-const GROUPS = [['layout', 'レイアウト'], ['enter', '登場'], ['hold', '保持'], ['exit', '退場'], ['decor', '装飾'], ['treat', '文字の加工'], ['bg', '背景'], ['cam', 'カメラ'], ['fx', '画面効果'], ['trans', 'カット間のつなぎ']];
+const GROUPS = [['layout', '레이아웃'], ['enter', '등장'], ['hold', '유지'], ['exit', '퇴장'], ['decor', '장식'], ['treat', '글자 효과'], ['bg', '배경'], ['cam', '카메라'], ['fx', '화면 효과'], ['trans', '컷 전환']];
 const openGroups = new Set();
 function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.registry(g)[k].special); }
 function renderTech() {
@@ -31335,12 +31837,12 @@ function renderTech() {
     const d = document.createElement('details'); d.className = 'tgroup';
     d.open = !!q || openGroups.has(g);
     d.addEventListener('toggle', () => { if (d.open) openGroups.add(g); else openGroups.delete(g); });
-    d.innerHTML = `<summary><span class="tg-name">${label}</span><span class="tg-cnt mono">${onN}/${items.length}</span></summary><div class="tg-tools"><button class="ghost small" data-a="on">すべてON</button><button class="ghost small" data-a="off">すべてOFF</button><button class="ghost small" data-a="flip">反転</button></div>`;
+    d.innerHTML = `<summary><span class="tg-name">${label}</span><span class="tg-cnt mono">${onN}/${items.length}</span></summary><div class="tg-tools"><button class="ghost small" data-a="on">모두 켜기</button><button class="ghost small" data-a="off">모두 끄기</button><button class="ghost small" data-a="flip">반전</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
     shown.forEach(k => {
       const l = document.createElement('label');
-      l.title = k + (tbl[k].tags && tbl[k].tags.length ? '（' + tbl[k].tags.map(t => (J.MOODS[t] ? J.MOODS[t].name : t)).join('・') + '）' : '');
-      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].extra && S.project.extra !== true ? '（追加分がオフのため、自動では選ばれません）' : '（和風の演出がオフのため、自動では選ばれません）'; }
+      l.title = k + (tbl[k].tags && tbl[k].tags.length ? ' (' + tbl[k].tags.map(t => (J.MOODS[t] ? J.MOODS[t].name : t)).join(', ') + ')' : '');
+      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].extra && S.project.extra !== true ? ' (추가 연출이 꺼져 있어 자동으로 선택되지 않음)' : ' (일본풍 연출이 꺼져 있어 자동으로 선택되지 않음)'; }
       l.innerHTML = `<input type="checkbox" ${en[k] !== false ? 'checked' : ''}> ${escapeHtml(tbl[k].name)}${setBadges(tbl[k])}`;
       l.querySelector('input').addEventListener('change', e => { en[k] = e.target.checked; S.project.mood = null; d.querySelector('.tg-cnt').textContent = `${items.filter(x => en[x] !== false).length}/${items.length}`; replanSoon(60); });
       list.appendChild(l);
@@ -31373,15 +31875,15 @@ function syncOut() {
   document.querySelectorAll('.centerDirSel').forEach(el => { el.value = S.project.centerDir === 'lr' ? 'lr' : 'tb'; });
   const kb = $('keyBadge');
   kb.hidden = k === 'off';
-  if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
+  if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? '그린 스크린' : '블랙 배경'}`;
 }
 async function codecNote() {
   const [w, h] = J.outputSize(S.project);
   const vc = await J.pickVideoCodec(w, h, S.project.fps, 12e6);
-  $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
+  $('codecNote').textContent = vc ? `이 브라우저에서는 ${vc.label} 로 내보냅니다 (${w}×${h} / ${S.project.fps}fps). 내보내는 동안 탭을 열어 두세요.` : '이 브라우저는 동영상 인코딩(WebCodecs)을 지원하지 않습니다. 최신 Chrome / Edge를 사용하거나 PNG 시퀀스로 내보내세요.';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
   ['btnMP4File', 'eMP4File'].forEach(id => { $(id).hidden = !vc || !canPickFile(); });
-  if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
+  if (!vc) $('eMP4').title = '이 브라우저에서는 MP4 내보내기를 사용할 수 없습니다 (Chrome / Edge 권장)';
 }
 const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'btnPNGL', 'eMP4', 'btnMP4File', 'eMP4File'];
 function baseName() {
@@ -31397,7 +31899,7 @@ async function runExport(kind) {
     try {
       const hnd = await window.showSaveFilePicker({ suggestedName: baseName() + rangeSuffix() + '.mp4', types: [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] });
       file = await hnd.createWritable(); fileName = hnd.name;
-    } catch (e) { if (e && e.name === 'AbortError') return; toast('保存先を開けませんでした: ' + (e && e.message ? e.message : e)); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; toast('저장 위치를 열 수 없습니다: ' + (e && e.message ? e.message : e)); return; }
   }
   pause();
   const ac = new AbortController(); S.exporting = ac;
@@ -31405,7 +31907,7 @@ async function runExport(kind) {
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
   const txt = { set textContent(m) { setText(m); }, get textContent() { return boxes[0].querySelector('.exp-text').textContent; } };
   boxes.forEach(b => { b.hidden = false; b.querySelector('.exp-bar').style.width = '0%'; });
-  setText('準備中…');
+  setText('준비 중…');
   EXP_BTNS.forEach(id => { $(id).disabled = true; });
   const onProgress = (p, m) => { boxes.forEach(b => { b.querySelector('.exp-bar').style.width = (p * 100).toFixed(1) + '%'; }); setText(m); };
   const t0 = performance.now();
@@ -31415,24 +31917,24 @@ async function runExport(kind) {
       const plan = S.plan, range = exportRange(), span = J.exportSpan(plan, range);
       const r = await J.exportMP4({ plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, range, file });
       file = null;
-      txt.textContent = `完成 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB・' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
+      txt.textContent = `완료 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB · ' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''} · ${((performance.now() - t0) / 1000).toFixed(0)}초`;
       if (r.blob) {
         const res = await J.saveFile(baseName() + rangeSuffix() + '.mp4', r.blob);
-        if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
-      } else txt.textContent += `・「${fileName}」に保存しました`;
-      if (r.tried && r.tried.length) txt.textContent += '（最初の方法では失敗したため、別のエンコーダーで書き出しました）';
+        if (res === 'declined') txt.textContent += ' (저장이 취소됨)';
+      } else txt.textContent += `·「${fileName}」에 저장했습니다`;
+      if (r.tried && r.tried.length) txt.textContent += '(처음 방법이 실패해서 다른 인코더로 내보냈습니다)';
       // audio that some players cannot play (Opus), or none at all: save the soundtrack as WAV next to it
       if (r.audioWanted && r.audio !== 'aac') {
         await J.saveFile(baseName() + rangeSuffix() + '_audio.wav', J.audioWav(S.audio.buffer, span.dur, span.t0));
-        txt.textContent += r.audio ? '。このブラウザでは音声が Opus になり、iPhone・QuickTime などでは音が出ないことがあるため、音声を WAV でも保存しました' : '。このブラウザは音声を書き出せないため、音声を WAV で別に保存しました（動画編集ソフトで重ねてください）';
-      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '。曲が読み込まれていないため音声なしです（「曲を読み込む」から読み込み直してください）';
+        txt.textContent += r.audio ? '. 이 브라우저에서는 오디오가 Opus가 되어 iPhone·QuickTime 등에서 소리가 나지 않을 수 있으므로, 오디오를 WAV로도 저장했습니다' : '. 이 브라우저는 오디오를 내보낼 수 없어 오디오를 WAV로 따로 저장했습니다(영상 편집 프로그램에서 합쳐 주세요)';
+      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '. 음원을 불러오지 않아 소리가 없습니다(‘음원 불러오기’로 다시 불러오세요)';
     } else {
       const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', layers: kind === 'pngl', onProgress, signal: ac.signal, range: exportRange() });
-      txt.textContent = `完成 ${(blob.size / 1048576).toFixed(1)}MB`;
+      txt.textContent = `완료 ${(blob.size / 1048576).toFixed(1)}MB`;
       await J.saveFile(baseName() + rangeSuffix() + (kind === 'pnga' ? '_alpha' : kind === 'pngl' ? '_layers' : '') + '_png.zip', blob);
     }
   } catch (e) {
-    txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
+    txt.textContent = '오류: ' + (e && e.message ? e.message : e);
     console.error(e);
     if (file) { try { await file.abort(); } catch (e2) {} }
   } finally {
@@ -31478,7 +31980,7 @@ function startTap(from = null) {
   S.tap = { i: startIdx, from: startIdx, startIdx, done: [] };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
 
-  // startIdx 以降の古いカット境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
+  // startIdx 以降の古い컷境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
   if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
     S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line < startIdx);
   }
@@ -31498,7 +32000,7 @@ function startTap(from = null) {
 
   $('tapBtn').focus();
   if (startIdx > 0) {
-    toast(`${startIdx + 1}行目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から再生）`);
+    toast(`${startIdx + 1}줄 目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から재생）`);
   }
 }
 
@@ -31519,7 +32021,7 @@ function tapNow() {
   const oldCutTimes = S.project.timing.cutTimes ? [...S.project.timing.cutTimes] : null;
   S.tap.done.push({ i: curIdx, had: LT[curIdx], oldCutTimes });
 
-  // 該当行のカット境界を確実にクリアして新タイミングで再導出
+  // 該当줄 の컷境界を確実にクリアして新タイミングで再導出
   if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
     S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== curIdx);
   }
@@ -31533,7 +32035,7 @@ function tapNow() {
 
   if (S.tap.i >= S.plan.lines.length) {
     stopTap();
-    toast('全行のタップ同期が完了しました');
+    toast('全줄 のタップ同期が完了しました');
   } else {
     updateTap();
   }
@@ -31625,7 +32127,7 @@ function syncBlockInspector() {
   if (btnAddKey) {
     btnAddKey.textContent = hasKey ? '◆更新' : '◆＋キー';
     btnAddKey.classList.toggle('active', !!hasKey);
-    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを追加`;
+    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを추가`;
   }
   if (btnDelKey) {
     btnDelKey.disabled = !hasKey;
@@ -31656,7 +32158,7 @@ function syncUI() {
   $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
   $('lyrics').value = S.project.lyrics;
   $('bpm').value = S.project.timing.bpm > 0 ? S.project.timing.bpm : '';
-  $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : 'なし';
+  $('bpm').placeholder = S.audio ? `자동 ${S.audio.bpm}` : '없음';
   $('offset').value = S.project.timing.offset ?? 0.4;
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
@@ -31683,7 +32185,7 @@ function bind() {
     remember();
     S.project.lang = e.target.value; replan(); renderFontRoles(); commit(); flushSave();
     const l = J.resolveLang(S.project);
-    toast((S.project.lang === 'auto' ? '歌詞の言語：自動判定 → ' : '歌詞の言語：') + J.LANG_LABEL[l]);
+    toast((S.project.lang === 'auto' ? '가사 언어: 자동 감지 → ' : '가사 언어: ') + J.LANG_LABEL[l]);
   });
   $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; replanSoon(300); commitTextSoon('タイトル編集'); });
   $('songTitle').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('タイトル確定'); });
@@ -31924,7 +32426,7 @@ function bind() {
         seek(c.end);
         drawTimeline();
       } else if (dragMode === 'move') {
-        // 他のカットとのスワップ判定
+        // 他の컷とのスワップ判定
         let swapCut = null, swapIdx = -1;
         for (let i = 0; i < S.plan.cuts.length; i++) {
           if (i === dragData.cutIndex) continue;
@@ -31939,7 +32441,7 @@ function bind() {
           dragData.swapCandidate = { type: 'cut', index: swapIdx, cut: swapCut };
         } else {
           dragData.swapCandidate = null;
-          // 通常の平行移動
+          // 通常の平줄 移動
           const delta = curTime - dragData.startTime;
           let ns = dragData.origStart + delta;
           let ne = dragData.origEnd + delta;
@@ -32010,18 +32512,18 @@ function bind() {
     if (idx < 0 || idx >= cuts.length) return false;
     const cut = cuts[idx];
 
-    // 同一行内のカット一覧
+    // 同一줄 内の컷一覧
     const sameLineCuts = cuts.filter(c => c.line === cut.line);
 
-    // その行にカットが1つしか残っていない（最後の1カット）場合は誤削除を安全にブロック
+    // その줄 に컷が1つしか残っていない（最後の1컷）場合は誤削除を安全にブロック
     if (sameLineCuts.length <= 1) {
-      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '行の最後の演出は削除できません（行を削除したい場合は歌詞を編集してください）');
+      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '줄 の最後の연출は削除できません（줄 を削除したい場合は歌詞を編集してください）');
       return false;
     }
 
     remember();
 
-    // 同一行内の直前カット（prevInLine）と直後カット（nextInLine）を検索
+    // 同一줄 内の直前컷（prevInLine）と直後컷（nextInLine）を検索
     const prevInLine = cuts.slice(0, idx).reverse().find(c => c.line === cut.line);
     const nextInLine = cuts.slice(idx + 1).find(c => c.line === cut.line);
 
@@ -32043,7 +32545,7 @@ function bind() {
       }
     }
 
-    // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
+    // 2. タイムライン컷配列から対象컷を削除（※ 歌詞テキスト lyrics には一切触れない！）
     cuts.splice(idx, 1);
 
     // 3. タイトルカード削除時の特別処理
@@ -32051,7 +32553,7 @@ function bind() {
       S.plan.titleLine.cut = prevInLine || nextInLine || null;
     }
 
-    // 4. 残存カットリストを永続データとして記録
+    // 4. 残存컷リストを永続データとして記録
     if (!S.project.timing) S.project.timing = {};
     S.project.timing.cutTimes = cuts.map(c => ({
       start: +c.start.toFixed(3),
@@ -32060,16 +32562,16 @@ function bind() {
       text: c.text
     }));
 
-    // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
+    // 5. 該当줄 のrowCache整合（컷数が減ったため安全に再抽選）
     if (S.project.rowCache && S.project.rowCache[cut.line]) {
       delete S.project.rowCache[cut.line];
     }
 
     replan();
-    commit('カット削除');
+    commit('컷削除');
     flushSave();
     drawTimeline();
-    toast('演出を1つ削除し、行内の演出で尺とテキストを補間しました');
+    toast('연출を1つ削除し、줄 内の연출で尺とテキストを補間しました');
     return true;
   }
   window.deleteCutSafe = deleteCutSafe;
@@ -32110,7 +32612,7 @@ function bind() {
           const rawLines = S.project.lyrics.split('\n');
 
           if (cA.line >= 0 && cB.line >= 0 && cA.line !== cB.line) {
-            // 異なる歌詞行同士のスワップ
+            // 異なる歌詞줄 同士のスワップ
             if (rawLines[cA.line] !== undefined && rawLines[cB.line] !== undefined) {
               const tmp = rawLines[cA.line];
               rawLines[cA.line] = rawLines[cB.line];
@@ -32132,7 +32634,7 @@ function bind() {
               }
             }
           } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
-            // 同一行内のカット（フレーズ）同士のスワップ
+            // 同一줄 内の컷（フレーズ）同士のスワップ
             const curL = rawLines[cA.line];
             if (curL && curL.includes('/')) {
               const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
@@ -32148,7 +32650,7 @@ function bind() {
               }
             }
           } else if ((cA.line === -1 || cB.line === -1) && cA.line !== cB.line) {
-            // タイトルカードと歌詞行のスワップ
+            // タイトルカードと歌詞줄 のスワップ
             const lIdx = cA.line === -1 ? cB.line : cA.line;
             if (rawLines[lIdx] !== undefined) {
               const oldTitle = S.project.title || '';
@@ -32173,7 +32675,7 @@ function bind() {
               cB[p] = t;
             }
           }
-          toast('カットを入れ替えました');
+          toast('컷を入れ替えました');
         } else if (dragData.target === 'block' && dragData.swapCandidate.type === 'block') {
           const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
           const bA = blocks[dragData.index];
@@ -32208,10 +32710,10 @@ function bind() {
       }
 
       let actDesc = 'タイムライン操作';
-      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? 'カット削除' : 'ブロック削除';
-      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? 'カット入れ替え' : 'ブロック入れ替え';
-      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? 'カット境界調整' : 'ブロックトリミング';
-      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? 'カット移動' : 'ブロック移動';
+      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? '컷削除' : 'ブロック削除';
+      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? '컷入れ替え' : 'ブロック入れ替え';
+      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? '컷境界調整' : 'ブロックトリミング';
+      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? '컷移動' : 'ブロック移動';
 
       replan();
       commit(actDesc);
@@ -32256,7 +32758,7 @@ function bind() {
     setTlZoom(1.0);
   });
 
-  // マルチトラック：ブロック追加・削除
+  // マルチトラック：ブロック추가 · 削除
   if ($('btnAddImgBlock')) {
     $('btnAddImgBlock').addEventListener('click', () => {
       remember();
@@ -32282,7 +32784,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast('画像ブロックを追加しました。素材を選択してください');
+      toast('画像ブロックを추가しました。素材を選択してください');
       if ($('selBlockFile')) $('selBlockFile').click();
     });
   }
@@ -32312,7 +32814,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast('動画ブロックを追加しました。素材を選択してください');
+      toast('動画ブロックを추가しました。素材を選択してください');
       if ($('selBlockFile')) $('selBlockFile').click();
     });
   }
@@ -32321,7 +32823,7 @@ function bind() {
     $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
   }
 
-  // キーフレーム追加・更新
+  // キーフレーム추가 · 更新
   if ($('btnBlockAddKey')) {
     $('btnBlockAddKey').addEventListener('click', () => {
       if (!S.selectedBlock || !S.selectedBlock.block) return;
@@ -32348,7 +32850,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを追加しました (${curT.toFixed(2)}s)`);
+      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを추가しました (${curT.toFixed(2)}s)`);
     });
   }
 
@@ -32396,7 +32898,7 @@ function bind() {
   if ($('selBlockOpacity')) $('selBlockOpacity').addEventListener('input', onBlockParam('opacity', parseFloat));
   if ($('selBlockBlend')) $('selBlockBlend').addEventListener('change', onBlockParam('blendMode', String));
 
-  // ブロック素材ファイルの読み込み・差し替え
+  // ブロック素材ファイルの読み込み · 差し替え
   if ($('selBlockFile')) {
     $('selBlockFile').addEventListener('change', async e => {
       const file = e.target.files && e.target.files[0];
@@ -32430,7 +32932,7 @@ function bind() {
     });
   }
 
-  // 背景メディアUIイベント
+  // 배경メディアUIイベント
   if ($('bgMediaFile')) {
     $('bgMediaFile').addEventListener('change', async e => {
       const file = e.target.files && e.target.files[0];
@@ -32459,7 +32961,7 @@ function bind() {
       });
       syncBgMediaUI();
       replan();
-      toast(`${isVideo ? '動画' : '画像'}背景を設定しました`);
+      toast(`${isVideo ? '動画' : '画像'}배경を設定しました`);
     });
   }
   if ($('btnBgMediaClear')) {
@@ -32473,7 +32975,7 @@ function bind() {
       }
       syncBgMediaUI();
       replan();
-      toast('背景メディアを解除しました');
+      toast('배경メディアを解除しました');
     });
   }
   const onBgParam = (key, parser) => e => {
@@ -32536,10 +33038,10 @@ function bind() {
     renderTech(); drawStyleGrid(); replan(); commit(); flushSave();
     toast(e.target.checked ? msgOn : msgOff);
   }));
-  setSwitch('extra-toggle', 'extra', true, '追加分の演出：使う', '追加分の演出：使わない（最初の公開版の演出だけ）');
-  setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
-  setSwitch('unify-toggle', 'unify', true, '統一感：オン（パートごとにそろえ、キメ・モーフ・太さも使います）', '統一感：オフ');
-  setSwitch('typeset-toggle', 'typeset', true, '文字整列：オン（字間・助詞・英字・0.2秒先・効果控えめ）', '文字整列：オフ');
+  setSwitch('extra-toggle', 'extra', true, '추가 연출: 사용', '추가 연출: 사용 안 함 (초기 공개판 연출만)');
+  setSwitch('wa-toggle', 'wa', true, '일본풍 연출: 사용', '일본풍 연출: 사용 안 함 (자동 생성·셔플에서 제외)');
+  setSwitch('unify-toggle', 'unify', true, '통일감: 켬(파트별로 맞추고 킬링 파트·모프·굵기도 사용)', '통일감: 끔');
+  setSwitch('typeset-toggle', 'typeset', true, '문자 정렬: 켬(자간·조사·영문·0.2초 먼저·효과 절제)', '문자 정렬: 끔');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード変更'); });
@@ -32557,15 +33059,15 @@ function bind() {
     const name = $('localFont').value.trim(); if (!name) return;
     const key = 'local_' + name.replace(/\s+/g, '_');
     const weight = /bold|太|black|heavy|w[6-9]|[6-9]00/i.test(name) ? 700 : 400;
-    J.addUserFont(key, name + '（PC）', name, weight);
-    S.project.userFonts = (S.project.userFonts || []).filter(u => u.key !== key).concat([{ key, label: name + '（PC）', family: name, weight }]);
+    J.addUserFont(key, name + ' (PC)', name, weight);
+    S.project.userFonts = (S.project.userFonts || []).filter(u => u.key !== key).concat([{ key, label: name + ' (PC)', family: name, weight }]);
     S.project.fonts.display = key; $('localFont').value = '';
     fontKey = ''; renderFontRoles(); replan();
   });
   $('fontFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     try { const key = await J.loadFontFile(f); S.project.fonts.display = key; fontKey = ''; renderFontRoles(); replan(); }
-    catch (err) { showMsg('フォントを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
+    catch (err) { showMsg('글꼴을 불러오지 못했습니다'); setTimeout(() => showMsg(null), 2500); }
   });
   ['outAspect', 'eAspect'].forEach(id => $(id).addEventListener('change', e => { S.project.aspect = e.target.value; syncOut(); replan(); codecNote(); }));
   ['outRes', 'eRes'].forEach(id => $(id).addEventListener('change', e => { S.project.res = +e.target.value; syncOut(); autosave(); codecNote(); }));
@@ -32574,17 +33076,17 @@ function bind() {
   ['outKey', 'eKey'].forEach(id => $(id).addEventListener('change', e => {
     S.project.keyBg = e.target.value; syncOut(); replan(); flushSave();
     const k = J.keyMode(S.project);
-    toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
+    toast(k ? `배경: ${k === 'green' ? '그린 스크린' : '블랙 배경'} (흰 글자와 연출만)` : '배경: 기본(스타일 배색)');
   }));
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   document.querySelectorAll('.centerDirSel').forEach(el => el.addEventListener('change', e => {
     S.project.centerDir = e.target.value; syncOut(); replan(); flushSave();
-    toast(e.target.value === 'lr' ? '縦長の画面：左右に分けます' : '縦長の画面：上下に分けます');
+    toast(e.target.value === 'lr' ? '세로 화면: 좌우로 나눕니다' : '세로 화면: 위아래로 나눕니다');
   }));
   ['outCenter', 'eCenter'].forEach(id => $(id).addEventListener('change', e => {
     S.project.centerFree = e.target.checked; syncOut(); replan(); flushSave();
     const tall = S.plan.H > S.plan.W * 1.1 && S.project.centerDir !== 'lr';
-    toast(e.target.checked ? `中央を空けました：文字と演出を${tall ? '上下' : '左右'}に置きます` : '中央を空けるのをやめました');
+    toast(e.target.checked ? `가운데를 비웠습니다: 문자와 연출을 ${tall ? '위아래' : '좌우'}에 배치합니다` : '가운데 비우기를 해제했습니다');
   }));
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   ['btnMP4File', 'eMP4File'].forEach(id => $(id).addEventListener('click', () => runExport('mp4file')));
@@ -32604,7 +33106,7 @@ function bind() {
   $('eMood').addEventListener('click', () => rerollPart('mood'));
   $('eCut').addEventListener('click', () => rerollPart('cut'));
   $('ePalette').addEventListener('click', () => { randomPalette(); restartPreview(); });
-  // 利用について（出力物の権利・ライセンス）
+  // 利用について（出力物の権利 · ライセンス）
   const dlg = $('termsDlg');
   const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
@@ -32615,14 +33117,14 @@ function bind() {
   $('btnClearLyrics').addEventListener('click', clearLyrics);
   $('btnReset').addEventListener('click', () => {
     const dlg = $('resetDlg');
-    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します。元に戻すことはできません。')) resetAll(); return; }
+    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('가사·음원·설정·기록을 모두 지우고 처음 상태로 되돌릴까요? 되돌릴 수 없습니다.')) resetAll(); return; }
     dlg.returnValue = ''; dlg.showModal();
   });
   $('resetDlg').addEventListener('close', () => { if ($('resetDlg').returnValue === 'reset') resetAll(); });
   $('fileProject').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     try { S.project = mergeProject(JSON.parse(await f.text())); syncUI(); replan(); }
-    catch (err) { showMsg('プロジェクトを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
+    catch (err) { showMsg('프로젝트를 열지 못했습니다'); setTimeout(() => showMsg(null), 2500); }
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
@@ -32660,27 +33162,27 @@ function bind() {
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
 async function loadAudioFile(f, restored) {
-  $('audioName').textContent = '解析中…';
+  $('audioName').textContent = '분석 중…';
   try {
     pause();
     S.audio = await J.analyzeAudio(f);
-    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）` + (restored ? '・前回の曲' : '');
+    $('audioName').textContent = `${f.name} (${J.fmtTime(S.audio.duration)} · 약 ${S.audio.bpm}BPM)` + (restored ? ' · 지난번 음원' : '');
     S.project.audioName = f.name;
     if (!restored && J.saveSong) J.saveSong(f);             // kept in this browser: a reload does not drop the song from exports
     S.project.timing.snap = true;
     syncUI(); replan();
     return true;
-  } catch (err) { $('audioName').textContent = '読み込めませんでした: ' + err.message; S.audio = null; return false; }
+  } catch (err) { $('audioName').textContent = '불러오지 못했습니다: ' + err.message; S.audio = null; return false; }
 }
 
 /* ---------------- かんたんモードの案内ツアー ---------------- */
 const TOUR = [
-  { t: () => $('lyrics'), title: '1. 歌詞を入れる', text: '1行が1フレーズになります。空行で少し間が空き、[間奏 8] と書くと8秒の間奏（背景と装飾だけ）になります。' },
-  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 曲を読み込む', text: 'mp3 などを読み込むと拍を検出して、カットの切り替わりを合わせます。曲がなくても作れます。「タップで同期」で行の頭を合わせることもできます。' },
-  { t: () => $('btnOmakaseBig'), title: '3. おまかせで作る', text: 'スタイル・雰囲気・動き・配色・構成をまるごと決めます。押すたびに別の案になり、「◀ 前の案」で戻れます。' },
-  { t: () => $('btnPlay'), title: '4. 再生して確認する', text: '再生して見てみましょう。下のタイムラインでは、行の区切りをドラッグして動かせます（＋−で拡大）。' },
-  { t: () => $('lineList'), title: '5. 気になる行だけ直す', text: '行ごとに、歌詞を直す（✎）、カット数を決める、この行からタップし直す（◎）、この行だけ作り直す（サイコロ）ができます。' },
-  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 書き出す', text: '画面比（縦長 9:16 など）と解像度を選んで MP4 を書き出します。「書き出す範囲」で選んだ行だけを書き出すこともできます。' },
+  { t: () => $('lyrics'), title: '1. 가사 입력', text: '1줄이 1프레이즈가 됩니다. 빈 줄은 잠깐 쉬어 가고, [간주 8]이라고 쓰면 8초 간주(배경과 장식만)가 됩니다.' },
+  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 음원 불러오기', text: 'mp3 등을 불러오면 비트를 감지해 컷 전환을 맞춥니다. 음원이 없어도 만들 수 있습니다. ‘탭으로 싱크’로 각 줄의 시작을 맞출 수도 있습니다.' },
+  { t: () => $('btnOmakaseBig'), title: '3. 자동으로 만들기', text: '스타일·분위기·움직임·배색·구성을 한 번에 정합니다. 누를 때마다 다른 안이 나오고, ‘◀ 이전’으로 돌아갈 수 있습니다.' },
+  { t: () => $('btnPlay'), title: '4. 재생해서 확인하기', text: '재생해서 확인해 보세요. 아래 타임라인에서는 줄 구분을 드래그해서 옮길 수 있습니다(＋−로 확대/축소).' },
+  { t: () => $('lineList'), title: '5. 마음에 걸리는 줄만 고치기', text: '줄마다 가사 고치기(✎), 컷 수 정하기, 이 줄부터 탭 다시 하기(◎), 이 줄만 다시 만들기(주사위)를 할 수 있습니다.' },
+  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 내보내기', text: '화면비(세로 9:16 등)와 해상도를 골라 MP4로 내보냅니다. ‘내보낼 범위’로 고른 줄만 내보낼 수도 있습니다.' },
 ];
 const TR = { i: -1 };
 function tourShow(i) {
@@ -32693,7 +33195,7 @@ function tourShow(i) {
   el.querySelector('.tour-title').textContent = st.title;
   el.querySelector('.tour-text').textContent = st.text;
   el.querySelector('.tour-prev').disabled = i === 0;
-  el.querySelector('.tour-next').textContent = i === n - 1 ? 'はじめる' : '次へ';
+  el.querySelector('.tour-next').textContent = i === n - 1 ? '시작하기' : '다음';
   if (tg && tg.scrollIntoView) tg.scrollIntoView({ block: 'center', behavior: 'auto' });
   requestAnimationFrame(() => tourPlace(tg));
   el.querySelector('.tour-next').focus();

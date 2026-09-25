@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="ja">
+<html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>JIZURA 字面</title>
-<meta name="description" content="歌詞を入れると文字PV（リリックモーション）を自動で組み立てて MP4 に書き出すブラウザアプリ">
-<link rel="canonical" href="https://852wa.github.io/JIZURA/">
+<title>JIZURA — 動態歌詞影片製作工具</title>
+<meta name="description" content="在瀏覽器中把歌詞做成動態歌詞影片，並匯出 MP4。">
+<link rel="canonical" href="https://852wa.github.io/JIZURA/zh-hant/">
 <link rel="alternate" hreflang="ja" href="https://852wa.github.io/JIZURA/">
 <link rel="alternate" hreflang="en" href="https://852wa.github.io/JIZURA/en/">
 <link rel="alternate" hreflang="zh-Hant" href="https://852wa.github.io/JIZURA/zh-hant/">
@@ -13,9 +13,9 @@
 <link rel="alternate" hreflang="ko" href="https://852wa.github.io/JIZURA/ko/">
 <link rel="alternate" hreflang="id-ID" href="https://852wa.github.io/JIZURA/id/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="JIZURA 字面">
-<meta property="og:description" content="歌詞を入れると文字PV（リリックモーション）を自動で組み立てて MP4 に書き出すブラウザアプリ">
-<meta property="og:url" content="https://852wa.github.io/JIZURA/">
+<meta property="og:title" content="JIZURA — 動態歌詞影片製作工具">
+<meta property="og:description" content="在瀏覽器中把歌詞做成動態歌詞影片，並匯出 MP4。">
+<meta property="og:url" content="https://852wa.github.io/JIZURA/zh-hant/">
 <meta name="twitter:card" content="summary">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -374,110 +374,110 @@ button.small.primary { padding: 4px 12px; }
     <div class="tour-step mono muted"></div>
     <h3 id="tourTitle" class="tour-title"></h3>
     <p class="tour-text"></p>
-    <div class="tour-nav"><button class="tour-skip ghost small">スキップ</button><span class="tour-sp"></span><button class="tour-prev ghost small">戻る</button><button class="tour-next primary small">次へ</button></div>
+    <div class="tour-nav"><button class="tour-skip ghost small">略過</button><span class="tour-sp"></span><button class="tour-prev ghost small">上一步</button><button class="tour-next primary small">下一步</button></div>
   </div>
 </div>
 <div id="app">
   <header class="bar">
     <div class="brand"><span class="mark" aria-hidden="true">字面</span><span class="word">JIZURA</span><span class="tag">lyric motion engine</span></div>
     <div class="proj">
-      <input id="songTitle" type="text" placeholder="曲名（タイトルカード・HUDに表示）" aria-label="曲名">
-      <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
+      <input id="songTitle" type="text" placeholder="歌名（顯示在標題卡與 HUD）" aria-label="歌名">
+      <input id="songArtist" type="text" placeholder="演唱者" aria-label="演唱者">
     </div>
-    <div class="modes" role="group" aria-label="表示モード">
-      <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
-      <button id="modePro" aria-pressed="true" title="すべての設定を表示">詳細</button>
-      <button id="btnTour" class="ghost tour-btn" title="かんたんモードの使い方を案内します" aria-label="使い方の案内">？</button>
+    <div class="modes" role="group" aria-label="顯示模式">
+      <button id="modeEasy" aria-pressed="false" title="以「隨機生成」按鈕為主的簡易畫面">簡易</button>
+      <button id="modePro" aria-pressed="true" title="顯示所有設定">進階</button>
+      <button id="btnTour" class="ghost tour-btn" title="簡易模式的使用導覽" aria-label="使用導覽">？</button>
     </div>
-    <label class="lang-switch"><span class="sr-only">Language</span><select aria-label="Language" onchange="if(this.value)location.href=this.value"><option value="index.html" lang="ja" selected>日本語</option><option value="en/index.html" lang="en">English</option><option value="zh-hant/index.html" lang="zh-Hant">繁體中文</option><option value="zh-hans/index.html" lang="zh-Hans">简体中文</option><option value="ko/index.html" lang="ko">한국어</option><option value="id/index.html" lang="id-ID">Bahasa Indonesia</option></select></label>
+    <label class="lang-switch"><span class="sr-only">Language</span><select aria-label="Language" onchange="if(this.value)location.href=this.value"><option value="../index.html" lang="ja">日本語</option><option value="../en/index.html" lang="en">English</option><option value="../zh-hant/index.html" lang="zh-Hant" selected>繁體中文</option><option value="../zh-hans/index.html" lang="zh-Hans">简体中文</option><option value="../ko/index.html" lang="ko">한국어</option><option value="../id/index.html" lang="id-ID">Bahasa Indonesia</option></select></label>
     <div class="acts">
-      <label class="file" title="保存したプロジェクト(.json)を開く">開く<input id="fileProject" type="file" accept=".json,application/json"></label>
-      <button id="btnSave" title="プロジェクトを .json で保存">保存</button>
-      <button id="btnAE" title="After Effects パネル用の構成データを書き出す">AE用に書き出し</button>
-      <button id="btnReset" class="ghost" title="歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します">初期化</button>
-      <button id="btnTerms" class="ghost terms-open" title="出力物の権利とライセンス">利用について</button>
+      <label class="file" title="開啟已儲存的專案（.json）">開啟<input id="fileProject" type="file" accept=".json,application/json"></label>
+      <button id="btnSave" title="將專案儲存為 .json">儲存</button>
+      <button id="btnAE" title="匯出給 After Effects 面板使用的編排資料">匯出 AE 資料</button>
+      <button id="btnReset" class="ghost" title="清除歌詞、歌曲、設定與歷史，回到最初的狀態">初始化</button>
+      <button id="btnTerms" class="ghost terms-open" title="產出物的權利與授權">使用須知</button>
     </div>
   </header>
 
   <main class="work">
     <!-- ================= left: lyrics & timing ================= -->
-    <section class="col col-left" aria-label="歌詞とタイミング">
+    <section class="col col-left" aria-label="歌詞與時間軸">
       <div class="sec">
-        <div class="sec-h"><h2>歌詞</h2><span class="sec-btns"><button id="btnClearLyrics" class="ghost small" title="歌詞と、行ごとのタイミング・指定・書き出す範囲を消します（「元に戻す」か Ctrl+Z で戻せます）">歌詞を消す</button><button id="btnSyntax" class="ghost small" aria-expanded="false">記法</button></span></div>
-        <textarea id="lyrics" rows="9" spellcheck="false" aria-label="歌詞（1行 = 1フレーズ）"></textarea>
-        <label class="lang-row">歌詞の言語<select id="lyricLang"><option value="auto">自動判定</option><option value="ja">日本語</option><option value="zh-Hant">繁體中文</option><option value="zh-Hans">简体中文</option><option value="ko">한국어</option><option value="en">English</option></select><span id="langNote" class="muted"></span></label>
+        <div class="sec-h"><h2>歌詞</h2><span class="sec-btns"><button id="btnClearLyrics" class="ghost small" title="清除歌詞，以及各行的時間點、逐行設定與匯出範圍（可用「復原」或 Ctrl+Z 找回）">清除歌詞</button><button id="btnSyntax" class="ghost small" aria-expanded="false">語法</button></span></div>
+        <textarea id="lyrics" rows="9" spellcheck="false" aria-label="歌詞（1 行 = 1 句）"></textarea>
+        <label class="lang-row">歌詞語言<select id="lyricLang"><option value="auto">自動偵測</option><option value="ja">日本語</option><option value="zh-Hant">繁體中文</option><option value="zh-Hans">简体中文</option><option value="ko">한국어</option><option value="en">English</option></select><span id="langNote" class="muted"></span></label>
         <div id="syntax" class="syntax" hidden>
           <ul>
-            <li>1行が1フレーズ。空行は少し間を空けます</li>
-            <li><code>夜明けの色を/覚えてる</code> … <code>/</code> でカットの切れ目を指定</li>
-            <li><code>*透明*</code> … 強調（大きく・インパクト寄りの演出）</li>
-            <li>行末の <code>!</code> … フラッシュと揺れを入れる</li>
-            <li><code>歌詞|ruby or note</code> … 注釈レイアウトの小さな文字</li>
-            <li><code>[01:23.45]歌詞</code> … LRC のタイムスタンプをそのまま使用</li>
-            <li><code>[間奏 8]</code> … 8秒の間奏（歌詞は出さず、背景と装飾だけ）。秒数を省くと4秒、タップ同期やマーカーで長さを合わせられます</li>
-            <li><code>#</code> で始まる行 … コメント（無視）</li>
+            <li>一行就是一句。空行會多留一小段空白</li>
+            <li><code>晚風把影子/拉成一條線</code> … <code>/</code> 標示片段的切換點</li>
+            <li><code>*微光*</code> … 強調（放大、更有衝擊力的效果）</li>
+            <li>行尾的 <code>!</code> … 加入閃光與震動</li>
+            <li><code>歌詞|讀音或註解</code> … 註解版面中的小字</li>
+            <li><code>[01:23.45]歌詞</code> … 直接使用 LRC 時間戳記</li>
+            <li><code>[間奏 8]</code> … 8 秒的間奏（不顯示歌詞，只有背景與裝飾）。省略秒數時為 4 秒，也可用點擊同步或標記調整長度</li>
+            <li><code>#</code> 開頭的行 … 註解（會被忽略）</li>
           </ul>
         </div>
       </div>
 
       <div class="sec">
-        <div class="sec-h"><h2>曲とタイミング</h2></div>
-        <div id="audioName" class="muted audio-name">曲なし（読み込むと拍を検出してカットを合わせます）</div>
+        <div class="sec-h"><h2>歌曲與時間軸</h2></div>
+        <div id="audioName" class="muted audio-name">尚未匯入歌曲（匯入後會偵測節拍並對齊片段）</div>
         <div class="row">
-          <label class="file" title="mp3 / wav / m4a など">曲を読み込む<input id="audioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"></label>
-          <button id="btnTap" title="曲を再生しながら各行の頭でタップ">タップで同期</button>
+          <label class="file" title="mp3 / wav / m4a 等格式">匯入歌曲<input id="audioFile" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"></label>
+          <button id="btnTap" title="播放歌曲時，在每一行開頭點一下">點擊對拍</button>
         </div>
         <div class="fields pro-only">
           <label class="field">BPM<input id="bpm" type="number" min="0" max="300" step="0.1" placeholder="自動"></label>
-          <label class="field">開始(秒)<input id="offset" type="number" min="0" step="0.05"></label>
-          <label class="field">行の長さ<input id="lineScale" type="number" min="0.4" max="3" step="0.05"></label>
+          <label class="field">起始（秒）<input id="offset" type="number" min="0" step="0.05"></label>
+          <label class="field">每行長度<input id="lineScale" type="number" min="0.4" max="3" step="0.05"></label>
         </div>
         <div class="row pro-only">
-          <label class="row" style="gap:6px"><input id="snap" type="checkbox"> 拍にスナップ</label>
-          <button id="btnResetTimes" class="ghost small">手動タイミングを消す</button>
+          <label class="row" style="gap:6px"><input id="snap" type="checkbox"> 對齊節拍</label>
+          <button id="btnResetTimes" class="ghost small">清除手動時間</button>
         </div>
         <div id="tapPanel" class="tapbox" hidden>
-          <div class="hint">曲に合わせて、各行が始まる瞬間に <span class="kbd">Space</span> かボタンを押してください。押し間違えたら <span class="kbd">Backspace</span> か「1つ戻る」。途中の行からやり直すときは、行一覧の ◎ を押します。</div>
-          <div class="next">次: <b id="tapLine">—</b></div>
+          <div class="hint">請跟著歌曲，在每一行開始的瞬間按 <span class="kbd">Space</span> 或下方按鈕。按錯時請按 <span class="kbd">Backspace</span> 或「退回一步」。要從中間某一行重來，請按行列表中的 ◎。</div>
+          <div class="next">下一行： <b id="tapLine">—</b></div>
           <button id="tapBtn" class="tap">TAP</button>
           <div class="row" style="gap:6px;margin-top:6px">
             <button id="tapBack" class="ghost small">1つ戻る</button>
             <button id="tapFromStart" class="ghost small" title="曲の最初（第1行）からタップし直す">最初から</button>
-            <button id="tapStop" class="ghost small" style="flex:1">終了する</button>
+            <button id="tapStop" class="ghost small" style="flex:1">結束</button>
           </div>
         </div>
       </div>
 
       <div class="sec">
-        <div class="sec-h"><h2>行とカット</h2><span id="linesInfo" class="muted mono"></span></div>
+        <div class="sec-h"><h2>行與片段</h2><span id="linesInfo" class="muted mono"></span></div>
         <ol id="lineList"></ol>
       </div>
     </section>
 
     <!-- ================= center: stage ================= -->
-    <section class="col col-stage" aria-label="プレビュー">
+    <section class="col col-stage" aria-label="預覽">
       <div class="viewport" id="viewport"><canvas id="view" width="1280" height="720"></canvas><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
       <div class="transport">
-        <button id="btnPlay" class="play" aria-label="再生">▶</button>
+        <button id="btnPlay" class="play" aria-label="播放">▶</button>
         <span id="timeNow" class="tc">00:00.00</span><span class="tc muted">/</span><span id="timeDur" class="tc muted">00:00.00</span>
-        <input id="scrub" type="range" min="0" max="10000" value="0" aria-label="再生位置">
-        <button id="btnLoop" class="ghost small" aria-pressed="true">ループ</button>
-        <span class="vol"><button id="btnMute" class="ghost small" aria-pressed="false" title="クリックで消音／解除（プレビューだけ。書き出しの音量は変わりません）">音量</button><input id="vol" type="range" min="0" max="100" value="80" aria-label="プレビューの音量"></span>
+        <input id="scrub" type="range" min="0" max="10000" value="0" aria-label="播放位置">
+        <button id="btnLoop" class="ghost small" aria-pressed="true">循環</button>
+        <span class="vol"><button id="btnMute" class="ghost small" aria-pressed="false" title="點一下切換靜音（只影響預覽，不會改變匯出的音量）">音量</button><input id="vol" type="range" min="0" max="100" value="80" aria-label="預覽音量"></span>
         <span class="hist-btns">
-          <button id="btnPrev" class="ghost small icon-txt" title="前の案に戻る" aria-label="前の案">◀</button>
-          <button id="btnNext" class="ghost small icon-txt" title="次の案へ進む" aria-label="次の案">▶</button>
+          <button id="btnPrev" class="ghost small icon-txt" title="回到上一個方案" aria-label="上一個方案">◀</button>
+          <button id="btnNext" class="ghost small icon-txt" title="前往下一個方案" aria-label="下一個方案">▶</button>
         </span>
-        <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
-        <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
+        <button id="btnShuffle" class="accent" title="保留設定，只重新抽選編排（已鎖定的行不變）">重新排列</button>
+        <button id="btnOmakase" class="primary" title="風格、氛圍、效果、配色全部隨機（快捷鍵 R）">隨機生成</button>
       </div>
       <div class="tl-toolbar">
         <label class="tl-zoom">ズーム <input id="tlZoom" type="range" min="1" max="10" step="0.1" value="1"><span id="tlZoomVal" class="mono">1.0x</span></label>
-        <button id="tlOut" class="ghost small icon-txt" title="縮小" aria-label="タイムラインを縮小">−</button>
-        <button id="tlIn" class="ghost small icon-txt" title="拡大（タイムライン上でホイールでも）" aria-label="タイムラインを拡大">＋</button>
+        <button id="tlOut" class="ghost small icon-txt" title="縮小" aria-label="縮小時間軸">−</button>
+        <button id="tlIn" class="ghost small icon-txt" title="放大（也可在時間軸上用滾輪）" aria-label="放大時間軸">＋</button>
         <button id="btnTlReset" class="ghost small" title="ズームと位置をリセット">全体表示</button>
-        <button id="btnUndoEdit" class="ghost small" title="歌詞・タイミングの変更を元に戻す（Ctrl+Z）" disabled>元に戻す</button>
-        <button id="btnAddImgBlock" class="small accent" title="現在の再生位置に背景画像ブロックを追加">＋画像ブロック</button>
-        <button id="btnAddVidBlock" class="small accent" title="現在の再生位置に背景動画ブロックを追加">＋動画ブロック</button>
+        <button id="btnUndoEdit" class="ghost small" title="復原歌詞與時間的變更（Ctrl+Z）" disabled>復原</button>
+        <button id="btnAddImgBlock" class="small accent" title="現在の播放位置に背景画像ブロックを新增">＋画像ブロック</button>
+        <button id="btnAddVidBlock" class="small accent" title="現在の播放位置に背景動画ブロックを新增">＋動画ブロック</button>
         <button id="btnDelBlock" class="ghost small" title="選択中のブロックを削除" disabled>削除</button>
         <span class="tl-hint muted">Track 0:文字 / Track 1:画像 / Track 2:動画（ドラッグで境界調整・Shiftで吸着無効）</span>
       </div>
@@ -488,7 +488,7 @@ button.small.primary { padding: 4px 12px; }
         <label class="param">X <input id="selBlockX" type="number" min="-100" max="100" step="1" style="width:52px"></label>
         <label class="param">Y <input id="selBlockY" type="number" min="-100" max="100" step="1" style="width:52px"></label>
         <label class="param">倍率 <input id="selBlockScale" type="number" min="0.1" max="5" step="0.05" style="width:54px"></label>
-        <label class="param">不透明度 <input id="selBlockOpacity" type="range" min="0" max="1" step="0.01" style="width:64px"></label>
+        <label class="param">不微光度 <input id="selBlockOpacity" type="range" min="0" max="1" step="0.01" style="width:64px"></label>
         <label class="param">合成 <select id="selBlockBlend">
           <option value="normal">通常</option>
           <option value="multiply">乗算</option>
@@ -500,88 +500,88 @@ button.small.primary { padding: 4px 12px; }
           <option value="color-dodge">覆い焼き</option>
         </select></label>
         <span class="param-divider" style="opacity:0.3;margin:0 2px">|</span>
-        <button id="btnBlockAddKey" class="small ghost icon-txt" title="現在の再生位置にキーフレーム(◆)を追加または更新" style="padding:2px 6px;font-size:11px">◆＋キー</button>
-        <button id="btnBlockDelKey" class="small ghost icon-txt" title="現在の再生位置のキーフレーム(◆)を削除" style="padding:2px 6px;font-size:11px" disabled>◆－キー</button>
+        <button id="btnBlockAddKey" class="small ghost icon-txt" title="現在の播放位置にキーフレーム(◆)を新增または更新" style="padding:2px 6px;font-size:11px">◆＋キー</button>
+        <button id="btnBlockDelKey" class="small ghost icon-txt" title="現在の播放位置のキーフレーム(◆)を削除" style="padding:2px 6px;font-size:11px" disabled>◆－キー</button>
       </div>
       <div class="cutinfo" id="cutInfo"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
-    <section class="col col-right" aria-label="スタイルと書き出し">
+    <section class="col col-right" aria-label="風格與匯出">
       <div id="easyPanel" class="easy" hidden>
         <div class="easy-hero">
-          <button id="btnOmakaseBig" class="omakase">おまかせで作る</button>
-          <p class="hint">押すたびに、スタイル・雰囲気・動き・配色・構成がまるごと変わります。キーボードの <span class="kbd">R</span> でも実行できます。</p>
+          <button id="btnOmakaseBig" class="omakase">隨機生成一版</button>
+          <p class="hint">每按一次，風格、氛圍、動態、配色與編排都會整組換新。也可以按鍵盤的 <span class="kbd">R</span> 執行。</p>
           <div class="hist-row">
-            <button id="btnPrev2" class="ghost">◀ 前の案</button>
+            <button id="btnPrev2" class="ghost">◀ 上一個方案</button>
             <span id="histPos" class="muted mono"></span>
-            <button id="btnNext2" class="ghost">次の案 ▶</button>
+            <button id="btnNext2" class="ghost">下一個方案 ▶</button>
           </div>
           <div class="pick-sets">
-            <label class="check"><input id="eExtra" class="extra-toggle" type="checkbox"><span>追加分の演出も使う<small>最初の公開版のあとに追加した約350の演出・配色セット12・書体6も、おまかせやシャッフルの候補にします（オフのときは最初の公開版の演出だけ）</small></span></label>
-            <label class="check"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>和風の演出も使う<small>提灯・はがき・障子・扇・家紋・青海波・桜の花びらなどの和風グラフィック。オフにすると、おまかせやシャッフルで選ばれません</small></span></label>
+            <label class="check"><input id="eExtra" class="extra-toggle" type="checkbox"><span>也使用新增的效果<small>首次公開版之後新增的約 350 種效果、12 種風格與 6 款字型，也列入隨機生成與重新排列的候選（關閉時只用首次公開版的效果）</small></span></label>
+            <label class="check"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>也使用和風效果<small>燈籠、明信片、障子、扇子、家紋、青海波、櫻花花瓣等和風圖形。關閉後，隨機生成與重新排列就不會選用</small></span></label>
             <label class="check"><input class="unify-toggle" type="checkbox"><span>統一感</span></label>
-            <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字整列</span></label>
+            <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字排列</span></label>
           </div>
         </div>
         <div class="easy-sec">
-          <h3>いまの案</h3>
+          <h3>目前的方案</h3>
           <div id="easyNow" class="now"></div>
         </div>
         <div class="easy-sec">
-          <h3>ここだけ変える</h3>
+          <h3>只換這一項</h3>
           <div class="easy-grid">
-            <button id="eStyle" title="スタイルだけ別のものに">スタイル</button>
-            <button id="ePalette" title="アクセント・ズレ色A/Bをランダムに">配色</button>
-            <button id="eMood" title="動き・グリッチ・使う手法の雰囲気だけ">雰囲気</button>
-            <button id="eCut" title="レイアウトと動きの組み合わせだけ">構成</button>
+            <button id="eStyle" title="只換風格">風格</button>
+            <button id="ePalette" title="隨機更換強調色與錯位色 A/B">配色</button>
+            <button id="eMood" title="只換動態、故障風與手法的氛圍">氛圍</button>
+            <button id="eCut" title="只換版面與動態的組合">編排</button>
           </div>
         </div>
         <div class="easy-sec">
-          <h3>書き出し</h3>
+          <h3>匯出</h3>
           <div class="fields">
-            <label class="field">画面比<select id="eAspect"><option value="16:9">16:9</option><option value="9:16">9:16 縦</option><option value="4:3">4:3</option><option value="3:4">3:4 縦</option><option value="1:1">1:1</option><option value="4:5">4:5 縦</option><option value="21:9">21:9</option></select></label>
-            <label class="field">解像度<select id="eRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
+            <label class="field">畫面比例<select id="eAspect"><option value="16:9">16:9</option><option value="9:16">9:16 直式</option><option value="4:3">4:3</option><option value="3:4">3:4 直式</option><option value="1:1">1:1</option><option value="4:5">4:5 直式</option><option value="21:9">21:9</option></select></label>
+            <label class="field">解析度<select id="eRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
             <label class="field">fps<select id="eFps"><option>24</option><option>30</option><option>60</option></select></label>
-            <label class="field field-wide">背景<select id="eKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
+            <label class="field field-wide">背景<select id="eKey"><option value="off">一般（風格的背景）</option><option value="green">綠幕（合成用）</option><option value="black">黑底（合成用）</option></select></label>
           </div>
-          <label class="check center-free"><input id="eCenter" class="center-toggle" type="checkbox"><span>中央を空ける（キャラクター用）<small>中央にキャラクターなどを重ねる前提で、文字と演出を横長の画面では左右、縦長の画面では上下に、行ごとに交互に置きます。背景と画面効果は全体のままです（プレビューには空ける範囲を点線で表示）</small></span></label>
-          <label class="row center-dir" hidden>縦長のとき<select class="centerDirSel" aria-label="縦長の画面での分け方"><option value="tb">上下に分ける</option><option value="lr">左右に分ける</option></select></label>
-          <div class="rng-row"><span class="rng-lab">書き出す範囲</span><select class="rngFrom" aria-label="書き出す範囲の最初の行"></select><span class="muted">〜</span><select class="rngTo" aria-label="書き出す範囲の最後の行"></select><span class="rngInfo muted mono"></span></div>
-          <div class="outbtns"><button id="eMP4" class="primary">MP4 を書き出す</button><button id="eMP4File" class="ghost mp4file" hidden title="保存先のファイルを先に選び、そこへ直接書き込みます。長い曲・1080p 以上でブラウザのメモリが足りずに失敗するときに使ってください（Chrome / Edge）">大きな動画用（ファイルに直接保存）</button></div>
-          <button class="terms-open linkish">書き出した動画の権利について</button>
+          <label class="check center-free"><input id="eCenter" class="center-toggle" type="checkbox"><span>保留畫面中央（放角色用）<small>以在中央疊加角色等素材為前提，把文字與效果放在橫式畫面的左右、直式畫面的上下，並逐行交替。背景與畫面效果仍覆蓋整個畫面（預覽會以虛線標出保留的範圍）</small></span></label>
+          <label class="row center-dir" hidden>直式畫面時<select class="centerDirSel" aria-label="直式畫面的分法"><option value="tb">分成上下</option><option value="lr">分成左右</option></select></label>
+          <div class="rng-row"><span class="rng-lab">匯出範圍</span><select class="rngFrom" aria-label="匯出範圍的第一行"></select><span class="muted">〜</span><select class="rngTo" aria-label="匯出範圍的最後一行"></select><span class="rngInfo muted mono"></span></div>
+          <div class="outbtns"><button id="eMP4" class="primary">匯出 MP4</button><button id="eMP4File" class="ghost mp4file" hidden title="先選擇要儲存的檔案，直接寫入該檔案。長歌曲或 1080p 以上因瀏覽器記憶體不足而失敗時使用（Chrome / Edge）">大型影片用（直接存成檔案）</button></div>
+          <button class="terms-open linkish">關於匯出影片的權利</button>
           <div class="exp-box" hidden>
             <div class="progress"><i class="exp-bar"></i></div>
-            <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
+            <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">取消</button></div>
           </div>
         </div>
       </div>
       <nav class="tabs" role="tablist">
-        <button role="tab" data-tab="style" aria-selected="true">スタイル</button>
+        <button role="tab" data-tab="style" aria-selected="true">風格</button>
         <button role="tab" data-tab="bg" aria-selected="false">背景素材</button>
-        <button role="tab" data-tab="fx" aria-selected="false">演出</button>
+        <button role="tab" data-tab="fx" aria-selected="false">效果</button>
         <button role="tab" data-tab="tech" aria-selected="false">手法</button>
-        <button role="tab" data-tab="out" aria-selected="false">書き出し</button>
+        <button role="tab" data-tab="out" aria-selected="false">匯出</button>
       </nav>
 
       <div class="tabpane" data-pane="style">
         <div id="styleGrid" class="style-grid"></div>
-        <h3>フォントの役割</h3>
+        <h3>字型用途</h3>
         <div id="fontRoles"></div>
         <div class="row" style="margin-top:8px">
-          <input id="localFont" type="text" placeholder="PCのフォント名（例: 游明朝）" style="flex:1">
-          <button id="btnAddFont">追加</button>
+          <input id="localFont" type="text" placeholder="電腦上的字型名稱（例：微軟正黑體）" style="flex:1">
+          <button id="btnAddFont">加入</button>
         </div>
-        <div class="row" style="margin-top:8px"><label class="file">フォントファイル（.ttf/.otf）<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
-        <h3>アクセント・ズレ色</h3>
-        <label class="check"><input id="accentOn" type="checkbox"><span>自分の色で上書き<small>全シーンに適用。背景に合わせて明るさを自動調整します</small></span></label>
+        <div class="row" style="margin-top:8px"><label class="file">字型檔（.ttf/.otf）<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
+        <h3>強調色與錯位色</h3>
+        <label class="check"><input id="accentOn" type="checkbox"><span>改用自訂顏色<small>套用到所有場景，亮度會依背景自動調整</small></span></label>
         <div class="color-row" id="colorRowAccent"></div>
         <div class="row" style="margin-top:10px">
-          <button id="btnRandPalette" class="accent">ランダムに配色</button>
+          <button id="btnRandPalette" class="accent">隨機配色</button>
           <div id="paletteSwatch" class="swatches" aria-hidden="true"></div>
         </div>
-        <h3>背景・文字色</h3>
-        <label class="check"><input id="colorOn" type="checkbox"><span>メインの背景と文字を自分の色にする</span></label>
+        <h3>背景與文字顏色</h3>
+        <label class="check"><input id="colorOn" type="checkbox"><span>主背景與文字改用自訂顏色</span></label>
         <div class="color-row" id="colorRow"></div>
       </div>
 
@@ -605,12 +605,12 @@ button.small.primary { padding: 4px 12px; }
         </div>
 
         <div class="fields" style="margin-top:8px">
-          <label class="field">不透明度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
+          <label class="field">不微光度<input id="bgOpacity" type="range" min="0" max="1" step="0.01" value="1.0"></label>
         </div>
 
         <h3>レイヤー合成（ブレンドモード）</h3>
         <div class="fields">
-          <label class="field field-wide">文字演出レイヤーの合成<select id="textBlendMode">
+          <label class="field field-wide">文字效果レイヤーの合成<select id="textBlendMode">
             <option value="normal">通常 (Normal)</option>
             <option value="multiply">乗算 (Multiply)</option>
             <option value="screen">スクリーン (Screen)</option>
@@ -644,56 +644,56 @@ button.small.primary { padding: 4px 12px; }
       <div class="tabpane" data-pane="fx" hidden>
         <div class="unify-box">
           <label class="check"><input class="unify-toggle" type="checkbox"><span>統一感</span></label>
-          <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字整列</span></label>
+          <label class="check"><input class="typeset-toggle" type="checkbox"><span>文字排列</span></label>
         </div>
         <div id="fxSliders"></div>
         <div class="row" style="margin-top:6px">
-          <label class="row" style="gap:6px"><input id="fxFlash" type="checkbox"> フラッシュ</label>
-          <label class="row" style="gap:6px">コマ打ち <select id="fxKoma" title="動きを何枚/秒で描くか（出力fpsとは別）"><option value="0">フル（出力fpsのまま）</option><option value="12">2コマ打ち（12枚/秒）</option><option value="8">3コマ打ち（8枚/秒）</option></select></label>
+          <label class="row" style="gap:6px"><input id="fxFlash" type="checkbox"> 閃光</label>
+          <label class="row" style="gap:6px">動畫拍數 <select id="fxKoma" title="動態每秒畫幾張（與輸出 fps 無關）"><option value="0">完整（同輸出 fps）</option><option value="12">一拍二（每秒 12 張）</option><option value="8">一拍三（每秒 8 張）</option></select></label>
         </div>
         <div class="fields" style="margin-top:12px">
-          <label class="field">HUD<select id="fxHud"><option value="auto">スタイル次第</option><option value="on">常に表示</option><option value="off">表示しない</option></select></label>
-          <label class="field">シード<input id="seed" type="number" step="1"></label>
-          <label class="field">&nbsp;<button id="btnSeed" class="ghost">新しいシード</button></label>
+          <label class="field">HUD<select id="fxHud"><option value="auto">依風格而定</option><option value="on">一律顯示</option><option value="off">不顯示</option></select></label>
+          <label class="field">種子<input id="seed" type="number" step="1"></label>
+          <label class="field">&nbsp;<button id="btnSeed" class="ghost">新種子</button></label>
         </div>
-        <p class="note">同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。</p>
+        <p class="note">相同的種子會產生相同的編排。要逐行「重新抽選」或「鎖定」，請使用左側的行清單。</p>
       </div>
 
       <div class="tabpane" data-pane="tech" hidden>
         <div class="pick-sets">
-          <label class="check"><input id="tExtra" class="extra-toggle" type="checkbox"><span>追加分の演出も使う<small>「追加」印の手法・スタイル・書体。オフのときは、おまかせやシャッフルで最初の公開版の演出だけを使います</small></span></label>
-          <label class="check"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>和風の演出も使う<small>「和」印の手法とスタイル。オフにすると、おまかせやシャッフルでは選ばれません（追加分の判定のあとに適用。行ごとに手動で指定した場合は使えます）</small></span></label>
+          <label class="check"><input id="tExtra" class="extra-toggle" type="checkbox"><span>也使用新增的效果<small>標有「新增」的手法、風格與字型。關閉時，隨機生成與重新排列只使用首次公開版的效果</small></span></label>
+          <label class="check"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>也使用和風效果<small>標有「和」的手法與風格。關閉後，隨機生成與重新排列不會選用（在「新增」的判定之後套用；逐行手動指定時仍可使用）</small></span></label>
         </div>
-        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="手法を名前で絞り込み" style="flex:1" aria-label="手法を名前で絞り込み"><span id="techTotal" class="muted mono"></span></div>
+        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="依名稱篩選手法" style="flex:1" aria-label="依名稱篩選手法"><span id="techTotal" class="muted mono"></span></div>
         <div id="techLists"></div>
       </div>
 
       <div class="tabpane" data-pane="out" hidden>
         <div class="fields">
-          <label class="field">画面比<select id="outAspect"><option value="16:9">16:9</option><option value="9:16">9:16 縦</option><option value="4:3">4:3</option><option value="3:4">3:4 縦</option><option value="1:1">1:1</option><option value="4:5">4:5 縦</option><option value="21:9">21:9</option></select></label>
-          <label class="field">解像度<select id="outRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
+          <label class="field">畫面比例<select id="outAspect"><option value="16:9">16:9</option><option value="9:16">9:16 直式</option><option value="4:3">4:3</option><option value="3:4">3:4 直式</option><option value="1:1">1:1</option><option value="4:5">4:5 直式</option><option value="21:9">21:9</option></select></label>
+          <label class="field">解析度<select id="outRes"><option value="720">720p</option><option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option></select></label>
           <label class="field">fps<select id="outFps"><option>24</option><option>30</option><option>60</option></select></label>
-          <label class="field">画質<select id="outQuality"><option value="standard">標準</option><option value="high">高</option><option value="max">最高</option></select></label>
-          <label class="field field-wide">背景<select id="outKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
+          <label class="field">畫質<select id="outQuality"><option value="standard">標準</option><option value="high">高</option><option value="max">最高</option></select></label>
+          <label class="field field-wide">背景<select id="outKey"><option value="off">一般（風格的背景）</option><option value="green">綠幕（合成用）</option><option value="black">黑底（合成用）</option></select></label>
         </div>
-        <p class="note key-note">グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。</p>
-        <label class="check center-free"><input id="outCenter" class="center-toggle" type="checkbox"><span>中央を空ける（キャラクター用）<small>中央にキャラクターなどを重ねる前提で、文字と演出を横長の画面では左右、縦長の画面では上下に、行ごとに交互に置きます。背景と画面効果は全体のままです（プレビューには空ける範囲を点線で表示）</small></span></label>
-          <label class="row center-dir" hidden>縦長のとき<select class="centerDirSel" aria-label="縦長の画面での分け方"><option value="tb">上下に分ける</option><option value="lr">左右に分ける</option></select></label>
-        <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
-        <div class="rng-row"><span class="rng-lab">書き出す範囲</span><select class="rngFrom" aria-label="書き出す範囲の最初の行"></select><span class="muted">〜</span><select class="rngTo" aria-label="書き出す範囲の最後の行"></select><span class="rngInfo muted mono"></span></div>
+        <p class="note key-note">選擇綠幕／黑底時，只會在單色背景上繪製白色文字與效果（不含背景圖樣、紙張質感、粒子與暗角），預覽也會同步呈現。綠幕可在影片剪輯軟體中用色度鍵去背，黑底可用「濾色」混合模式或亮度鍵去背，再疊到其他影片上。</p>
+        <label class="check center-free"><input id="outCenter" class="center-toggle" type="checkbox"><span>保留畫面中央（放角色用）<small>以在中央疊加角色等素材為前提，把文字與效果放在橫式畫面的左右、直式畫面的上下，並逐行交替。背景與畫面效果仍覆蓋整個畫面（預覽會以虛線標出保留的範圍）</small></span></label>
+          <label class="row center-dir" hidden>直式畫面時<select class="centerDirSel" aria-label="直式畫面的分法"><option value="tb">分成上下</option><option value="lr">分成左右</option></select></label>
+        <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 將歌曲加入影片</label>
+        <div class="rng-row"><span class="rng-lab">匯出範圍</span><select class="rngFrom" aria-label="匯出範圍的第一行"></select><span class="muted">〜</span><select class="rngTo" aria-label="匯出範圍的最後一行"></select><span class="rngInfo muted mono"></span></div>
         <div class="outbtns">
-          <button id="btnMP4" class="primary">MP4 を書き出す</button>
-          <button id="btnMP4File" class="mp4file" hidden title="保存先のファイルを先に選び、そこへ直接書き込みます。長い曲・1080p 以上でブラウザのメモリが足りずに失敗するときに使ってください（Chrome / Edge）">MP4（大きな動画用・ファイルに直接保存）</button>
-          <button id="btnPNG">連番PNG（ZIP）</button>
-          <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
-          <button id="btnPNGL" title="後景（背景のグラフィックと歌詞の後ろの装飾）と前景（歌詞とその装飾・ゴースト）を、別々のフォルダ（back / front）に透過PNGで書き出します。画面全体の演出は両方にかかるので、前景を後景の上に重ねると通常の見た目になります">透過PNG 前景／後景（ZIP）</button>
+          <button id="btnMP4" class="primary">匯出 MP4</button>
+          <button id="btnMP4File" class="mp4file" hidden title="先選擇要儲存的檔案，直接寫入該檔案。長歌曲或 1080p 以上因瀏覽器記憶體不足而失敗時使用（Chrome / Edge）">MP4（大型影片用，直接存成檔案）</button>
+          <button id="btnPNG">PNG 序列圖（ZIP）</button>
+          <button id="btnPNGA">微光 PNG（ZIP，無背景）</button>
+          <button id="btnPNGL" title="將後景（背景圖形與歌詞後方的裝飾）和前景（歌詞及其裝飾、殘影）分別匯出為微光 PNG，存放在不同資料夾（back / front）。全畫面效果會同時套用在兩者，把前景疊在後景上就是一般的畫面。">微光 PNG 前景／後景（ZIP）</button>
         </div>
         <div class="exp-box" hidden style="margin-top:12px">
           <div class="progress"><i class="exp-bar"></i></div>
-          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">中止</button></div>
+          <div class="row" style="justify-content:space-between;margin-top:6px"><span class="exp-text muted mono">—</span><button class="exp-cancel ghost small">取消</button></div>
         </div>
-        <button class="terms-open linkish" style="margin-top:10px">書き出した動画・画像の権利とライセンスについて</button>
-        <p class="note" id="codecNote">書き出しはこのブラウザの中で行われます（Chrome / Edge 推奨）。</p>
+        <button class="terms-open linkish" style="margin-top:10px">關於匯出影片與圖片的權利和授權</button>
+        <p class="note" id="codecNote">匯出會在這個瀏覽器中進行（建議使用 Chrome / Edge）。</p>
       </div>
     </section>
   </main>
@@ -701,33 +701,33 @@ button.small.primary { padding: 4px 12px; }
 
 <dialog id="resetDlg" class="terms" aria-labelledby="resetTitle">
   <form method="dialog">
-    <h2 id="resetTitle">初期化</h2>
-    <p>次のものをすべて消して、最初の状態に戻します。<strong>元に戻すことはできません。</strong></p>
+    <h2 id="resetTitle">初始化</h2>
+    <p>將清除以下所有內容並回到最初的狀態。<strong>此操作無法復原。</strong></p>
     <ul class="reset-list">
-      <li>歌詞・曲名・アーティスト</li>
-      <li>読み込んだ曲（このブラウザに残していた分も）</li>
-      <li>タイミング・行ごとの指定・書き出す範囲</li>
-      <li>スタイル・演出・配色・書体などの設定</li>
-      <li>案の履歴（◀ ▶）と、歌詞・タイミングの「元に戻す」の履歴</li>
+      <li>歌詞、歌名、效果者</li>
+      <li>已匯入的歌曲（包含保留在此瀏覽器中的檔案）</li>
+      <li>時間點、逐行設定、匯出範圍</li>
+      <li>風格、效果、配色、字型等設定</li>
+      <li>版本歷史（◀ ▶）與歌詞、時間點的「復原」紀錄</li>
     </ul>
-    <p class="terms-sub">表示モード（かんたん／詳細）・プレビューの音量・画面の言語はそのままです。保存したプロジェクトファイル（.json）も消えません。</p>
-    <div class="terms-foot"><span></span><span class="row"><button value="cancel" class="ghost">やめる</button><button value="reset" class="danger">初期化する</button></span></div>
+    <p class="terms-sub">顯示模式（簡易／進階）、預覽音量與介面語言維持不變。已儲存的專案檔（.json）也不會被刪除。</p>
+    <div class="terms-foot"><span></span><span class="row"><button value="cancel" class="ghost">取消</button><button value="reset" class="danger">初始化</button></span></div>
   </form>
 </dialog>
 <dialog id="termsDlg" class="terms" aria-labelledby="termsTitle">
   <form method="dialog">
-    <h2 id="termsTitle">利用について</h2>
+    <h2 id="termsTitle">使用須知</h2>
     <div class="terms-main">
-      <p class="terms-big">このツールで作った<strong>動画や画像（出力物）の権利は、作った人</strong>に帰属します。</p>
-      <p class="terms-sub">※ 使った歌詞や曲の権利は、それぞれの権利者に帰属します。</p>
+      <p class="terms-big">使用本工具製作的<strong>影片與圖片（產出物），權利歸製作者</strong>所有。</p>
+      <p class="terms-sub">※ 所使用的歌詞與歌曲，權利歸各自的權利人所有。</p>
     </div>
-    <p>ツール本体は <strong>MIT ライセンス</strong>で公開しています。詳細なライセンスはこちら：</p>
+    <p>工具本身以 <strong>MIT 授權</strong>條款公開。完整授權內容請見：</p>
     <p><a href="https://github.com/852wa/JIZURA" target="_blank" rel="noopener">https://github.com/852wa/JIZURA</a></p>
-    <p class="muted terms-note">入力した歌詞や曲は、このブラウザの中だけで処理され、サーバーには送信されません。</p>
-    <details class="terms-oss"><summary>使用しているオープンソース</summary>
-      <p>MP4 書き出し：mp4-muxer（MIT License）<br>フォント：Google Fonts 配布の各書体（SIL Open Font License 1.1）</p>
+    <p class="muted terms-note">輸入的歌詞與歌曲只會在這個瀏覽器中處理，不會傳送到伺服器。</p>
+    <details class="terms-oss"><summary>使用的開放原始碼軟體</summary>
+      <p>MP4 匯出：mp4-muxer（MIT License）<br>字型：Google Fonts 提供的各款字型（SIL Open Font License 1.1）</p>
     </details>
-    <div class="terms-foot"><span class="muted mono">© 2026 hakoniwa · MIT</span><button value="close" class="primary" autofocus>閉じる</button></div>
+    <div class="terms-foot"><span class="muted mono">© 2026 hakoniwa · MIT</span><button value="close" class="primary" autofocus>關閉</button></div>
   </form>
 </dialog>
 
@@ -5350,22 +5350,22 @@ J.exportMP4 = async (o) => {
   const [w, h] = J.outputSize(project);
   const fps = plan.fps, bitrate = J.videoBitrate(w, h, fps, quality);
   const attempts = await J.videoAttempts(w, h, fps, bitrate);
-  if (!attempts.length) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
+  if (!attempts.length) throw new Error('這個瀏覽器不支援影片編碼（WebCodecs）。請改用最新版 Chrome 或 Edge 開啟。');
   const tried = [];
   for (let k = 0; k < attempts.length; k++) {
     const vc = attempts[k];
     try {
       if (file && k > 0) { await file.seek(0); await file.truncate(0); }
-      const r = await encodeMP4(Object.assign({}, o, { w, h, vc, note: k > 0 ? `（${vc.label}・ソフトウェアで再試行 ${k}）` : '' }));
+      const r = await encodeMP4(Object.assign({}, o, { w, h, vc, note: k > 0 ? `（${vc.label}，以軟體重試 ${k}）` : '' }));
       r.tried = tried; return r;
     } catch (e) {
-      if (signal && signal.aborted) throw new Error('キャンセルしました');
+      if (signal && signal.aborted) throw new Error('已取消');
       if (e && e.jzFatal) throw e;
       tried.push(`${vc.label}/${vc.hw}: ${e && e.message ? e.message : e}`);
       console.warn('MP4 export attempt failed', vc.codec, vc.hw, e);
     }
   }
-  const err = new Error('MP4 を書き出せませんでした。' + (file ? '' : '「大きな動画用（ファイルに直接保存）」か、') + '解像度・fps・画質を下げて試してください。詳細：' + tried.join(' ／ '));
+  const err = new Error('無法輸出 MP4。請使用' + (file ? '' : '「大型影片用（直接存成檔案）」，或') + '降低解析度、fps 或畫質再試一次。詳細：' + tried.join(' ／ '));
   err.detail = tried; throw err;
 };
 async function encodeMP4({ plan, project, audio, onProgress, signal, range, file, w, h, vc, note }) {
@@ -5392,9 +5392,9 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
   const closeEnc = () => { try { if (venc.state !== 'closed') venc.close(); } catch (e) {} };
   try {
     for (let i = 0; i < total; i++) {
-      if (signal && signal.aborted) { closeEnc(); throw new Error('キャンセルしました'); }
+      if (signal && signal.aborted) { closeEnc(); throw new Error('已取消'); }
       if (err) throw err;
-      if (venc.state === 'closed') throw new Error('エンコーダーが停止しました');
+      if (venc.state === 'closed') throw new Error('編碼器已停止');
       if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
         const targetTime = (span.t0 + i / fps) % bgm.element.duration;
         if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
@@ -5410,19 +5410,19 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
       const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
       try { venc.encode(vf, { keyFrame: i % (fps * 2) === 0 }); } finally { vf.close(); }
       let spins = 0;
-      while (venc.encodeQueueSize > 4 && !err) { await new Promise(r => setTimeout(r, 2)); if (++spins > 15000) throw new Error('エンコーダーが応答しません'); }
+      while (venc.encodeQueueSize > 4 && !err) { await new Promise(r => setTimeout(r, 2)); if (++spins > 15000) throw new Error('編碼器沒有回應'); }
       // an encoder that accepts frames but never returns any has failed silently (seen with some GPU drivers)
-      if (i === Math.min(total - 1, fps * 3) && outFrames === 0) { await venc.flush(); if (!outFrames) throw new Error('エンコーダーが出力を返しません'); }
-      if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}${note || ''}`); await new Promise(r => setTimeout(r, 0)); }
+      if (i === Math.min(total - 1, fps * 3) && outFrames === 0) { await venc.flush(); if (!outFrames) throw new Error('編碼器沒有輸出'); }
+      if (i % 3 === 0) { onProgress && onProgress(i / total, `畫格 ${i + 1}/${total}${note || ''}`); await new Promise(r => setTimeout(r, 0)); }
     }
     await venc.flush();
     if (err) throw err;
   } catch (e) { closeEnc(); throw e; }
   finally { J.glyphs.maxRes = prevRes; }
   closeEnc();
-  if (outFrames < total * 0.98) throw new Error(`動画のフレームが足りません（${outFrames}/${total}）`);
+  if (outFrames < total * 0.98) throw new Error(`影格不足（${outFrames}/${total}）`);
   if (ac) {
-    onProgress && onProgress(0.99, '音声をエンコード中');
+    onProgress && onProgress(0.99, '正在編碼音訊');
     const rs = await resample(audio.buffer, ac.sr, span.dur, span.t0);
     const chn = rs.numberOfChannels;
     let aChunks = 0, aEnd = 0, aErr = null;
@@ -5440,16 +5440,16 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
     }
     await aenc.flush(); aenc.close();
     const fatal = m => { const e = new Error(m); e.jzFatal = true; return e; };    // audio problems: another video encoder won't help
-    if (aErr) throw fatal('音声のエンコードに失敗しました: ' + (aErr.message || aErr));
+    if (aErr) throw fatal('音訊編碼失敗：' + (aErr.message || aErr));
     // the encoder must have produced the whole soundtrack — otherwise report it instead of writing a silent file
-    if (!aChunks || aEnd < (Math.min(span.dur, audio.buffer.duration - span.t0) - 0.5) * 1e6) throw fatal('音声のエンコードが途中で止まりました（' + aChunks + '）。もう一度書き出してください');
+    if (!aChunks || aEnd < (Math.min(span.dur, audio.buffer.duration - span.t0) - 0.5) * 1e6) throw fatal('音訊編碼中途停止（' + aChunks + '）。請重新匯出');
   }
-  onProgress && onProgress(0.995, 'ファイルを仕上げ中');
+  onProgress && onProgress(0.995, '正在完成檔案');
   muxer.finalize();
   if (file) await file.close();
-  onProgress && onProgress(1, '完了');
+  onProgress && onProgress(1, '完成');
   const size = file ? null : store.end;
-  return { blob: file ? null : store.blob('video/mp4'), size, codec: vc.label + (vc.hw === 'prefer-software' ? '（ソフトウェア）' : ''), audio: ac ? ac.mux : null, audioWanted: !!(audio && audio.buffer && project.includeAudio !== false), width: w, height: h, toFile: !!file };
+  return { blob: file ? null : store.blob('video/mp4'), size, codec: vc.label + (vc.hw === 'prefer-software' ? '（軟體）' : ''), audio: ac ? ac.mux : null, audioWanted: !!(audio && audio.buffer && project.includeAudio !== false), width: w, height: h, toFile: !!file };
 }
 
 /* ---------- PNG sequence as ZIP (store, no compression) ---------- */
@@ -5492,7 +5492,7 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
   const scale = w / plan.W;
   const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   for (let i = 0; i < total; i += every) {
-    if (signal && signal.aborted) throw new Error('キャンセルしました');
+    if (signal && signal.aborted) throw new Error('已取消');
     if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
       const targetTime = (i / fps) % bgm.element.duration;
       if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
@@ -5512,7 +5512,7 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
     }
     onProgress && onProgress(i / total, `PNG ${i + 1}/${total}`);
   }
-  onProgress && onProgress(1, '完了');
+  onProgress && onProgress(1, '完成');
   return zip.finish();
 };
 
@@ -30099,6 +30099,456 @@ J.randomOk = (project, g, k) => {
 };
 })();
 
+/* English labels are applied after all expression packs register, before the editor starts.
+   Internal IDs and project JSON remain language independent. */
+(() => {
+  'use strict';
+  const titles = {
+    layout: {
+      vcols: 'Vertical text', marquee: 'Scrolling banner', tile: 'Tiled text',
+      huge: 'Oversized text', gloss: 'Annotation', diag: 'Diagonal band',
+      stack: 'Echo stack', lowerThird: 'Lower third', corners: 'Opposite corners',
+      arcTop: 'Rainbow arc', gridCells: 'Grid cells', dropCap: 'Drop cap',
+      frameBox: 'Picture frame', subtitleBar: 'Subtitle bar',
+      sideways: 'Sideways text', edgeFrame: 'Edge frame', hanko: 'Signature seal',
+      genkou: 'Manuscript paper', panels: 'Comic panels', ruler: 'Dimension lines',
+      rain: 'Letter rain', bounceLine: 'Bouncing line', crossBands: 'Crossing bands',
+      stickerBomb: 'Sticker collage', credits: 'End credits',
+      columnsBig: 'Contrasting columns', circleWords: 'Concentric words',
+      typeSpecimen: 'Type specimen', kanjiFocus: 'Character focus',
+      halfVertical: 'Mixed vertical type', magazine: 'Magazine spread',
+      headlineDeck: 'Headline and deck', proofread: 'Proof sheet',
+      ema: 'Ema wish plaque', ransom: 'Cutout letters', vinyl: 'Vinyl record',
+      bookSpine: 'Book spine', stampSheet: 'Stamp sheet',
+      chochin: 'Paper lantern', noren: 'Noren curtain',
+      tanzaku: 'Wish strip', omikuji: 'Fortune slip',
+      kakejiku: 'Hanging scroll', shoji: 'Shoji screen',
+      clapper: 'Clapperboard', karuta: 'Karuta card',
+      flipCards: 'Flipping cards', pile: 'Letter pile', balloons: 'Letter balloons',
+      tiles: 'Letter tiles', bulbs: 'Marquee bulbs', ledScroll: 'LED ticker',
+      crowdBubbles: 'Speech bubble crowd', wordSearch: 'Word search',
+      shadowPlay: 'Shadow puppets', kaleido: 'Kaleidoscope',
+      fisheye: 'Fisheye lens', wall: 'Perspective wall',
+      sliceStack: 'Sliced layers', maskReveal: 'Text window',
+      halftoneBig: 'Oversized halftone text'
+    },
+    enter: {
+      assemble: 'Break apart and assemble', riseMask: 'Reveal from below',
+      dropMask: 'Reveal from above', slideL: 'Slide from left', slideR: 'Slide from right',
+      slideWhole: 'Slide in together', flipX: 'Flip on vertical axis',
+      flipY: 'Flip on horizontal axis', strokeDraw: 'Draw outlines, then fill',
+      outlineFill: 'Outline to fill', splitJoin: 'Join from top and bottom',
+      vSlice: 'Vertical slices', diagWipe: 'Diagonal wipe',
+      randomOrder: 'Random letter order', bounceBig: 'Big bounce',
+      squashDrop: 'Squash landing', echoIn: 'Echoes converge',
+      trackIn: 'Tighten letter spacing', trackOut: 'Expand letter spacing',
+      blurStagger: 'Staggered blur', fadeStagger: 'Letter by letter fade',
+      spiralIn: 'Spiral assembly', zoomOut: 'Oversized to normal',
+      cursorSweep: 'Cursor sweep', rockSettle: 'Wobble to rest',
+      snapRail: 'Snap into alignment', fanOpen: 'Folding fan opens',
+      stickerPeel: 'Apply sticker', crumple: 'Uncrumple',
+      noteUnfold: 'Unfold letter', tornJoin: 'Join torn pieces',
+      splitFlap: 'Split flap display', crtOn: 'CRT powers on',
+      odometer: 'Rolling number drum', matrixRain: 'Data rain',
+      brushReveal: 'Brush reveal', quarters: 'Converge from four sides',
+      printRegister: 'Color plates align', echoCount: 'Count in',
+      liquidFill: 'Liquid rises', strokeOrder: 'Stroke by stroke',
+      shadowFirst: 'Shadow first', tokoroten: 'Extruded noodles'
+    },
+    hold: {
+      still: 'Still', breathe: 'Breathe', glitchtick: 'Glitch tick',
+      colorRun: 'Traveling color', trackBreathe: 'Breathing letter spacing',
+      beatHop: 'Hop to the beat', hWave: 'Horizontal wave',
+      orbitSmall: 'Small orbit', scanBand: 'Scanning band',
+      noiseDrift: 'Drifting noise', zoomSlow: 'Slow push',
+      stretchPulse: 'Stretch to the beat', glitchJump: 'Occasional glitch jump',
+      echoTrail: 'Echo trail', glowFlicker: 'Flickering glow',
+      windGust: 'Wind gust', eqBounce: 'Audio level bounce',
+      flashBox: 'Invert to the beat', glintSweep: 'Passing highlight',
+      flipSwap: 'Occasional flip', shadowSway: 'Swaying shadow',
+      typeRattle: 'Typewriter rattle', focusRack: 'Rack focus',
+      pluckString: 'Plucked string'
+    },
+    exit: {
+      fall: 'Crumble and fall', drift: 'Drift away', sinkMask: 'Sink out',
+      riseOut: 'Rise out', slideOutL: 'Slide left', slideOutR: 'Slide right',
+      flipOutX: 'Doors close', flipOutY: 'Flip down',
+      trackOutWide: 'Spread letter spacing', collapse: 'Collapse inward',
+      zoomThrough: 'Zoom through', zoomFar: 'Recede into distance',
+      spinOut: 'Spin away', blurOutStagger: 'Blur letters in sequence',
+      undraw: 'Return to outlines', outlineOut: 'Fill fades to outline',
+      irisClose: 'Iris closes', splitApart: 'Split top and bottom',
+      vSliceDrop: 'Vertical slices fall', dissolve: 'Crumble away',
+      scrambleOut: 'Become symbols', glitchDissolve: 'Glitch into blocks',
+      gravity: 'Fall with gravity', burn: 'Burn away',
+      sweepCover: 'Covered by a bar', shatterLite: 'Shatter into quarters',
+      peelOff: 'Peel off sticker', crumpleOut: 'Crumple and toss',
+      tearOut: 'Tear away', scorchOut: 'Scorch away',
+      overexposeOut: 'Blow out to white', scanOut: 'Scanline erase',
+      halftoneOut: 'Dissolve to halftone', eraserOut: 'Chalkboard erase',
+      vacuumOut: 'Vacuum to a point', sandOut: 'Scatter as sand',
+      hingeOut: 'Loose hinge', rocketOff: 'Rocket away',
+      balloonOff: 'Float off like a balloon', deflateOut: 'Deflate and fly',
+      glassBreak: 'Break like glass', clapShut: 'Close at center',
+      lampOff: 'Lights out', matrixOut: 'Digital rain',
+      tornadoOut: 'Tornado', snakeOut: 'Leave in a line',
+      flutterOut: 'Flutter down', fanClose: 'Folding fan closes',
+      rgbSplitOut: 'Split into RGB', shockOut: 'Shockwave',
+      floodOut: 'Submerge', slashOut: 'Sliced in two',
+      scribbleOut: 'Scribble away', candleOut: 'Blow out'
+    },
+    decor: {
+      brackets: 'Corner marks', rings: 'Coordinate rings', dots: 'Dotted ring',
+      leaders: 'Leader lines', blobs: 'Ink stains', bars: 'Rough bands',
+      counter: 'Large numbers', cropMarks: 'Crop marks',
+      indexNum: 'Sequence number', dateStamp: 'Photo date stamp',
+      qrBlock: 'QR inspired blocks', guides: 'Guide lines',
+      checkerStrip: 'Checker strip', beatRing: 'Beat ring',
+      speedCorner: 'Speed lines', risingParticles: 'Rising particles',
+      brushStroke: 'Brush stroke', tapePieces: 'Masking tape',
+      scribbleUnder: 'Hand drawn underline', crossOut: 'Editorial marks',
+      watermarkKanji: 'Large watermark character',
+      verticalStrip: 'Vertical text strip', romajiLine: 'Romanized line',
+      bracketsJP: 'Japanese corner brackets', seal: 'Red seal',
+      kamon: 'Family crest', seigaiha: 'Seigaiha wave pattern',
+      asanoha: 'Asanoha hemp leaf pattern', hanabi: 'Fireworks',
+      chochin: 'Paper lantern', shimenawa: 'Sacred rope', sensu: 'Folding fan',
+      tsukiKumo: 'Moon and clouds', momiji: 'Maple leaves',
+      namiGashira: 'Wave crest', kasumi: 'Mist',
+      registration: 'Registration marks', ruledLines: 'Ruled notebook',
+      indexTabs: 'Index tabs', moonPhases: 'Moon phases',
+      dandelion: 'Dandelion seeds', tally: 'Tally marks',
+      windowChrome: 'Window frame', notifBell: 'Notification bell',
+      likeCounter: 'Like counter', mediaControls: 'Playback controls'
+    },
+    treat: {
+      none: 'None', outline: 'Hollow letters', outlineFill: 'Outlined text',
+      doubleOutline: 'Double outline', extrude: 'Extruded text',
+      marker: 'Marker highlight', strike: 'Strikethrough',
+      boxed: 'Boxed text', gradientV: 'Vertical gradient',
+      splitColor: 'Two tone split', halftone: 'Halftone',
+      dotted: 'Dotted outline', alternate: 'Alternating colors',
+      wide: 'Wide letters', tall: 'Tall letters',
+      echoOutline: 'Echoed outline', emphasisDots: 'Emphasis dots',
+      neonOutline: 'Neon tubing', glitchSplit: 'Misregistered colors',
+      stencilGap: 'Stencil gaps', sizeWave: 'Rhythmic letter sizes',
+      rotateAlt: 'Alternating angles', baselineShift: 'Staggered baseline',
+      fauxBold: 'Extra bold', circled: 'Circled letters',
+      bracketsQuote: 'Quotation marks', reflection: 'Reflection',
+      sticker: 'Sticker outline', kerningWide: 'Wide letter spacing',
+      monoGrid: 'Manuscript grid', outlineOffset: 'Offset outline',
+      toneShadow: 'Halftone shadow', fadeChars: 'Fading letters',
+      cutShift: 'Offset cut', focusPull: 'Focus shift',
+      spotChar: 'Highlighted character', ransom: 'Cutout letters'
+    },
+    bg: {
+      none: 'Solid color', seigaiha: 'Seigaiha waves',
+      asanoha: 'Asanoha pattern', topoLines: 'Contour lines',
+      ridgePlot: 'Mountain ridges', nightMoon: 'Moonlit night',
+      filmStrip: 'Filmstrip', vhsBand: 'VHS noise band',
+      godRays: 'Light rays', vignettePulse: 'Pulsing vignette',
+      paperCut: 'Paper cutout', bigChar: 'Oversized letters',
+      splitV: 'Vertical color split', splitH: 'Horizontal color split',
+      splitDiag: 'Diagonal color split', tvBars: 'TV color bars',
+      speedLines: 'Speed lines', bokehBg: 'Bokeh',
+      particlesBg: 'Floating particles', eqBars: 'Equalizer bars',
+      letterbox: 'Cinema letterbox', noiseField: 'Moving noise'
+    },
+    cam: {
+      push: 'Slow push in', rackFocus: 'Rack focus',
+      floatNoise: 'Floating camera', vertigo: 'Dolly zoom',
+      spiralIn: 'Spiral zoom', jelly: 'Elastic wobble',
+      pullOut: 'Pull out', panL: 'Pan left', panR: 'Pan right',
+      dutch: 'Dutch angle', beatPunch: 'Zoom on beat',
+      driftDiag: 'Diagonal drift', shakeHard: 'Strong shake',
+      stepZoom: 'Stepped zoom'
+    },
+    fx: {
+      chroma: 'Chromatic jump', slice: 'Slice glitch', block: 'Block glitch',
+      zoom: 'Zoom blur', radialChroma: 'Radial color fringing',
+      bulge: 'Fisheye distortion', macroBlock: 'Compression blocks',
+      ditherBit: '1 bit dither', rotateSnap: 'Angle snap',
+      echoFrames: 'Frame echoes', kaleido: 'Kaleidoscope',
+      bandInvert: 'Inverted band', anamorphic: 'Anamorphic flare',
+      tvStatic: 'TV static', dustScratches: 'Film scratches',
+      filmAdvance: 'Film advance', perspectiveTilt: 'Perspective tilt',
+      focusLines: 'Focus lines', starGlint: 'Star glint',
+      negativeRing: 'Inverted ring', shatter: 'Glass shatter',
+      defocus: 'Out of focus', rgbSplit: 'RGB separation',
+      vhsRoll: 'VHS roll', trackingNoise: 'Tracking noise',
+      posterize: 'Posterization', filmBurn: 'Film burn',
+      crtOff: 'CRT powers off'
+    },
+    trans: {
+      wipe: 'Edge wipe', diagonalWipe: 'Diagonal band wipe',
+      irisOpen: 'Iris opens', pushSlide: 'Push',
+      doorsOpen: 'Double doors', checker: 'Checkerboard',
+      blockDissolve: 'Block dissolve', inkBlob: 'Ink blot',
+      shatterTiles: 'Shattering tiles', sliceShift: 'Sliding strips',
+      cubeTurn: 'Cube turn', flashCross: 'Flash cut', pixelate: 'Pixel transition'
+    }
+  };
+  const acronym = { rgb: 'RGB', crt: 'CRT', vhs: 'VHS', qr: 'QR', tv: 'TV', led: 'LED', hud: 'HUD', jp: 'JP' };
+  const label = key => key.replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+    .replace(/_/g, ' ').split(' ').map((part, i) => acronym[part.toLowerCase()] || (i ? part.toLowerCase() : part.charAt(0).toUpperCase() + part.slice(1))).join(' ');
+  for (const group of J.GROUP_KEYS) {
+    for (const key of J.order(group)) {
+      const item = J.registry(group)[key];
+      if (item) item.name = (titles[group] || {})[key] || label(key);
+    }
+  }
+  const styles = {
+    noir: ['Noir Chroma', 'Black and white with cyan and amber color offsets'],
+    crimson: ['Crimson Signal', 'Deep red, monochrome type and damaged data'],
+    caution: ['Caution', 'Yellow, red and blue with instrument graphics'],
+    magenta: ['Pop Magenta', 'Hot pink, round bold type and callout lines'],
+    paper: ['Paper and Ink', 'Paper texture, indigo, magenta and serif echoes'],
+    hud: ['Dark HUD', 'Charcoal, fine frames, orange accents and eclipses'],
+    mint: ['Mint Terminal', 'Black, teal and lime with scan effects'],
+    specimen: ['Type Specimen', 'Ink colored background with serif annotations'],
+    transit: ['Transit', 'Olive and yellow with signage and halftone'],
+    blueprint: ['Blueprint', 'Blue, white and black graphic collage'],
+    rouge: ['Rouge Gradient', 'Light gray and red gradients with capsules'],
+    mono: ['Mono RGB', 'Gray space, white serif and bold RGB separation'],
+    sakura: ['Sakura', 'Soft cherry pink and plum with rounded and serif type'],
+    ocean: ['Deep Sea', 'Navy, glowing cyan, bubbles and light sans type'],
+    sunset: ['Sunset Gradient', 'Orange to violet, bold serif and backlight'],
+    forest: ['Forest Notebook', 'Moss, natural paper and pencil lettering'],
+    vapor: ['Vaporwave', 'Pastel pink and blue with VHS bloom'],
+    newsprint: ['Newsprint', 'Gray paper, black and red with halftone registration'],
+    synth80: ['Synth 80s', 'Black with neon magenta, cyan and scanlines'],
+    kraft: ['Kraft Paper', 'Warm paper, red and indigo stamps and washi tape'],
+    candy: ['Candy', 'Mint and fruit pastel colors with bouncing letters'],
+    acid: ['Acid', 'Black, acid green and magenta with distressed type'],
+    sumi: ['Ink and Vermilion', 'Japanese paper, brush lettering and red seals'],
+    gold: ['Golden Night', 'Deep black, gold foil, ivory serif and glints']
+  };
+  for (const [key, [name, desc]] of Object.entries(styles)) {
+    J.STYLES[key].name = name; J.STYLES[key].desc = desc;
+  }
+  for (const [key, name] of Object.entries({glitch:'Glitch', calm:'Gentle', pop:'Pop', graphic:'Graphic', editorial:'Editorial', emotional:'Emotional', chaos:'Anything goes'})) J.MOODS[key].name = name;
+  J.SAMPLE_LYRICS = 'I remember/the color of dawn\nA voice faded into the distance\nCan we still make it in time?\n*Transparent* is not how this ends!';
+})();
+
+(() => {
+  const S = {"noir": ["黑白色差", "黑白畫面，帶有青色與琥珀色的色差偏移"], "crimson": ["緋紅訊號", "深紅、單色字體與損毀的資料"], "caution": ["警示", "黃、紅、藍配上儀表圖形"], "magenta": ["流行洋紅", "亮粉紅、圓潤粗體與標註線"], "paper": ["紙與墨", "紙張質感、靛藍、洋紅與襯線殘影"], "hud": ["暗色 HUD", "炭灰、細框、橘色點綴與日蝕"], "mint": ["薄荷終端機", "黑、青綠與萊姆綠，加上掃描效果"], "specimen": ["字體樣本", "墨色背景搭配襯線註解"], "transit": ["交通號誌", "橄欖綠與黃，搭配標誌與網點"], "blueprint": ["藍圖", "藍、白、黑的圖像拼貼"], "rouge": ["胭脂漸層", "淺灰與紅色漸層，搭配膠囊形狀"], "mono": ["單色 RGB", "灰色空間、白色襯線與強烈的 RGB 分離"], "sakura": ["櫻花", "柔和櫻粉與梅紫，搭配圓體與襯線字"], "ocean": ["深海", "海軍藍、發光青色、氣泡與細黑體"], "sunset": ["夕陽漸層", "橘到紫的漸層、粗襯線與逆光"], "forest": ["森林筆記", "苔綠、原色紙與鉛筆字"], "vapor": ["蒸氣波", "粉彩粉紅與藍，加上 VHS 光暈"], "newsprint": ["新聞紙", "灰色紙張、黑與紅，帶網點套印"], "synth80": ["80 年代合成", "黑底配霓虹洋紅、青色與掃描線"], "kraft": ["牛皮紙", "暖色紙張、紅與靛藍印章及紙膠帶"], "candy": ["糖果", "薄荷與水果粉彩，搭配彈跳文字"], "acid": ["酸性", "黑、螢光綠與洋紅，搭配破損字體"], "sumi": ["墨與朱", "和紙、毛筆字與朱紅印章"], "gold": ["金色夜晚", "深黑、燙金、象牙色襯線與閃光"]};
+  for (const [k, [n, d]] of Object.entries(S)) if (J.STYLES[k]) { J.STYLES[k].name = n; J.STYLES[k].desc = d; }
+  const M = {"glitch": "故障", "calm": "溫和", "pop": "流行", "graphic": "圖像", "editorial": "編輯排版", "emotional": "感性", "chaos": "隨心所欲"};
+  for (const [k, n] of Object.entries(M)) if (J.MOODS[k]) J.MOODS[k].name = n;
+  J.SAMPLE_LYRICS = "我還記得/黎明的顏色\n散開的聲音在遠方響起\n欸，現在還來得及嗎\n不能就這樣*透明*地結束!";
+})();
+
+/* Traditional Chinese (Taiwan) labels are applied after all expression packs register, before the editor starts.
+   Internal IDs and project JSON remain language independent. Entries without a label here keep their Japanese name. */
+(() => {
+  'use strict';
+  const titles = {
+    layout: {
+      center: '置中', mixed: '大小混排', vcols: '直書', marquee: '流動橫幅', tile: '滿版鋪排',
+      scatter: '散落', ring: '環形', wave: '波浪軌跡', huge: '超出畫面', labels: '標籤貼',
+      condensed: '瘦長壓縮', gloss: '註解', type: '打字', diag: '斜帶', circle: '圓窗',
+      stack: '殘影堆疊', pill: '膠囊', lowerThird: '下方字卡', corners: '對角配置', staircase: '階梯',
+      zigzag: '鋸齒', arcTop: '彩虹弧', spiral: '螺旋', gridCells: '方格', dropCap: '首字放大',
+      justified: '版心', frameBox: '畫框', bubble: '對話框', subtitleBar: '字幕條', ticker: '新聞跑馬燈',
+      splitScreen: '二分割', mirror: '鏡像', sideways: '橫躺直書', edgeFrame: '沿邊環繞', perspective: '景深',
+      hanko: '落款', genkou: '稿紙', panels: '漫畫分格', filmstrip: '底片', quote: '引用',
+      ruler: '尺寸線', searchBar: '搜尋框', chat: '聊天', notification: '通知', ticket: '票券',
+      rain: '文字雨', hanging: '吊掛', orbit: '環繞', tunnel: '隧道', wordCloud: '文字雲',
+      bounceLine: '彈跳', elastic: '橡皮筋', crossBands: '交叉帶', stickerBomb: '貼紙', neon: '霓虹',
+      keycaps: '鍵帽', bubbles: '泡泡', slotMachine: '拉霸機', flipBoard: '翻牌看板', credits: '片尾名單',
+      zoomRepeat: '連續放大', splitHalves: '上下分割', columnsBig: '大小直排', circleWords: '同心圓', dotMatrix: '點陣顯示',
+      depthStack: '景深重疊', typeSpecimen: '字型樣本', kanjiFocus: '單字強調', halfVertical: '直橫混排', curtain: '布幕',
+      equalizer: '等化器', tape: '膠帶', magazine: '雜誌跨頁', headlineDeck: '標題與導言', contents: '目錄',
+      footnote: '註腳', proofread: '校樣', numbered: '編號', poster: '海報', swissGrid: '瑞士網格',
+      dictionary: '辭典', ema: '繪馬', ransom: '剪報字', newspaper: '報紙', vinyl: '黑膠唱片',
+      cassette: '卡帶', bookSpine: '書背', polaroid: '拍立得', stampSheet: '郵票版張', postcard: '明信片',
+      letterPaper: '信紙', calendar: '月曆', chochin: '燈籠', routeMap: '路線圖', stationSign: '站名牌',
+      noren: '暖簾', tanzaku: '短籤', omikuji: '御神籤', kakejiku: '掛軸', shoji: '障子',
+      clapper: '場記板', warningLabel: '警告標籤', priceTag: '價格標籤', nameTag: '名牌', stickyNotes: '便利貼',
+      karuta: '歌牌', cube: '立方體', cylinder: '圓柱', flipCards: '翻卡', accordion: '風琴摺',
+      flag: '飄揚的旗', ribbon: '緞帶', pendulum: '鐘擺', pile: '文字堆', blocks: '積木',
+      balloons: '文字氣球', magnets: '磁鐵', tiles: '文字磁磚', bulbs: '燈泡招牌', ledScroll: '電子跑馬燈',
+      billboard: '看板', crowdBubbles: '對話框群', crossword: '填字遊戲', wordSearch: '找字遊戲', puzzle: '拼圖',
+      shadowPlay: '皮影戲', kaleido: '萬花筒', dominoes: '骨牌', burst: '爆炸', fisheye: '魚眼鏡頭',
+      wall: '牆面透視', origami: '摺紙', zipper: '拉鍊', sliceStack: '切片堆疊', glitchGrid: '故障網格',
+      mosaicTiles: '磁磚拼畫', maskReveal: '文字窗', contour: '等高線', halftoneBig: '網點巨字', stencil: '鏤空模板',
+      title: '標題', interlude: '間奏'
+    },
+    enter: {
+      cut: '直切', assemble: '分解→聚合', slice: '切片', type: '打字', pop: '彈出',
+      drop: '落下', stretch: '伸縮', wipe: '擦除', blur: '模糊', spin: '旋轉',
+      flicker: '閃爍', scramble: '亂碼', zoom: '縮放', riseMask: '由下浮現', dropMask: '由上浮現',
+      slideL: '從左滑入', slideR: '從右滑入', slideWhole: '整體滑入', flipX: '縱軸翻轉', flipY: '橫軸翻轉',
+      domino: '骨牌', fold: '摺疊展開', unroll: '捲軸展開', strokeDraw: '線稿到上色', outlineFill: '輪廓→填色',
+      splitJoin: '上下合體', vSlice: '縱向切片', shutter: '快門', iris: '光圈', diagWipe: '斜向擦除',
+      blinds: '百葉窗', checker: '棋盤格', randomOrder: '隨機順序', bounceBig: '大跳躍', squashDrop: '壓扁著地',
+      rubber: '橡皮拉伸', glitchIn: '故障浮現', echoIn: '殘影聚合', whip: '急甩', skewIn: '傾斜',
+      trackIn: '字距收攏', trackOut: '字距擴張', blurStagger: '模糊錯落', fadeStagger: '逐字淡入', waveIn: '波浪起伏',
+      spiralIn: '螺旋聚合', zoomOut: '巨大→原尺寸', resolve: '解碼', magnet: '磁吸', inkBleed: '暈染',
+      neonOn: '霓虹點亮', cursorSweep: '游標掃過', stamp: '蓋章', springIn: '彈簧', pendulum: '鐘擺',
+      rollIn: '滾入', slingshot: '彈弓', rockSettle: '搖晃著地', bounceBall: '彈跳球', snapRail: '吸附對齊',
+      fanOpen: '扇子展開', cylinder: '圓柱旋轉', shuffle: '洗牌', stopMotion: '定格動畫', ripple: '漣漪',
+      zipper: '拉鍊', zoomAlt: '交錯縮放', tiltUp: '站起', stickerPeel: '貼上貼紙', crumple: '揉皺還原',
+      noteUnfold: '展開信紙', tornJoin: '撕紙拼合', splitFlap: '翻牌', overexpose: '過曝', glint: '反光一閃',
+      loupe: '放大鏡', filmFeed: '底片捲動', backlight: '逆光', lightLeak: '漏光', heatHaze: '熱浪扭曲',
+      crtOn: 'CRT 開機', interlace: '交錯掃描', loadingBar: '載入條', dither: '遞色', odometer: '數字滾輪',
+      matrixRain: '資料雨', hatchFill: '斜線→實心', brushReveal: '筆觸掃出', inkDrop: '墨滴', quarters: '四方聚合',
+      invertBox: '反轉挖空', printRegister: '套印錯位', echoCount: '數拍進場', liquidFill: '水位上升', windBlown: '乘風而來',
+      strokeOrder: '逐筆書寫', clockWipe: '順時針', shadowFirst: '影子先落', bubbles: '泡泡', tokoroten: '擠壓成條'
+    },
+    hold: {
+      still: '靜止', jitter: '抖動', drift: '漂移', breathe: '呼吸', wave: '波浪',
+      glitchtick: '故障', float: '輕飄飄', sway: '搖曳', pulse: '脈動', shimmer: '閃耀',
+      colorRun: '流動色彩', rotateSlow: '緩慢旋轉', trackBreathe: '字距呼吸', skewWobble: '斜向搖晃', beatHop: '隨拍跳動',
+      hWave: '橫向波浪', heartbeat: '心跳', orbitSmall: '小圓周運動', jelly: '果凍', scanBand: '掃描帶',
+      noiseDrift: '雜訊漂移', tilt: '翹翹板', zoomSlow: '緩慢推近', stretchPulse: '隨拍橫向拉伸', glitchJump: '偶爾錯位',
+      echoTrail: '殘影拖尾', glowFlicker: '燭火搖曳', windGust: '陣風', dangle: '懸吊', eqBounce: '隨音量伸縮',
+      flashBox: '隨拍反轉', glintSweep: '光澤掃過', flipSwap: '偶爾翻面', shadowSway: '影子搖晃', magnetJiggle: '磁力',
+      typeRattle: '打字震動', focusRack: '移焦', pluckString: '撥弦'
+    },
+    exit: {
+      cut: '直切', explode: '爆散', fall: '崩落', drift: '霧散', slice: '切片退場',
+      wipe: '擦除退場', shrink: '收縮', blur: '模糊退場', stretch: '伸縮退場', scatter: '飛散',
+      glitch: '故障退場', sinkMask: '下沉', riseOut: '向上消失', slideOutL: '向左滑出', slideOutR: '向右滑出',
+      flipOutX: '關門', flipOutY: '啪地倒下', foldOut: '摺疊收起', squash: '壓扁', trackOutWide: '字距散開',
+      collapse: '吸入', zoomThrough: '衝向鏡頭', zoomFar: '退向遠方', spinOut: '旋轉消失', twist: '扭轉',
+      waveOut: '波浪崩解', blurOutStagger: '逐字模糊', undraw: '回到線稿', outlineOut: '填色褪去', irisClose: '光圈',
+      diagWipeOut: '斜向擦除', blindsClose: '百葉窗', checkerOut: '棋盤格', splitApart: '上下裂開', vSliceDrop: '縱向切片掉落',
+      melt: '融化', dissolve: '碎散', backspace: '退格刪除', scrambleOut: '變成符號', glitchDissolve: '化為方塊',
+      echoOut: '殘響', whipOut: '急甩', gravity: '重力墜落', popOut: '迸裂', burn: '燒毀',
+      sweepCover: '橫條遮蓋', shatterLite: '四分飛散', peelOff: '撕下貼紙', crumpleOut: '揉成紙團丟掉', tearOut: '撕掉',
+      scorchOut: '燒焦消失', overexposeOut: '過曝泛白', scanOut: '掃描線消除', stripesOut: '條紋消除', halftoneOut: '化為網點',
+      eraserOut: '黑板擦擦掉', vacuumOut: '吸入一點', sandOut: '化沙飛散', shredOut: '碎紙機', dominoOut: '骨牌倒下',
+      hingeOut: '單邊脫落', rocketOff: '發射升空', bounceOff: '彈跳離開', balloonOff: '氣球飛走', deflateOut: '洩氣飛走',
+      hazeOut: '消失於熱浪', glassBreak: '玻璃碎裂', zipOut: '拉鍊', clapShut: '中央閉合', lampOff: '熄燈',
+      slotOut: '拉霸轉動', clockOut: '時鐘擦除', matrixOut: '數位雨', tornadoOut: '龍捲風', rollUpOut: '捲起',
+      snakeOut: '排隊離開', flutterOut: '飄落', rollOff: '滾走', fanClose: '收起扇子', rgbSplitOut: '分色',
+      shockOut: '衝擊波', floodOut: '淹沒', slashOut: '一刀兩斷', mosaicOut: '馬賽克', scribbleOut: '亂塗抹消',
+      candleOut: '吹熄'
+    },
+    decor: {
+      brackets: '框角標記', rings: '座標圓', dots: '點狀圓環', arrows: '箭頭', slash: '斜線',
+      sparks: '火花', leaders: '引線', waveform: '波形', barcode: '條碼', grid: '網格',
+      stripes: '條紋', blobs: '墨漬', bars: '粗糙色帶', shapes: '幾何圖形', counter: '大數字',
+      crosshair: '十字準線', cropMarks: '裁切標記', reticle: '鎖定框', radar: '雷達', progressRing: '進度環',
+      timecodeBar: '時間碼', rulerEdge: '邊緣尺規', dimension: '尺寸線', indexNum: '流水號', dateStamp: '相片日期',
+      qrBlock: 'QR 風格方塊', glitchRects: '故障碎片', concentricSquares: '同心方框', triangleSpin: '旋轉三角', lineBurst: '放射線',
+      plusGrid: '十字網格', guides: '參考線', waveLine: '波浪線', spiralLine: '漩渦', halftonePatch: '網點',
+      checkerStrip: '棋盤格帶', beatRing: '節拍圓環', orbitDots: '環繞圓點', constellation: '星座', confetti: '彩紙',
+      petals: '花瓣', rainStreaks: '雨絲', snow: '雪', lightLeak: '漏光', bokeh: '散景光點',
+      speedCorner: '集中線', risingParticles: '上升粒子', twinkle: '閃爍星光', brushStroke: '筆刷痕', tapePieces: '紙膠帶',
+      scribbleCircle: '手繪圈', scribbleUnder: '手繪底線', crossOut: '推敲筆記', highlightMark: '螢光筆', heartsStars: '愛心與星星',
+      watermarkKanji: '浮水印大字', verticalStrip: '直書條', romajiLine: '羅馬字', bracketsJP: '方頭括號', seal: '落款',
+      kamon: '家紋', seigaiha: '青海波', asanoha: '麻葉紋', hanabi: '煙火', chochin: '燈籠',
+      shimenawa: '注連繩', sensu: '扇子', tsukiKumo: '雲中月', momiji: '楓葉', namiGashira: '浪頭',
+      kasumi: '霞', hexGrid: '六角網格', spectrumRing: '環形頻譜', dataColumns: '資料列', spinner: '載入中',
+      headingTape: '方位刻度', glyphLock: '文字鎖定', atomOrbit: '原子軌道', sonarArcs: '聲波', circuit: '電路',
+      swatches: '色票', ruledLines: '橫線筆記', registration: '套準標記', punchHoles: '打孔', staple: '釘書針',
+      paperClip: '迴紋針', indexTabs: '索引標籤', vines: '藤蔓', cloudPuffs: '雲朵', starField: '星空',
+      moonPhases: '月相', sunRays: '陽光', rainRipples: '雨滴漣漪', bubbles: '肥皂泡', smoke: '煙',
+      dandelion: '蒲公英', fireflies: '螢火蟲', memphis: '孟菲斯', zigzagRibbon: '鋸齒緞帶', polkaPatch: '圓點',
+      stripeCircle: '條紋圓', decoCorners: '裝飾角', halfCircles: '半圓堆疊', loopArrows: '循環箭頭', starburst: '星芒',
+      tally: '畫正字', cursorClick: '游標', windowChrome: '視窗', progressBar: '進度條', toggleSwitch: '切換開關',
+      notifBell: '通知', likeCounter: '按讚數', mediaControls: '播放按鈕', volumeBars: '音量', musicNotes: '音符'
+    },
+    treat: {
+      none: '無', outline: '空心字', outlineFill: '描邊', doubleOutline: '雙層描邊', extrude: '立體字',
+      longShadow: '長陰影', hardShadow: '錯位陰影', softShadow: '柔和陰影', glow: '發光', marker: '螢光筆',
+      underline: '底線', strike: '刪除線', boxed: '方框字', gradientV: '垂直漸層', splitColor: '上下雙色',
+      halftone: '網點', stripes: '條紋', hatch: '斜線', dotted: '點線輪廓', alternate: '交錯配色',
+      italic: '斜體', wide: '扁平字', tall: '瘦長字', echoOutline: '輪廓殘響', emphasisDots: '著重號',
+      neonOutline: '霓虹燈管', chrome: '鍍鉻', rainbow: '彩虹色', glitchSplit: '色版錯位', shadowStack: '多重陰影',
+      stencilGap: '鏤空字', waterline: '水位', karaoke: '卡拉 OK', sizeWave: '大小節奏', rotateAlt: '搖擺字',
+      baselineShift: '高低錯落', fauxBold: '超粗', circled: '圓圈字', bracketsQuote: '引號', reflection: '倒影',
+      inline: '內框線', sticker: '貼紙描邊', gradientSweep: '光澤掃過', kerningWide: '寬字距', monoGrid: '稿紙風',
+      outlineOffset: '錯位空心字', toneShadow: '網點陰影', fadeChars: '餘韻', cutShift: '切割錯位', focusPull: '模糊移焦',
+      spotChar: '單字標記', ransom: '剪貼字'
+    },
+    bg: {
+      none: '素色', auroraRibbons: '極光', meshBlobs: '網格漸層', duotoneSweep: '雙色掃動', horizonGlow: '行星邊緣',
+      seigaiha: '青海波', asanoha: '麻葉紋', houndstooth: '千鳥格', herringbone: '人字紋', argyle: '菱格紋',
+      tartan: '蘇格蘭格紋', chevron: 'V 形紋', isoCubes: '立方體', hexGrid: '六角網格', triTess: '三角馬賽克',
+      moire: '摩爾紋', squareTunnel: '方形隧道', spiralArms: '漩渦', topoLines: '等高線', ridgePlot: '山脊線圖',
+      starfield: '星空', nightMoon: '月夜', skyline: '街景', sunsetSun: '夕陽', oceanWaves: '海浪',
+      rainWindow: '雨窗', snowLayers: '雪', fireworks: '煙火', cloudLayers: '雲', mountains: '山巒',
+      filmStrip: '底片', vhsBand: 'VHS 雜訊', tornPaper: '撕紙', godRays: '光芒', vignettePulse: '彩色暗角',
+      kaleidoscope: '萬花筒', marble: '大理石', paperCut: '剪紙', sunburst: '放射', concentric: '同心圓',
+      halftoneFade: '網點漸層', bigStripes: '大斜紋', splitV: '左右雙色', splitH: '上下雙色', splitDiag: '斜向雙色',
+      gradientSweep: '漸層', spotlight: '聚光燈', tvBars: '電視彩條', checker: '棋盤格', bigChar: '巨大文字',
+      speedLines: '集中線', scanBars: '掃描線帶', dotGrid: '點狀網格', retroGrid: '復古網格', bokehBg: '散景光點',
+      particlesBg: '飛舞粒子', ripples: '漣漪', polka: '圓點', eqBars: '背景等化器', borderFrame: '粗框',
+      letterbox: '電影黑邊', noiseField: '雜訊擾動'
+    },
+    cam: {
+      push: '緩慢推近', orbitDrift: '環繞', barrelRoll: '桶滾', pendulumSway: '鐘擺', focusIn: '對焦',
+      rackFocus: '失焦', earthquake: '地震', floatNoise: '漂浮', vertigo: '暈眩變焦', tiltDown: '鏡頭下搖',
+      spiralIn: '漩渦變焦', snapPan: '快速橫搖', jelly: '果凍晃動', pullOut: '拉遠', panL: '向左橫搖',
+      panR: '向右橫搖', tiltUp: '鏡頭上搖', dutch: '斜角鏡頭', handheld: '手持', beatPunch: '隨拍放大',
+      whipIn: '急甩推入', crashZoom: '急速變焦', bounce: '彈跳', roll: '滾轉', driftDiag: '斜向漂移',
+      shakeHard: '劇烈搖晃', dollyIn: '推軌', stepZoom: '分段變焦'
+    },
+    fx: {
+      chroma: '色彩錯位跳動', shake: '搖晃', slice: '切片故障', block: '區塊故障', invert: '反轉',
+      flash: '閃光', zoom: '縮放模糊', mosaic: '馬賽克', radialChroma: '放射色差', bloomFlash: '光暈',
+      bulge: '魚眼', pixelSort: '像素排序', interlace: '交錯掃描', macroBlock: '區塊雜訊', halftone: '網點',
+      duotone: '雙色調', ditherBit: '1 位元遞色', rotateSnap: '角度急轉', echoFrames: '殘影回聲', kaleido: '萬花筒',
+      bandInvert: '帶狀反轉', lightRays: '光芒', anamorphic: '橫向光斑', heartbeat: '心跳', tvStatic: '雪花雜訊',
+      dustScratches: '底片刮痕', filmAdvance: '底片捲動', perspectiveTilt: '透視搖晃', ripple: '漣漪', focusLines: '集中線',
+      speedLines: '速度線', starGlint: '星芒閃光', colorBars: '彩條', zoomStutter: '連續縮放', negativeRing: '反轉圓環',
+      edgeDetect: '邊緣偵測', shatter: '玻璃碎裂', defocus: '失焦', snapshot: '快門', squash: '伸縮',
+      scanBar: '掃描', loopScroll: '橫向循環', panelWipe: '面板擦除', irisTrans: '光圈', doors: '門',
+      blindsTrans: '百葉窗', rgbSplit: 'RGB 分離', smear: '橫向拖影', vhsRoll: 'VHS 滾動', trackingNoise: '磁軌雜訊',
+      mirrorFlash: '鏡像', strobe: '頻閃', posterize: '色調分離', hueShift: '色相偏移', tileShift: '磁磚錯位',
+      filmBurn: '底片燒灼', whipBlur: '急甩模糊', blackFrame: '黑畫格', whiteFrame: '白畫格', gridRepeat: '分割畫面',
+      waveWarp: '波浪扭曲', pixelDrift: '像素偏移', zoomPunch: '縮放重擊', lightSweep: '光束掃過', crtOff: '映像管關機',
+      splitSlide: '上下滑移'
+    },
+    trans: {
+      wipe: '邊緣擦除', diagonalWipe: '斜帶擦除', clockWipe: '時鐘擦除', irisOpen: '光圈開啟', pushSlide: '推移',
+      cover: '覆蓋', uncover: '揭開', zoomThrough: '穿越縮放', doorsOpen: '對開門', blinds: '百葉窗轉場',
+      checker: '棋盤格轉場', blockDissolve: '方塊崩解', whipPan: '急甩橫搖', spinOut: '旋轉轉出', inkBlob: '墨漬',
+      shatterTiles: '磁磚崩落', sliceShift: '長條錯位', cubeTurn: '立方體', flashCross: '閃光轉場', pixelate: '馬賽克轉場'
+    }
+  };
+  for (const group of J.GROUP_KEYS) {
+    const table = J.registry(group), names = titles[group] || {};
+    for (const key of Object.keys(table)) if (names[key]) table[key].name = names[key];   // includes the special title / interlude layouts
+  }
+  const styles = {
+    noir: ['暗黑色差', '黑底、白字、青色／琥珀色的色彩錯位'],
+    crimson: ['深紅訊號', '深紅底、黑白雙層排版、資料毀損'],
+    caution: ['警示', '黃色底、紅藍強調色、儀表介面'],
+    magenta: ['普普洋紅', '螢光粉紅×白、粗圓體、標示引線'],
+    paper: ['紙與墨', '紙張質感、靛藍與洋紅、明體殘影'],
+    hud: ['暗色 HUD', '炭灰底、細線框、橘色點綴、日蝕'],
+    mint: ['薄荷終端機', '黑×青綠×萊姆綠、標籤貼紙、狹縫掃描'],
+    specimen: ['字型樣本', '墨色底、明體、辭典註解與引線'],
+    transit: ['交通指標', '橄欖綠×黃色、箭頭與標誌、網點'],
+    blueprint: ['藍圖', '鮮藍×白×黑、圖形拼貼、斜帶'],
+    rouge: ['胭脂漸層', '淺灰底、紅色漸層、膠囊'],
+    mono: ['單色 RGB', '灰色空間、白色明體、強烈 RGB 分離、座標圓'],
+    sakura: ['櫻花', '淡櫻色、深梅紫、夜櫻、圓體與明體'],
+    ocean: ['深海', '深藍的深海、青色螢光、泡泡與細黑體'],
+    sunset: ['夕陽漸層', '橘到紫羅蘭的漸層、粗明體、逆光'],
+    forest: ['森林手帖', '苔綠與米白、樹皮棕、鉛筆手寫字'],
+    vapor: ['蒸氣波', '淡紫與粉彩粉紅／水藍、明體、VHS 暈染'],
+    newsprint: ['報紙', '灰色新聞紙、墨黑與紅、標題明體、CMY 套印錯位與網點'],
+    synth80: ['合成器 80s', '黑底霓虹洋紅／青色、立體字、掃描線'],
+    kraft: ['牛皮紙', '牛皮紙與米白、朱紅與靛藍印章、紙膠帶'],
+    candy: ['糖果', '薄荷／草莓／檸檬／葡萄的粉彩色、圓潤跳動的文字'],
+    acid: ['酸性', '黑×酸性綠×洋紅、粗糙字型與故障畫面'],
+    sumi: ['墨與朱', '和紙米白、毛筆墨字、朱紅落款'],
+    gold: ['金夜', '漆黑與金箔、象牙色明體、閃爍光芒']
+  };
+  for (const [key, [name, desc]] of Object.entries(styles)) {
+    if (J.STYLES[key]) { J.STYLES[key].name = name; J.STYLES[key].desc = desc; }
+  }
+  for (const [key, name] of Object.entries({glitch: '故障風', calm: '沉靜', pop: '普普', graphic: '圖形感', editorial: '編輯排版', emotional: '感性', chaos: '全都來'})) if (J.MOODS[key]) J.MOODS[key].name = name;
+  J.SAMPLE_LYRICS = '晚風把影子/拉成一條線\n口袋裡還藏著沒寄出的信\n喂，現在追上去還來得及嗎\n*微光*也要燒到最後!';
+})();
+
 /* ============================================================
    JIZURA — editor UI
    ============================================================ */
@@ -30107,7 +30557,7 @@ J.randomOk = (project, g, k) => {
 if (!document.getElementById('app')) return;          // engine-only pages (tests)
 const $ = id => document.getElementById(id);
 const LS_KEY = 'jizura.project.v1';
-const HUD_CHARS = '0123456789:./-_()【】・No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
+const HUD_CHARS = '0123456789:./-_()【】、No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
 const ICON = {
   dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1" fill="currentColor"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/><circle cx="5.5" cy="10.5" r="1" fill="currentColor"/></svg>',
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
@@ -30143,7 +30593,7 @@ function initVolume() {
   let v = 0.8, m = false;
   try { const o = JSON.parse(localStorage.getItem('jizura.previewVolume') || 'null'); if (o) { v = +o.v; m = !!o.m; } } catch (e) {}
   if (!(v >= 0 && v <= 1)) v = 0.8;
-  const show = () => { el.value = Math.round(AP.vol * 100); mb.textContent = AP.muted || AP.vol === 0 ? '消音' : '音量'; mb.setAttribute('aria-pressed', String(AP.muted)); el.title = '音量 ' + Math.round(AP.vol * 100) + '%'; };
+  const show = () => { el.value = Math.round(AP.vol * 100); mb.textContent = AP.muted || AP.vol === 0 ? '靜音' : '音量'; mb.setAttribute('aria-pressed', String(AP.muted)); el.title = '音量 ' + Math.round(AP.vol * 100) + '%'; };
   const save = () => { try { localStorage.setItem('jizura.previewVolume', JSON.stringify({ v: AP.vol, m: AP.muted })); } catch (e) {} };
   AP.setVol(v, m); show();
   el.addEventListener('input', () => { AP.setVol(el.value / 100, false); show(); save(); });
@@ -30169,7 +30619,7 @@ function mergeProject(p) {
   return o;
 }
 function setBadges(d) {
-  return (d && d.extra ? '<span class="set-badge ex" title="最初の公開版のあとに追加">追加</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
+  return (d && d.extra ? '<span class="set-badge ex" title="首次公開版之後新增">新增</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風效果">和</span>' : '');
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
 let saveTimer = 0;
@@ -30260,7 +30710,7 @@ async function ensureFonts() {
   const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length + '|' + J.lang;   // the lyric language changes the faces
   if (key === fontKey) return;
   fontKey = key;
-  showMsg('フォントを読み込み中…');
+  showMsg('正在載入字型…');
   try { await J.ensureFonts(txt, keys); } catch (e) {}
   showMsg(null); S.need = true; drawStyleGrid(); loadThumbFonts();
 }
@@ -30335,14 +30785,14 @@ function play() {
     if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
     v.play().catch(() => {});
   }
-  S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
+  S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '暫停');
 }
 function pause() {
   S.playing = false; AP.stop();
   if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
     J.bgMedia.element.pause();
   }
-  $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
+  $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '播放'); S.need = true;
 }
 function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
@@ -30506,7 +30956,7 @@ function drawTimeline() {
     if (px >= 0 && px <= w) x.fillRect(px, L.t0Bot - 5 * dpr, 1, 5 * dpr);
   }
 
-  // Track 0: 文字PVカット
+  // Track 0: 文字PV 個片段
   for (const cut of (S.plan.cuts || [])) {
     const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
     if (x1 < 0 || x0 > w) continue;
@@ -30755,17 +31205,17 @@ function updateCutInfo() {
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
   const el = $('cutInfo');
-  if (!cut) { el.innerHTML = '<span class="hint">この位置にカットはありません</span>'; return; }
+  if (!cut) { el.innerHTML = '<span class="hint">這個位置沒有片段</span>'; return; }
   const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
   const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
   el.innerHTML = [
     `<span class="chip mono">${cut.line === -1 ? '#00 (タイトル)' : '#' + String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
+    chip('l', '版面', n(J.LAYOUTS, cut.layout)), chip('e', '進場', n(J.ENTER, cut.enter)), chip('h', '停留', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
+    cut.decor && cut.decor.length ? chip('', '裝飾', cut.decor.map(d => n(J.DECOR, d.id)).join('、')) : '',
+    cut.treat && cut.treat !== 'none' ? chip('t', '文字效果', n(J.TREAT, cut.treat)) : '',
     cut.bg && cut.bg !== 'none' ? chip('b', '背景', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'カメラ', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'つなぎ', n(J.TRANS, cut.trans)) : '',
+    cut.cam && cut.cam !== 'push' ? chip('c', '運鏡', n(J.CAMERA, cut.cam)) : '',
+    cut.trans ? chip('c', '轉場', n(J.TRANS, cut.trans)) : '',
   ].join('');
 }
 
@@ -30774,7 +31224,7 @@ function renderLines() {
   const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
   const ov = S.project.overrides, R = typeof exportRangeLines === 'function' ? exportRangeLines() : null;
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
-  const cutOpts = '<option value="">カット 自動</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">カット ${n}</option>`).join('');
+  const cutOpts = '<option value="">片段數 自動</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">${n}  個片段</option>`).join('');
 
   // 先頭の曲タイトル行 (#00)
   if (S.plan && S.plan.titleLine) {
@@ -30789,9 +31239,9 @@ function renderLines() {
       <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <select aria-label="タイトルレイアウト指定">${titleLayoutOpts}</select>
-        <button class="icon ghost dice" title="タイトルの装飾・配置・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
-        <button class="icon ghost lock" title="タイトルの構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+        <select aria-label="タイトル指定版面">${titleLayoutOpts}</select>
+        <button class="icon ghost dice" title="タイトルの裝飾、配置、效果を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの編排をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
     tli.querySelector('select').value = to.layout || '';
     tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
@@ -30816,9 +31266,9 @@ function renderLines() {
     S.plan.cuts.filter(c => c.line === -1).forEach(c => {
       const sp = document.createElement('span');
       const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
-      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('、') : '裝飾無';
       sp.textContent = `${layName} [${decorNames}]`;
-      sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
+      sp.title = `版面: ${layName}｜裝飾: ${decorNames}`;
       sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
       sp.addEventListener('click', () => seek(0.001));
       tcutsEl.appendChild(sp);
@@ -30832,17 +31282,17 @@ function renderLines() {
     const manual = S.project.timing.lineTimes && S.project.timing.lineTimes[i] != null;
     const label = ln.interlude ? `〔間奏${ln.secs ? ' ' + ln.secs + '秒' : ''}〕` : ln.text;
     li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span>
-      <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="開始（秒）${manual ? '・手動' : '・自動'}" aria-label="${i + 1}行目の開始秒" style="${manual ? 'border-color:var(--cyan)' : ''}">
+      <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="起始（秒）${manual ? ' · 手動' : ' · 自動'}" aria-label="第 ${i + 1} 行的起始秒數" style="${manual ? 'border-color:var(--cyan)' : ''}">
       <span class="txt" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <button class="icon ghost edit" title="この行の歌詞を直す" aria-label="${i + 1}行目の歌詞を直す">${ICON.pen}</button>
-        ${ln.interlude ? '' : `<select class="ncut" aria-label="${i + 1}行目のカット数">${cutOpts}</select>`}
-        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="レイアウト指定">${layoutOpts}</select>`}
-        <button class="icon ghost tapfrom tap-from-here" title="この行からタップで同期し直す" aria-label="${i + 1}行目からタップ">${ICON.tap || '⏱️'}</button>
-        <button class="icon ghost rng" title="書き出す範囲にする（Shift+クリックで範囲を広げる）" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="${i + 1}行目を書き出す範囲に">${ICON.range}</button>
-        ${ln.interlude ? '' : `<button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>`}
-        ${ln.interlude ? '' : `<button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
+        <button class="icon ghost edit" title="修改這一行的歌詞" aria-label="修改第 ${i + 1} 行的歌詞">${ICON.pen}</button>
+        ${ln.interlude ? '' : `<select class="ncut" aria-label="第 ${i + 1} 行的片段數">${cutOpts}</select>`}
+        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="指定版面">${layoutOpts}</select>`}
+        <button class="icon ghost tapfrom tap-from-here" title="從這一行重新點擊對拍" aria-label="從第 ${i + 1} 行點擊對拍">${ICON.tap || '⏱️'}</button>
+        <button class="icon ghost rng" title="設為匯出範圍（Shift+點擊可擴大範圍）" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="將第 ${i + 1} 行設為匯出範圍">${ICON.range}</button>
+        ${ln.interlude ? '' : `<button class="icon ghost dice" title="重新抽選這一行">${ICON.dice}</button>`}
+        ${ln.interlude ? '' : `<button class="icon ghost lock" title="鎖定這一行的編排" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
       </span></div>`;
     const q = sel => li.querySelector(sel);
     if (q('.lay')) q('.lay').value = o.layout || '';
@@ -30863,7 +31313,7 @@ function renderLines() {
       if (S.project.rowCache) delete S.project.rowCache[i];
       setOv(i, { cuts: +e.target.value || undefined, single: undefined });
       replan();
-      commit('行' + (i + 1) + 'カット数変更');
+      commit('行' + (i + 1) + ' 個片段数変更');
       seek(ln.start + 0.001);
     });
     const tapBtn = q('.tapfrom') || q('.tap-from-here');
@@ -30894,7 +31344,7 @@ function renderLines() {
     });
     ol.appendChild(li); S.lineEls.push(li);
   });
-  $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
+  $('linesInfo').textContent = `${S.plan.lines.length}  行 / ${S.plan.cuts.length} 個片段`;
   updateCutInfo();
   if (typeof syncRangeUI === 'function') syncRangeUI();
 }
@@ -30907,8 +31357,8 @@ function editLine(li, ln) {
   const rows = S.project.lyrics.replace(/\r/g, '').split('\n'), row = rows[ln.src] || '';
   const pre = (row.match(LRC_PREFIX) || [''])[0], body = row.slice(pre.length).trim();
   const txt = li.querySelector('.txt'), inp = document.createElement('input');
-  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `${ln.index + 1}行目の歌詞`);
-  inp.title = '記法（/ 区切り・*強調*・行末の ! ・| 注釈・[間奏 8]）もそのまま使えます。Enter で確定、Esc で取り消し';
+  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `第 ${ln.index + 1} 行的歌詞`);
+  inp.title = '也可以使用歌詞語法（/ 分隔、*強調*、行尾的 !、| 註解、[間奏 8]）。Enter 確定，Esc 取消';
   txt.replaceWith(inp); inp.focus(); inp.select();
   let done = false;
   const finish = ok => {
@@ -30922,14 +31372,14 @@ function editLine(li, ln) {
       if (S.project.timing && S.project.timing.cutTimes) {
         S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== ln.index);
       }
-      replan(); flushSave(); toast(`${ln.index + 1}行目の歌詞を直しました`);
+      replan(); flushSave(); toast(`已修改第 ${ln.index + 1} 行的歌詞`);
     } else renderLines();
   };
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
   inp.addEventListener('blur', () => finish(true));
 }
 
-/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z） ---------------- */
+/* ---------------- 歌詞、タイミングの取り消し（Ctrl+Z） ---------------- */
 // separate from the ◀ ▶ history of looks: lyric edits, dragged / typed / tapped line times
 const ED = { undo: [], redo: [] };
 const edSnap = () => JSON.stringify({ lyrics: S.project.lyrics, lineTimes: S.project.timing.lineTimes || {} });
@@ -30943,7 +31393,7 @@ function edGo(d) {
   S.project.lyrics = o.lyrics; S.project.timing.lineTimes = o.lineTimes; $('lyrics').value = o.lyrics;
   if ('ov' in o) { S.project.overrides = o.ov || {}; S.project.exportRange = o.range || null; }
   replan(); flushSave(); updateEditBtns();
-  toast(d < 0 ? '元に戻しました' : 'やり直しました');
+  toast(d < 0 ? '已復原' : '已重做');
 }
 // 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
 function clearLyrics() {
@@ -30955,7 +31405,7 @@ function clearLyrics() {
   pause();
   P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
   replan(); flushSave(); updateEditBtns(); seek(0);
-  toast('歌詞を消しました（「元に戻す」か Ctrl+Z で戻せます）');
+  toast('已清除歌詞（可用「復原」或 Ctrl+Z 找回）');
 }
 // 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
 let audioNameDefault = '';
@@ -30971,7 +31421,7 @@ async function resetAll() {
   TL.z = 1; TL.off = 0;
   $('lyrics').value = ''; fontKey = '';
   syncUI(); replan(); commit(); updateEditBtns(); flushSave(); seek(0);
-  toast('初期化しました');
+  toast('已初始化');
 }
 function updateEditBtns() { const u = $('btnUndoEdit'); if (u) u.disabled = !ED.undo.length; }
 
@@ -30997,15 +31447,15 @@ function setExportRange(i, extend) {
   else S.project.exportRange = { from: i, to: i };
   flushSave(); renderLines();
   const R2 = exportRangeLines();
-  toast(R2 ? `書き出す範囲：${R2.from + 1}${R2.to > R2.from ? '〜' + (R2.to + 1) : ''}行目` : '書き出す範囲：全体');
+  toast(R2 ? `匯出範圍：第 ${R2.from + 1}${R2.to > R2.from ? '～' + (R2.to + 1) : ''} 行` : '匯出範圍：全曲');
 }
 function syncRangeUI() {
   const R = exportRangeLines(), n = S.plan.lines.length;
   const opts = (sel, first) => `<option value="-1">${first}</option>` + S.plan.lines.map((ln, i) => `<option value="${i}">${String(i + 1).padStart(2, '0')} ${escapeHtml((ln.interlude ? '〔間奏〕' : ln.text).slice(0, 14))}</option>`).join('');
-  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '全体'); el.value = R ? String(R.from) : '-1'; });
+  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '全曲'); el.value = R ? String(R.from) : '-1'; });
   document.querySelectorAll('.rngTo').forEach(el => { el.innerHTML = opts(el, '—'); el.value = R ? String(R.to) : '-1'; el.disabled = !R; });
   const r = exportRange();
-  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} 〜 ${J.fmtTime(r.t1)}（${(r.t1 - r.t0).toFixed(1)}秒）` : `全体（${S.plan.duration.toFixed(1)}秒）`; });
+  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} ～ ${J.fmtTime(r.t1)}（${(r.t1 - r.t0).toFixed(1)} 秒）` : `全曲（${S.plan.duration.toFixed(1)} 秒）`; });
 }
 function bindRangeUI() {
   document.querySelectorAll('.rngFrom').forEach(el => el.addEventListener('change', () => {
@@ -31043,7 +31493,7 @@ function drawStyleGrid() {
     b.setAttribute('aria-pressed', S.project.style === k ? 'true' : 'false');
     const off = !J.randomOk(S.project, 'style', k);
     b.classList.toggle('set-off', off);
-    b.title = st.desc + (off ? (st.extra && S.project.extra !== true ? '（追加分がオフのため、おまかせでは選ばれません）' : '（和風の演出がオフのため、おまかせでは選ばれません）') : '');
+    b.title = st.desc + (off ? (st.extra && S.project.extra !== true ? '（已關閉新增效果，隨機生成不會選用）' : '（已關閉和風效果，隨機生成不會選用）') : '');
     x.fillStyle = sc.bg; x.fillRect(0, 0, 192, 108);
     st.schemes.slice(1, 4).forEach((s2, i) => { x.fillStyle = s2.bg; x.fillRect(192 - 14 * (i + 1), 0, 14, 10); });
     const f = st.fonts.display[0];
@@ -31056,22 +31506,22 @@ function drawStyleGrid() {
   });
 }
 function fontSelectOptions(sel) {
-  return '<option value="">スタイルの既定</option>' + Object.entries(J.FONTS).map(([k, f]) => {
+  return '<option value="">風格預設</option>' + Object.entries(J.FONTS).map(([k, f]) => {
     const g = J.faceOf ? J.faceOf(k) : f, alt = g.label && g.label !== f.label ? ' → ' + g.label : '';   // the face actually used for the lyric language
     return `<option value="${k}" ${sel === k ? 'selected' : ''}>${escapeHtml(f.label + alt)}</option>`;
   }).join('');
 }
 function renderFontRoles() {
   const box = $('fontRoles'); box.innerHTML = '';
-  [['display', '見出し'], ['serif', '明朝枠'], ['body', '小さな文字']].forEach(([role, label]) => {
+  [['display', '標題'], ['serif', '明體'], ['body', '小字']].forEach(([role, label]) => {
     const row = document.createElement('div'); row.className = 'font-row';
-    row.innerHTML = `<span class="muted">${label}</span><select aria-label="${label}のフォント">${fontSelectOptions(S.project.fonts[role])}</select>`;
+    row.innerHTML = `<span class="muted">${label}</span><select aria-label="${label}字型">${fontSelectOptions(S.project.fonts[role])}</select>`;
     row.querySelector('select').addEventListener('change', e => { if (e.target.value) S.project.fonts[role] = e.target.value; else delete S.project.fonts[role]; fontKey = ''; replan(); });
     box.appendChild(row);
   });
 }
-const BASE_KEYS = [['bg', '背景'], ['fg', '文字'], ['sub', '補助']];
-const ACCENT_KEYS = [['accent', 'アクセント'], ['ghostA', 'ズレ色A'], ['ghostB', 'ズレ色B']];
+const BASE_KEYS = [['bg', '背景'], ['fg', '文字'], ['sub', '輔助']];
+const ACCENT_KEYS = [['accent', '強調色'], ['ghostA', '錯位色 A'], ['ghostB', '錯位色 B']];
 function renderColors() {
   const st = J.STYLES[S.project.style] || J.STYLES.noir, sc = st.schemes[0];
   const c = S.project.colors;
@@ -31110,7 +31560,7 @@ function randomPalette() {
   do { p = J.randomPalette(bg); } while (guard++ < 6 && p.ghostA === c.ghostA && p.ghostB === c.ghostB);
   Object.assign(c, { accent: p.accent, ghostA: p.ghostA, ghostB: p.ghostB, accentOn: true });
   renderColors(); replan(); commit();
-  toast('配色：アクセント・ズレ色A/Bを変更', [p.accent, p.ghostA, p.ghostB]);
+  toast('配色：已更換強調色與錯位色 A/B', [p.accent, p.ghostA, p.ghostB]);
 }
 
 /* ---------------- history of looks (◀ ▶) ---------------- */
@@ -31128,7 +31578,7 @@ function commit(desc) {              // call after changing the look
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
   updateHist();
-  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定・デザイン変更');
+  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定、デザイン変更');
 }
 function histGo(d) {
   if (S.exporting) return;
@@ -31137,7 +31587,7 @@ function histGo(d) {
   H.i = j;
   Object.assign(S.project, JSON.parse(H.list[j]));
   fontKey = ''; syncUI(); replan(); updateHist();
-  toast(`${j + 1} / ${H.list.length} 案目`);
+  toast(`方案 ${j + 1} / ${H.list.length}`);
   restartPreview();
 }
 function updateHist() {
@@ -31231,7 +31681,7 @@ function omakase() {
   S.project.rowCache = {};
   if (S.project.timing) S.project.timing.cutTimes = null;
   fontKey = ''; syncUI(); replan(); commit();
-  toast(`おまかせ：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
+  toast(`隨機生成：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
 }
 // change just one aspect of the current look
@@ -31246,17 +31696,17 @@ function rerollPart(part) {
     P.style = pool[Math.floor(Math.random() * pool.length)];
     P.colors.enabled = false;
     P.rowCache = {};
-    msg = `スタイル：${J.STYLES[P.style].name}`;
+    msg = `風格：${J.STYLES[P.style].name}`;
   } else if (part === 'mood') {
     const r = J.omakase(P);
     Object.assign(P, { mood: r.mood, fx: r.fx, enabled: r.enabled });
     P.rowCache = {};
-    msg = `雰囲気：${J.MOODS[r.mood].name}`;
+    msg = `氛圍：${J.MOODS[r.mood].name}`;
   } else if (part === 'cut') {
     P.seed = (Math.random() * 1e9) | 0;
     P.rowCache = {};
     if (P.timing) P.timing.cutTimes = null;
-    msg = '構成：レイアウトと動きを再抽選';
+    msg = '編排：已重新抽選版面與動態';
   }
   fontKey = ''; syncUI(); replan(); commit();
   toast(msg);
@@ -31265,18 +31715,18 @@ function rerollPart(part) {
 function showNow() {
   const el = $('easyNow'); if (!el || !S.plan || el.closest('[hidden]')) return;
   const P = S.project, sc = S.plan.style.schemes[0];
-  const moodName = P.mood && J.MOODS[P.mood] ? J.MOODS[P.mood].name : 'カスタム';
+  const moodName = P.mood && J.MOODS[P.mood] ? J.MOODS[P.mood].name : '自訂';
   const fk = S.plan.style.fonts.display[0];
   const fontName = J.FONTS[fk] ? J.FONTS[fk].label : fk;
   const cuts = S.plan.cuts.filter(c => c.line >= 0 && c.layout !== 'interlude');
   const kinds = new Set(cuts.map(c => c.layout)).size;
   const row = (k, v) => `<div class="now-row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-  el.innerHTML = row('スタイル', `<b>${escapeHtml(J.STYLES[P.style].name)}</b>`)
-    + row('雰囲気', escapeHtml(moodName))
-    + row('配色', `<span class="swatches">${swatchHTML([sc.bg, sc.fg, sc.accent, sc.ghostA, sc.ghostB])}</span>${P.colors.accentOn ? '<span class="tagl">ランダム</span>' : ''}`)
-    + row('見出し書体', escapeHtml(fontName))
-    + row('構成', `${cuts.length} カット・レイアウト ${kinds} 種`)
-    + row('演出', `加工 ${cuts.filter(c => c.treat && c.treat !== 'none').length}・背景 ${new Set(cuts.map(c => c.bg).filter(b => b && b !== 'none')).size}種・カメラ ${cuts.filter(c => c.cam && c.cam !== 'push').length}`);
+  el.innerHTML = row('風格', `<b>${escapeHtml(J.STYLES[P.style].name)}</b>`)
+    + row('氛圍', escapeHtml(moodName))
+    + row('配色', `<span class="swatches">${swatchHTML([sc.bg, sc.fg, sc.accent, sc.ghostA, sc.ghostB])}</span>${P.colors.accentOn ? '<span class="tagl">隨機</span>' : ''}`)
+    + row('標題字型', escapeHtml(fontName))
+    + row('編排', `${cuts.length}  個片段 · ${kinds} 種版面`)
+    + row('效果', `文字效果 ${cuts.filter(c => c.treat && c.treat !== 'none').length}、背景 ${new Set(cuts.map(c => c.bg).filter(b => b && b !== 'none')).size} 種、運鏡 ${cuts.filter(c => c.cam && c.cam !== 'push').length}`);
 }
 let toastTimer = 0;
 function toast(m, cols) {
@@ -31301,7 +31751,7 @@ function setMode(m) {
 }
 
 /* ---------------- fx tab ---------------- */
-const FX = [['motion', '動きの強さ'], ['glitch', 'グリッチ'], ['chroma', '色ズレ'], ['decor', '装飾の量'], ['density', 'カットの細かさ'], ['texture', '質感'], ['bgSwitch', '背景の切替']];
+const FX = [['motion', '動態強度'], ['glitch', '故障風'], ['chroma', '色彩錯位'], ['decor', '裝飾量'], ['density', '片段密度'], ['texture', '質感'], ['bgSwitch', '背景切換']];
 function renderFx() {
   const box = $('fxSliders'); box.innerHTML = '';
   FX.forEach(([k, label]) => {
@@ -31319,7 +31769,7 @@ function renderFx() {
 }
 
 /* ---------------- technique tab ---------------- */
-const GROUPS = [['layout', 'レイアウト'], ['enter', '登場'], ['hold', '保持'], ['exit', '退場'], ['decor', '装飾'], ['treat', '文字の加工'], ['bg', '背景'], ['cam', 'カメラ'], ['fx', '画面効果'], ['trans', 'カット間のつなぎ']];
+const GROUPS = [['layout', '版面'], ['enter', '進場'], ['hold', '停留'], ['exit', '退場'], ['decor', '裝飾'], ['treat', '文字效果'], ['bg', '背景'], ['cam', '運鏡'], ['fx', '畫面效果'], ['trans', '片段轉場']];
 const openGroups = new Set();
 function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.registry(g)[k].special); }
 function renderTech() {
@@ -31335,12 +31785,12 @@ function renderTech() {
     const d = document.createElement('details'); d.className = 'tgroup';
     d.open = !!q || openGroups.has(g);
     d.addEventListener('toggle', () => { if (d.open) openGroups.add(g); else openGroups.delete(g); });
-    d.innerHTML = `<summary><span class="tg-name">${label}</span><span class="tg-cnt mono">${onN}/${items.length}</span></summary><div class="tg-tools"><button class="ghost small" data-a="on">すべてON</button><button class="ghost small" data-a="off">すべてOFF</button><button class="ghost small" data-a="flip">反転</button></div>`;
+    d.innerHTML = `<summary><span class="tg-name">${label}</span><span class="tg-cnt mono">${onN}/${items.length}</span></summary><div class="tg-tools"><button class="ghost small" data-a="on">全部開啟</button><button class="ghost small" data-a="off">全部關閉</button><button class="ghost small" data-a="flip">反轉</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
     shown.forEach(k => {
       const l = document.createElement('label');
-      l.title = k + (tbl[k].tags && tbl[k].tags.length ? '（' + tbl[k].tags.map(t => (J.MOODS[t] ? J.MOODS[t].name : t)).join('・') + '）' : '');
-      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].extra && S.project.extra !== true ? '（追加分がオフのため、自動では選ばれません）' : '（和風の演出がオフのため、自動では選ばれません）'; }
+      l.title = k + (tbl[k].tags && tbl[k].tags.length ? '（' + tbl[k].tags.map(t => (J.MOODS[t] ? J.MOODS[t].name : t)).join('、') + '）' : '');
+      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].extra && S.project.extra !== true ? '（已關閉新增效果，自動挑選時不會選用）' : '（已關閉和風效果，自動挑選時不會選用）'; }
       l.innerHTML = `<input type="checkbox" ${en[k] !== false ? 'checked' : ''}> ${escapeHtml(tbl[k].name)}${setBadges(tbl[k])}`;
       l.querySelector('input').addEventListener('change', e => { en[k] = e.target.checked; S.project.mood = null; d.querySelector('.tg-cnt').textContent = `${items.filter(x => en[x] !== false).length}/${items.length}`; replanSoon(60); });
       list.appendChild(l);
@@ -31373,15 +31823,15 @@ function syncOut() {
   document.querySelectorAll('.centerDirSel').forEach(el => { el.value = S.project.centerDir === 'lr' ? 'lr' : 'tb'; });
   const kb = $('keyBadge');
   kb.hidden = k === 'off';
-  if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
+  if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? '綠幕' : '黑底'}`;
 }
 async function codecNote() {
   const [w, h] = J.outputSize(S.project);
   const vc = await J.pickVideoCodec(w, h, S.project.fps, 12e6);
-  $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
+  $('codecNote').textContent = vc ? `這個瀏覽器將以 ${vc.label} 匯出（${w}×${h} / ${S.project.fps}fps）。匯出期間請勿關閉這個分頁。` : '這個瀏覽器不支援影片編碼（WebCodecs）。請改用最新版 Chrome / Edge 開啟，或改為匯出 PNG 序列圖。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
   ['btnMP4File', 'eMP4File'].forEach(id => { $(id).hidden = !vc || !canPickFile(); });
-  if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
+  if (!vc) $('eMP4').title = '這個瀏覽器不支援匯出 MP4（建議使用 Chrome / Edge）';
 }
 const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'btnPNGL', 'eMP4', 'btnMP4File', 'eMP4File'];
 function baseName() {
@@ -31397,7 +31847,7 @@ async function runExport(kind) {
     try {
       const hnd = await window.showSaveFilePicker({ suggestedName: baseName() + rangeSuffix() + '.mp4', types: [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] });
       file = await hnd.createWritable(); fileName = hnd.name;
-    } catch (e) { if (e && e.name === 'AbortError') return; toast('保存先を開けませんでした: ' + (e && e.message ? e.message : e)); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; toast('無法開啟儲存位置：' + (e && e.message ? e.message : e)); return; }
   }
   pause();
   const ac = new AbortController(); S.exporting = ac;
@@ -31415,24 +31865,24 @@ async function runExport(kind) {
       const plan = S.plan, range = exportRange(), span = J.exportSpan(plan, range);
       const r = await J.exportMP4({ plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, range, file });
       file = null;
-      txt.textContent = `完成 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB・' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
+      txt.textContent = `完成 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB、' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}、${((performance.now() - t0) / 1000).toFixed(0)}秒`;
       if (r.blob) {
         const res = await J.saveFile(baseName() + rangeSuffix() + '.mp4', r.blob);
-        if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
-      } else txt.textContent += `・「${fileName}」に保存しました`;
-      if (r.tried && r.tried.length) txt.textContent += '（最初の方法では失敗したため、別のエンコーダーで書き出しました）';
+        if (res === 'declined') txt.textContent += '（已取消儲存）';
+      } else txt.textContent += `，已儲存至「${fileName}」`;
+      if (r.tried && r.tried.length) txt.textContent += '（第一種方式失敗，已改用其他編碼器輸出）';
       // audio that some players cannot play (Opus), or none at all: save the soundtrack as WAV next to it
       if (r.audioWanted && r.audio !== 'aac') {
         await J.saveFile(baseName() + rangeSuffix() + '_audio.wav', J.audioWav(S.audio.buffer, span.dur, span.t0));
-        txt.textContent += r.audio ? '。このブラウザでは音声が Opus になり、iPhone・QuickTime などでは音が出ないことがあるため、音声を WAV でも保存しました' : '。このブラウザは音声を書き出せないため、音声を WAV で別に保存しました（動画編集ソフトで重ねてください）';
-      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '。曲が読み込まれていないため音声なしです（「曲を読み込む」から読み込み直してください）';
+        txt.textContent += r.audio ? '。此瀏覽器會以 Opus 編碼音訊，iPhone、QuickTime 等可能無法播放，因此另外將音訊存成 WAV' : '。此瀏覽器無法匯出音訊，因此將音訊另存成 WAV（請在影片剪輯軟體中合併）';
+      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '。尚未匯入歌曲，因此影片沒有聲音（請從「匯入歌曲」重新載入）';
     } else {
       const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', layers: kind === 'pngl', onProgress, signal: ac.signal, range: exportRange() });
       txt.textContent = `完成 ${(blob.size / 1048576).toFixed(1)}MB`;
       await J.saveFile(baseName() + rangeSuffix() + (kind === 'pnga' ? '_alpha' : kind === 'pngl' ? '_layers' : '') + '_png.zip', blob);
     }
   } catch (e) {
-    txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
+    txt.textContent = '錯誤：' + (e && e.message ? e.message : e);
     console.error(e);
     if (file) { try { await file.abort(); } catch (e2) {} }
   } finally {
@@ -31478,7 +31928,7 @@ function startTap(from = null) {
   S.tap = { i: startIdx, from: startIdx, startIdx, done: [] };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
 
-  // startIdx 以降の古いカット境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
+  // startIdx 以降の古い 個片段境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
   if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
     S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line < startIdx);
   }
@@ -31498,7 +31948,7 @@ function startTap(from = null) {
 
   $('tapBtn').focus();
   if (startIdx > 0) {
-    toast(`${startIdx + 1}行目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から再生）`);
+    toast(`${startIdx + 1}行目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から播放）`);
   }
 }
 
@@ -31519,7 +31969,7 @@ function tapNow() {
   const oldCutTimes = S.project.timing.cutTimes ? [...S.project.timing.cutTimes] : null;
   S.tap.done.push({ i: curIdx, had: LT[curIdx], oldCutTimes });
 
-  // 該当行のカット境界を確実にクリアして新タイミングで再導出
+  // 該当行の 個片段境界を確実にクリアして新タイミングで再導出
   if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
     S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== curIdx);
   }
@@ -31625,7 +32075,7 @@ function syncBlockInspector() {
   if (btnAddKey) {
     btnAddKey.textContent = hasKey ? '◆更新' : '◆＋キー';
     btnAddKey.classList.toggle('active', !!hasKey);
-    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを追加`;
+    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを新增`;
   }
   if (btnDelKey) {
     btnDelKey.disabled = !hasKey;
@@ -31656,7 +32106,7 @@ function syncUI() {
   $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
   $('lyrics').value = S.project.lyrics;
   $('bpm').value = S.project.timing.bpm > 0 ? S.project.timing.bpm : '';
-  $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : 'なし';
+  $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : '無';
   $('offset').value = S.project.timing.offset ?? 0.4;
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
@@ -31683,7 +32133,7 @@ function bind() {
     remember();
     S.project.lang = e.target.value; replan(); renderFontRoles(); commit(); flushSave();
     const l = J.resolveLang(S.project);
-    toast((S.project.lang === 'auto' ? '歌詞の言語：自動判定 → ' : '歌詞の言語：') + J.LANG_LABEL[l]);
+    toast((S.project.lang === 'auto' ? '歌詞語言：自動偵測 → ' : '歌詞語言：') + J.LANG_LABEL[l]);
   });
   $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; replanSoon(300); commitTextSoon('タイトル編集'); });
   $('songTitle').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('タイトル確定'); });
@@ -31924,7 +32374,7 @@ function bind() {
         seek(c.end);
         drawTimeline();
       } else if (dragMode === 'move') {
-        // 他のカットとのスワップ判定
+        // 他の 個片段とのスワップ判定
         let swapCut = null, swapIdx = -1;
         for (let i = 0; i < S.plan.cuts.length; i++) {
           if (i === dragData.cutIndex) continue;
@@ -32010,18 +32460,18 @@ function bind() {
     if (idx < 0 || idx >= cuts.length) return false;
     const cut = cuts[idx];
 
-    // 同一行内のカット一覧
+    // 同一行内の 個片段一覧
     const sameLineCuts = cuts.filter(c => c.line === cut.line);
 
-    // その行にカットが1つしか残っていない（最後の1カット）場合は誤削除を安全にブロック
+    // その行に 個片段が1つしか残っていない（最後の1 個片段）場合は誤削除を安全にブロック
     if (sameLineCuts.length <= 1) {
-      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '行の最後の演出は削除できません（行を削除したい場合は歌詞を編集してください）');
+      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '行の最後の效果は削除できません（行を削除したい場合は歌詞を編集してください）');
       return false;
     }
 
     remember();
 
-    // 同一行内の直前カット（prevInLine）と直後カット（nextInLine）を検索
+    // 同一行内の直前 個片段（prevInLine）と直後 個片段（nextInLine）を検索
     const prevInLine = cuts.slice(0, idx).reverse().find(c => c.line === cut.line);
     const nextInLine = cuts.slice(idx + 1).find(c => c.line === cut.line);
 
@@ -32043,7 +32493,7 @@ function bind() {
       }
     }
 
-    // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
+    // 2. タイムライン 個片段配列から対象 個片段を削除（※ 歌詞テキスト lyrics には一切触れない！）
     cuts.splice(idx, 1);
 
     // 3. タイトルカード削除時の特別処理
@@ -32051,7 +32501,7 @@ function bind() {
       S.plan.titleLine.cut = prevInLine || nextInLine || null;
     }
 
-    // 4. 残存カットリストを永続データとして記録
+    // 4. 残存 個片段リストを永続データとして記録
     if (!S.project.timing) S.project.timing = {};
     S.project.timing.cutTimes = cuts.map(c => ({
       start: +c.start.toFixed(3),
@@ -32060,16 +32510,16 @@ function bind() {
       text: c.text
     }));
 
-    // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
+    // 5. 該当行のrowCache整合（ 個片段数が減ったため安全に再抽選）
     if (S.project.rowCache && S.project.rowCache[cut.line]) {
       delete S.project.rowCache[cut.line];
     }
 
     replan();
-    commit('カット削除');
+    commit(' 個片段削除');
     flushSave();
     drawTimeline();
-    toast('演出を1つ削除し、行内の演出で尺とテキストを補間しました');
+    toast('效果を1つ削除し、行内の效果で尺とテキストを補間しました');
     return true;
   }
   window.deleteCutSafe = deleteCutSafe;
@@ -32132,7 +32582,7 @@ function bind() {
               }
             }
           } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
-            // 同一行内のカット（フレーズ）同士のスワップ
+            // 同一行内の 個片段（フレーズ）同士のスワップ
             const curL = rawLines[cA.line];
             if (curL && curL.includes('/')) {
               const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
@@ -32173,7 +32623,7 @@ function bind() {
               cB[p] = t;
             }
           }
-          toast('カットを入れ替えました');
+          toast(' 個片段を入れ替えました');
         } else if (dragData.target === 'block' && dragData.swapCandidate.type === 'block') {
           const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
           const bA = blocks[dragData.index];
@@ -32208,10 +32658,10 @@ function bind() {
       }
 
       let actDesc = 'タイムライン操作';
-      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? 'カット削除' : 'ブロック削除';
-      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? 'カット入れ替え' : 'ブロック入れ替え';
-      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? 'カット境界調整' : 'ブロックトリミング';
-      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? 'カット移動' : 'ブロック移動';
+      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? ' 個片段削除' : 'ブロック削除';
+      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? ' 個片段入れ替え' : 'ブロック入れ替え';
+      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? ' 個片段境界調整' : 'ブロックトリミング';
+      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? ' 個片段移動' : 'ブロック移動';
 
       replan();
       commit(actDesc);
@@ -32256,7 +32706,7 @@ function bind() {
     setTlZoom(1.0);
   });
 
-  // マルチトラック：ブロック追加・削除
+  // マルチトラック：ブロック新增、削除
   if ($('btnAddImgBlock')) {
     $('btnAddImgBlock').addEventListener('click', () => {
       remember();
@@ -32282,7 +32732,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast('画像ブロックを追加しました。素材を選択してください');
+      toast('画像ブロックを新增しました。素材を選択してください');
       if ($('selBlockFile')) $('selBlockFile').click();
     });
   }
@@ -32312,7 +32762,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast('動画ブロックを追加しました。素材を選択してください');
+      toast('動画ブロックを新增しました。素材を選択してください');
       if ($('selBlockFile')) $('selBlockFile').click();
     });
   }
@@ -32321,7 +32771,7 @@ function bind() {
     $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
   }
 
-  // キーフレーム追加・更新
+  // キーフレーム新增、更新
   if ($('btnBlockAddKey')) {
     $('btnBlockAddKey').addEventListener('click', () => {
       if (!S.selectedBlock || !S.selectedBlock.block) return;
@@ -32348,7 +32798,7 @@ function bind() {
       drawTimeline();
       commit();
       flushSave();
-      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを追加しました (${curT.toFixed(2)}s)`);
+      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを新增しました (${curT.toFixed(2)}s)`);
     });
   }
 
@@ -32396,7 +32846,7 @@ function bind() {
   if ($('selBlockOpacity')) $('selBlockOpacity').addEventListener('input', onBlockParam('opacity', parseFloat));
   if ($('selBlockBlend')) $('selBlockBlend').addEventListener('change', onBlockParam('blendMode', String));
 
-  // ブロック素材ファイルの読み込み・差し替え
+  // ブロック素材ファイルの読み込み、差し替え
   if ($('selBlockFile')) {
     $('selBlockFile').addEventListener('change', async e => {
       const file = e.target.files && e.target.files[0];
@@ -32536,10 +32986,10 @@ function bind() {
     renderTech(); drawStyleGrid(); replan(); commit(); flushSave();
     toast(e.target.checked ? msgOn : msgOff);
   }));
-  setSwitch('extra-toggle', 'extra', true, '追加分の演出：使う', '追加分の演出：使わない（最初の公開版の演出だけ）');
-  setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
-  setSwitch('unify-toggle', 'unify', true, '統一感：オン（パートごとにそろえ、キメ・モーフ・太さも使います）', '統一感：オフ');
-  setSwitch('typeset-toggle', 'typeset', true, '文字整列：オン（字間・助詞・英字・0.2秒先・効果控えめ）', '文字整列：オフ');
+  setSwitch('extra-toggle', 'extra', true, '新增效果：使用', '新增效果：不使用（只用首次公開版的效果）');
+  setSwitch('wa-toggle', 'wa', true, '和風效果：使用', '和風效果：不使用（隨機生成與重新排列不會選用）');
+  setSwitch('unify-toggle', 'unify', true, '統一感：開啟（段落一致，並使用亮點、變形、粗細）', '統一感：關閉');
+  setSwitch('typeset-toggle', 'typeset', true, '文字排列：開啟（字距、助詞、英文、提前 0.2 秒、效果節制）', '文字排列：關閉');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード変更'); });
@@ -32557,15 +33007,15 @@ function bind() {
     const name = $('localFont').value.trim(); if (!name) return;
     const key = 'local_' + name.replace(/\s+/g, '_');
     const weight = /bold|太|black|heavy|w[6-9]|[6-9]00/i.test(name) ? 700 : 400;
-    J.addUserFont(key, name + '（PC）', name, weight);
-    S.project.userFonts = (S.project.userFonts || []).filter(u => u.key !== key).concat([{ key, label: name + '（PC）', family: name, weight }]);
+    J.addUserFont(key, name + '（本機）', name, weight);
+    S.project.userFonts = (S.project.userFonts || []).filter(u => u.key !== key).concat([{ key, label: name + '（本機）', family: name, weight }]);
     S.project.fonts.display = key; $('localFont').value = '';
     fontKey = ''; renderFontRoles(); replan();
   });
   $('fontFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     try { const key = await J.loadFontFile(f); S.project.fonts.display = key; fontKey = ''; renderFontRoles(); replan(); }
-    catch (err) { showMsg('フォントを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
+    catch (err) { showMsg('無法載入字型'); setTimeout(() => showMsg(null), 2500); }
   });
   ['outAspect', 'eAspect'].forEach(id => $(id).addEventListener('change', e => { S.project.aspect = e.target.value; syncOut(); replan(); codecNote(); }));
   ['outRes', 'eRes'].forEach(id => $(id).addEventListener('change', e => { S.project.res = +e.target.value; syncOut(); autosave(); codecNote(); }));
@@ -32574,17 +33024,17 @@ function bind() {
   ['outKey', 'eKey'].forEach(id => $(id).addEventListener('change', e => {
     S.project.keyBg = e.target.value; syncOut(); replan(); flushSave();
     const k = J.keyMode(S.project);
-    toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
+    toast(k ? `背景：${k === 'green' ? '綠幕' : '黑底'}（只有白色文字與效果）` : '背景：一般（風格的配色）');
   }));
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   document.querySelectorAll('.centerDirSel').forEach(el => el.addEventListener('change', e => {
     S.project.centerDir = e.target.value; syncOut(); replan(); flushSave();
-    toast(e.target.value === 'lr' ? '縦長の画面：左右に分けます' : '縦長の画面：上下に分けます');
+    toast(e.target.value === 'lr' ? '直式畫面：分成左右' : '直式畫面：分成上下');
   }));
   ['outCenter', 'eCenter'].forEach(id => $(id).addEventListener('change', e => {
     S.project.centerFree = e.target.checked; syncOut(); replan(); flushSave();
     const tall = S.plan.H > S.plan.W * 1.1 && S.project.centerDir !== 'lr';
-    toast(e.target.checked ? `中央を空けました：文字と演出を${tall ? '上下' : '左右'}に置きます` : '中央を空けるのをやめました');
+    toast(e.target.checked ? `已保留中央：文字與效果放在${tall ? '上下' : '左右'}` : '已取消保留中央');
   }));
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   ['btnMP4File', 'eMP4File'].forEach(id => $(id).addEventListener('click', () => runExport('mp4file')));
@@ -32604,7 +33054,7 @@ function bind() {
   $('eMood').addEventListener('click', () => rerollPart('mood'));
   $('eCut').addEventListener('click', () => rerollPart('cut'));
   $('ePalette').addEventListener('click', () => { randomPalette(); restartPreview(); });
-  // 利用について（出力物の権利・ライセンス）
+  // 利用について（出力物の権利、ライセンス）
   const dlg = $('termsDlg');
   const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
@@ -32615,14 +33065,14 @@ function bind() {
   $('btnClearLyrics').addEventListener('click', clearLyrics);
   $('btnReset').addEventListener('click', () => {
     const dlg = $('resetDlg');
-    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します。元に戻すことはできません。')) resetAll(); return; }
+    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('要清除歌詞、歌曲、設定與歷史，回到最初的狀態嗎？此操作無法復原。')) resetAll(); return; }
     dlg.returnValue = ''; dlg.showModal();
   });
   $('resetDlg').addEventListener('close', () => { if ($('resetDlg').returnValue === 'reset') resetAll(); });
   $('fileProject').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     try { S.project = mergeProject(JSON.parse(await f.text())); syncUI(); replan(); }
-    catch (err) { showMsg('プロジェクトを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
+    catch (err) { showMsg('無法開啟專案'); setTimeout(() => showMsg(null), 2500); }
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
@@ -32660,27 +33110,27 @@ function bind() {
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
 async function loadAudioFile(f, restored) {
-  $('audioName').textContent = '解析中…';
+  $('audioName').textContent = '分析中…';
   try {
     pause();
     S.audio = await J.analyzeAudio(f);
-    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）` + (restored ? '・前回の曲' : '');
+    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}、約${S.audio.bpm}BPM）` + (restored ? ' · 上次的歌曲' : '');
     S.project.audioName = f.name;
     if (!restored && J.saveSong) J.saveSong(f);             // kept in this browser: a reload does not drop the song from exports
     S.project.timing.snap = true;
     syncUI(); replan();
     return true;
-  } catch (err) { $('audioName').textContent = '読み込めませんでした: ' + err.message; S.audio = null; return false; }
+  } catch (err) { $('audioName').textContent = '無法載入：' + err.message; S.audio = null; return false; }
 }
 
 /* ---------------- かんたんモードの案内ツアー ---------------- */
 const TOUR = [
-  { t: () => $('lyrics'), title: '1. 歌詞を入れる', text: '1行が1フレーズになります。空行で少し間が空き、[間奏 8] と書くと8秒の間奏（背景と装飾だけ）になります。' },
-  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 曲を読み込む', text: 'mp3 などを読み込むと拍を検出して、カットの切り替わりを合わせます。曲がなくても作れます。「タップで同期」で行の頭を合わせることもできます。' },
-  { t: () => $('btnOmakaseBig'), title: '3. おまかせで作る', text: 'スタイル・雰囲気・動き・配色・構成をまるごと決めます。押すたびに別の案になり、「◀ 前の案」で戻れます。' },
-  { t: () => $('btnPlay'), title: '4. 再生して確認する', text: '再生して見てみましょう。下のタイムラインでは、行の区切りをドラッグして動かせます（＋−で拡大）。' },
-  { t: () => $('lineList'), title: '5. 気になる行だけ直す', text: '行ごとに、歌詞を直す（✎）、カット数を決める、この行からタップし直す（◎）、この行だけ作り直す（サイコロ）ができます。' },
-  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 書き出す', text: '画面比（縦長 9:16 など）と解像度を選んで MP4 を書き出します。「書き出す範囲」で選んだ行だけを書き出すこともできます。' },
+  { t: () => $('lyrics'), title: '1. 輸入歌詞', text: '1 行就是 1 個樂句。空行會留一點間隔；寫成 [間奏 8] 就是 8 秒的間奏（只有背景與裝飾）。' },
+  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 匯入歌曲', text: '載入 mp3 等檔案後會偵測節拍，讓片段切換對齊節拍。沒有歌曲也能製作。也可以用「點擊對拍」對齊每行的開頭。' },
+  { t: () => $('btnOmakaseBig'), title: '3. 隨機生成一版', text: '風格、氛圍、動態、配色與編排會一次全部決定。每按一次就是不同的方案，按「◀ 上一個方案」可以返回。' },
+  { t: () => $('btnPlay'), title: '4. 播放確認', text: '播放看看吧。在下方的時間軸上，可以拖曳行的分隔來移動（＋−縮放）。' },
+  { t: () => $('lineList'), title: '5. 只修改在意的行', text: '每一行都可以修改歌詞（✎）、設定片段數、從這一行重新點擊對拍（◎），或只重做這一行（骰子）。' },
+  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 匯出', text: '選擇畫面比例（如直式 9:16）與解析度後匯出 MP4。也可以用「匯出範圍」只匯出選取的行。' },
 ];
 const TR = { i: -1 };
 function tourShow(i) {
@@ -32693,7 +33143,7 @@ function tourShow(i) {
   el.querySelector('.tour-title').textContent = st.title;
   el.querySelector('.tour-text').textContent = st.text;
   el.querySelector('.tour-prev').disabled = i === 0;
-  el.querySelector('.tour-next').textContent = i === n - 1 ? 'はじめる' : '次へ';
+  el.querySelector('.tour-next').textContent = i === n - 1 ? '開始' : '下一步';
   if (tg && tg.scrollIntoView) tg.scrollIntoView({ block: 'center', behavior: 'auto' });
   requestAnimationFrame(() => tourPlace(tg));
   el.querySelector('.tour-next').focus();

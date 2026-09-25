@@ -10,6 +10,9 @@ const HUD_CHARS = '0123456789:./-_()【】・No.LYRICRECUNTITLEDXYlinebpminterlu
 const ICON = {
   dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1" fill="currentColor"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/><circle cx="5.5" cy="10.5" r="1" fill="currentColor"/></svg>',
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
+  pen: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13l1-3.5L11 2.5l2.5 2.5L6.5 12z"/><path d="M9.5 4l2.5 2.5"/></svg>',
+  tap: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2" fill="currentColor"/><circle cx="8" cy="8" r="5.5"/></svg>',
+  range: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10M13 3v10"/><path d="M5.5 8h5M8.5 5.5L11 8l-2.5 2.5"/></svg>',
 };
 
 const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null, selectedBlock: null };
@@ -153,7 +156,7 @@ let thumbFonts = null;
 async function ensureFonts() {
   const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS;
   const keys = J.fontsOfPlan(S.plan);                       // only the faces this plan draws with
-  const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length;
+  const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length + '|' + J.lang;   // the lyric language changes the faces
   if (key === fontKey) return;
   fontKey = key;
   showMsg('フォントを読み込み中…');
@@ -168,11 +171,16 @@ function loadThumbFonts() {
 function showMsg(m) { const el = $('viewMsg'); if (!m) { el.hidden = true; return; } el.textContent = m; el.hidden = false; }
 
 /* ---------------- viewport & drawing ---------------- */
+// 固定表示: on wide & tall windows the page itself doesn't scroll (see style.css html.fixed-ok)
+const FIXED_MQ = window.matchMedia ? window.matchMedia('(min-width: 1181px) and (min-height: 620px)') : null;
+document.documentElement.classList.add('fixed-ok');
+function fixedLayout() { return !!(FIXED_MQ && FIXED_MQ.matches) && document.documentElement.classList.contains('fixed-ok'); }
 function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
   let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  const maxH = Math.max(220, window.innerHeight * 0.68);
+  // fixed workspace: the viewport gets whatever height is left under the header / above the transport and timeline
+  const maxH = fixedLayout() ? Math.max(160, vp.clientHeight - 2) : Math.max(220, window.innerHeight * 0.68);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -180,10 +188,20 @@ function sizeViewport() {
   c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
   S.need = true;
 }
+// preview only: dotted outline of the centre that 中央を空ける keeps free (never in exports)
+function drawCenterGuide(ctx, k) {
+  const P = S.plan, z = P.zones; if (!z) return;
+  const r = z[0].side === 'left' ? [z[0].w, 0, P.W - z[0].w - z[1].w, P.H] : [0, z[0].h, P.W, P.H - z[0].h - z[1].h];
+  ctx.save(); ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.setLineDash([14, 10]); ctx.lineWidth = 2 / k * 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.strokeRect(r[0] + 4, r[1] + 4, r[2] - 8, r[3] - 8);
+  ctx.setLineDash([]); ctx.restore();
+}
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
   const t0 = performance.now();
   S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: S.playing && S.slow });
+  if (S.plan.centerFree) drawCenterGuide(ctx, c.width / S.plan.W);
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
   updateTimeUI(); drawTimeline(); updateCutInfo(); syncBlockInspector();
@@ -236,8 +254,8 @@ function seek(t) {
 }
 
 /* ---------------- timeline ---------------- */
+// zoomable view: [TL.off, TL.off + D / TL.z] seconds; line starts are draggable handles in the top band
 const layoutHue = k => (J.LAYOUT_ORDER.indexOf(k) * 37 + 30) % 360;
-
 const tlVisSec = () => Math.max(0.1, (S.plan ? S.plan.duration : 10) / Math.max(1, S.timelineZoom || 1));
 const tlTimeFromPx = (px, w) => {
   const vis = tlVisSec();
@@ -256,6 +274,11 @@ function fmtTime(t) {
   const m = Math.floor(t / 60);
   const s = t % 60;
   return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+}
+
+function tlZoom(f) {
+  const oldZoom = S.timelineZoom || 1;
+  setTlZoom(Math.max(1, Math.min(10, oldZoom * f)));
 }
 
 function getTrackLayout(h, dpr) {
@@ -293,6 +316,7 @@ function hitTestTimeline(px, py, w, h, dpr) {
       if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'images', block: b, index: i };
     }
   }
+  }
 
   // Track 2: 背景動画
   const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
@@ -308,7 +332,6 @@ function hitTestTimeline(px, py, w, h, dpr) {
 
   return { type: 'seek' };
 }
-
 function drawTimeline() {
   const c = $('timeline');
   if (!c || !S.plan) return;
@@ -329,6 +352,17 @@ function drawTimeline() {
   x.fillStyle = '#17171d'; x.fillRect(0, L.t0Top, w, L.t0Bot - L.t0Top);
   x.fillStyle = '#14181c'; x.fillRect(0, L.t1Top, w, L.t1Bot - L.t1Top);
   x.fillStyle = '#191522'; x.fillRect(0, L.t2Top, w, L.t2Bot - L.t2Top);
+
+  // 範囲エクスポートハイライト（全トラック縦断）
+  const R = typeof exportRange === 'function' ? exportRange() : null;
+  if (R) {
+    const rx0 = tlPxFromTime(R.t0, w), rx1 = tlPxFromTime(R.t1, w);
+    x.fillStyle = 'rgba(245, 165, 12, 0.12)';
+    x.fillRect(rx0, 0, Math.max(2, rx1 - rx0), h);
+    x.strokeStyle = 'rgba(245, 165, 12, 0.4)';
+    x.lineWidth = 1;
+    x.strokeRect(rx0, 0, Math.max(2, rx1 - rx0), h);
+  }
 
   // トラック境界線
   x.strokeStyle = '#272733'; x.lineWidth = 1;
@@ -588,6 +622,23 @@ function timelineSeek(ev) {
   }
 }
 
+/* ---------------- keep the playing line in view (the list scrolls inside its column) ---------------- */
+let listTouched = 0;
+function followLine(li) {
+  if (!S.playing || li < 0 || !fixedLayout()) return;
+  if (performance.now() - listTouched < 2500) return;                       // the user is scrolling the list
+  const el = S.lineEls[li], col = el && el.closest('.col-left');
+  if (!el || !col || col.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const r = el.getBoundingClientRect(), c = col.getBoundingClientRect();
+  if (r.top >= c.top + 8 && r.bottom <= c.bottom - 8) return;
+  col.scrollTo({ top: col.scrollTop + (r.top - c.top) - c.height * 0.3, behavior: 'smooth' });
+}
+function bindFollow() {
+  const col = document.querySelector('.col-left'); if (!col) return;
+  const touch = () => { listTouched = performance.now(); };
+  col.addEventListener('wheel', touch, { passive: true }); col.addEventListener('touchmove', touch, { passive: true }); col.addEventListener('pointerdown', touch);
+}
+
 /* ---------------- cut info ---------------- */
 let lastCutIdx = -2;
 function updateCutInfo() {
@@ -598,6 +649,7 @@ function updateCutInfo() {
     if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', li === -1);
     S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li));
     S.curLine = li;
+    followLine(li);
   }
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
@@ -619,8 +671,9 @@ function updateCutInfo() {
 /* ---------------- line list ---------------- */
 function renderLines() {
   const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
-  const ov = S.project.overrides;
+  const ov = S.project.overrides, R = typeof exportRangeLines === 'function' ? exportRangeLines() : null;
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
+  const cutOpts = '<option value="">カット 自動</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">カット ${n}</option>`).join('');
 
   // 先頭の曲タイトル行 (#00)
   if (S.plan && S.plan.titleLine) {
@@ -672,35 +725,50 @@ function renderLines() {
     ol.appendChild(tli);
     S.titleLineEl = tli;
   }
-
   S.plan.lines.forEach((ln, i) => {
     const o = ov[i] || {};
-    const li = document.createElement('li'); li.className = 'ln';
+    const li = document.createElement('li'); li.className = 'ln' + (ln.interlude ? ' is-inter' : '') + (R && i >= R.from && i <= R.to ? ' in-range' : '');
     const manual = S.project.timing.lineTimes && S.project.timing.lineTimes[i] != null;
+    const label = ln.interlude ? `〔間奏${ln.secs ? ' ' + ln.secs + '秒' : ''}〕` : ln.text;
     li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span>
       <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="開始（秒）${manual ? '・手動' : '・自動'}" aria-label="${i + 1}行目の開始秒" style="${manual ? 'border-color:var(--cyan)' : ''}">
-      <span class="txt" title="${escapeHtml(ln.text)}">${escapeHtml(ln.text)}</span>
+      <span class="txt" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <select aria-label="レイアウト指定">${layoutOpts}</select>
-        <button class="icon ghost tap-from-here" title="この行からタップ同期を開始">⏱️</button>
-        <button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>
-        <button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>
+        <button class="icon ghost edit" title="この行の歌詞を直す" aria-label="${i + 1}行目の歌詞を直す">${ICON.pen}</button>
+        ${ln.interlude ? '' : `<select class="ncut" aria-label="${i + 1}行目のカット数">${cutOpts}</select>`}
+        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="レイアウト指定">${layoutOpts}</select>`}
+        <button class="icon ghost tapfrom tap-from-here" title="この行からタップで同期し直す" aria-label="${i + 1}行目からタップ">${ICON.tap || '⏱️'}</button>
+        <button class="icon ghost rng" title="書き出す範囲にする（Shift+クリックで範囲を広げる）" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="${i + 1}行目を書き出す範囲に">${ICON.range}</button>
+        ${ln.interlude ? '' : `<button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>`}
+        ${ln.interlude ? '' : `<button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
       </span></div>`;
-    li.querySelector('select').value = o.layout || '';
-    li.querySelector('.time').addEventListener('change', e => {
+    const q = sel => li.querySelector(sel);
+    if (q('.lay')) q('.lay').value = o.layout || '';
+    if (q('.ncut')) q('.ncut').value = o.cuts ? String(o.cuts) : '';
+    q('.time').addEventListener('change', e => {
       const v = parseFloat(e.target.value);
+      pushEdit();
       if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
       if (isFinite(v)) S.project.timing.lineTimes[i] = Math.max(0, v); else delete S.project.timing.lineTimes[i];
       replan();
     });
-    li.querySelector('.txt').addEventListener('click', () => { S.curLine = i; seek(ln.start + 0.001); });
-    li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
-    li.querySelector('.tap-from-here').addEventListener('click', (e) => {
-      e.stopPropagation();
-      startTap(i);
+    q('.txt').addEventListener('click', () => { S.curLine = i; seek(ln.start + 0.001); });
+    q('.txt').addEventListener('dblclick', () => editLine(li, ln));
+    if (q('.edit')) q('.edit').addEventListener('click', () => editLine(li, ln));
+    if (q('.lay')) q('.lay').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
+    if (q('.ncut')) q('.ncut').addEventListener('change', e => {
+      remember();
+      if (S.project.rowCache) delete S.project.rowCache[i];
+      setOv(i, { cuts: +e.target.value || undefined, single: undefined });
+      replan();
+      commit('行' + (i + 1) + 'カット数変更');
+      seek(ln.start + 0.001);
     });
-    li.querySelector('.dice').addEventListener('click', () => {
+    const tapBtn = q('.tapfrom') || q('.tap-from-here');
+    if (tapBtn) tapBtn.addEventListener('click', (e) => { e.stopPropagation(); startTap(i); });
+    if (q('.rng')) q('.rng').addEventListener('click', e => setExportRange(i, e.shiftKey));
+    if (q('.dice')) q('.dice').addEventListener('click', () => {
       const cur = ov[i] || {};
       if (cur.lock) return;
       remember();
@@ -710,13 +778,13 @@ function renderLines() {
       commit('行' + (i + 1) + '再抽選');
       seek(ln.start + 0.001);
     });
-    li.querySelector('.lock').addEventListener('click', () => {
+    if (q('.lock')) q('.lock').addEventListener('click', () => {
       const cur = ov[i] || {};
       if (cur.lock) setOv(i, { lock: false, lockedSeed: undefined });
       else setOv(i, { lock: true, lockedSeed: ln.seed });
       replan();
     });
-    const cutsEl = li.querySelector('.cuts');
+    const cutsEl = q('.cuts');
     S.plan.cuts.filter(c => c.line === i && J.LAYOUTS[c.layout] && !J.LAYOUTS[c.layout].special).forEach(c => {
       const sp = document.createElement('span'); sp.textContent = J.LAYOUTS[c.layout].name; sp.title = `${c.text}｜${J.ENTER[c.enter].name} → ${J.EXIT[c.exit].name}`;
       sp.style.borderColor = `hsla(${layoutHue(c.layout)},70%,58%,0.7)`;
@@ -727,6 +795,128 @@ function renderLines() {
   });
   $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
   updateCutInfo();
+  if (typeof syncRangeUI === 'function') syncRangeUI();
+}
+
+/* ---------------- 行から歌詞を直す ---------------- */
+// the lyrics text is the source: a plan line knows the row it came from (ln.src); LRC time tags on that row are kept
+const LRC_PREFIX = /^\s*(?:\[\d+:\d+(?:[.:]\d+)?\])*/;
+function editLine(li, ln) {
+  if (ln.src == null || li.querySelector('.txt-edit')) return;
+  const rows = S.project.lyrics.replace(/\r/g, '').split('\n'), row = rows[ln.src] || '';
+  const pre = (row.match(LRC_PREFIX) || [''])[0], body = row.slice(pre.length).trim();
+  const txt = li.querySelector('.txt'), inp = document.createElement('input');
+  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `${ln.index + 1}行目の歌詞`);
+  inp.title = '記法（/ 区切り・*強調*・行末の ! ・| 注釈・[間奏 8]）もそのまま使えます。Enter で確定、Esc で取り消し';
+  txt.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = ok => {
+    if (done) return; done = true;
+    const v = inp.value.trim();
+    if (ok && v && v !== body) {
+      pushEdit();
+      rows[ln.src] = pre + v;
+      S.project.lyrics = rows.join('\n'); $('lyrics').value = S.project.lyrics;
+      if (S.project.rowCache) delete S.project.rowCache[ln.index];
+      if (S.project.timing && S.project.timing.cutTimes) {
+        S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== ln.index);
+      }
+      replan(); flushSave(); toast(`${ln.index + 1}行目の歌詞を直しました`);
+    } else renderLines();
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
+  inp.addEventListener('blur', () => finish(true));
+}
+
+/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z） ---------------- */
+// separate from the ◀ ▶ history of looks: lyric edits, dragged / typed / tapped line times
+const ED = { undo: [], redo: [] };
+const edSnap = () => JSON.stringify({ lyrics: S.project.lyrics, lineTimes: S.project.timing.lineTimes || {} });
+function pushEdit() { const s = edSnap(); if (ED.undo[ED.undo.length - 1] !== s) ED.undo.push(s); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = []; updateEditBtns(); }
+function edGo(d) {
+  const from = d < 0 ? ED.undo : ED.redo, to = d < 0 ? ED.redo : ED.undo;
+  if (!from.length) return;
+  const o = JSON.parse(from.pop()), cur = JSON.parse(edSnap());
+  if ('ov' in o) { cur.ov = S.project.overrides; cur.range = S.project.exportRange || null; }   // clearLyrics() also cleared these
+  to.push(JSON.stringify(cur));
+  S.project.lyrics = o.lyrics; S.project.timing.lineTimes = o.lineTimes; $('lyrics').value = o.lyrics;
+  if ('ov' in o) { S.project.overrides = o.ov || {}; S.project.exportRange = o.range || null; }
+  replan(); flushSave(); updateEditBtns();
+  toast(d < 0 ? '元に戻しました' : 'やり直しました');
+}
+// 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
+function clearLyrics() {
+  if (S.tap || S.exporting) return;
+  const P = S.project;
+  if (!P.lyrics.trim() && !Object.keys(P.timing.lineTimes || {}).length) { $('lyrics').focus(); return; }
+  const snap = JSON.parse(edSnap()); snap.ov = P.overrides || {}; snap.range = P.exportRange || null;
+  ED.undo.push(JSON.stringify(snap)); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = [];
+  pause();
+  P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
+  replan(); flushSave(); updateEditBtns(); seek(0);
+  toast('歌詞を消しました（「元に戻す」か Ctrl+Z で戻せます）');
+}
+// 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
+let audioNameDefault = '';
+async function resetAll() {
+  if (S.exporting) return;
+  if (S.tap) stopTap();
+  pause();
+  S.project = mergeProject(null); S.project.lyrics = '';
+  S.audio = null; if ($('audioFile')) $('audioFile').value = '';
+  if (J.forgetSong) await J.forgetSong();
+  $('audioName').textContent = audioNameDefault;
+  ED.undo = []; ED.redo = []; H.list = []; H.i = -1;
+  TL.z = 1; TL.off = 0;
+  $('lyrics').value = ''; fontKey = '';
+  syncUI(); replan(); commit(); updateEditBtns(); flushSave(); seek(0);
+  toast('初期化しました');
+}
+function updateEditBtns() { const u = $('btnUndoEdit'); if (u) u.disabled = !ED.undo.length; }
+
+/* ---------------- 書き出す範囲（選んだ行だけ） ---------------- */
+function exportRangeLines() {
+  const r = S.project.exportRange, n = S.plan ? S.plan.lines.length : 0;
+  if (!r || !n || !(r.from >= 0)) return null;
+  const from = Math.min(n - 1, r.from | 0), to = Math.min(n - 1, Math.max(from, r.to | 0));
+  return { from, to };
+}
+function exportRange() {
+  const R = exportRangeLines(); if (!R) return null;
+  const L = S.plan.lines, a = L[R.from], b = L[R.to], last = R.to === L.length - 1;
+  const t0 = Math.max(0, a.start - 0.25);
+  const t1 = last ? S.plan.duration : Math.min(L[R.to + 1].start, (b.interlude ? b.end : b.visEnd) + 0.35);
+  return { t0, t1 };
+}
+function rangeSuffix() { const R = exportRangeLines(); if (!R) return ''; const f = n => String(n + 1).padStart(2, '0'); return '_L' + f(R.from) + (R.to > R.from ? '-' + f(R.to) : ''); }
+function setExportRange(i, extend) {
+  const R = exportRangeLines();
+  if (extend && R) S.project.exportRange = { from: Math.min(R.from, i), to: Math.max(R.to, i) };
+  else if (R && R.from === i && R.to === i) S.project.exportRange = null;          // click again: back to the whole song
+  else S.project.exportRange = { from: i, to: i };
+  flushSave(); renderLines();
+  const R2 = exportRangeLines();
+  toast(R2 ? `書き出す範囲：${R2.from + 1}${R2.to > R2.from ? '〜' + (R2.to + 1) : ''}行目` : '書き出す範囲：全体');
+}
+function syncRangeUI() {
+  const R = exportRangeLines(), n = S.plan.lines.length;
+  const opts = (sel, first) => `<option value="-1">${first}</option>` + S.plan.lines.map((ln, i) => `<option value="${i}">${String(i + 1).padStart(2, '0')} ${escapeHtml((ln.interlude ? '〔間奏〕' : ln.text).slice(0, 14))}</option>`).join('');
+  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '全体'); el.value = R ? String(R.from) : '-1'; });
+  document.querySelectorAll('.rngTo').forEach(el => { el.innerHTML = opts(el, '—'); el.value = R ? String(R.to) : '-1'; el.disabled = !R; });
+  const r = exportRange();
+  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} 〜 ${J.fmtTime(r.t1)}（${(r.t1 - r.t0).toFixed(1)}秒）` : `全体（${S.plan.duration.toFixed(1)}秒）`; });
+}
+function bindRangeUI() {
+  document.querySelectorAll('.rngFrom').forEach(el => el.addEventListener('change', () => {
+    const v = +el.value, R = exportRangeLines();
+    S.project.exportRange = v < 0 ? null : { from: v, to: R ? Math.max(v, R.to) : v };
+    flushSave(); renderLines();
+  }));
+  document.querySelectorAll('.rngTo').forEach(el => el.addEventListener('change', () => {
+    const v = +el.value, R = exportRangeLines(); if (!R) return;
+    S.project.exportRange = v < 0 ? { from: R.from, to: R.from } : { from: Math.min(R.from, v), to: Math.max(R.from, v) };
+    flushSave(); renderLines();
+  }));
 }
 function setOv(i, patch) {
   const cur = Object.assign({}, S.project.overrides[i] || {}, patch);
@@ -1076,6 +1266,10 @@ function syncOut() {
   $('outQuality').value = S.project.quality || 'high'; $('outAudio').checked = S.project.includeAudio !== false;
   const k = J.keyMode(S.project) || 'off';
   $('outKey').value = k; $('eKey').value = k;
+  $('outCenter').checked = $('eCenter').checked = !!S.project.centerFree;
+  const tall = J.designSize(S.project.aspect)[1] > J.designSize(S.project.aspect)[0] * 1.1;
+  document.querySelectorAll('.center-dir').forEach(el => { el.hidden = !(S.project.centerFree && tall); });
+  document.querySelectorAll('.centerDirSel').forEach(el => { el.value = S.project.centerDir === 'lr' ? 'lr' : 'tb'; });
   const kb = $('keyBadge');
   kb.hidden = k === 'off';
   if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
@@ -1085,15 +1279,25 @@ async function codecNote() {
   const vc = await J.pickVideoCodec(w, h, S.project.fps, 12e6);
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  ['btnMP4File', 'eMP4File'].forEach(id => { $(id).hidden = !vc || !canPickFile(); });
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'btnPNGL', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'btnPNGL', 'eMP4', 'btnMP4File', 'eMP4File'];
 function baseName() {
   const k = J.keyMode(S.project);
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
+const canPickFile = () => typeof window.showSaveFilePicker === 'function' && !document.documentElement.classList.contains('cep') && typeof VideoEncoder !== 'undefined';
 async function runExport(kind) {
   if (S.exporting) return;
+  // 大きな動画用: the save dialog must open straight from the click (before anything is awaited)
+  let file = null, fileName = '';
+  if (kind === 'mp4file') {
+    try {
+      const hnd = await window.showSaveFilePicker({ suggestedName: baseName() + rangeSuffix() + '.mp4', types: [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] });
+      file = await hnd.createWritable(); fileName = hnd.name;
+    } catch (e) { if (e && e.name === 'AbortError') return; toast('保存先を開けませんでした: ' + (e && e.message ? e.message : e)); return; }
+  }
   pause();
   const ac = new AbortController(); S.exporting = ac;
   const boxes = [...document.querySelectorAll('.exp-box')];
@@ -1106,19 +1310,30 @@ async function runExport(kind) {
   const t0 = performance.now();
   try {
     await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS, J.fontsOfPlan(S.plan));
-    if (kind === 'mp4') {
-      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal });
-      txt.textContent = `完成 ${(r.blob.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
-      const res = await J.saveFile(baseName() + '.mp4', r.blob);
-      if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
+    if (kind === 'mp4' || kind === 'mp4file') {
+      const plan = S.plan, range = exportRange(), span = J.exportSpan(plan, range);
+      const r = await J.exportMP4({ plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, range, file });
+      file = null;
+      txt.textContent = `完成 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB・' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
+      if (r.blob) {
+        const res = await J.saveFile(baseName() + rangeSuffix() + '.mp4', r.blob);
+        if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
+      } else txt.textContent += `・「${fileName}」に保存しました`;
+      if (r.tried && r.tried.length) txt.textContent += '（最初の方法では失敗したため、別のエンコーダーで書き出しました）';
+      // audio that some players cannot play (Opus), or none at all: save the soundtrack as WAV next to it
+      if (r.audioWanted && r.audio !== 'aac') {
+        await J.saveFile(baseName() + rangeSuffix() + '_audio.wav', J.audioWav(S.audio.buffer, span.dur, span.t0));
+        txt.textContent += r.audio ? '。このブラウザでは音声が Opus になり、iPhone・QuickTime などでは音が出ないことがあるため、音声を WAV でも保存しました' : '。このブラウザは音声を書き出せないため、音声を WAV で別に保存しました（動画編集ソフトで重ねてください）';
+      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '。曲が読み込まれていないため音声なしです（「曲を読み込む」から読み込み直してください）';
     } else {
-      const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', layers: kind === 'pngl', onProgress, signal: ac.signal });
+      const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', layers: kind === 'pngl', onProgress, signal: ac.signal, range: exportRange() });
       txt.textContent = `完成 ${(blob.size / 1048576).toFixed(1)}MB`;
-      await J.saveFile(baseName() + (kind === 'pnga' ? '_alpha' : kind === 'pngl' ? '_layers' : '') + '_png.zip', blob);
+      await J.saveFile(baseName() + rangeSuffix() + (kind === 'pnga' ? '_alpha' : kind === 'pngl' ? '_layers' : '') + '_png.zip', blob);
     }
   } catch (e) {
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
+    if (file) { try { await file.abort(); } catch (e2) {} }
   } finally {
     S.exporting = null; S.need = true;
     EXP_BTNS.forEach(id => { $(id).disabled = false; });
@@ -1149,15 +1364,17 @@ function inferTapStartLine() {
   return bestIdx;
 }
 
-function startTap(targetLineIdx = null) {
+// start from any line: playback begins a little before that line, earlier lines keep their times
+function startTap(from = null) {
   if (!S.plan.lines.length) return;
-  const startIdx = targetLineIdx != null ? targetLineIdx : inferTapStartLine();
+  const startIdx = from != null ? J.clamp(from | 0, 0, S.plan.lines.length - 1) : inferTapStartLine();
   const ln = S.plan.lines[startIdx];
   if (!ln) return;
 
+  pushEdit();
   remember();
 
-  S.tap = { i: startIdx, startIdx };
+  S.tap = { i: startIdx, from: startIdx, startIdx, done: [] };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
 
   // startIdx 以降の古いカット境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
@@ -1172,38 +1389,44 @@ function startTap(targetLineIdx = null) {
   $('tapPanel').hidden = false;
   $('btnTap').setAttribute('aria-pressed', 'true');
 
-  const lineStart = ln.start || 0;
-  const preRoll = startIdx > 0 ? 1.2 : 0;
-  const seekT = Math.max(0, lineStart - preRoll);
-
-  seek(seekT);
+  const prev = startIdx > 0 ? S.plan.lines[startIdx - 1] : null;
+  const t0 = startIdx === 0 ? 0 : Math.max(0, prev.start + 0.01, ln.start - 1.8);
+  seek(t0);
   play();
   updateTap();
 
-  if (startIdx > 0) {
-    toast(`第 ${startIdx + 1} 行「${ln.text.slice(0, 12)}…」からタップ同期を開始（${seekT.toFixed(1)}秒へ移動）`);
-  }
   $('tapBtn').focus();
+  if (startIdx > 0) {
+    toast(`${startIdx + 1}行目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から再生）`);
+  }
 }
 
 function tapNow() {
   if (!S.tap) return;
   const curIdx = S.tap.i;
+  const LT = S.project.timing.lineTimes;
   let tVal = +S.t.toFixed(3);
 
-  if (curIdx > 0 && S.project.timing.lineTimes && S.project.timing.lineTimes[curIdx - 1] != null) {
-    const prevT = S.project.timing.lineTimes[curIdx - 1];
+  if (curIdx > 0 && LT && LT[curIdx - 1] != null) {
+    const prevT = LT[curIdx - 1];
     if (tVal <= prevT) {
       tVal = +(prevT + 0.05).toFixed(3);
     }
   }
+
+  // 1つ戻る (tapBack) 用の履歴記録
+  const oldCutTimes = S.project.timing.cutTimes ? [...S.project.timing.cutTimes] : null;
+  S.tap.done.push({ i: curIdx, had: LT[curIdx], oldCutTimes });
 
   // 該当行のカット境界を確実にクリアして新タイミングで再導出
   if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
     S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== curIdx);
   }
 
-  S.project.timing.lineTimes[curIdx] = tVal;
+  LT[curIdx] = tVal;
+  // later lines tapped earlier (a previous pass) must not come before this one
+  for (const k of Object.keys(LT)) if (+k > curIdx && LT[k] <= tVal + 0.2) delete LT[k];
+
   S.tap.i++;
   replan();
 
@@ -1213,6 +1436,15 @@ function tapNow() {
   } else {
     updateTap();
   }
+}
+
+function tapBack() {                    // 1つ戻る: undo the last tap and jump back a little
+  if (!S.tap || !S.tap.done.length) return;
+  const d = S.tap.done.pop(), LT = S.project.timing.lineTimes;
+  if (d.had != null) LT[d.i] = d.had; else delete LT[d.i];
+  if (d.oldCutTimes) S.project.timing.cutTimes = d.oldCutTimes;
+  S.tap.i = d.i; replan(); updateTap();
+  seek(Math.max(0, S.t - 3)); if (!S.playing) play();
 }
 
 function stopTap() {
@@ -1329,6 +1561,8 @@ function syncUI() {
   $('snap').checked = !!S.project.timing.snap;
   document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
   document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
+  document.querySelectorAll('.unify-toggle').forEach(el => { el.checked = S.project.unify === true; });
+  document.querySelectorAll('.typeset-toggle').forEach(el => { el.checked = S.project.typeset === true; });
   if ($('lyricLang') && J.LANG_LABEL) { $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; if (typeof langNote === 'function') langNote(); }
   renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); syncBlockInspector(); drawStyleGrid();
 }
@@ -2165,6 +2399,27 @@ function bind() {
       toast('変形をリセットしました');
     });
   }
+  if ($('tlIn')) $('tlIn').addEventListener('click', () => {
+    const curZoom = S.timelineZoom || 1;
+    if (typeof setTlZoom === 'function') setTlZoom(Math.min(10, curZoom * 1.5));
+    else if (typeof tlZoom === 'function') tlZoom(1.6);
+  });
+  if ($('tlOut')) $('tlOut').addEventListener('click', () => {
+    const curZoom = S.timelineZoom || 1;
+    if (typeof setTlZoom === 'function') setTlZoom(Math.max(1, curZoom / 1.5));
+    else if (typeof tlZoom === 'function') tlZoom(1 / 1.6);
+  });
+  if ($('tlFit')) $('tlFit').addEventListener('click', () => {
+    S.timelineScroll = 0;
+    if (typeof setTlZoom === 'function') setTlZoom(1.0);
+    drawTimeline();
+  });
+  if ($('btnUndoEdit')) $('btnUndoEdit').addEventListener('click', () => {
+    if (typeof UndoRedo !== 'undefined' && UndoRedo.undo) UndoRedo.undo();
+    else if (typeof edGo === 'function') edGo(-1);
+  });
+  if ($('tapBack')) $('tapBack').addEventListener('click', tapBack);
+  if (typeof bindRangeUI === 'function') bindRangeUI();
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.tabpane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
@@ -2182,6 +2437,8 @@ function bind() {
   }));
   setSwitch('extra-toggle', 'extra', true, '追加分の演出：使う', '追加分の演出：使わない（最初の公開版の演出だけ）');
   setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
+  setSwitch('unify-toggle', 'unify', true, '統一感：オン（パートごとにそろえ、キメ・モーフ・太さも使います）', '統一感：オフ');
+  setSwitch('typeset-toggle', 'typeset', true, '文字整列：オン（字間・助詞・英字・0.2秒先・効果控えめ）', '文字整列：オフ');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード変更'); });
@@ -2219,7 +2476,17 @@ function bind() {
     toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
   }));
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
+  document.querySelectorAll('.centerDirSel').forEach(el => el.addEventListener('change', e => {
+    S.project.centerDir = e.target.value; syncOut(); replan(); flushSave();
+    toast(e.target.value === 'lr' ? '縦長の画面：左右に分けます' : '縦長の画面：上下に分けます');
+  }));
+  ['outCenter', 'eCenter'].forEach(id => $(id).addEventListener('change', e => {
+    S.project.centerFree = e.target.checked; syncOut(); replan(); flushSave();
+    const tall = S.plan.H > S.plan.W * 1.1 && S.project.centerDir !== 'lr';
+    toast(e.target.checked ? `中央を空けました：文字と演出を${tall ? '上下' : '左右'}に置きます` : '中央を空けるのをやめました');
+  }));
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
+  ['btnMP4File', 'eMP4File'].forEach(id => $(id).addEventListener('click', () => runExport('mp4file')));
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   $('btnPNGL').addEventListener('click', () => runExport('pngl'));
@@ -2242,7 +2509,15 @@ function bind() {
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close ? dlg.close() : dlg.removeAttribute('open'); });   // click on the backdrop
   $('btnSave').addEventListener('click', () => J.saveFile(baseName() + '.jizura.json', JSON.stringify(S.project, null, 1)));
-  $('btnAE').addEventListener('click', () => J.saveFile(baseName() + '_ae.json', JSON.stringify(J.planForAE(S.plan, S.project), null, 1)));
+  $('btnAE').addEventListener('click', () => J.saveFile(baseName() + rangeSuffix() + '_ae.json', JSON.stringify(J.planForAE(S.plan, S.project, exportRange()), null, 1)));
+  audioNameDefault = $('audioName').textContent;
+  $('btnClearLyrics').addEventListener('click', clearLyrics);
+  $('btnReset').addEventListener('click', () => {
+    const dlg = $('resetDlg');
+    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します。元に戻すことはできません。')) resetAll(); return; }
+    dlg.returnValue = ''; dlg.showModal();
+  });
+  $('resetDlg').addEventListener('close', () => { if ($('resetDlg').returnValue === 'reset') resetAll(); });
   $('fileProject').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     try { S.project = mergeProject(JSON.parse(await f.text())); syncUI(); replan(); }
@@ -2267,7 +2542,10 @@ function bind() {
     const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
     if (S.tap && e.code === 'Escape') { pause(); stopTap(); return; }
-    if (typing || $('termsDlg').open) return;
+    if (S.tap && e.code === 'Backspace' && !typing) { e.preventDefault(); tapBack(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !typing && !S.tap) { e.preventDefault(); edGo(e.shiftKey ? 1 : -1); return; }
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY' && !typing && !S.tap) { e.preventDefault(); edGo(1); return; }
+    if (typing || $('termsDlg').open || $('resetDlg').open) return;
     if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play(); }
     else if (e.code === 'ArrowRight') seek(S.t + (e.shiftKey ? 1 : 1 / S.plan.fps));
     else if (e.code === 'ArrowLeft') seek(S.t - (e.shiftKey ? 1 : 1 / S.plan.fps));
@@ -2276,19 +2554,84 @@ function bind() {
   });
   window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); });
   if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); }).observe($('viewport'));
+  bindFollow();
 }
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
-async function loadAudioFile(f) {
+async function loadAudioFile(f, restored) {
   $('audioName').textContent = '解析中…';
   try {
     pause();
     S.audio = await J.analyzeAudio(f);
-    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）`;
+    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）` + (restored ? '・前回の曲' : '');
+    S.project.audioName = f.name;
+    if (!restored && J.saveSong) J.saveSong(f);             // kept in this browser: a reload does not drop the song from exports
     S.project.timing.snap = true;
     syncUI(); replan();
     return true;
   } catch (err) { $('audioName').textContent = '読み込めませんでした: ' + err.message; S.audio = null; return false; }
+}
+
+/* ---------------- かんたんモードの案内ツアー ---------------- */
+const TOUR = [
+  { t: () => $('lyrics'), title: '1. 歌詞を入れる', text: '1行が1フレーズになります。空行で少し間が空き、[間奏 8] と書くと8秒の間奏（背景と装飾だけ）になります。' },
+  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 曲を読み込む', text: 'mp3 などを読み込むと拍を検出して、カットの切り替わりを合わせます。曲がなくても作れます。「タップで同期」で行の頭を合わせることもできます。' },
+  { t: () => $('btnOmakaseBig'), title: '3. おまかせで作る', text: 'スタイル・雰囲気・動き・配色・構成をまるごと決めます。押すたびに別の案になり、「◀ 前の案」で戻れます。' },
+  { t: () => $('btnPlay'), title: '4. 再生して確認する', text: '再生して見てみましょう。下のタイムラインでは、行の区切りをドラッグして動かせます（＋−で拡大）。' },
+  { t: () => $('lineList'), title: '5. 気になる行だけ直す', text: '行ごとに、歌詞を直す（✎）、カット数を決める、この行からタップし直す（◎）、この行だけ作り直す（サイコロ）ができます。' },
+  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 書き出す', text: '画面比（縦長 9:16 など）と解像度を選んで MP4 を書き出します。「書き出す範囲」で選んだ行だけを書き出すこともできます。' },
+];
+const TR = { i: -1 };
+function tourShow(i) {
+  const el = $('tour'), n = TOUR.length;
+  if (i < 0 || i >= n) return tourEnd();
+  TR.i = i;
+  const st = TOUR[i], tg = st.t();
+  el.hidden = false;
+  el.querySelector('.tour-step').textContent = `${i + 1} / ${n}`;
+  el.querySelector('.tour-title').textContent = st.title;
+  el.querySelector('.tour-text').textContent = st.text;
+  el.querySelector('.tour-prev').disabled = i === 0;
+  el.querySelector('.tour-next').textContent = i === n - 1 ? 'はじめる' : '次へ';
+  if (tg && tg.scrollIntoView) tg.scrollIntoView({ block: 'center', behavior: 'auto' });
+  requestAnimationFrame(() => tourPlace(tg));
+  el.querySelector('.tour-next').focus();
+}
+function tourPlace(tg) {
+  const el = $('tour'), spot = el.querySelector('.tour-spot'), bub = el.querySelector('.tour-bub');
+  const vw = window.innerWidth, vh = window.innerHeight, pad = 6;
+  const r = tg ? tg.getBoundingClientRect() : { left: vw / 2, top: vh / 2, width: 0, height: 0, right: vw / 2, bottom: vh / 2 };
+  const x0 = Math.max(4, r.left - pad), y0 = Math.max(4, r.top - pad), x1 = Math.min(vw - 4, r.right + pad), y1 = Math.min(vh - 4, r.bottom + pad);
+  Object.assign(spot.style, { left: x0 + 'px', top: y0 + 'px', width: Math.max(0, x1 - x0) + 'px', height: Math.max(0, y1 - y0) + 'px' });
+  const bw = bub.offsetWidth, bh = bub.offsetHeight, gap = 12;
+  let top = y1 + gap <= vh - bh - 8 ? y1 + gap : y0 - gap - bh >= 8 ? y0 - gap - bh : Math.max(8, vh - bh - 8);
+  let left = J.clamp(x0 + (x1 - x0) / 2 - bw / 2, 8, vw - bw - 8);
+  Object.assign(bub.style, { top: top + 'px', left: left + 'px' });
+}
+function tourStart() {
+  if (S.exporting || S.tap) return;
+  if (S.mode !== 'easy') setMode('easy');
+  pause(); tourShow(0);
+}
+function tourEnd() {
+  $('tour').hidden = true; TR.i = -1;
+  try { localStorage.setItem('jizura.tourDone', '1'); } catch (e) {}
+}
+function bindTour() {
+  const el = $('tour');
+  el.querySelector('.tour-next').addEventListener('click', () => tourShow(TR.i + 1));
+  el.querySelector('.tour-prev').addEventListener('click', () => tourShow(TR.i - 1));
+  el.querySelector('.tour-skip').addEventListener('click', tourEnd);
+  $('btnTour').addEventListener('click', tourStart);
+  document.addEventListener('keydown', e => {
+    if (TR.i < 0) return;
+    if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); tourShow(TR.i + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopImmediatePropagation(); tourShow(TR.i - 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); tourEnd(); }
+    else if (e.key !== 'Tab') { e.stopImmediatePropagation(); }
+  }, true);
+  window.addEventListener('resize', () => { if (TR.i >= 0) tourPlace(TOUR[TR.i].t()); });
+  window.addEventListener('scroll', () => { if (TR.i >= 0) tourPlace(TOUR[TR.i].t()); }, true);
 }
 
 /* ---------------- boot ---------------- */
@@ -2298,13 +2641,17 @@ function boot() {
   bind(); initVolume(); syncUI(); replan();
   let mode = 'easy'; try { mode = localStorage.getItem('jizura.mode') || 'easy'; } catch (e) {}
   setMode(mode); commit();
+  bindTour();
+  let seen = false; try { seen = localStorage.getItem('jizura.tourDone') === '1'; } catch (e) {}
+  if (!seen && S.mode === 'easy' && !window.__adobe_cep__) setTimeout(tourStart, 600);   // first visit: show the tour once
   // open on a representative frame (end of the first cut's entrance)
   const c0 = S.plan.cuts.find(c => c.line >= 0);
   if (c0) seek(c0.start + Math.min(c0.dur * 0.6, c0.inDur + 0.25));
   requestAnimationFrame(tick);
+  // the song used last time (same name as the saved project's) comes back after a reload
+  if (J.loadSong && S.project.audioName) J.loadSong().then(f => { if (f && f.name === S.project.audioName && !S.audio) loadAudioFile(f, true); });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
-// hooks for hosts that embed the app (the After Effects CEP panel)
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo };
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, exportRange, exportRangeLines };
 })();
