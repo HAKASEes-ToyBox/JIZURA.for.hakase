@@ -316,7 +316,6 @@ function hitTestTimeline(px, py, w, h, dpr) {
       if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'images', block: b, index: i };
     }
   }
-  }
 
   // Track 2: 背景動画
   const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
@@ -2653,5 +2652,7 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
+window.S = S;
+window.J = J;
 J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, exportRange, exportRangeLines };
 })();

@@ -3906,14 +3906,6 @@ J.plan = (project, audio) => {
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
       }
-        if (trans) {
-          const TD = J.TRANS[trans];
-          transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
-          transP = TD.plan ? TD.plan(rng, st) : {};
-          enter = 'cut'; inDur = 0.12;
-          prevCut.exit = 'cut'; prevCut.outDur = 0;
-        }
-      }
       const cut = makeCut({ text: txt, lineText: ln.text, note: ln.note, line: li, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: cutSeed, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur, zone: Z });
       if (kime) cut.kime = true;
@@ -30658,7 +30650,6 @@ function hitTestTimeline(px, py, w, h, dpr) {
       if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'images', block: b, index: i };
     }
   }
-  }
 
   // Track 2: Latar動画
   const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
@@ -32995,6 +32986,8 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
+window.S = S;
+window.J = J;
 J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, exportRange, exportRangeLines };
 })();
 
