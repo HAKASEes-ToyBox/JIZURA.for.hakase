@@ -1,12 +1,65 @@
-# JIZURA 字面 — 文字PV自動構成ツール
+# JIZURA 字面 — Hakase Edition (for hakase)
 
-**English edition:** [Open the app](https://852wa.github.io/JIZURA/en/) · [English guide](README.en.md)　／　**Bahasa Indonesia**：[Buka](https://852wa.github.io/JIZURA/id/) · [Panduan](README.id.md)　**繁體中文**：[開啟](https://852wa.github.io/JIZURA/zh-hant/)　**简体中文**：[打开](https://852wa.github.io/JIZURA/zh-hans/)　**한국어**：[열기](https://852wa.github.io/JIZURA/ko/) · [한국어 가이드](README.ko.md)
+> **歌詞を入れるだけで、魂の宿ったリリックモーションが立ち上がる。**  
+> 本プロジェクトは、**hakoniwa（852wa）様** が制作・公開された素晴らしいオープンソースの文字PV自動構成ツール [JIZURA](https://github.com/852wa/JIZURA)（MIT License）に深く感銘を受け、敬意を持ってフォーク・機能拡張させていただいたエディションです。
+
+---
+
+## 🙏 本家様（Original JIZURA）への謝辞と敬意
+
+本家『**JIZURA 字面**』が持つ、洗練された700種以上の演出部品、軽やかで無駄のない設計思想、そして何よりも「歌詞と音楽を入れるだけで、誰でも一瞬でプロ品質の文字PVを構成できる」という魔法のような体験を生み出してくださった本家制作者・**hakoniwa（@852wa）様** に、心よりの感謝と最大限のリスペクトを捧げます。
+
+本エディション（Hakase Edition）は、本家の持つ美学や直感性を一切損なうことなく、長尺楽曲の制作現場やタイムライン編集において「ここがもっと自由になったら嬉しい」という実戦的な要望を丁寧に具現化した拡張フォークです。
+
+- **本家 JIZURA Web版**: <https://852wa.github.io/JIZURA/>
+- **本家 JIZURA GitHub**: <https://github.com/852wa/JIZURA>
+- **本家 制作者様**: hakoniwa様（[@852wa](https://twitter.com/852wa)）
+- **本家 ライセンス**: MIT License (Copyright (c) 2026 hakoniwa)
+
+---
+
+## ⬇️ ダウンロード ＆ いますぐ使う方法（利用案内）
+
+インストール不要。ブラウザ（Google Chrome または Microsoft Edge 推奨）があれば、**インターネット接続がない完全オフライン環境でも動作します**。  
+入力した歌詞・楽曲・画像・動画データはすべてお使いのPC（ブラウザ内）だけで安全に処理され、外部サーバーに送信されることは一切ありません。
+
+### 方法1：ブラウザで今すぐ使う（オンライン版）
+以下の公開URLを開くだけですぐにお使いいただけます：  
+👉 **<https://hakasees-toybox.github.io/JIZURA.for.hakase/>**
+
+### 方法2：ダウンロードして手元で使う（完全オフライン・ローカル版 / 推奨）
+1. 画面右上の緑色の **「Code」** ボタン ➔ **「Download ZIP」** をクリックしてZIPファイルを保存します。  
+   （または [Releases ページ](https://github.com/HAKASEes-ToyBox/JIZURA.for.hakase/releases) から最新版のZIPを取得）
+2. ダウンロードした ZIP ファイルを任意の場所に展開（解凍）します。
+3. 展開したフォルダの中にある **`index.html`** を、Google Chrome または Microsoft Edge で開いてください。
+   - インストール作業やコマンド実行は一切不要です。
+   - 完全オフライン環境でも、動画の編集・プレビュー・MP4/PNG書き出しの全機能をご利用いただけます。
+
+---
+
+## ✨ Hakase Edition で追加された主な機能
+
+本家の軽快さをそのままに、本格的な映像制作に対応するためのタイムライン操作・演出保護・エクスポート強化を行っています。
+
+| 機能 | 概要 |
+| :--- | :--- |
+| 🎬 **マルチトラック対応** | テキストトラック（Track 0）に加え、**画像トラック（Track 1）** と **動画トラック（Track 2）** を新設。タイムライン上の自由な位置に複数の静止画や動画素材を配置・オーバーレイできます。 |
+| ✂️ **タイムライン操作の強化** | 各カットの**伸縮（ドラッグでトリミング）**、**並び替え（ドラッグ＆ドロップ）**、**安全カット分割**（1行を任意の位置で分割・統合）、**不要カットの個別削除**に対応。 |
+| 🛡️ **元に戻す（Ctrl+Z）の完全保護** | 操作の取り消し・やり直しを行っても、読み込んだ画像・動画のリンクが切れたり、演出属性が意図せず変化してしまったりしないよう、プロジェクトの整合性を完全保護。 |
+| 👆 **「ここからタップ同期」** | 行リストの「◎」ボタンを押すことで、**曲の途中からでも即座にタップ同期（Spaceキー）を再開・修正**可能。長尺曲の部分修正が数秒で完了します。 |
+| 🎲 **行キャッシュ保護 ＆ 独立再抽選** | お気に入りのカットはそのままに、変更したい行だけをサイコロで独立再抽選。他の行の演出やメディアリンクを巻き込んで破壊しません。 |
+| 🏷️ **タイトル行（Lカット）独自演出保持** | 冒頭のタイトル（カット #00）に独自のキーフレーム・演出・書体設定を個別保持可能。 |
+| 🔄 **動画素材ループ同期 ＆ 出力スタール防止** | タイムラインに配置した動画素材が短尺であっても、エクスポート出力時に途中でフリーズすることなく、終了時刻までシームレスに複数周回ループ再生し続けます。 |
+
+---
+
+# JIZURA 字面 — オリジナル基本機能・ガイド
+
+**English edition:** [Open the app](https://852wa.github.io/JIZURA/en/) · [English guide](README.en.md)　／　**Bahasa Indonesia**：[Buka](https://852wa.github.io/JIZURA/id/) · [Panduan](README.id.md)　**繁體中文**：[開啟](https://852wa.github.io/JIZURA/zh-hant/)　**简体中文**：[打开](https://852wa.github.io/JIZURA/zh-hans/)　**한국어**：[열기](https://852wa.github.io/JIZURA/ko/) · [한국어 가イド](README.ko.md)
 
 英語版 AE パネル：[ScriptUI](https://852wa.github.io/JIZURA/JIZURA_AE_en.jsx) · [CEP](https://852wa.github.io/JIZURA/JIZURA_CEP_en.zip)
 
 歌詞を入れると、文字PV（リリックモーション）でよく使われる表現を組み合わせてカットを自動で組み立て、MP4 に書き出すブラウザアプリです。レイアウト・動き・装飾・つなぎ・仕上げを 707 の小さな部品（と 24 のスタイル）として持ち、その組み合わせを毎回変えるので、シードを変えれば何度でも別の構成になります。After Effects 用のパネル（スクリプト版と、ブラウザ版の画面をそのまま使える CEP 版）も付属しています。
-
-**▶ ブラウザで使う：<https://852wa.github.io/JIZURA/>**　／　AE パネル：[JIZURA_AE.jsx](https://852wa.github.io/JIZURA/JIZURA_AE.jsx)（スクリプト版。リンク先を右クリック →「名前を付けてリンク先を保存」）・[JIZURA_CEP.zip](https://852wa.github.io/JIZURA/JIZURA_CEP.zip)（CEP 版）
 
 - インストール不要。歌詞・曲・書き出しはすべてブラウザの中で処理され、サーバーには送信されません（外部から読み込むのは Google Fonts のフォントだけで、今の構成で使う書体だけを読み込みます）。
 - おまかせボタン（キー `R`）で、押すたびにスタイル・雰囲気・動き・配色・構成がまるごと変わります。
@@ -340,7 +393,12 @@ python3 build_cep.py          # index.html + ae/ + cep/ → build/com.852wa.jizu
 
 ## ライセンス
 
-[MIT License](LICENSE)。商用・非商用を問わず、使用・改変・再配布できます（著作権表示とライセンス文の同梱が条件です）。
-このツールで作った動画や画像の権利は、作った人（と、その歌詞・曲の権利者）に帰属します。このソフトのライセンスは出力物には及びません。
+本プロジェクトは [MIT License](LICENSE) のもとで公開されています。
+
+- **オリジナル著作権**: Copyright (c) 2026 hakoniwa ([https://github.com/852wa/JIZURA](https://github.com/852wa/JIZURA))
+- **Hakase Edition 改変部分**: Copyright (c) 2026 HAKASEes-ToyBox
+
+商用・非商用を問わず、自由に使用・改変・再配布いただけます（著作権表示とライセンス条文の同梱が必要です）。  
+**このツールで作った動画や画像の権利は、作った人（と、その歌詞・曲・メディアの権利者）に帰属します。** このツールのライセンスが出力物に制限を課すことはありません。
 
 同梱しているサードパーティ製ソフトウェアについては [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。

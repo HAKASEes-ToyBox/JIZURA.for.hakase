@@ -1,4 +1,38 @@
-# JIZURA — Lyric Motion Video Maker
+# JIZURA — Hakase Edition (for hakase)
+
+> **Automatic Lyric Motion Video Maker — Extended Edition**  
+> This project is a respectful, extended fork of [JIZURA](https://github.com/852wa/JIZURA) (MIT License), created by **hakoniwa (@852wa)**.  
+> We express our deepest gratitude and respect to **hakoniwa** for creating such an inspiring and innovative lyric motion engine.
+
+---
+
+### 🙏 Respect & Tribute to the Original Author
+Original JIZURA is an extraordinary web application that turns lyrics into beautiful kinetic typography and lyric videos with over 700 procedural components.
+- **Original JIZURA**: <https://852wa.github.io/JIZURA/>
+- **Original GitHub Repository**: <https://github.com/852wa/JIZURA>
+- **Original Author**: hakoniwa ([@852wa](https://twitter.com/852wa))
+- **Original License**: MIT License (Copyright (c) 2026 hakoniwa)
+
+---
+
+### ✨ Features Added in Hakase Edition
+- **Multi-Track Timeline**: Dedicated Image and Video tracks alongside the Text track. Overlay visual assets freely on the timeline.
+- **Enhanced Timeline Controls**: Cut trimming, reordering, safe split, and individual cut deletion.
+- **Undo / Redo Safety Protection**: Full integrity protection for media links and design attributes during undo/redo operations.
+- **"Tap to Sync from Here"**: Instantly resume or adjust beat syncing starting from any line mid-song.
+- **Line Cache Protection & Independent Reroll**: Reroll individual lines without resetting or altering unaffected lines.
+- **Title Cut (L-cut) Custom Motion**: Independent keyframes and design preservation for title cards.
+- **Loop Sync & Stall Prevention**: Seamless multi-cycle looping for short background video assets during export.
+
+---
+
+### ⬇️ Download & Offline Usage
+- **Web App**: <https://hakasees-toybox.github.io/JIZURA.for.hakase/en/>
+- **Offline / Local Run**: Click **Code** → **Download ZIP**, unpack it, and open **`index.html`** in Chrome or Edge. No installation or server required.
+
+---
+
+# Original JIZURA Documentation & Guide
 
 Turn lyrics into animated lyric videos in your browser. JIZURA combines layouts, entrances, holds, exits, decorations, text treatments, backgrounds, camera moves, effects and transitions. Change the seed or press **Create a variation** to explore another arrangement.
 
@@ -21,7 +55,15 @@ A volume slider next to the play button sets the preview volume (click **Vol** t
 
 Lyric syntax: `[interlude 8]` adds an 8-second instrumental part with background and decorations only (4 seconds without a number); `I remember/the dawn` makes a manual cut; `*word*` emphasizes a word; a final `!` adds a flash and shake; `lyric|note` adds small annotation text; `[01:23.45]lyric` imports an LRC timestamp; `# comment` is ignored.
 
-Use **Save** and **Open** for `.jizura.json` projects. **Export for AE** creates arrangement data to import into the After Effects panel. Generated videos and images belong to their creators; rights to music and lyrics remain with their respective rights holders. Project files, lyrics and audio are handled in the browser. Google Fonts are loaded as needed. The tool is MIT licensed; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Use **Save** and **Open** for `.jizura.json` projects. **Export for AE** creates arrangement data to import into the After Effects panel. Generated videos and images belong to their creators; rights to music and lyrics remain with their respective rights holders. Project files, lyrics and audio are handled in the browser. Google Fonts are loaded as needed.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+- **Original Work Copyright (c) 2026 hakoniwa** ([https://github.com/852wa/JIZURA](https://github.com/852wa/JIZURA))
+- **Hakase Edition Modifications Copyright (c) 2026 HAKASEes-ToyBox**
+
+See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full details.
 
 ## Build and publish
 
