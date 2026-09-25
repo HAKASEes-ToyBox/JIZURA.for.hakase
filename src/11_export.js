@@ -111,6 +111,46 @@ class BlockStore {                    // positioned writes into a list of blocks
   }
   blob(type) { return new Blob(this.blocks.map(b => b.u), { type }); }
 }
+
+async function syncVideosForFrame(t, plan, project) {
+  const promises = [];
+  // 1. タイムライン上の動画トラック（tracks.videos）
+  const tr = (plan && plan.tracks) || (project && project.tracks) || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
+  if (tr && tr.videos) {
+    for (const b of tr.videos) {
+      if (b.element && isFinite(b.element.duration) && b.element.duration > 0) {
+        if (t >= b.start && t < b.end) {
+          const targetTime = (t - b.start) % b.element.duration;
+          if (Math.abs(b.element.currentTime - targetTime) > 0.02) {
+            b.element.currentTime = targetTime;
+            promises.push(new Promise(r => {
+              const onSeeked = () => { b.element.removeEventListener('seeked', onSeeked); r(); };
+              b.element.addEventListener('seeked', onSeeked, { once: true });
+              setTimeout(r, 25);
+            }));
+          }
+        }
+      }
+    }
+  }
+  // 2. 単一背景動画（J.bgMedia）
+  const bgm = (plan && plan.bgMedia) || (project && project.bgMedia) || (typeof J !== 'undefined' ? J.bgMedia : null);
+  if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
+    const targetTime = t % bgm.element.duration;
+    if (Math.abs(bgm.element.currentTime - targetTime) > 0.02) {
+      bgm.element.currentTime = targetTime;
+      promises.push(new Promise(r => {
+        const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
+        bgm.element.addEventListener('seeked', onSeeked, { once: true });
+        setTimeout(r, 25);
+      }));
+    }
+  }
+  if (promises.length > 0) {
+    await Promise.all(promises);
+  }
+}
+
 J.exportMP4 = async (o) => {
   const { plan, project, audio, quality = 'high', onProgress, signal, range, file = null } = o;
   const [w, h] = J.outputSize(project);
@@ -161,18 +201,9 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
       if (signal && signal.aborted) { closeEnc(); throw new Error('キャンセルしました'); }
       if (err) throw err;
       if (venc.state === 'closed') throw new Error('エンコーダーが停止しました');
-      if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
-        const targetTime = (span.t0 + i / fps) % bgm.element.duration;
-        if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
-          bgm.element.currentTime = targetTime;
-          await new Promise(r => {
-            const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
-            bgm.element.addEventListener('seeked', onSeeked, { once: true });
-            setTimeout(r, 25);
-          });
-        }
-      }
-      R.frame(ctx, plan, span.t0 + i / fps, { scale });
+      const curT = span.t0 + i / fps;
+      await syncVideosForFrame(curT, plan, project);
+      R.frame(ctx, plan, curT, { scale });
       const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
       try { venc.encode(vf, { keyFrame: i % (fps * 2) === 0 }); } finally { vf.close(); }
       let spins = 0;
@@ -259,17 +290,8 @@ J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal
   const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
   for (let i = 0; i < total; i += every) {
     if (signal && signal.aborted) throw new Error('キャンセルしました');
-    if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
-      const targetTime = (i / fps) % bgm.element.duration;
-      if (Math.abs(bgm.element.currentTime - targetTime) > 0.03) {
-        bgm.element.currentTime = targetTime;
-        await new Promise(r => {
-          const onSeeked = () => { bgm.element.removeEventListener('seeked', onSeeked); r(); };
-          bgm.element.addEventListener('seeked', onSeeked, { once: true });
-          setTimeout(r, 25);
-        });
-      }
-    }
+    const curT = span.t0 + i / fps;
+    await syncVideosForFrame(curT, plan, project);
     const name = `jizura_${String(i).padStart(5, '0')}.png`;
     for (const layer of layers ? ['back', 'front'] : [null]) {
       R.frame(ctx, plan, span.t0 + i / fps, { scale, transparent: transparent || !!layers, layer });

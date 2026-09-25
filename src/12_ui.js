@@ -218,8 +218,37 @@ function tick(now) {
     }
     S.t = t; S.need = true;
   }
-  if (S.playing && typeof J !== 'undefined' && J.bgMedia && J.bgMedia.type === 'video') S.need = true;
+  if (S.playing) {
+    if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.type === 'video') S.need = true;
+    const tr = S.project && S.project.tracks;
+    if (tr && tr.videos && tr.videos.length > 0) S.need = true;
+  }
+  syncTrackVideos(S.t, S.playing);
   if (S.need) { S.need = false; draw(); }
+}
+function syncTrackVideos(t, isPlaying) {
+  const tr = S.project && S.project.tracks;
+  if (!tr || !tr.videos) return;
+  for (const b of tr.videos) {
+    if (b.element && isFinite(b.element.duration) && b.element.duration > 0) {
+      const active = t >= b.start && t < b.end;
+      const targetTime = (t - b.start) % b.element.duration;
+      if (active) {
+        if (Math.abs(b.element.currentTime - targetTime) > 0.08) {
+          b.element.currentTime = targetTime;
+        }
+        if (isPlaying && b.element.paused) {
+          b.element.play().catch(() => {});
+        } else if (!isPlaying && !b.element.paused) {
+          b.element.pause();
+        }
+      } else {
+        if (!b.element.paused) {
+          b.element.pause();
+        }
+      }
+    }
+  }
 }
 function updateTimeUI() {
   $('timeNow').textContent = J.fmtTime(S.t);
@@ -234,6 +263,7 @@ function play() {
     if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
     v.play().catch(() => {});
   }
+  syncTrackVideos(S.t, true);
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
 }
 function pause() {
@@ -241,6 +271,7 @@ function pause() {
   if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
     J.bgMedia.element.pause();
   }
+  syncTrackVideos(S.t, false);
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
@@ -248,6 +279,7 @@ function seek(t) {
   if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && isFinite(J.bgMedia.element.duration) && J.bgMedia.element.duration > 0) {
     J.bgMedia.element.currentTime = S.t % J.bgMedia.element.duration;
   }
+  syncTrackVideos(S.t, S.playing);
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
   S.need = true;
