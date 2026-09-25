@@ -3727,10 +3727,10 @@ J.plan = (project, audio) => {
     const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : (cachedTitle && cachedTitle.hold && J.HOLD[cachedTitle.hold] ? cachedTitle.hold : 'still');
     const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cachedTitle && cachedTitle.decor ? cachedTitle.decor : pickDecor(rng, st, en, fx, layout, history));
     const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cachedTitle && cachedTitle.treat && J.TREAT[cachedTitle.treat] ? cachedTitle.treat : pickTreat(rng, st, en, fx, LD, false, history));
-    const treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+    const treatP = (cachedTitle && cachedTitle.treatP) ? cachedTitle.treatP : (J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {});
     const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cachedTitle && cachedTitle.cam && J.CAMERA[cachedTitle.cam] ? cachedTitle.cam : pickCam(rng, st, en, fx, LD, false, history));
-    const camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
-    const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - titleStart }, st) : {};
+    const camP = (cachedTitle && cachedTitle.camP) ? cachedTitle.camP : (J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {});
+    const params = (cachedTitle && cachedTitle.params) ? cachedTitle.params : (LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - titleStart }, st) : {});
     const titleCut = makeCut({
       text: title, note: artist, lineText: title, line: -1,
       start: titleStart, end: titleEnd, layout, enter, exit, hold,
@@ -3739,7 +3739,7 @@ J.plan = (project, audio) => {
     plan.cuts.push(titleCut);
     history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
     plan.titleLine = { index: -1, text: title, note: artist, start: titleStart, end: titleEnd, seed: titleSeed, cut: titleCut };
-    newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, cam }];
+    newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, treatP, cam, camP, params }];
   }
 
   // 統一感: sections, repeated lines, キメ lines and the per-section palettes (see makeUnify below)
@@ -3865,20 +3865,20 @@ J.plan = (project, audio) => {
         return [a, b];
       };
       let [inDur, outDur] = durs(enter, exit);
-      let sch = schemeIdx;
-      if (!U && nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
+      let sch = (cached && cached.scheme !== undefined) ? cached.scheme : schemeIdx;
+      if (!cached && !U && nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
       let LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
-      let params = LD.plan ? LD.plan(rng, { text: txt, n: nn, W: LW, H: LH, dur }, st) : {};
+      let params = (cached && cached.params) ? cached.params : (LD.plan ? LD.plan(rng, { text: txt, n: nn, W: LW, H: LH, dur }, st) : {});
       let decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cached && cached.decor ? cached.decor : pickDecor(rng, st, en, fx, layout, history));
       let treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cached && cached.treat && J.TREAT[cached.treat] ? cached.treat : pickTreat(rng, st, en, fx, LD, emph, history));
       if (UU && !cached) { decor = UU.decor(li, decor, { layout, kime, rng }); treat = UU.treat(li, treat, { kime, rng, LD }); }
-      let treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+      let treatP = (cached && cached.treatP) ? cached.treatP : (J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {});
       if (!ov.bg && k > 0 && !U && rng.chance(0.18 * fx.bgSwitch + 0.04)) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
       let bg = ov.bg && J.BG[ov.bg] ? ov.bg : (cached && cached.bg && J.BG[cached.bg] ? cached.bg : (LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg));
       let cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cached && cached.cam && J.CAMERA[cached.cam] ? cached.cam : pickCam(rng, st, en, fx, LD, emph, history));
       if (UU && !cached) cam = UU.cam(li, cam, { kime, emph, rng });
-      let camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
-      let cutSeed = J.h(lineSeed, k, 17);
+      let camP = (cached && cached.camP) ? cached.camP : (J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {});
+      let cutSeed = (cached && cached.seed !== undefined) ? cached.seed : J.h(lineSeed, k, 17);
       // 統一感: a line that comes back (サビ etc.) is shown exactly as the first time
       const again = (UU && !cached) ? UU.again(li, k, txt) : null;
       if (again) {
@@ -3900,8 +3900,8 @@ J.plan = (project, audio) => {
         if (trans && UU && !cached) trans = UU.trans(li, trans, { rng });
         if (trans) {
           const TD = J.TRANS[trans];
-          transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
-          transP = TD.plan ? TD.plan(rng, st) : {};
+          transDur = (cached && cached.transDur !== undefined) ? cached.transDur : J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
+          transP = (cached && cached.transP) ? cached.transP : (TD.plan ? TD.plan(rng, st) : {});
           enter = 'cut'; inDur = 0.12;
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
@@ -3918,7 +3918,11 @@ J.plan = (project, audio) => {
       plan.cuts.push(cut);
       const evMark = plan.events.length;
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
-      newRowCache[li].push({ layout, enter, exit, hold, decor, treat, cam, bg, trans });
+      newRowCache[li].push({
+        layout, enter, exit, hold, decor, treat, treatP,
+        cam, camP, bg, trans, transP, transDur,
+        scheme: sch, seed: cutSeed, params
+      });
       // events at cut start
       // events at cut start — durations are on a 24fps timebase so every output rate looks the same
       const g = fx.glitch * (st.glitchBoost || 1);
@@ -31161,32 +31165,29 @@ function editLine(li, ln) {
   inp.addEventListener('blur', () => finish(true));
 }
 
-/* ---------------- 歌詞 · タイミングの取り消し（Ctrl+Z） ---------------- */
-// separate from the ◀ ▶ history of looks: lyric edits, dragged / typed / tapped line times
-const ED = { undo: [], redo: [] };
-const edSnap = () => JSON.stringify({ lyrics: S.project.lyrics, lineTimes: S.project.timing.lineTimes || {} });
-function pushEdit() { const s = edSnap(); if (ED.undo[ED.undo.length - 1] !== s) ED.undo.push(s); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = []; updateEditBtns(); }
+/* ---------------- 歌詞 · タイミングの取り消し（Ctrl+Z / Ctrl+Y） ---------------- */
+function pushEdit(desc = '歌詞 · タイミング編集') {
+  if (typeof UndoRedo !== 'undefined' && UndoRedo.commit) {
+    UndoRedo.commit(desc);
+  }
+  updateEditBtns();
+}
 function edGo(d) {
-  const from = d < 0 ? ED.undo : ED.redo, to = d < 0 ? ED.redo : ED.undo;
-  if (!from.length) return;
-  const o = JSON.parse(from.pop()), cur = JSON.parse(edSnap());
-  if ('ov' in o) { cur.ov = S.project.overrides; cur.range = S.project.exportRange || null; }   // clearLyrics() also cleared these
-  to.push(JSON.stringify(cur));
-  S.project.lyrics = o.lyrics; S.project.timing.lineTimes = o.lineTimes; $('lyrics').value = o.lyrics;
-  if ('ov' in o) { S.project.overrides = o.ov || {}; S.project.exportRange = o.range || null; }
-  replan(); flushSave(); updateEditBtns();
-  toast(d < 0 ? 'Dibatalkan' : 'Diulang kembali');
+  if (typeof UndoRedo !== 'undefined') {
+    if (d < 0) UndoRedo.undo();
+    else UndoRedo.redo();
+  }
+  updateEditBtns();
 }
 // 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
 function clearLyrics() {
   if (S.tap || S.exporting) return;
   const P = S.project;
   if (!P.lyrics.trim() && !Object.keys(P.timing.lineTimes || {}).length) { $('lyrics').focus(); return; }
-  const snap = JSON.parse(edSnap()); snap.ov = P.overrides || {}; snap.range = P.exportRange || null;
-  ED.undo.push(JSON.stringify(snap)); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = [];
+  remember();
   pause();
   P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
-  replan(); flushSave(); updateEditBtns(); seek(0);
+  replan(); flushSave(); commit('歌詞削除'); updateEditBtns(); seek(0);
   toast('Lirik dihapus (Urungkan atau Ctrl+Z untuk mengembalikan)');
 }
 // 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
@@ -31199,13 +31200,17 @@ async function resetAll() {
   S.audio = null; if ($('audioFile')) $('audioFile').value = '';
   if (J.forgetSong) await J.forgetSong();
   $('audioName').textContent = audioNameDefault;
-  ED.undo = []; ED.redo = []; H.list = []; H.i = -1;
+  if (typeof UndoRedo !== 'undefined') UndoRedo.init(S.project);
+  H.list = []; H.i = -1;
   TL.z = 1; TL.off = 0;
   $('lyrics').value = ''; fontKey = '';
-  syncUI(); replan(); commit(); updateEditBtns(); flushSave(); seek(0);
+  syncUI(); replan(); commit('初期化'); updateEditBtns(); flushSave(); seek(0);
   toast('Editor sudah diatur ulang');
 }
-function updateEditBtns() { const u = $('btnUndoEdit'); if (u) u.disabled = !ED.undo.length; }
+function updateEditBtns() {
+  const u = $('btnUndoEdit');
+  if (u) u.disabled = typeof UndoRedo !== 'undefined' ? !UndoRedo.canUndo() : true;
+}
 
 /* ---------------- 書き出す範囲（選んだbaris だけ） ---------------- */
 function exportRangeLines() {
@@ -31379,11 +31384,65 @@ function updateHist() {
   $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
 
+/* ---------------- メディア要素キャッシュ＆復元マネージャー ---------------- */
+const MediaElementCache = new Map();
+
+function cacheMediaElement(url, element, isVideo, name) {
+  if (!url || !element) return;
+  MediaElementCache.set(url, { element, isVideo, name, ready: true });
+}
+
+function restoreMediaElements(proj) {
+  if (!proj) return;
+  if (proj.tracks) {
+    ['images', 'videos'].forEach(trackName => {
+      const list = proj.tracks[trackName] || [];
+      list.forEach(b => {
+        if (!b.url) return;
+        const cached = MediaElementCache.get(b.url);
+        if (cached && cached.element) {
+          b.element = cached.element;
+          b.ready = true;
+        } else {
+          const isVideo = trackName === 'videos' || b.type === 'video' || /\.(mp4|webm|mov)$/i.test(b.name || '');
+          if (isVideo) {
+            const v = document.createElement('video');
+            v.src = b.url; v.loop = true; v.muted = true; v.playsInline = true;
+            v.play().then(() => { b.ready = true; drawTimeline(); }).catch(() => {});
+            b.element = v;
+            b.ready = true;
+            cacheMediaElement(b.url, v, true, b.name);
+          } else {
+            const img = new Image();
+            img.src = b.url;
+            img.onload = () => { b.ready = true; drawTimeline(); };
+            img.onerror = () => { b.ready = false; };
+            b.element = img;
+            b.ready = true;
+            cacheMediaElement(b.url, img, false, b.name);
+          }
+        }
+      });
+    });
+  }
+  // 単一Latarメディアの復元
+  if (proj.bgMedia && proj.bgMedia.enabled) {
+    if (proj.bgMedia.url) {
+      const cached = MediaElementCache.get(proj.bgMedia.url);
+      if (cached && cached.element) {
+        J.bgMedia = { type: cached.isVideo ? 'video' : 'image', element: cached.element, ready: true, name: proj.bgMedia.name, url: proj.bgMedia.url };
+      }
+    } else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) {
+      proj.bgMedia.url = J.bgMedia.url;
+    }
+  }
+}
+
 /* ---------------- undo / redo (Ctrl+Z / Ctrl+Y) ---------------- */
 const UndoRedo = {
   stack: [],
   index: -1,
-  max: 15,
+  max: 50,
   isApplying: false,
 
   init(proj) {
@@ -31409,6 +31468,7 @@ const UndoRedo = {
     } else {
       this.index++;
     }
+    if (typeof updateEditBtns === 'function') updateEditBtns();
   },
 
   undo() {
@@ -31441,9 +31501,12 @@ const UndoRedo = {
     this.isApplying = true;
     try {
       S.project = JSON.parse(JSON.stringify(entry.project));
+      restoreMediaElements(S.project);
       fontKey = '';
       syncUI();
       replan();
+      drawTimeline();
+      if (typeof updateEditBtns === 'function') updateEditBtns();
     } finally {
       this.isApplying = false;
     }
@@ -32646,16 +32709,19 @@ function bind() {
         await v.play().catch(() => {});
         b.element = v;
         b.ready = true;
+        cacheMediaElement(url, v, true, file.name);
       } else {
         const img = new Image();
         img.src = url;
         await new Promise(r => { img.onload = r; img.onerror = r; });
         b.element = img;
         b.ready = true;
+        cacheMediaElement(url, img, false, file.name);
       }
       syncBlockInspector();
       replan();
       drawTimeline();
+      commit('ブロック素材設定');
       flushSave();
       toast(`素材「${file.name}」をブロックに設定しました`);
       e.target.value = '';
@@ -32676,21 +32742,25 @@ function bind() {
         v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
         await v.play().catch(() => {});
         J.bgMedia = { type: 'video', element: v, ready: true, name: file.name, url };
+        cacheMediaElement(url, v, true, file.name);
       } else {
         const img = new Image();
         img.src = url;
         await new Promise(r => { img.onload = r; img.onerror = r; });
         J.bgMedia = { type: 'image', element: img, ready: true, name: file.name, url };
+        cacheMediaElement(url, img, false, file.name);
       }
       if (!S.project.bgMedia) S.project.bgMedia = {};
       S.project.bgMedia.enabled = true;
       S.project.bgMedia.type = isVideo ? 'video' : 'image';
       S.project.bgMedia.name = file.name;
+      S.project.bgMedia.url = url;
       ['fit', 'scale', 'x', 'y', 'opacity', 'bgBlendMode', 'textBlendMode'].forEach(k => {
         if (S.project.bgMedia[k] !== undefined && J.bgMedia) J.bgMedia[k] = S.project.bgMedia[k];
       });
       syncBgMediaUI();
       replan();
+      commit('Latarメディア設定');
       toast(`${isVideo ? '動画' : '画像'}Latarを設定しました`);
     });
   }
@@ -32858,8 +32928,10 @@ function bind() {
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
+    const tag = (e.target && e.target.tagName) || '';
+    const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     const isCtrl = e.ctrlKey || e.metaKey;
-    if (isCtrl) {
+    if (isCtrl && !typing && !S.tap) {
       const key = e.key.toLowerCase();
       if (key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -32871,13 +32943,9 @@ function bind() {
         return;
       }
     }
-    const tag = (e.target && e.target.tagName) || '';
-    const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
     if (S.tap && e.code === 'Escape') { pause(); stopTap(); return; }
     if (S.tap && e.code === 'Backspace' && !typing) { e.preventDefault(); tapBack(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !typing && !S.tap) { e.preventDefault(); edGo(e.shiftKey ? 1 : -1); return; }
-    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY' && !typing && !S.tap) { e.preventDefault(); edGo(1); return; }
     if (typing || $('termsDlg').open || $('resetDlg').open) return;
     if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play(); }
     else if (e.code === 'ArrowRight') seek(S.t + (e.shiftKey ? 1 : 1 / S.plan.fps));
@@ -32988,7 +33056,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 J.ui = S;
 window.S = S;
 window.J = J;
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, exportRange, exportRangeLines };
+window.$ = $;
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, commit, cacheMediaElement, drawTimeline, MediaElementCache, exportRange, exportRangeLines };
 })();
 
 </script>

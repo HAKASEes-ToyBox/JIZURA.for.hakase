@@ -827,32 +827,29 @@ function editLine(li, ln) {
   inp.addEventListener('blur', () => finish(true));
 }
 
-/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z） ---------------- */
-// separate from the ◀ ▶ history of looks: lyric edits, dragged / typed / tapped line times
-const ED = { undo: [], redo: [] };
-const edSnap = () => JSON.stringify({ lyrics: S.project.lyrics, lineTimes: S.project.timing.lineTimes || {} });
-function pushEdit() { const s = edSnap(); if (ED.undo[ED.undo.length - 1] !== s) ED.undo.push(s); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = []; updateEditBtns(); }
+/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z / Ctrl+Y） ---------------- */
+function pushEdit(desc = '歌詞・タイミング編集') {
+  if (typeof UndoRedo !== 'undefined' && UndoRedo.commit) {
+    UndoRedo.commit(desc);
+  }
+  updateEditBtns();
+}
 function edGo(d) {
-  const from = d < 0 ? ED.undo : ED.redo, to = d < 0 ? ED.redo : ED.undo;
-  if (!from.length) return;
-  const o = JSON.parse(from.pop()), cur = JSON.parse(edSnap());
-  if ('ov' in o) { cur.ov = S.project.overrides; cur.range = S.project.exportRange || null; }   // clearLyrics() also cleared these
-  to.push(JSON.stringify(cur));
-  S.project.lyrics = o.lyrics; S.project.timing.lineTimes = o.lineTimes; $('lyrics').value = o.lyrics;
-  if ('ov' in o) { S.project.overrides = o.ov || {}; S.project.exportRange = o.range || null; }
-  replan(); flushSave(); updateEditBtns();
-  toast(d < 0 ? '元に戻しました' : 'やり直しました');
+  if (typeof UndoRedo !== 'undefined') {
+    if (d < 0) UndoRedo.undo();
+    else UndoRedo.redo();
+  }
+  updateEditBtns();
 }
 // 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
 function clearLyrics() {
   if (S.tap || S.exporting) return;
   const P = S.project;
   if (!P.lyrics.trim() && !Object.keys(P.timing.lineTimes || {}).length) { $('lyrics').focus(); return; }
-  const snap = JSON.parse(edSnap()); snap.ov = P.overrides || {}; snap.range = P.exportRange || null;
-  ED.undo.push(JSON.stringify(snap)); if (ED.undo.length > 60) ED.undo.shift(); ED.redo = [];
+  remember();
   pause();
   P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
-  replan(); flushSave(); updateEditBtns(); seek(0);
+  replan(); flushSave(); commit('歌詞削除'); updateEditBtns(); seek(0);
   toast('歌詞を消しました（「元に戻す」か Ctrl+Z で戻せます）');
 }
 // 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
@@ -865,13 +862,17 @@ async function resetAll() {
   S.audio = null; if ($('audioFile')) $('audioFile').value = '';
   if (J.forgetSong) await J.forgetSong();
   $('audioName').textContent = audioNameDefault;
-  ED.undo = []; ED.redo = []; H.list = []; H.i = -1;
+  if (typeof UndoRedo !== 'undefined') UndoRedo.init(S.project);
+  H.list = []; H.i = -1;
   TL.z = 1; TL.off = 0;
   $('lyrics').value = ''; fontKey = '';
-  syncUI(); replan(); commit(); updateEditBtns(); flushSave(); seek(0);
+  syncUI(); replan(); commit('初期化'); updateEditBtns(); flushSave(); seek(0);
   toast('初期化しました');
 }
-function updateEditBtns() { const u = $('btnUndoEdit'); if (u) u.disabled = !ED.undo.length; }
+function updateEditBtns() {
+  const u = $('btnUndoEdit');
+  if (u) u.disabled = typeof UndoRedo !== 'undefined' ? !UndoRedo.canUndo() : true;
+}
 
 /* ---------------- 書き出す範囲（選んだ行だけ） ---------------- */
 function exportRangeLines() {
@@ -1045,11 +1046,65 @@ function updateHist() {
   $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
 
+/* ---------------- メディア要素キャッシュ＆復元マネージャー ---------------- */
+const MediaElementCache = new Map();
+
+function cacheMediaElement(url, element, isVideo, name) {
+  if (!url || !element) return;
+  MediaElementCache.set(url, { element, isVideo, name, ready: true });
+}
+
+function restoreMediaElements(proj) {
+  if (!proj) return;
+  if (proj.tracks) {
+    ['images', 'videos'].forEach(trackName => {
+      const list = proj.tracks[trackName] || [];
+      list.forEach(b => {
+        if (!b.url) return;
+        const cached = MediaElementCache.get(b.url);
+        if (cached && cached.element) {
+          b.element = cached.element;
+          b.ready = true;
+        } else {
+          const isVideo = trackName === 'videos' || b.type === 'video' || /\.(mp4|webm|mov)$/i.test(b.name || '');
+          if (isVideo) {
+            const v = document.createElement('video');
+            v.src = b.url; v.loop = true; v.muted = true; v.playsInline = true;
+            v.play().then(() => { b.ready = true; drawTimeline(); }).catch(() => {});
+            b.element = v;
+            b.ready = true;
+            cacheMediaElement(b.url, v, true, b.name);
+          } else {
+            const img = new Image();
+            img.src = b.url;
+            img.onload = () => { b.ready = true; drawTimeline(); };
+            img.onerror = () => { b.ready = false; };
+            b.element = img;
+            b.ready = true;
+            cacheMediaElement(b.url, img, false, b.name);
+          }
+        }
+      });
+    });
+  }
+  // 単一背景メディアの復元
+  if (proj.bgMedia && proj.bgMedia.enabled) {
+    if (proj.bgMedia.url) {
+      const cached = MediaElementCache.get(proj.bgMedia.url);
+      if (cached && cached.element) {
+        J.bgMedia = { type: cached.isVideo ? 'video' : 'image', element: cached.element, ready: true, name: proj.bgMedia.name, url: proj.bgMedia.url };
+      }
+    } else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) {
+      proj.bgMedia.url = J.bgMedia.url;
+    }
+  }
+}
+
 /* ---------------- undo / redo (Ctrl+Z / Ctrl+Y) ---------------- */
 const UndoRedo = {
   stack: [],
   index: -1,
-  max: 15,
+  max: 50,
   isApplying: false,
 
   init(proj) {
@@ -1075,6 +1130,7 @@ const UndoRedo = {
     } else {
       this.index++;
     }
+    if (typeof updateEditBtns === 'function') updateEditBtns();
   },
 
   undo() {
@@ -1107,9 +1163,12 @@ const UndoRedo = {
     this.isApplying = true;
     try {
       S.project = JSON.parse(JSON.stringify(entry.project));
+      restoreMediaElements(S.project);
       fontKey = '';
       syncUI();
       replan();
+      drawTimeline();
+      if (typeof updateEditBtns === 'function') updateEditBtns();
     } finally {
       this.isApplying = false;
     }
@@ -2312,16 +2371,19 @@ function bind() {
         await v.play().catch(() => {});
         b.element = v;
         b.ready = true;
+        cacheMediaElement(url, v, true, file.name);
       } else {
         const img = new Image();
         img.src = url;
         await new Promise(r => { img.onload = r; img.onerror = r; });
         b.element = img;
         b.ready = true;
+        cacheMediaElement(url, img, false, file.name);
       }
       syncBlockInspector();
       replan();
       drawTimeline();
+      commit('ブロック素材設定');
       flushSave();
       toast(`素材「${file.name}」をブロックに設定しました`);
       e.target.value = '';
@@ -2342,21 +2404,25 @@ function bind() {
         v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
         await v.play().catch(() => {});
         J.bgMedia = { type: 'video', element: v, ready: true, name: file.name, url };
+        cacheMediaElement(url, v, true, file.name);
       } else {
         const img = new Image();
         img.src = url;
         await new Promise(r => { img.onload = r; img.onerror = r; });
         J.bgMedia = { type: 'image', element: img, ready: true, name: file.name, url };
+        cacheMediaElement(url, img, false, file.name);
       }
       if (!S.project.bgMedia) S.project.bgMedia = {};
       S.project.bgMedia.enabled = true;
       S.project.bgMedia.type = isVideo ? 'video' : 'image';
       S.project.bgMedia.name = file.name;
+      S.project.bgMedia.url = url;
       ['fit', 'scale', 'x', 'y', 'opacity', 'bgBlendMode', 'textBlendMode'].forEach(k => {
         if (S.project.bgMedia[k] !== undefined && J.bgMedia) J.bgMedia[k] = S.project.bgMedia[k];
       });
       syncBgMediaUI();
       replan();
+      commit('背景メディア設定');
       toast(`${isVideo ? '動画' : '画像'}背景を設定しました`);
     });
   }
@@ -2524,8 +2590,10 @@ function bind() {
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
+    const tag = (e.target && e.target.tagName) || '';
+    const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     const isCtrl = e.ctrlKey || e.metaKey;
-    if (isCtrl) {
+    if (isCtrl && !typing && !S.tap) {
       const key = e.key.toLowerCase();
       if (key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -2537,13 +2605,9 @@ function bind() {
         return;
       }
     }
-    const tag = (e.target && e.target.tagName) || '';
-    const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
     if (S.tap && e.code === 'Escape') { pause(); stopTap(); return; }
     if (S.tap && e.code === 'Backspace' && !typing) { e.preventDefault(); tapBack(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ' && !typing && !S.tap) { e.preventDefault(); edGo(e.shiftKey ? 1 : -1); return; }
-    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyY' && !typing && !S.tap) { e.preventDefault(); edGo(1); return; }
     if (typing || $('termsDlg').open || $('resetDlg').open) return;
     if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play(); }
     else if (e.code === 'ArrowRight') seek(S.t + (e.shiftKey ? 1 : 1 / S.plan.fps));
@@ -2654,5 +2718,6 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 J.ui = S;
 window.S = S;
 window.J = J;
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, exportRange, exportRangeLines };
+window.$ = $;
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, commit, cacheMediaElement, drawTimeline, MediaElementCache, exportRange, exportRangeLines };
 })();

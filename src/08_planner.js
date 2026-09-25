@@ -276,10 +276,10 @@ J.plan = (project, audio) => {
     const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : (cachedTitle && cachedTitle.hold && J.HOLD[cachedTitle.hold] ? cachedTitle.hold : 'still');
     const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cachedTitle && cachedTitle.decor ? cachedTitle.decor : pickDecor(rng, st, en, fx, layout, history));
     const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cachedTitle && cachedTitle.treat && J.TREAT[cachedTitle.treat] ? cachedTitle.treat : pickTreat(rng, st, en, fx, LD, false, history));
-    const treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+    const treatP = (cachedTitle && cachedTitle.treatP) ? cachedTitle.treatP : (J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {});
     const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cachedTitle && cachedTitle.cam && J.CAMERA[cachedTitle.cam] ? cachedTitle.cam : pickCam(rng, st, en, fx, LD, false, history));
-    const camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
-    const params = LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - titleStart }, st) : {};
+    const camP = (cachedTitle && cachedTitle.camP) ? cachedTitle.camP : (J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {});
+    const params = (cachedTitle && cachedTitle.params) ? cachedTitle.params : (LD.plan ? LD.plan(rng, { text: title, note: artist, W, H, dur: titleEnd - titleStart }, st) : {});
     const titleCut = makeCut({
       text: title, note: artist, lineText: title, line: -1,
       start: titleStart, end: titleEnd, layout, enter, exit, hold,
@@ -288,7 +288,7 @@ J.plan = (project, audio) => {
     plan.cuts.push(titleCut);
     history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
     plan.titleLine = { index: -1, text: title, note: artist, start: titleStart, end: titleEnd, seed: titleSeed, cut: titleCut };
-    newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, cam }];
+    newRowCache[-1] = [{ layout, enter, exit, hold, decor, treat, treatP, cam, camP, params }];
   }
 
   // 統一感: sections, repeated lines, キメ lines and the per-section palettes (see makeUnify below)
@@ -414,20 +414,20 @@ J.plan = (project, audio) => {
         return [a, b];
       };
       let [inDur, outDur] = durs(enter, exit);
-      let sch = schemeIdx;
-      if (!U && nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
+      let sch = (cached && cached.scheme !== undefined) ? cached.scheme : schemeIdx;
+      if (!cached && !U && nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
       let LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
-      let params = LD.plan ? LD.plan(rng, { text: txt, n: nn, W: LW, H: LH, dur }, st) : {};
+      let params = (cached && cached.params) ? cached.params : (LD.plan ? LD.plan(rng, { text: txt, n: nn, W: LW, H: LH, dur }, st) : {});
       let decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : (cached && cached.decor ? cached.decor : pickDecor(rng, st, en, fx, layout, history));
       let treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : (cached && cached.treat && J.TREAT[cached.treat] ? cached.treat : pickTreat(rng, st, en, fx, LD, emph, history));
       if (UU && !cached) { decor = UU.decor(li, decor, { layout, kime, rng }); treat = UU.treat(li, treat, { kime, rng, LD }); }
-      let treatP = J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+      let treatP = (cached && cached.treatP) ? cached.treatP : (J.TREAT[treat] && J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {});
       if (!ov.bg && k > 0 && !U && rng.chance(0.18 * fx.bgSwitch + 0.04)) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
       let bg = ov.bg && J.BG[ov.bg] ? ov.bg : (cached && cached.bg && J.BG[cached.bg] ? cached.bg : (LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg));
       let cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : (cached && cached.cam && J.CAMERA[cached.cam] ? cached.cam : pickCam(rng, st, en, fx, LD, emph, history));
       if (UU && !cached) cam = UU.cam(li, cam, { kime, emph, rng });
-      let camP = J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
-      let cutSeed = J.h(lineSeed, k, 17);
+      let camP = (cached && cached.camP) ? cached.camP : (J.CAMERA[cam] && J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {});
+      let cutSeed = (cached && cached.seed !== undefined) ? cached.seed : J.h(lineSeed, k, 17);
       // 統一感: a line that comes back (サビ etc.) is shown exactly as the first time
       const again = (UU && !cached) ? UU.again(li, k, txt) : null;
       if (again) {
@@ -449,8 +449,8 @@ J.plan = (project, audio) => {
         if (trans && UU && !cached) trans = UU.trans(li, trans, { rng });
         if (trans) {
           const TD = J.TRANS[trans];
-          transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
-          transP = TD.plan ? TD.plan(rng, st) : {};
+          transDur = (cached && cached.transDur !== undefined) ? cached.transDur : J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
+          transP = (cached && cached.transP) ? cached.transP : (TD.plan ? TD.plan(rng, st) : {});
           enter = 'cut'; inDur = 0.12;
           prevCut.exit = 'cut'; prevCut.outDur = 0;
         }
@@ -467,7 +467,11 @@ J.plan = (project, audio) => {
       plan.cuts.push(cut);
       const evMark = plan.events.length;
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
-      newRowCache[li].push({ layout, enter, exit, hold, decor, treat, cam, bg, trans });
+      newRowCache[li].push({
+        layout, enter, exit, hold, decor, treat, treatP,
+        cam, camP, bg, trans, transP, transDur,
+        scheme: sch, seed: cutSeed, params
+      });
       // events at cut start
       // events at cut start — durations are on a 24fps timebase so every output rate looks the same
       const g = fx.glitch * (st.glitchBoost || 1);
