@@ -272,6 +272,7 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
   $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
@@ -1493,6 +1494,46 @@ function freezeMediaCuts(layer) {
   m.manualCuts = true;
   m.cutCount = cuts.length;
 }
+function mediaSplitTarget(layer) {
+  if(!S.plan || S.exporting || S.tap || S.plan[layer].cuts.length>=1000)return null;
+  const cut=J.mediaAt(S.plan,S.t,layer);
+  return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
+}
+function splitMediaCut(layer) {
+  const cut=mediaSplitTarget(layer);if(!cut)return;
+  pause();
+  const time=S.t,m=S.project[layer],cuts=S.plan[layer].cuts,index=cut.index;
+  const clone=v=>JSON.parse(JSON.stringify(v)),overrides={},times={};
+  const resolved={...clone(mediaCutOptions(layer,index)),itemId:cut.itemId,
+    technique:cut.technique,entrance:cut.entrance,departure:cut.departure,
+    placement:clone(cut.placement),blend:cut.blend,opacity:cut.opacity,
+    details:Object.fromEntries(J.cutDetailKeys.media.filter(k=>cut[k]!==undefined).map(k=>[k,clone(cut[k])]))};
+  const first=clone(resolved),second=clone(resolved);
+  // No entrance, departure or transition at the newly created interior boundary.
+  first.departure='none';first.lockedDeparture='none';first.details.exit='cut';
+  second.entrance='none';second.lockedEntrance='none';second.details.enter='cut';second.details.trans='none';
+  if(cut.type==='video'){
+    const asset=J.mediaAssets.get(cut.itemId),item=m.items.find(x=>x.id===cut.itemId);
+    const duration=asset?.element?.duration || item?.duration;
+    first.videoStart=cut.videoStart;first.videoDuration=time-cut.start;
+    second.videoStart=Number.isFinite(duration)&&duration>0 ? J.mediaVideoTime(cut,time,duration) : cut.videoStart+time-cut.start;
+    second.videoDuration=cut.end-time;
+    first.videoLoop=second.videoLoop=cut.videoLoop;
+  }
+  cuts.forEach((c,i)=>{
+    const next=i>index?i+1:i;
+    overrides[next]=i===index?first:{...clone(m.cutOverrides[i] || {}),itemId:c.itemId};
+    times[next]=c.start;
+  });
+  overrides[index+1]=second;times[index+1]=time;
+  m.randomOrder=false;m.manualCuts=true;m.cutCount=cuts.length+1;m.cutOverrides=overrides;m.timing.lineTimes=times;
+  S.project.durationOverride=S.plan.duration;
+  const prefix=layer==='foreground'?'f:':'m:';
+  for(const link of S.project.timelineLinks)for(const end of ['a','b']){
+    if(link[end].startsWith(prefix) && +link[end].slice(2)>index)link[end]=prefix+(+link[end].slice(2)+1);
+  }
+  replan();seek(time);
+}
 function insertMediaCut(index, layer = activeMediaLayer() || 'media') {
   const m = S.project[layer], cuts = S.plan[layer].cuts;
   if (cuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
@@ -2307,6 +2348,8 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
+  $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
