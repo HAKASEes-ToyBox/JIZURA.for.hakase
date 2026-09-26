@@ -146,8 +146,8 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .media-ln .tools select { max-width: 78px; }
 .media-video-loop { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); cursor: pointer; }
 .media-video-loop input { margin: 0; accent-color: var(--amber); }
-.media-video-duration { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); }
-.media-video-duration input { width: 72px; padding: 3px 5px; }
+.media-video-start-field, .media-video-duration { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); }
+.media-video-start-field input, .media-video-duration input { width: 72px; padding: 3px 5px; }
 .media-phase-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: 100%; }
 .media-phase-controls label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); min-width: 0; }
 .media-phase-controls select { min-width: 0; width: 100%; font-size: 11px; padding: 4px; }

@@ -164,8 +164,8 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .media-ln .tools select { max-width: 78px; }
 .media-video-loop { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); cursor: pointer; }
 .media-video-loop input { margin: 0; accent-color: var(--amber); }
-.media-video-duration { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); }
-.media-video-duration input { width: 72px; padding: 3px 5px; }
+.media-video-start-field, .media-video-duration { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); }
+.media-video-start-field input, .media-video-duration input { width: 72px; padding: 3px 5px; }
 .media-phase-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: 100%; }
 .media-phase-controls label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); min-width: 0; }
 .media-phase-controls select { min-width: 0; width: 100%; font-size: 11px; padding: 4px; }
@@ -4401,6 +4401,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
       opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
       zoom: 100, focus: 'mc',
+      videoStart: item?.type === 'video' && Number.isFinite(+ov.videoStart) ? Math.max(0,+ov.videoStart) : 0,
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,
       chromaColor: /^#[0-9a-fA-F]{6}$/.test(ov.chromaColor || '') ? ov.chromaColor : '#00ff00',
@@ -4452,7 +4453,8 @@ J.mediaInsertChoices = (project,layer) => {
 J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
 J.mediaVideoTime = (cut, t, duration) => {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
-  const elapsed = Math.max(0, t - cut.start);
+  const offset = Number.isFinite(+cut.videoStart) ? J.clamp(+cut.videoStart,0,Math.max(0,duration-0.001)) : 0;
+  const elapsed = offset + Math.max(0, t - cut.start);
   return Math.min(cut.videoLoop ? elapsed % duration : elapsed, Math.max(0, duration - 0.001));
 };
 
@@ -37518,11 +37520,11 @@ function openCutDetails(layer,index,part=0) {
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置・サイズ（画面比率）','Placement / size (stage ratios)'],
     motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
     motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
-    technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => names[key] ? L(...names[key]) : key;
-  const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoDuration','chromaKey','chromaColor'];
+  const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
     const project = clone(S.project);
     if (lyric) project.lyricCutOptions[key]=draft; else project[layer].cutOverrides[index]=draft;
@@ -37578,7 +37580,7 @@ function openCutDetails(layer,index,part=0) {
     const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
-    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
+    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     input.addEventListener('change',()=>{
@@ -37620,7 +37622,7 @@ function openCutDetails(layer,index,part=0) {
       grid.lastChild.querySelector('span').textContent=lyric?L('行の構成をロック','Lock line composition'):L('カットをロック','Lock cut');
     }
     for(const field of nativeKeys) {
-      if(['videoLoop','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
+      if(['videoLoop','videoStart','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
       let value=draft[field]??current[field];
       if(['technique','entrance','departure'].includes(field)&&Object.hasOwn(draft,field))value=draft[field]??'';
       if(field==='placement')value ||= {cx:.5,cy:.5,w:1,h:1,angle:0,lockAspect:true};
@@ -38519,7 +38521,7 @@ function renderMediaLines() {
     const placement = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
     const placementControl = `<span class="foreground-placement-controls"><button class="foreground-placement-open ghost" type="button" ${placement ? '' : 'disabled'} aria-label="${i + 1}カット目の配置とサイズを編集"><span class="foreground-placement-thumb"><i style="left:${(placement ? placement.x : 0) * 100}%;top:${(placement ? placement.y : 0) * 100}%;width:${(placement ? placement.w : 1) * 100}%;height:${(placement ? placement.h : 1) * 100}%;transform:rotate(${cut.placement ? cut.placement.angle || 0 : 0}deg)"></i></span>配置・サイズを編集</button>${cut.placementMode === 'auto' ? `<span class="tagl">${J.mediaLabel('自動配置', 'Auto placement')}</span>` : ''}${cut.placementMode === 'manual' ? '<button class="foreground-placement-reset ghost" type="button">自動配置に戻す</button>' : ''}</span>`;
     const li = document.createElement('li'); li.className = 'ln media-ln';
-    li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span><input class="time mono" type="number" step="0.01" min="0" value="${cut.start.toFixed(2)}" aria-label="${i + 1}カット目の開始秒">${fileSelect}${mediaThumb(item, 'media-ln-thumb')}<div class="meta"><span class="cuts"><span>${J.mediaTechniqueName(cut)}</span></span><span class="tools">${selectTechnique(ov, cut)}<button class="icon ghost dice" title="このカットを再抽選">${ICON.dice}</button><button class="icon ghost lock" title="このカットをロック" aria-pressed="${ov.lock ? 'true' : 'false'}">${ICON.lock}</button><button class="ghost small remove-media-cut" type="button" aria-label="${i + 1}カット目を削除">削除</button></span>${placementControl}${cut.type === 'video' ? `<label class="media-video-loop"><input type="checkbox" ${cut.videoLoop ? 'checked' : ''}>動画をループ再生</label><label class="media-video-duration">動画の長さ（秒）<input type="number" min="0.04" max="3600" step="0.01" placeholder="自動" value="${ov.videoDuration ?? ''}" aria-label="${i + 1}カット目の動画の長さ（秒）"></label>` : ''}</div>`;
+    li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span><input class="time mono" type="number" step="0.01" min="0" value="${cut.start.toFixed(2)}" aria-label="${i + 1}カット目の開始秒">${fileSelect}${mediaThumb(item, 'media-ln-thumb')}<div class="meta"><span class="cuts"><span>${J.mediaTechniqueName(cut)}</span></span><span class="tools">${selectTechnique(ov, cut)}<button class="icon ghost dice" title="このカットを再抽選">${ICON.dice}</button><button class="icon ghost lock" title="このカットをロック" aria-pressed="${ov.lock ? 'true' : 'false'}">${ICON.lock}</button><button class="ghost small remove-media-cut" type="button" aria-label="${i + 1}カット目を削除">削除</button></span>${placementControl}${cut.type === 'video' ? `<label class="media-video-loop"><input type="checkbox" ${cut.videoLoop ? 'checked' : ''}>動画をループ再生</label><label class="media-video-start-field">${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}<input class="media-video-start" type="number" min="0" step="0.01" value="${cut.videoStart}" aria-label="${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}"></label><label class="media-video-duration">動画の長さ（秒）<input type="number" min="0.04" max="3600" step="0.01" placeholder="自動" value="${ov.videoDuration ?? ''}" aria-label="${i + 1}カット目の動画の長さ（秒）"></label>` : ''}</div>`;
     if (cut.type === 'video') li.querySelector('.meta').insertAdjacentHTML('beforeend', `<span class="media-chroma"><label><input class="media-chroma-toggle" type="checkbox" ${cut.chromaKey ? 'checked' : ''}>クロマキー合成</label><label>色<input class="media-chroma-color" type="color" value="${cut.chromaColor}" aria-label="${i + 1}カット目のクロマキー色" ${cut.chromaKey ? '' : 'disabled'}></label></span>`);
     li.querySelector('.foreground-placement-controls').insertAdjacentHTML('beforebegin', `<div class="media-phase-controls">${selectPhase(ov, cut, 'enter', 'entrance')}${selectPhase(ov, cut, 'exit', 'departure')}</div>`);
     li.querySelectorAll('[data-media-phase]').forEach(select => select.addEventListener('change', e => {
@@ -38537,7 +38539,9 @@ function renderMediaLines() {
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
-    const videoDuration = li.querySelector('.media-video-duration input');
+    const videoStart = li.querySelector('.media-video-start');
+    if (videoStart) videoStart.addEventListener('change', e => { const value=Number(e.target.value); mediaOv(i,{videoStart:Number.isFinite(value)?Math.max(0,value):0},layer); replan(); });
+    const videoDuration = li.querySelector('.media-video-duration input:not(.media-video-start)');
     if (videoDuration) videoDuration.addEventListener('change', e => { const v = +e.target.value; mediaOv(i, { videoDuration: e.target.value && Number.isFinite(v) && v > 0 ? J.clamp(v, 0.04, 3600) : undefined }, layer); replan(); });
     const placementOpen = li.querySelector('.foreground-placement-open');
     if (placementOpen) placementOpen.addEventListener('click', () => openMediaEditor(i, layer));

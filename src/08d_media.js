@@ -195,6 +195,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       blend: ['normal','multiply','screen','overlay'].includes(ov.blend) ? ov.blend : m.blend,
       opacity: ov.opacity != null && Number.isFinite(+ov.opacity) ? J.clamp(+ov.opacity,0,100) : m.opacity,
       zoom: 100, focus: 'mc',
+      videoStart: item?.type === 'video' && Number.isFinite(+ov.videoStart) ? Math.max(0,+ov.videoStart) : 0,
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,
       chromaColor: /^#[0-9a-fA-F]{6}$/.test(ov.chromaColor || '') ? ov.chromaColor : '#00ff00',
@@ -246,7 +247,8 @@ J.mediaInsertChoices = (project,layer) => {
 J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
 J.mediaVideoTime = (cut, t, duration) => {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
-  const elapsed = Math.max(0, t - cut.start);
+  const offset = Number.isFinite(+cut.videoStart) ? J.clamp(+cut.videoStart,0,Math.max(0,duration-0.001)) : 0;
+  const elapsed = offset + Math.max(0, t - cut.start);
   return Math.min(cut.videoLoop ? elapsed % duration : elapsed, Math.max(0, duration - 0.001));
 };
 
