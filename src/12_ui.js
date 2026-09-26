@@ -1557,7 +1557,7 @@ async function addMediaFiles(files, layer) {
 }
 const MEDIA_EFFECT_GROUPS = {
   enter: J.mediaLabel('登場', 'Entrance'), exit: J.mediaLabel('退場', 'Exit'),
-  cinema: J.mediaLabel('シネマ・カメラ', 'Cinema / camera'), dynamic: J.mediaLabel('ダイナミックモーション', 'Dynamic motion'),
+  cinema: J.mediaLabel('カメラ', 'Camera'), dynamic: J.mediaLabel('ダイナミックモーション', 'Dynamic motion'),
   bpm: J.mediaLabel('BPM同期', 'BPM sync'), texture: J.mediaLabel('色・質感', 'Color / texture'),
   graphic: J.mediaLabel('分割・残像・グリッチ', 'Panels / echoes / glitch'), transition: J.mediaLabel('カット間のつなぎ', 'Cut transitions'),
 };
