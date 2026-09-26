@@ -512,6 +512,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #timelineAssets { position: absolute; inset: 0; pointer-events: none; }
 .timeline-asset-select { position: absolute; pointer-events: auto; min-width: 0; height: 20px; min-height: 0; padding: 0 2px; border-radius: 3px; font-size: 11px; text-overflow: ellipsis; }
 
+#tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
+
 </style>
 </head>
 <body>
@@ -616,6 +618,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         </div>
       </div>
       <div id="tapPanel" class="tapbox" hidden>
+        <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
         <div class="hint" id="tapHint">曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。</div>
         <div class="next">次: <b id="tapLine">—</b></div>
         <button id="tapBtn" class="tap">TAP</button>
@@ -37229,6 +37232,7 @@ function setProjectDuration(seconds) {
   return true;
 }
 function play() {
+  if(S.tap?.countingDown)return;
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
@@ -39037,16 +39041,30 @@ async function runExport(kind) {
 function startTap() {
   const layer = activeMediaLayer();
   if (!(layer ? S.plan[layer].cuts.length || S.project[layer].loop : S.plan.lines.length)) return;
-  S.tap = { i: 0, layer, append: !!layer && S.project[layer].loop };
+  pause();
+  S.tap = { i: 0, layer, append: !!layer && S.project[layer].loop, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
   $('tapHint').textContent = S.tap.append ? 'タップするたびに素材をループしてカットを追加します。終了するまで続けられます。' : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
   $('tapPanel').hidden = false; syncTapButtons();
   if (S.tap.append && !S.audio) extendTapPreview(0);
-  seek(0); play(); updateTap();
-  $('tapBtn').focus();
+  seek(0); updateTap();
+  const session=S.tap,deadline=performance.now()+3000;
+  const countdown=$('tapCountdown');countdown.hidden=false;
+  $('tapStop').focus();
+  const tick=()=>{
+    if(S.tap!==session)return;
+    const remaining=Math.ceil((deadline-performance.now())/1000);
+    if(remaining<=0){
+      session.countingDown=false;countdown.hidden=true;syncTapButtons();
+      seek(0);play();$('tapBtn').focus();return;
+    }
+    countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
+    session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));
+  };
+  tick();
 }
 function tapNow() {
-  if (!S.tap) return;
+  if (!S.tap || S.tap.countingDown) return;
   if (S.tap.append) {
     const i = S.tap.i;
     const m = S.project[S.tap.layer];
@@ -39066,8 +39084,10 @@ function tapNow() {
   replan();
   if (S.tap.i >= (layer ? S.plan[layer].cuts.length : S.plan.lines.length)) stopTap(); else updateTap();
 }
-function stopTap() { S.tap = null; $('tapPanel').hidden = true; syncTapButtons(); replan(); }
+function stopTap() { clearTimeout(S.tap?.timer); $('tapCountdown').hidden=true; S.tap = null; $('tapPanel').hidden = true; syncTapButtons(); replan(); }
 function syncTapButtons() {
+  $('tapBtn').disabled=!!S.tap?.countingDown;
+  if(!S.tap)$('tapCountdown').hidden=true;
   for (const id of ['btnTap', 'btnTapMedia']) $(id).setAttribute('aria-pressed', String(!!S.tap));
 }
 function updateTap() {

@@ -493,3 +493,5 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
 #timelineAssets { position: absolute; inset: 0; pointer-events: none; }
 .timeline-asset-select { position: absolute; pointer-events: auto; min-width: 0; height: 20px; min-height: 0; padding: 0 2px; border-radius: 3px; font-size: 11px; text-overflow: ellipsis; }
+
+#tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
