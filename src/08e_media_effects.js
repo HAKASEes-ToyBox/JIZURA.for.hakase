@@ -95,7 +95,7 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
   const w = fit[0], h = fit[1], tau = Math.PI * 2, t = p * tau;
-  let x = 0, y = 0, rotation = 0, scale = 1, sx = 1, sy = 1, alpha = 1, blur = 0;
+  let x = 0, y = 0, rotation = 0, scale = 1, sx = 1, sy = 1, alpha = 1, blur = 0, skew = 0;
   const progress = q => 1 - Math.pow(1 - J.clamp(q, 0, 1), 3);
   const phase = (type, q, leaving) => {
     const a = 1 - progress(q), sign = leaving ? -1 : 1;
@@ -136,14 +136,14 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   if (J.mediaVariationState) {
     const v = J.mediaVariationState(cut, p, fade, out, w, h);
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
-    sx *= v.sx ?? 1; sy *= v.sy ?? 1;
+    sx *= v.sx ?? 1; sy *= v.sy ?? 1; skew += v.skew || 0; blur += v.blur || 0;
   }
   if (J.mediaBeatState) {
     const v = J.mediaBeatState(cut, p, w, h);
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
     sx *= v.sx ?? 1; sy *= v.sy ?? 1;
   }
-  ctx.translate(x * amount, y * amount); ctx.rotate(rotation * amount); ctx.scale(Math.max(0.001, 1 + (scale * sx - 1) * amount), Math.max(0.001, 1 + (scale * sy - 1) * amount)); ctx.globalAlpha *= alpha;
+  ctx.translate(x * amount, y * amount); ctx.rotate(rotation * amount); if (skew) ctx.transform(1, 0, Math.tan(skew * amount), 1, 0, 0); ctx.scale(Math.max(0.001, 1 + (scale * sx - 1) * amount), Math.max(0.001, 1 + (scale * sy - 1) * amount)); ctx.globalAlpha *= alpha;
   const mask = (type, q) => {
     if (q >= 1) return;
     const a = progress(q); ctx.beginPath();

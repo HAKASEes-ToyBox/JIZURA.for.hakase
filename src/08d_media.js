@@ -204,6 +204,8 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     const ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[cut.index] || {});
     Object.assign(cut, J.mediaTechnique(project, ov, J.rng(J.h(cut.seed, 173)), layer));
     if (J.applyMediaPhases) J.applyMediaPhases(project, cut, ov, layer);
+    // Lyric cameras read the song's beat grid; kept off the serialized cut.
+    Object.defineProperty(cut, 'songBeats', { value: lyricPlan?.beats || [], configurable: true, writable: true });
     cut.effectTransition = cut.trans;
     delete cut.trans;
   }

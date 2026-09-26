@@ -77,7 +77,9 @@ J.themeCandidates = (project,key) => {
     lyrics[group] = J.order(group).filter(id=>wanted.has(id) && !J.registry(group)[id]?.special && allowed(group,id));
   }
   const phases = theme.phases.flatMap(id=>[id,id.startsWith('enter_') ? 'exit_'+id.slice(6) : 'exit_'+id]);
-  return {styles:theme.styles.filter(id=>J.STYLES[id] && allowed('style',id)),lyrics,media:[...new Set([...theme.media,...phases])].filter(id=>J.MEDIA_TECH[id])};
+  // Media layers share the theme's lyric camera pool (詳細 → 手法 → カメラ).
+  const cameras = (lyrics.cam || []).map(id=>'cam_'+id);
+  return {styles:theme.styles.filter(id=>J.STYLES[id] && allowed('style',id)),lyrics,media:[...new Set([...theme.media,...phases,...cameras])].filter(id=>J.MEDIA_TECH[id])};
 };
 const unrestricted = J.omakase;
 J.omakase = (project,rnd=Math.random,choices={}) => {

@@ -6,7 +6,7 @@
 - **自動**：詳細 → 前景 / 背景で、それぞれ有効にした手法から選びます。
 - **手法名**：保持中のモーション・加工・つなぎを固定します。登場・退場は別々に指定できます。
 
-登場55種類・退場55種類と、保持中の手法110種類（つなぎを含む）を選べます。詳細のカテゴリは「登場」「退場」「シネマ・カメラ」「ダイナミックモーション」「BPM同期」「色・質感」「分割・残像・グリッチ」「カット間のつなぎ」です。旧マスク・出現カテゴリと登場向けの演出は登場・退場へ整理しました。各「自動」は対応するカテゴリの有効な候補だけから選び、候補がない場合は即時表示になります。詳細タブでは、動きの強さ、加工の強さ、登場・退場の秒数と、自動選定に含める手法を設定できます。詳細の「前景」「背景」タブでそれぞれ個別に設定できます。自動配置のオン・オフも別々に指定できます。以前の共通設定は両レイヤーへ引き継ぎます。
+登場55種類・退場55種類と、保持中の手法146種類（つなぎ・歌詞カメラを含む）を選べます。詳細のカテゴリは「登場」「退場」「シネマ・カメラ」「ダイナミックモーション」「BPM同期」「色・質感」「分割・残像・グリッチ」「カット間のつなぎ」です。旧マスク・出現カテゴリと登場向けの演出は登場・退場へ整理しました。各「自動」は対応するカテゴリの有効な候補だけから選び、候補がない場合は即時表示になります。詳細タブでは、動きの強さ、加工の強さ、登場・退場の秒数と、自動選定に含める手法を設定できます。詳細の「前景」「背景」タブでそれぞれ個別に設定できます。自動配置のオン・オフも別々に指定できます。以前の共通設定は両レイヤーへ引き継ぎます。
 
 詳細の各カテゴリは見出しをクリックして折り畳み・展開できます。見出しには有効な手法数／総数を表示し、カテゴリごとに「すべてON」「すべてOFF」「反転」でまとめて変更できます。
 
@@ -52,6 +52,11 @@
 | カット間のつなぎ（5種類） | ブラインド接続、短冊ずらし接続、モザイク接続、罫線ワイプ接続、升目送り接続 |
 
 追加したつなぎは、手法として選んだ場合だけ使います。従来の設定のカットがランダムに選ぶつなぎの候補は変わりません。
+## 歌詞カメラの流用
+
+詳細 → 手法の「カメラ」（歌詞用のカメラワーク36種類）を、前景・背景の「シネマ・カメラ」にも「カメラ：〇〇」として追加しました。歌詞と同じ動きを、素材の枠に合わせた大きさで適用します。拍に合わせるカメラは歌詞と同じ拍（音源の解析結果またはBPM設定）を使います。動きの強さは詳細 → 前景／背景の「動きの強さ」で調整できます。
+
+自動選定の初期値は歌詞のランダムの規則に従います。追加分・和風・パーツセット（ホラーなど）の設定でランダムの対象外になっているカメラは、初期状態でOFFです（手動では常に選べます）。曲テーマでは、各テーマの歌詞カメラの候補が前景・背景にも使われます。
 ## English
 
 Choose a main technique, **Entrance**, and **Exit** independently on each foreground/background cut. Entrance and Exit default to **Auto**. **No effects** disables the main motion/treatment; choose **Instant (none)** for both phases too to display the file instantly. Videos continue playing normally. Each automatic phase uses only its enabled category; an empty pool means Instant. Explicit selections and locked phases survive shuffle.
@@ -60,7 +65,7 @@ Click a category heading in Details to expand or collapse it. Headings show the 
 
 **Randomize** chooses a random set of checked techniques independently for foreground and background. It preserves motion/treatment intensity, entrance/exit duration, and automatic placement settings. The selections support Undo/Redo, Previous/Next variation, and project saving. **Shuffle** keeps the checked set and rerolls the automatic cuts within it.
 
-**Details → Foreground / Background** contains 55 entrances, 55 exits, and 110 main techniques (including transitions). Categories are Entrance, Exit, Cinema/camera, Dynamic motion, BPM sync, Color/texture, Panels/echoes/glitch, and Cut transitions. Existing reveal effects have moved into the phase categories. Adjust motion and treatment intensity, entrance/exit duration, and the techniques included in Auto. Each layer has its own settings, including automatic placement. Previously shared settings are copied to both layers when an older project is opened.
+**Details → Foreground / Background** contains 55 entrances, 55 exits, and 146 main techniques (including transitions and lyric cameras). Categories are Entrance, Exit, Cinema/camera, Dynamic motion, BPM sync, Color/texture, Panels/echoes/glitch, and Cut transitions. Existing reveal effects have moved into the phase categories. Adjust motion and treatment intensity, entrance/exit duration, and the techniques included in Auto. Each layer has its own settings, including automatic placement. Previously shared settings are copied to both layers when an older project is opened.
 
 **Shuffle foreground** and **Shuffle background** reroll automatic cuts only in the corresponding layer. The main Shuffle button still rerolls both layers. Explicit selections and locked cuts are preserved. A cut's dice button switches it to Auto and rerolls it. Existing projects keep their individual settings as **Legacy settings** until a new technique is selected. With automatic placement enabled, effect cuts without manual placement vary their position and size on shuffle, preserving the source aspect ratio. Automatic background size stays between 100% and 135% of the full-fit size, with position shifts limited to the available crop on enlarged axes. Manual placement and locked cuts stay fixed. Use Reset automatic placement to return a manually placed cut to automatic composition. Disable Vary position and size automatically in Details to keep automatic cuts centered at full fit. No effects and Legacy settings retain their original framing. Video looping, chroma key, and timing remain independent of technique selection. Transitions apply between adjacent media cuts.
 
@@ -69,6 +74,8 @@ Click a category heading in Details to expand or collapse it. Headings show the 
 The second pack adds 33 techniques: 8 camera/motion variations, 10 masks/reveals, 10 panel/echo effects, and 5 color/texture treatments. Per-cut choices are grouped by category. New effects support transparent assets and live video frames; selection is deterministic for the same seed.
 
 The third pack adds, for both foreground and background: 14 entrances and 14 matching exits (drop and bounce, elastic zoom, swirl, fold up, flicker, shake, rubber snap, clock reveal, star iris, heart iris, random bars, brush strokes, polka-dot reveal, diagonal split); 4 camera moves (Ken Burns, Dutch angle, crane up, handheld); 4 dynamic motions (roll across, slam zoom, slow full turn, three-step zoom); 7 BPM motions (jelly, kick zoom out, tilt, side slide, four-beat flip, wall bounce, eight-beat build-up); 8 textures (light leak, film grain, vignette, hue cycle, CRT scanlines, thermal, soft bloom, cyanotype); 6 panel effects (zoom tunnel, tile scroll, column wave, strobe echoes, band shift, glass shards); and 5 transitions (blinds, slice shift, pixelate, rule wipe, grid cells). All of them are included in the curated themes. Transparent and chroma-keyed areas stay transparent. The new transitions are used only when selected as a technique; random transitions for legacy cuts are unchanged.
+
+The 36 lyric cameras (Details → Techniques → Camera) are also available as **Camera: …** techniques under Cinema / camera for the foreground and background. They move with the media frame, follow the same beats as the lyrics, and scale with Motion intensity. By default, Auto uses the cameras that lyric random picks may use (Extra parts, Japanese motifs and part sets such as Horror); the others start unchecked but can always be chosen by hand. Themes share their lyric camera pool with both media layers.
 
 Random order remains available after adding/removing cuts or tap sync when at least two files are uploaded. While enabled, media is assigned in a seeded shuffled cycle; blank and locked cuts are preserved. Turn it off to restore the underlying assignments and select files individually.
 
