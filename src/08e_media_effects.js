@@ -136,6 +136,7 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   if (J.mediaVariationState) {
     const v = J.mediaVariationState(cut, p, fade, out, w, h);
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
+    sx *= v.sx ?? 1; sy *= v.sy ?? 1;
   }
   if (J.mediaBeatState) {
     const v = J.mediaBeatState(cut, p, w, h);

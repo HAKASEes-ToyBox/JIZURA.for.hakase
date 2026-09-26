@@ -33,6 +33,23 @@ const rhythmByTheme = {
   retro: ['beatSideHop','beatPendulum','beatWaltz'],
 };
 for (const [key, motions] of Object.entries(rhythmByTheme)) presets[key].media.push(...motions);
+// Third media pack: main techniques/transitions, then entrances (exits follow).
+const scenesByTheme = {
+  horror: [['dutchTilt','handheld','filmGrain','vignette','scanlines','thermal','glassShards'],['flicker','shakeIn']],
+  pop: [['rollAcross','zoomStages','beatJelly','beatTilt','beatFlip','beatBounceWall','tileScroll'],['dropBounce','elasticZoom','starIris','heartIris','dotGrid']],
+  ballad: [['kenBurns','craneUp','lightLeak','vignette','softBloom','transition_blinds'],['brushStroke']],
+  rock: [['dutchTilt','handheld','slamZoom','beatKick','beatTilt','beatDrop','zoomTunnel','stutterEcho','splitShift','glassShards','transition_sliceShift'],['flicker','shakeIn','stretchSnap','randomBars','diagonalSplit']],
+  dance: [['slamZoom','turnOnce','zoomStages','beatKick','beatSlide','beatFlip','beatDrop','hueCycle','scanlines','zoomTunnel','columnWave','stutterEcho','transition_sliceShift','transition_pixelate'],['elasticZoom','swirl','stretchSnap','randomBars']],
+  hiphop: [['handheld','slamZoom','zoomStages','beatKick','beatTilt','beatSlide','stutterEcho','splitShift','transition_sliceShift'],['dropBounce','shakeIn','stretchSnap','diagonalSplit']],
+  jazz: [['kenBurns','filmGrain','vignette','cyanotype','transition_blinds','transition_tyRuleWipe'],['foldUp','clockReveal','brushStroke']],
+  acoustic: [['kenBurns','handheld','lightLeak','transition_tyRuleWipe'],['brushStroke']],
+  cool: [['dutchTilt','zoomStages','beatSlide','scanlines','thermal','cyanotype','splitShift','glassShards','transition_tyGridCells'],['foldUp','clockReveal','randomBars','diagonalSplit']],
+  cute: [['rollAcross','beatJelly','beatBounceWall','softBloom','tileScroll'],['dropBounce','elasticZoom','swirl','starIris','heartIris','dotGrid']],
+  elegant: [['kenBurns','craneUp','vignette','softBloom','cyanotype','transition_blinds'],['foldUp','brushStroke']],
+  dreamy: [['craneUp','turnOnce','lightLeak','hueCycle','softBloom','zoomTunnel','columnWave'],['swirl','starIris']],
+  retro: [['kenBurns','beatBounceWall','lightLeak','filmGrain','scanlines','tileScroll','transition_blinds','transition_pixelate','transition_tyRuleWipe','transition_tyGridCells'],['foldUp','clockReveal','dotGrid']],
+};
+for (const [key, [media, phases]] of Object.entries(scenesByTheme)) { presets[key].media.push(...media); presets[key].phases.push(...phases.map(id => 'enter_' + id)); }
 const descriptions = {
   horror:L('暗い配色・不穏な文字と映像','Dark colors and unsettling typography'),
   pop:L('明るい配色・弾む動き','Bright colors and bouncy motion'), ballad:L('落ち着いた配色・ゆっくりした余韻','Quiet colors and lingering motion'),

@@ -225,9 +225,11 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     if (!cut.itemId || !prev.itemId) continue;
     const rng = J.rng(J.h(cut.seed, 89));
     const registry = J.TRANS || {}, options = ['crossfade', ...J.MEDIA_TRANS_KEYS.filter(k => registry[k])];
+    // Newer transitions are explicit-only so legacy random picks stay unchanged.
+    const selectable = [...options, ...(J.MEDIA_TRANS_EXTRA_KEYS || []).filter(k => registry[k])];
     const selectedTrans = cut.technique && cut.technique !== 'legacy' ? cut.effectTransition : ov.trans;
     delete cut.trans;
-    const trans = selectedTrans === 'none' ? null : options.includes(selectedTrans) ? selectedTrans : rng.chance(0.65) ? rng.pick(options) : null;
+    const trans = selectedTrans === 'none' ? null : selectable.includes(selectedTrans) ? selectedTrans : rng.chance(0.65) ? rng.pick(options) : null;
     if (trans && cut.end - cut.start > 0.2 && Math.abs(prev.end - cut.start) < 0.06) {
       cut.trans = trans;
       cut.transDur = Math.min(registry[trans] ? registry[trans].dur || 0.35 : 0.35, 0.6, (cut.end - cut.start) * 0.45);
@@ -462,6 +464,8 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
   } else {
     const st = plan.style, sc = st.schemes[0];
     try { J.TRANS[cut.trans].draw(ctx, A, B, p, { cw: w, ch: h, sc, scPrev: sc, st, P: cut.transP || {}, step: Math.floor(t * (plan.fps || 24)), t, scale: w / plan.W, allowFilter: true, seed: cut.seed | 0,
+      // The foreground composites over lyrics/background, so transitions must not paint a backdrop.
+      transparent: layer !== 'media',
       tmp: (tw, th) => { const c = owner ? (owner.mediaTransTmp || (owner.mediaTransTmp = document.createElement('canvas'))) : document.createElement('canvas'); if (c.width !== tw || c.height !== th) { c.width = tw; c.height = th; } return c; } }); }
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }

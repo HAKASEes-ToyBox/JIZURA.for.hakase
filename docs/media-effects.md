@@ -6,7 +6,7 @@
 - **自動**：詳細 → 前景 / 背景で、それぞれ有効にした手法から選びます。
 - **手法名**：保持中のモーション・加工・つなぎを固定します。登場・退場は別々に指定できます。
 
-登場41種類・退場41種類と、保持中の手法64種類を選べます。詳細のカテゴリは「登場」「退場」「シネマ・カメラ」「ダイナミックモーション」「BPM同期」「色・質感」「分割・残像・グリッチ」「カット間のつなぎ」です。旧マスク・出現カテゴリと登場向けの演出は登場・退場へ整理しました。各「自動」は対応するカテゴリの有効な候補だけから選び、候補がない場合は即時表示になります。詳細タブでは、動きの強さ、加工の強さ、登場・退場の秒数と、自動選定に含める手法を設定できます。詳細の「前景」「背景」タブでそれぞれ個別に設定できます。自動配置のオン・オフも別々に指定できます。以前の共通設定は両レイヤーへ引き継ぎます。
+登場55種類・退場55種類と、保持中の手法110種類（つなぎを含む）を選べます。詳細のカテゴリは「登場」「退場」「シネマ・カメラ」「ダイナミックモーション」「BPM同期」「色・質感」「分割・残像・グリッチ」「カット間のつなぎ」です。旧マスク・出現カテゴリと登場向けの演出は登場・退場へ整理しました。各「自動」は対応するカテゴリの有効な候補だけから選び、候補がない場合は即時表示になります。詳細タブでは、動きの強さ、加工の強さ、登場・退場の秒数と、自動選定に含める手法を設定できます。詳細の「前景」「背景」タブでそれぞれ個別に設定できます。自動配置のオン・オフも別々に指定できます。以前の共通設定は両レイヤーへ引き継ぎます。
 
 詳細の各カテゴリは見出しをクリックして折り畳み・展開できます。見出しには有効な手法数／総数を表示し、カテゴリごとに「すべてON」「すべてOFF」「反転」でまとめて変更できます。
 
@@ -37,6 +37,21 @@
 
 透過素材・クロマキー処理後の動画にも使用できます。マスクや加工は素材の透明度を使って描画し、元動画のフレーム更新にも追従します。
 
+## 追加バリエーション（第3弾）
+
+前景・背景に共通で、以下を追加しました。すべて曲テーマ（おまかせのテーマ）の候補に反映済みです。素材の透明部分・クロマキーで抜いた部分は塗りつぶしません。
+
+| カテゴリ | 追加内容 |
+| --- | --- |
+| 登場・退場（各14種類） | 落下バウンド、エラスティックズーム、渦巻き、起き上がり（退場は折りたたみ）、明滅、シェイク、ゴムスナップ、時計回りリビール、星形アイリス、ハート形アイリス、ランダムバー、筆ストローク、水玉リビール、対角スプリット |
+| シネマ・カメラ（4種類） | ケン・バーンズ、ダッチアングル、クレーン上昇、手持ちカメラ |
+| ダイナミックモーション（4種類） | ローリング横断、スラムズーム、ゆっくり1回転、3段ズーム |
+| BPM同期（7種類） | ビート・ゼリー、キック・ズームアウト、拍ごとに左右傾き、拍ごとに左右スライド、4拍フリップ、ビート・反射移動、8拍ビルドアップ |
+| 色・質感（8種類） | ライトリーク、フィルムグレイン、ビネット、色相サイクル、ブラウン管、サーモグラフィ、ソフトブルーム、青写真 |
+| 分割・残像・グリッチ（6種類） | ズームトンネル、タイルスクロール、縦ウェーブスライス、ストロボ残像、帯ずらし、ガラス破片 |
+| カット間のつなぎ（5種類） | ブラインド接続、短冊ずらし接続、モザイク接続、罫線ワイプ接続、升目送り接続 |
+
+追加したつなぎは、手法として選んだ場合だけ使います。従来の設定のカットがランダムに選ぶつなぎの候補は変わりません。
 ## English
 
 Choose a main technique, **Entrance**, and **Exit** independently on each foreground/background cut. Entrance and Exit default to **Auto**. **No effects** disables the main motion/treatment; choose **Instant (none)** for both phases too to display the file instantly. Videos continue playing normally. Each automatic phase uses only its enabled category; an empty pool means Instant. Explicit selections and locked phases survive shuffle.
@@ -45,13 +60,15 @@ Click a category heading in Details to expand or collapse it. Headings show the 
 
 **Randomize** chooses a random set of checked techniques independently for foreground and background. It preserves motion/treatment intensity, entrance/exit duration, and automatic placement settings. The selections support Undo/Redo, Previous/Next variation, and project saving. **Shuffle** keeps the checked set and rerolls the automatic cuts within it.
 
-**Details → Foreground / Background** contains 41 entrances, 41 exits, and 64 main techniques. Categories are Entrance, Exit, Cinema/camera, Dynamic motion, BPM sync, Color/texture, Panels/echoes/glitch, and Cut transitions. Existing reveal effects have moved into the phase categories. Adjust motion and treatment intensity, entrance/exit duration, and the techniques included in Auto. Each layer has its own settings, including automatic placement. Previously shared settings are copied to both layers when an older project is opened.
+**Details → Foreground / Background** contains 55 entrances, 55 exits, and 110 main techniques (including transitions). Categories are Entrance, Exit, Cinema/camera, Dynamic motion, BPM sync, Color/texture, Panels/echoes/glitch, and Cut transitions. Existing reveal effects have moved into the phase categories. Adjust motion and treatment intensity, entrance/exit duration, and the techniques included in Auto. Each layer has its own settings, including automatic placement. Previously shared settings are copied to both layers when an older project is opened.
 
 **Shuffle foreground** and **Shuffle background** reroll automatic cuts only in the corresponding layer. The main Shuffle button still rerolls both layers. Explicit selections and locked cuts are preserved. A cut's dice button switches it to Auto and rerolls it. Existing projects keep their individual settings as **Legacy settings** until a new technique is selected. With automatic placement enabled, effect cuts without manual placement vary their position and size on shuffle, preserving the source aspect ratio. Automatic background size stays between 100% and 135% of the full-fit size, with position shifts limited to the available crop on enlarged axes. Manual placement and locked cuts stay fixed. Use Reset automatic placement to return a manually placed cut to automatic composition. Disable Vary position and size automatically in Details to keep automatic cuts centered at full fit. No effects and Legacy settings retain their original framing. Video looping, chroma key, and timing remain independent of technique selection. Transitions apply between adjacent media cuts.
 
 **BPM sync** adds ten motions: zoom, bounce, sway, orbit, turn, shake, double heartbeat, two-beat breathing, steps, and fade. They use the configured BPM, falling back to 120 when unset. The global timeline and beat offset keep beats aligned across cuts. Source video playback speed is unchanged.
 
 The second pack adds 33 techniques: 8 camera/motion variations, 10 masks/reveals, 10 panel/echo effects, and 5 color/texture treatments. Per-cut choices are grouped by category. New effects support transparent assets and live video frames; selection is deterministic for the same seed.
+
+The third pack adds, for both foreground and background: 14 entrances and 14 matching exits (drop and bounce, elastic zoom, swirl, fold up, flicker, shake, rubber snap, clock reveal, star iris, heart iris, random bars, brush strokes, polka-dot reveal, diagonal split); 4 camera moves (Ken Burns, Dutch angle, crane up, handheld); 4 dynamic motions (roll across, slam zoom, slow full turn, three-step zoom); 7 BPM motions (jelly, kick zoom out, tilt, side slide, four-beat flip, wall bounce, eight-beat build-up); 8 textures (light leak, film grain, vignette, hue cycle, CRT scanlines, thermal, soft bloom, cyanotype); 6 panel effects (zoom tunnel, tile scroll, column wave, strobe echoes, band shift, glass shards); and 5 transitions (blinds, slice shift, pixelate, rule wipe, grid cells). All of them are included in the curated themes. Transparent and chroma-keyed areas stay transparent. The new transitions are used only when selected as a technique; random transitions for legacy cuts are unchanged.
 
 Random order remains available after adding/removing cuts or tap sync when at least two files are uploaded. While enabled, media is assigned in a seeded shuffled cycle; blank and locked cuts are preserved. Turn it off to restore the underlying assignments and select files individually.
 

@@ -739,6 +739,9 @@ const part = (ctx, C, x, y, w, h, dx = 0, dy = 0) => {
   ctx.drawImage(C, x0, y0, x1 - x0, y1 - y0, x0 + dx, y0 + dy, x1 - x0, y1 - y0);
 };
 const scaled = (ctx, C, cw, ch, s, cx = cw / 2, cy = ch / 2) => ctx.drawImage(C, cx - cx * s, cy - cy * s, cw * s, ch * s);
+// Transparent layers (the media foreground) skip backdrop fills and tint drawn pixels only.
+const backdrop = (ctx, I) => { if (!I.transparent) { ctx.fillStyle = I.sc.bg; ctx.fillRect(0, 0, I.cw, I.ch); } };
+const tint = (ctx, I, paint) => { ctx.save(); if (I.transparent) ctx.globalCompositeOperation = 'source-atop'; paint(); ctx.restore(); };
 const trReg = (k, d) => reg('trans', k, Object.assign({}, d, {
   draw(ctx, A, B, p, I) {
     ctx.save();
@@ -836,14 +839,15 @@ trReg('cover', { name: 'カバー', tags: ['editorial', 'graphic', 'calm'], w: 0
     const { cw, ch } = I, e = E.inOutCubic(p), h = P.dir === 'L' || P.dir === 'R', sg = P.dir === 'L' || P.dir === 'U' ? -1 : 1;
     const L = h ? cw : ch, bo = Math.round((1 - e) * L) * -sg, ao = Math.round(e * L * 0.18) * sg;
     if (h) ctx.drawImage(A, ao, 0); else ctx.drawImage(A, 0, ao);
-    ctx.fillStyle = '#000000'; ctx.globalAlpha = 0.45 * e; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1;
-    // soft shadow ahead of the incoming edge
-    const sw = minD(I) * 0.06, edge = (h ? (sg > 0 ? cw + bo : bo) : (sg > 0 ? ch + bo : bo));
-    const g = h ? ctx.createLinearGradient(edge, 0, edge + sg * sw, 0) : ctx.createLinearGradient(0, edge, 0, edge + sg * sw);
-    g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.globalAlpha = bell(p);
-    if (h) ctx.fillRect(sg > 0 ? edge : edge - sw, 0, sw, ch); else ctx.fillRect(0, sg > 0 ? edge : edge - sw, cw, sw);
-    ctx.globalAlpha = 1;
+    tint(ctx, I, () => {
+      ctx.fillStyle = '#000000'; ctx.globalAlpha = 0.45 * e; ctx.fillRect(0, 0, cw, ch);
+      // soft shadow ahead of the incoming edge
+      const sw = minD(I) * 0.06, edge = (h ? (sg > 0 ? cw + bo : bo) : (sg > 0 ? ch + bo : bo));
+      const g = h ? ctx.createLinearGradient(edge, 0, edge + sg * sw, 0) : ctx.createLinearGradient(0, edge, 0, edge + sg * sw);
+      g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.globalAlpha = bell(p);
+      if (h) ctx.fillRect(sg > 0 ? edge : edge - sw, 0, sw, ch); else ctx.fillRect(0, sg > 0 ? edge : edge - sw, cw, sw);
+    });
     if (h) ctx.drawImage(B, bo, 0); else ctx.drawImage(B, 0, bo);
   } });
 
@@ -853,15 +857,16 @@ trReg('uncover', { name: 'アンカバー', tags: ['editorial', 'calm', 'emotion
   draw(ctx, A, B, p, I, P) {
     const { cw, ch } = I, e = E.inOutCubic(p), h = P.dir === 'L' || P.dir === 'R', sg = P.dir === 'L' || P.dir === 'U' ? -1 : 1;
     const s = 1.05 - 0.05 * E.outCubic(p);
-    ctx.fillStyle = I.sc.bg; ctx.fillRect(0, 0, cw, ch);
+    backdrop(ctx, I);
     scaled(ctx, B, cw, ch, s);
-    ctx.fillStyle = '#000000'; ctx.globalAlpha = 0.4 * (1 - e); ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1;
     const L = h ? cw : ch, ao = Math.round(e * L) * sg, edge = h ? (sg > 0 ? ao : cw + ao) : (sg > 0 ? ao : ch + ao), sw = minD(I) * 0.07;
-    const g = h ? ctx.createLinearGradient(edge, 0, edge - sg * sw, 0) : ctx.createLinearGradient(0, edge, 0, edge - sg * sw);
-    g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.globalAlpha = bell(p);
-    if (h) ctx.fillRect(sg > 0 ? edge - sw : edge, 0, sw, ch); else ctx.fillRect(0, sg > 0 ? edge - sw : edge, cw, sw);
-    ctx.globalAlpha = 1;
+    tint(ctx, I, () => {
+      ctx.fillStyle = '#000000'; ctx.globalAlpha = 0.4 * (1 - e); ctx.fillRect(0, 0, cw, ch);
+      const g = h ? ctx.createLinearGradient(edge, 0, edge - sg * sw, 0) : ctx.createLinearGradient(0, edge, 0, edge - sg * sw);
+      g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.globalAlpha = bell(p);
+      if (h) ctx.fillRect(sg > 0 ? edge - sw : edge, 0, sw, ch); else ctx.fillRect(0, sg > 0 ? edge - sw : edge, cw, sw);
+    });
     if (h) ctx.drawImage(A, ao, 0); else ctx.drawImage(A, 0, ao);
   } });
 
@@ -870,7 +875,7 @@ trReg('zoomThrough', { name: 'ズームスルー', tags: ['pop', 'emotional', 'g
   plan: rng => ({ z: rng.range(1.5, 2.2) }),
   draw(ctx, A, B, p, I, P) {
     const { cw, ch } = I, sa = 1 + (P.z - 1) * Math.pow(p, 1.4), aa = 1 - E.inCubic(clamp(p * 1.12)), sb = 0.86 + 0.14 * E.outCubic(p);
-    ctx.fillStyle = I.sc.bg; ctx.fillRect(0, 0, cw, ch);
+    backdrop(ctx, I);
     scaled(ctx, B, cw, ch, sb);
     if (aa > 0.003) {
       ctx.globalAlpha = aa; scaled(ctx, A, cw, ch, sa);
@@ -949,7 +954,7 @@ trReg('blockDissolve', { name: 'ブロック崩し', tags: ['glitch', 'graphic']
       const x0 = Math.round(i * cw / cols), x1 = Math.round((i + 1) * cw / cols), y0 = Math.round(j * ch / rows), y1 = Math.round((j + 1) * ch / rows);
       part(ctx, B, x0, y0, x1 - x0, y1 - y0);
       const f = 1 - (p - r) / 0.1;
-      if (f > 0) { ctx.globalAlpha = f * 0.75; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.globalAlpha = 1; }
+      if (f > 0) tint(ctx, I, () => { ctx.fillStyle = ac; ctx.globalAlpha = f * 0.75; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); });
     }
   } });
 
@@ -1105,7 +1110,7 @@ trReg('flashCross', { name: 'フラッシュ転換', tags: ['emotional', 'pop', 
     ctx.drawImage(A, 0, 0);
     if (x > 0) { ctx.globalAlpha = x; ctx.drawImage(B, 0, 0); ctx.globalAlpha = 1; }
     const a = p < 0.45 ? E.inQuad(p / 0.45) : 1 - E.outCubic((p - 0.45) / 0.55);
-    if (a > 0.003) { ctx.globalAlpha = a * 0.92; ctx.fillStyle = fl; ctx.fillRect(0, 0, cw, ch); }
+    if (a > 0.003) tint(ctx, I, () => { ctx.globalAlpha = a * 0.92; ctx.fillStyle = fl; ctx.fillRect(0, 0, cw, ch); });
   } });
 
 /* ---- pixelate: the old cut breaks down into big pixels, the new one resolves out of them ---- */
