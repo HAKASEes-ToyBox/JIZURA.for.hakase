@@ -590,6 +590,8 @@ function openCutDetails(layer,index,part=0) {
   let draft = clone(original), current = clone(cut), start = cut.start;
   let locked = !!(lyric ? S.project.overrides[index]?.lock : original.lock);
   const initialLock = locked;
+  let removedDetail = null;
+  const openDetails = new Map();
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
   document.body.appendChild(dialog);
@@ -636,8 +638,9 @@ function openCutDetails(layer,index,part=0) {
   }
   function fieldEditor(parent,field,value,onChange,path=field) {
     if(value && typeof value==='object') {
-      const section=document.createElement('details'); section.open=['area','placement'].includes(field);
-      const title=document.createElement('summary'); title.textContent=label(field); section.append(title);
+      const section=document.createElement('details'); section.dataset.detailSection=path;
+      section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
+      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       for(const [child,v] of Object.entries(value)) {
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
@@ -654,7 +657,7 @@ function openCutDetails(layer,index,part=0) {
         const add=document.createElement('button');add.type='button';add.textContent=L('装飾を追加','Add decoration');
         add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};section.append(add);
       }
-      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${i+1} を削除`,`Remove ${i+1}`);del.onclick=()=>{value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
+      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1} を削除`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
       return;
     }
     const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field);row.append(text);
@@ -668,6 +671,7 @@ function openCutDetails(layer,index,part=0) {
       const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value):input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
+      if(/^decor\.\d+\.id$/.test(path))preview();
       if(choices && !path.includes('.')) {
         const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
@@ -678,6 +682,18 @@ function openCutDetails(layer,index,part=0) {
     row.append(input);parent.append(row);
   }
   function render() {
+    openDetails.clear();
+    for(const section of dialog.querySelectorAll('details[data-detail-section]')){
+      let path=section.dataset.detailSection;
+      if(removedDetail && path.startsWith(removedDetail.path+'.')){
+        const tail=path.slice(removedDetail.path.length+1).split('.'),i=Number(tail[0]);
+        if(i===removedDetail.index)continue;
+        if(i>removedDetail.index){tail[0]=String(i-1);path=removedDetail.path+'.'+tail.join('.');}
+      }
+      openDetails.set(path,section.open);
+    }
+    removedDetail=null;
+    const scrollTop=dialog.scrollTop;
     dialog.replaceChildren();const form=document.createElement('form');dialog.append(form);
     const heading=document.createElement('h2');heading.textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;form.append(heading);
     const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
@@ -708,6 +724,7 @@ function openCutDetails(layer,index,part=0) {
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
     const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
+    dialog.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
       if(!blank && (locked !== initialLock || !lyric)) {
