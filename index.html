@@ -6287,8 +6287,10 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     const [shapes, sc] = buffer('motionShapes', fw * sx * k, fh * sy * k); sc.fillStyle = '#fff';
     for (const s of mask.shapes) { J.maskShapePath(sc, [s], shapes.width, shapes.height); sc.fill(); }
     const { c, p, fade, out } = motionState(mask.motion, timing);
-    mx.setTransform(matrix); mx.translate(fw / 2, fh / 2);
+    // Reveal phases clip the context; save/restore keeps that clip off this reused buffer's later frames.
+    mx.save(); mx.setTransform(matrix); mx.translate(fw / 2, fh / 2);
     try { J.paintMediaEffect(mx, shapes, [fw, fh], c, p, fade, out); } catch (e) { console.warn('mask motion', e); }
+    mx.restore();
   } else {
     mx.setTransform(matrix); mx.fillStyle = '#fff';
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
@@ -38554,7 +38556,7 @@ function openCutDetails(layer,index,part=0) {
       const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
       kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);
       for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
-        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="${key==='angle'?1:.01}" min="${min}" max="${max}" data-mask-shape="${key}">`;
+        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="any" min="${min}" max="${max}" data-mask-shape="${key}">`;
         const input=row.querySelector('input');input.value=+s[key].toFixed(4);
         input.addEventListener('change',()=>{
           const v=Number(input.value);if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
@@ -38624,7 +38626,7 @@ function openCutDetails(layer,index,part=0) {
       row(L('登場','Entrance'),select('entrance',[[MEDIA_EFFECT_GROUPS.enter,J.mediaPhaseOptions('enter')]]));
       row(L('退場','Exit'),select('departure',[[MEDIA_EFFECT_GROUPS.exit,J.mediaPhaseOptions('exit')]]));
       for(const [key,ja,en,min,max] of [['amount','動きの強さ','Motion intensity',0,2],['duration','登場・退場時間（秒）','Entrance / exit (s)',.05,1.5]]){
-        const input=document.createElement('input');input.type='number';input.step='.05';input.min=min;input.max=max;input.value=m[key];input.dataset.maskMotion=key;
+        const input=document.createElement('input');input.type='number';input.step='any';input.min=min;input.max=max;input.value=m[key];input.dataset.maskMotion=key;
         input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;m[key]=J.clamp(v,min,max);input.value=m[key];save();});row(L(ja,en),input);
       }
     }

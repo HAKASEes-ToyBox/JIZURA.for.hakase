@@ -89,8 +89,10 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     const [shapes, sc] = buffer('motionShapes', fw * sx * k, fh * sy * k); sc.fillStyle = '#fff';
     for (const s of mask.shapes) { J.maskShapePath(sc, [s], shapes.width, shapes.height); sc.fill(); }
     const { c, p, fade, out } = motionState(mask.motion, timing);
-    mx.setTransform(matrix); mx.translate(fw / 2, fh / 2);
+    // Reveal phases clip the context; save/restore keeps that clip off this reused buffer's later frames.
+    mx.save(); mx.setTransform(matrix); mx.translate(fw / 2, fh / 2);
     try { J.paintMediaEffect(mx, shapes, [fw, fh], c, p, fade, out); } catch (e) { console.warn('mask motion', e); }
+    mx.restore();
   } else {
     mx.setTransform(matrix); mx.fillStyle = '#fff';
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).

@@ -66,6 +66,11 @@ for(const target of ['cut','source']){
 }
 {const still=frame(project({media:{details:moving('cut',{technique:'none'})}}),.8),none=frame(project({media:{details:mask('cut',[ellipse(.5,.5,.3,.3)])}}),.8);
  check(still.every((v,i)=>v===none[i]),'no motion = static mask');}
+// Regression: a reveal entrance at its first frame (empty clip) must not leave the mask empty afterwards.
+{const staticMask=frame(project({media:{details:mask('cut',[ellipse(.5,.5,.3,.3)])}}),3);
+ for(const entrance of ['iris','wipe','diamond']){frame(project({media:{details:moving('cut',{entrance})}}),0.001);
+  const after=frame(project({media:{details:moving('cut',{entrance:'none'})}}),3);check(after.every((v,i)=>v===staticMask[i]),'no leftover clip after '+entrance);
+  const done=frame(project({media:{details:moving('cut',{entrance})}}),3);check(blue(at(done,.5,.5)),'reveal finished '+entrance);}}
 {const lyr=project({lyrics,lyric:moving('cut',{entrance:'enter_slide'},leftHalf)});check(bright(frame(lyr,.03),0,.45)!==bright(frame(lyr,.5),0,.45),'lyric mask motion');}
 // Effect paste keeps the target's own mask.
 {const p=project({media:{details:mask('cut',[ellipse(.5,.5,.2,.2)])}}),plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');
@@ -129,6 +134,15 @@ const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
 assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
+// Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
+await page.evaluate(()=>{delete J.ui.project.media.cutOverrides[0].details.mask;J.uiApi.replan();});
+await page.locator('#timelineLinks [data-action="details"][data-layer="media"]').first().dispatchEvent('pointerdown',{button:0});
+await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
+await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await page.waitForTimeout(400);await section.locator('[data-mask-motion="entrance"]').selectOption('none');
+assert.equal(await modal.locator('form').evaluate(f=>f.checkValidity()),true);
+await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();await modal.waitFor({state:'detached'});
+const shown=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=320;c.height=180;const x=c.getContext('2d');new J.Renderer().frame(x,J.ui.plan,3,{scale:320/J.ui.plan.W,noHud:true,noLyrics:true});const d=x.getImageData(0,0,320,180).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>180&&d[i+1]<90&&d[i+2]<90)n++;return {entrance:J.ui.project.media.cutOverrides[0].details.mask.motion.entrance,red:n/(d.length/4)};});
+assert.equal(shown.entrance,'none');assert.ok(shown.red>.05,'source visible after reveal reset '+JSON.stringify(shown));
 // Lyric cut details show the mask section with the display-area hint.
 await page.locator('#lineList .cut-details-open').first().click();await section.locator('summary').click();
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
