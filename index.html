@@ -38620,7 +38620,7 @@ function openCutDetails(layer,index,part=0) {
     // Motion: the moving / revealing media techniques, applied to the mask over this cut (all off by default).
     function motionFields(){
       const box=section.querySelector('.cut-mask-motion'),grid=box.querySelector('.cut-details-grid'),m=mask.motion;
-      box.querySelector('h4').textContent=L('モーション','Motion');
+      box.querySelector('h4').textContent=L('マスクのモーション','Mask motion');
       box.querySelector('.hint').textContent=L('マスクの図形に、前景・背景と同じ登場・退場・動きを付けます。','Moves the mask shapes with the same entrances, exits and motions as foreground / background.');
       grid.replaceChildren();
       const row=(label,control)=>{const r=document.createElement('label');r.className='cut-detail-field';const s=document.createElement('span');s.textContent=label;r.append(s,control);grid.append(r);return control;};
