@@ -552,6 +552,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .insert-cut-dialog { width: min(420px,90vw); }
 .insert-cut-dialog textarea, .insert-cut-dialog select { display: block; width: 100%; margin-top: 6px; }
 
+.timeline-action-group { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 2px 10px 2px 0; border-right: 1px solid var(--line2); }
+.timeline-action-group:last-child { border-right: 0; padding-right: 0; }
+
 </style>
 </head>
 <body>
@@ -691,7 +694,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
       </div>
       <div class="timeline-toolbar">
       <div class="timeline-position-label">At playhead:</div>
-      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button><button id="insertLyricAtPlayhead" type="button" disabled>Insert lyrics</button><button id="insertForegroundAtPlayhead" type="button" disabled>Insert foreground</button><button id="insertBackgroundAtPlayhead" type="button" disabled>Insert background</button></div>
+      <div class="timeline-split"><div class="timeline-action-group" role="group" aria-label="Lyrics"><button id="insertLyricAtPlayhead" type="button" disabled>Insert lyrics</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button></div><div class="timeline-action-group" role="group" aria-label="Foreground"><button id="insertForegroundAtPlayhead" type="button" disabled>Insert foreground</button><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button></div><div class="timeline-action-group" role="group" aria-label="Background"><button id="insertBackgroundAtPlayhead" type="button" disabled>Insert background</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button></div></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
       </div>
       <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
