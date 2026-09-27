@@ -53,12 +53,13 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   settings.sizeMin = Math.min(sizeMin, sizeMax); settings.sizeMax = Math.max(sizeMin, sizeMax);
   settings.enabled = settings.enabled && typeof settings.enabled === 'object' ? Object.assign({}, settings.enabled) : {};
+  settings.decor = settings.decor === true;
   return settings;
 };
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
@@ -162,15 +163,19 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
   const filters = { mono: `grayscale(${treatment})`, sepia: `sepia(${treatment * .85})`, contrast: `contrast(${1 + treatment * .6})`, blur: `blur(${8 * treatment}px)`, vivid: `saturate(${1 + treatment})`, glow: `brightness(${1 + treatment * .12}) saturate(${1 + treatment * .25})`, cool: `sepia(${treatment * .5}) hue-rotate(150deg)`, warm: `sepia(${treatment * .45}) saturate(${1 + treatment * .4})`, invert: `invert(${treatment})`, poster: `contrast(${1 + treatment * 1.5}) saturate(${1 + treatment * .6})` };
   ctx.filter = `${filters[cut.treat] || ''} blur(${blur * w / 1920}px)`.trim();
   const draw = (dx = 0, dy = 0, dw = w, dh = h) => ctx.drawImage(source, -dw / 2 + dx, -dh / 2 + dy, dw, dh);
+  // Lyric decorations around the media frame: back ones under the source, front ones over it.
+  const decor = layer => { if (J.drawMediaDecor && cut.decor?.length) J.drawMediaDecor(ctx, cut, p, w, h, layer); };
+  decor('back');
   if (['echo', 'prism'].includes(cut.treat) && treatment > 0) {
     ctx.save(); ctx.globalAlpha *= .22 * treatment;
     for (const n of [-2, -1, 1, 2]) { if (cut.treat === 'prism') ctx.filter = `hue-rotate(${n * 65}deg)`; draw(n * w * .035 * treatment); }
     ctx.restore();
   }
-  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) return;
+  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front'); return; }
   if (cut.treat === 'triptych' && treatment > 0) { for (const n of [-1, 0, 1]) draw(n * w / 3, 0, w / 3, h / 3); }
   else if (cut.treat === 'glitch' && treatment > 0) {
     for (let i = 0; i < 12; i++) { ctx.save(); ctx.beginPath(); ctx.rect(-w, -h / 2 + i * h / 12, w * 2, h / 12 + .5); ctx.clip(); draw(Math.sin(Math.floor(p * 32) * 19 + i * 31 + cut.seed) * w * .035 * treatment); ctx.restore(); }
   } else draw();
+  decor('front');
 };
 })();

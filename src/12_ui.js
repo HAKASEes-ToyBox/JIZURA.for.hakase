@@ -737,7 +737,7 @@ function openCutDetails(layer,index,part=0) {
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       for(const [child,v] of Object.entries(value)) {
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
-        if(['enabled','randomize','autoPlacement','sizeMin','sizeMax'].includes(child)) continue;
+        if(['enabled','randomize','autoPlacement','sizeMin','sizeMax','decor'].includes(child)) continue;
         fieldEditor(grid,child,v,next=>{
           if (value.lockAspect && ['w','h'].includes(child) && value[child]>0) {
             const other=child==='w'?'h':'w'; value[other]*=next/value[child];
@@ -2328,6 +2328,13 @@ function renderMediaEffects(layer) {
     box.appendChild(section);
   }
   setting('autoPlacement').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
+  {
+    // Lyric decorations (Details → Techniques → Decoration) on automatic media cuts; off by default.
+    const row = document.createElement('label'); row.className = 'check';
+    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('装飾を有効にする', 'Enable decorations')}<small>${L('「自動」の画像・動画に、詳細 → 手法の装飾を付けます。', 'Adds decorations from Details → Techniques to Auto images and videos.')}</small></span>`;
+    row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.decor = e.target.checked; S.project[layer].effects = next; replan(); };
+    setting('autoPlacement').closest('label').before(row);
+  }
   if (layer === 'media') {
     const row = document.createElement('label'); row.className = 'check';
     row.innerHTML = `<input type="checkbox" data-media-setting="applyLyricBackground" ${settings.applyLyricBackground !== false ? 'checked' : ''}><span>${L('歌詞の背景演出も適用', 'Apply lyric background effects')}</span>`;
