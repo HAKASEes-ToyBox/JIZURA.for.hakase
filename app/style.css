@@ -460,6 +460,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
 .cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
 .cut-details-preview .hint { margin: 10px 0 0; }
+.cut-details-preview .cut-details-solo { margin: 10px 0 0; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }

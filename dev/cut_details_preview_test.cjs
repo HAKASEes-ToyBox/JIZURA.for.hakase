@@ -10,8 +10,9 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await page.goto(url);
   await page.evaluate(()=>{
     const p=J.defaultProject();p.lyrics='[00:00]最初の歌詞/次の歌詞\n[00:04]最後の歌詞';p.durationOverride=8;
-    const img=document.createElement('canvas');img.width=160;img.height=90;const g=img.getContext('2d');g.fillStyle='#e33';g.fillRect(0,0,160,90);J.mediaAssets.set('pv',{element:img,type:'image'});
-    for(const layer of ['foreground','media'])p[layer]={...p[layer],items:[{id:'pv',name:'pv.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:2,timing:{lineTimes:{0:0,1:4}},cutOverrides:{0:{itemId:'pv',technique:'none'},1:{itemId:'pv',technique:'none'}}};
+    // Foreground: green on the left quarter only (transparent elsewhere); background: solid blue.
+    for(const [id,color,w] of [['fg','#0c0',40],['bg','#00d',160]]){const img=document.createElement('canvas');img.width=160;img.height=90;const g=img.getContext('2d');g.fillStyle=color;g.fillRect(0,0,w,90);J.mediaAssets.set(id,{element:img,type:'image'});}
+    for(const [layer,id] of [['foreground','fg'],['media','bg']])p[layer]={...p[layer],items:[{id,name:id+'.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:2,timing:{lineTimes:{0:0,1:4}},cutOverrides:{0:{itemId:id,technique:'none'},1:{itemId:id,technique:'none'}}};
     J.ui.project=p;J.uiApi.syncUI();J.uiApi.replan();
   });
   const modal=page.locator('#cutDetailsDialog'),pane=modal.locator('.cut-details-preview'),form=modal.locator('.cut-details-form');
@@ -52,6 +53,17 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
     await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();
     assert.equal(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].technique,layer),'kenBurns');
   }
+  // "Show the edited cut only": other layers and lyric cuts disappear; the choice is remembered.
+  const colors=()=>pane.locator('canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let green=0,blue=0;for(let i=0;i<d.length;i+=8){if(d[i+1]>150&&d[i]<80&&d[i+2]<80)green++;if(d[i+2]>150&&d[i]<80&&d[i+1]<80)blue++;}return {green,blue};});
+  const open=async layer=>{await page.locator(`#timelineLinks [data-action="details"][data-layer="${layer}"]`).first().dispatchEvent('pointerdown',{button:0});await page.waitForTimeout(350);};
+  const close=async()=>{await modal.getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();await modal.waitFor({state:'detached'});};
+  await open('lyrics');const solo=modal.locator('[data-preview-solo]');
+  assert.equal((await modal.locator('.cut-details-solo span').textContent()),locale?'Show the edited cut only':'編集対象単体を表示');
+  assert.equal(await solo.isChecked(),false);let seen=await colors();assert.ok(seen.green>0&&seen.blue>0,'all layers '+JSON.stringify(seen));
+  await solo.check();await page.waitForTimeout(300);seen=await colors();assert.deepEqual(seen,{green:0,blue:0});await close();
+  await open('foreground');assert.equal(await solo.isChecked(),true);seen=await colors();assert.ok(seen.green>0&&seen.blue===0,'foreground only '+JSON.stringify(seen));await close();
+  await open('media');seen=await colors();assert.ok(seen.blue>0&&seen.green===0,'background only '+JSON.stringify(seen));
+  await solo.uncheck();await page.waitForTimeout(300);seen=await colors();assert.ok(seen.green>0&&seen.blue>0,'solo off '+JSON.stringify(seen));await close();
   assert.deepEqual(errors,[]);console.log(locale||'ja',viewport.width,'cut details preview passed');await page.close();
  }} finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});

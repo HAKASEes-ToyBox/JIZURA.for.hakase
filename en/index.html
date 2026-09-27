@@ -478,6 +478,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
 .cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
 .cut-details-preview .hint { margin: 10px 0 0; }
+.cut-details-preview .cut-details-solo { margin: 10px 0 0; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -38244,6 +38245,7 @@ function detailButton(onClick) {
   button.title = J.mediaLabel('cutsの詳細編集','Edit cut details'); button.setAttribute('aria-label',button.title);
   button.innerHTML = ICON.details; button.addEventListener('click',onClick); return button;
 }
+let cutPreviewSolo=false;// remembered while the page is open
 function openCutDetails(layer,index,part=0) {
   const lyric = layer === 'lyrics', L = J.mediaLabel, clone = value => JSON.parse(JSON.stringify(value));
   const blank = lyric && part === 'blank';
@@ -38260,10 +38262,12 @@ function openCutDetails(layer,index,part=0) {
   dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
-  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><p class="hint"></p>`;
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><p class="hint"></p>`;
   pane.querySelector('h2').textContent=L('cutsの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('Foreground','Foreground'):L('Background','Background'))+` ${index+1}${lyric&&!blank?` / ${part+1}`:''}`;
   pane.querySelector('.progress').setAttribute('aria-label',L('Play位置','Playback position'));
   pane.querySelector('.hint').textContent=L('このcutsの区間をループPlayします。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
+  const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
+  solo.addEventListener('change',()=>{cutPreviewSolo=solo.checked;});
   const formHost=document.createElement('div');formHost.className='cut-details-form';
   dialog.append(pane,formHost);
   document.body.appendChild(dialog);
@@ -38275,13 +38279,21 @@ function openCutDetails(layer,index,part=0) {
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
   const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
-  function drawPreview(now){
+  // "Show the edited cut only": other layers are switched off and other lyric cuts are left out
+  // of a shallow plan copy (the cut keeps its own background effect and transition).
+  const soloOptions=lyric?{noForeground:true,noMedia:true}:layer==='foreground'?{noMedia:true,noLyrics:true}:{noForeground:true,noLyrics:true};
+  let soloSource=null,soloShown=null;
+  const soloPlan=(plan,c)=>{
+    if(soloSource!==plan){soloSource=plan;soloShown=lyric?{...plan,retainedCutIndices:(plan.retainedCutIndices||[]).filter(i=>i===c.index)}:{...plan,cuts:[],retainedCutIndices:[],events:[]};}
+    return soloShown;
+  };  function drawPreview(now){
     previewFrame=requestAnimationFrame(drawPreview);
     const plan=previewPlan,c=previewCut;if(!plan||!c)return;
     const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
     if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
     const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
-    try{J.syncMediaPreview(plan,t,true);previewRenderer.frame(previewCanvas.getContext('2d'),plan,t,{scale:w/plan.W,noHud:true});}catch(e){}
+    const shown=cutPreviewSolo?soloPlan(plan,c):plan;
+    try{J.syncMediaPreview(shown,t,true);previewRenderer.frame(previewCanvas.getContext('2d'),shown,t,{scale:w/plan.W,noHud:true,...(cutPreviewSolo?soloOptions:{})});}catch(e){}
     const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
     pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
   }
