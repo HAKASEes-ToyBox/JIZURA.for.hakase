@@ -488,6 +488,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
+.cut-mask-motion h4 { margin: 0 0 4px; font-size: 13px; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -4720,7 +4722,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
     const fit = placement ? [placement.w * w, placement.h * h] : [sw * scale, sh * scale];
     const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
     const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut) : keyed;
+    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
     ctx.save();
     ctx.translate(placement ? (placement.x + placement.w / 2) * w : w / 2, placement ? (placement.y + placement.h / 2) * h : h / 2);
     ctx.rotate((cut.placement?.angle || 0) * Math.PI / 180);
@@ -4747,7 +4749,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   ctx.filter = ({ mono: 'grayscale(1)', sepia: 'sepia(1)', contrast: 'contrast(1.6)', blur: 'blur(8px)' })[cut.treat] || 'none';
   const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
   const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut) : keyed;
+  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
@@ -4793,7 +4795,7 @@ J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
   const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
   const cw=lx.canvas.width,ch=lx.canvas.height;
   J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
-  if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut);
+  if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut, t, plan);
   const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
   if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
     const mask = owner.ensure(owner.foregroundKeyMask || (owner.foregroundKeyMask = document.createElement('canvas')), cw, ch);
@@ -6201,12 +6203,22 @@ J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
 'use strict';
 const num = (v, d) => Number.isFinite(+v) ? +v : d;
 J.MASK_SHAPES = ['ellipse', 'rect', 'roundRect', 'triangle', 'diamond', 'pentagon', 'hexagon', 'star', 'heart'];
+// Mask motion reuses the media techniques that only move or reveal (no colour / panel effects).
+J.MASK_MOTION_GROUPS = ['cinema', 'dynamic', 'bpm'];
+const motionTechnique = key => { const d = J.MEDIA_TECH?.[key]; return !!d && !d.stage && J.MASK_MOTION_GROUPS.includes(d.group); };
+J.normalizeMaskMotion = m => ({
+  technique: motionTechnique(m?.technique) ? m.technique : 'none',
+  entrance: J.MEDIA_TECH?.[m?.entrance]?.stage === 'enter' ? m.entrance : 'none',
+  departure: J.MEDIA_TECH?.[m?.departure]?.stage === 'exit' ? m.departure : 'none',
+  amount: J.clamp(num(m?.amount, 1), 0, 2), duration: J.clamp(num(m?.duration, .45), .05, 1.5),
+});
+J.maskMotionActive = m => !!m && (m.technique !== 'none' || m.entrance !== 'none' || m.departure !== 'none');
 J.normalizeMask = m => {
   if (!m || typeof m !== 'object') return null;
   const shapes = (Array.isArray(m.shapes) ? m.shapes : []).filter(s => s && J.MASK_SHAPES.includes(s.type)).map(s => ({
     type: s.type, cx: num(s.cx, .5), cy: num(s.cy, .5), w: Math.max(0, num(s.w, .5)), h: Math.max(0, num(s.h, .5)), angle: J.clamp(num(s.angle, 0), -180, 180), lockAspect: s.lockAspect !== false,
   })).filter(s => s.w > 0 && s.h > 0);
-  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, shapes };
+  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, shapes, motion: J.normalizeMaskMotion(m.motion) };
 };
 // The editor previews the unmasked reference while it is drawn.
 J.masksSuspended = false;
@@ -6252,29 +6264,53 @@ const buffer = (name, w, h) => {
   const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, c.width, c.height);
   return [c, x];
 };
-// Keep (or, inverted, remove) the union of the shapes on a whole canvas. matrix maps frame units to pixels.
-J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh) => {
+// A media-cut-like description of the mask's motion at time t, timed over the masked cut.
+const motionState = (motion, { cut, t, plan }) => {
+  const start = cut.start, end = cut.end, d = Math.max(.04, end - start), beats = cut.songBeats || plan?.beats || [];
+  const c = {
+    start, end, seed: cut.seed | 0, index: cut.index | 0, technique: motion.technique, treat: 'none', trans: 'none',
+    enter: J.MEDIA_TECH[motion.entrance]?.motion || 'cut', exit: J.MEDIA_TECH[motion.departure]?.motion || 'cut', hold: J.MEDIA_TECH[motion.technique]?.hold || 'still',
+    bpm: cut.bpm || (beats.length > 1 ? 60 / Math.max(.05, beats[1] - beats[0]) : 120), beatOffset: cut.beatOffset ?? beats[0] ?? 0,
+    effectSettings: { motion: motion.amount, treatment: 0, duration: motion.duration },
+  };
+  Object.defineProperty(c, 'songBeats', { value: beats });
+  const phase = Math.min(motion.duration, d * .3);
+  return { c, p: J.clamp((t - start) / d, 0, 1), fade: J.clamp((t - start) / phase, 0, 1), out: J.clamp((end - t) / phase, 0, 1) };
+};
+// Keep (or, inverted, remove) the union of the shapes on a whole canvas. matrix maps frame units to pixels;
+// timing ({cut, t, plan}) animates the mask when it has a motion.
+J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
   const [m, mx] = buffer('shapes', canvas.width, canvas.height);
-  mx.setTransform(matrix); mx.fillStyle = '#fff';
-  // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
-  for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
+  if (timing && J.maskMotionActive(mask.motion) && J.paintMediaEffect) {
+    // Draw the shapes as a white image and move it with the media painter (phases, holds, beats, cameras).
+    const sx = Math.hypot(matrix.a, matrix.b), sy = Math.hypot(matrix.c, matrix.d), k = Math.min(1, 2048 / Math.max(fw * sx, fh * sy, 1));
+    const [shapes, sc] = buffer('motionShapes', fw * sx * k, fh * sy * k); sc.fillStyle = '#fff';
+    for (const s of mask.shapes) { J.maskShapePath(sc, [s], shapes.width, shapes.height); sc.fill(); }
+    const { c, p, fade, out } = motionState(mask.motion, timing);
+    mx.setTransform(matrix); mx.translate(fw / 2, fh / 2);
+    try { J.paintMediaEffect(mx, shapes, [fw, fh], c, p, fade, out); } catch (e) { console.warn('mask motion', e); }
+  } else {
+    mx.setTransform(matrix); mx.fillStyle = '#fff';
+    // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
+    for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
+  }
   const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none';
   x.globalCompositeOperation = mask.invert ? 'destination-out' : 'destination-in'; x.drawImage(m, 0, 0); x.restore();
 };
 const dims = src => [src.videoWidth || src.naturalWidth || src.width || 0, src.videoHeight || src.naturalHeight || src.height || 0];
 // "素材": mask the media source in its own frame, before any technique uses it.
-J.maskMediaSource = (source, cut) => {
+J.maskMediaSource = (source, cut, t, plan) => {
   const mask = J.activeMask(cut); if (!mask || mask.target !== 'source') return source;
   const [sw, sh] = dims(source); if (!sw || !sh) return source;
   const k = Math.min(1, 2048 / Math.max(sw, sh)), [c, x] = buffer('source', sw * k, sh * k);
   x.drawImage(source, 0, 0, c.width, c.height);
-  J.applyMaskToCanvas(c, mask, new DOMMatrix([c.width, 0, 0, c.height, 0, 0]), 1, 1);
+  J.applyMaskToCanvas(c, mask, new DOMMatrix([c.width, 0, 0, c.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
   return c;
 };
 // "カット": mask a finished media layer canvas in stage fractions.
-J.maskMediaLayer = (canvas, cut) => {
+J.maskMediaLayer = (canvas, cut, t, plan) => {
   const mask = J.activeMask(cut); if (!mask || mask.target !== 'cut') return;
-  J.applyMaskToCanvas(canvas, mask, new DOMMatrix([canvas.width, 0, 0, canvas.height, 0, 0]), 1, 1);
+  J.applyMaskToCanvas(canvas, mask, new DOMMatrix([canvas.width, 0, 0, canvas.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
 };
 })();
 
@@ -6392,7 +6428,7 @@ class Renderer {
       const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
       const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
       J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
-      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut);
+      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut, t, plan);
       ctx.globalAlpha=mediaCut.opacity/100;
       ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
       ctx.drawImage(mediaLayer,0,0);ctx.restore();
@@ -6516,7 +6552,7 @@ class Renderer {
         const contentMatrix = sourceMask ? X.getTransform() : null;
         this.drawCut(env);
         X.restore();
-        if (sourceMask) J.applyMaskToCanvas(X.canvas, mask, contentMatrix, contentW, contentH);
+        if (sourceMask) J.applyMaskToCanvas(X.canvas, mask, contentMatrix, contentW, contentH, { cut, t: tp, plan });
         if (X !== target) {
           target.save(); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = blend;
           target.filter = blur > .4 ? `blur(${(blur * scale).toFixed(1)}px)` : 'none'; target.drawImage(X.canvas, 0, 0); target.restore();
@@ -6530,7 +6566,7 @@ class Renderer {
           if (key) this.keyFinish(target, key, layerOptions);
         }
         // The cut mask applies to the finished cut, after its effects, in stage units.
-        if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H);
+        if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H, { cut, t: tq, plan });
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }
@@ -38467,18 +38503,18 @@ function openCutDetails(layer,index,part=0) {
     return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
   }
   function maskEditor(parent){
-    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || {enabled:false,target:'source',invert:false,shapes:[]};
+    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
     const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
     section.open=openDetails.get('mask') ?? mask.enabled;
-    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div>`;
+    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     section.querySelector('summary').textContent=L('マスク','Mask');
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
     target.add(new Option(L('素材','Source'),'source'));target.add(new Option(L('カット','Cut'),'cut'));
     section.querySelector('[data-mask-field="enabled"]').checked=mask.enabled;target.value=mask.target;section.querySelector('[data-mask-field="invert"]').checked=mask.invert;
-    const hint=section.querySelector('.hint');
+    const hint=section.querySelector('.cut-mask-hint');
     const setHint=()=>{hint.textContent=mask.target==='source'
       ?(lyric?L('素材：表示範囲を基準に文字をマスクします。マスク後の文字にカメラなどの演出がかかります。','Source: masks the lyric within its display area; camera and other effects apply to the masked lyric.')
              :L('素材：素材画像を基準にマスクします。マスク後の素材に演出・エフェクトがかかります。','Source: masks the source image itself; techniques and effects apply to the masked source.'))
@@ -38574,7 +38610,25 @@ function openCutDetails(layer,index,part=0) {
     });
     const end=()=>{if(!drag)return;drag=null;fields();save();};
     canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
-    setHint();fields();parent.append(section);draw();
+    // Motion: the moving / revealing media techniques, applied to the mask over this cut (all off by default).
+    function motionFields(){
+      const box=section.querySelector('.cut-mask-motion'),grid=box.querySelector('.cut-details-grid'),m=mask.motion;
+      box.querySelector('h4').textContent=L('モーション','Motion');
+      box.querySelector('.hint').textContent=L('マスクの図形に、前景・背景と同じ登場・退場・動きを付けます。','Moves the mask shapes with the same entrances, exits and motions as foreground / background.');
+      grid.replaceChildren();
+      const row=(label,control)=>{const r=document.createElement('label');r.className='cut-detail-field';const s=document.createElement('span');s.textContent=label;r.append(s,control);grid.append(r);return control;};
+      const select=(key,groups)=>{const el=document.createElement('select');el.dataset.maskMotion=key;el.add(new Option(L('なし','None'),'none'));
+        for(const [name,items] of groups){const g=document.createElement('optgroup');g.label=name;for(const [id,def] of items)g.append(new Option(def.name,id));el.append(g);}
+        el.value=m[key];el.addEventListener('change',()=>{m[key]=el.value;save();});return el;};
+      row(L('手法','Technique'),select('technique',J.MASK_MOTION_GROUPS.map(group=>[MEDIA_EFFECT_GROUPS[group],Object.entries(J.MEDIA_TECH).filter(([,d])=>!d.stage&&d.group===group)])));
+      row(L('登場','Entrance'),select('entrance',[[MEDIA_EFFECT_GROUPS.enter,J.mediaPhaseOptions('enter')]]));
+      row(L('退場','Exit'),select('departure',[[MEDIA_EFFECT_GROUPS.exit,J.mediaPhaseOptions('exit')]]));
+      for(const [key,ja,en,min,max] of [['amount','動きの強さ','Motion intensity',0,2],['duration','登場・退場時間（秒）','Entrance / exit (s)',.05,1.5]]){
+        const input=document.createElement('input');input.type='number';input.step='.05';input.min=min;input.max=max;input.value=m[key];input.dataset.maskMotion=key;
+        input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;m[key]=J.clamp(v,min,max);input.value=m[key];save();});row(L(ja,en),input);
+      }
+    }
+    setHint();fields();motionFields();parent.append(section);draw();
   }
   function drawPreview(now){
     previewFrame=requestAnimationFrame(drawPreview);

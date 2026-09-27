@@ -9,7 +9,7 @@ const project=(opts={})=>{const p=J.defaultProject();p.lyrics=opts.lyrics||'';p.
  for(const [layer,id,ov] of [['media','bl',opts.media],['foreground','gr',opts.foreground]]){if(!ov)continue;p[layer]={...p[layer],items:[{id,name:id+'.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:id,technique:'none',entrance:'none',departure:'none',...ov}}};}
  // The line splits into several automatic cuts; give each the same details.
  if(opts.lyric)p.lyricCutOptions=Object.fromEntries(Array.from({length:8},(_,k)=>['0:'+k,{details:JSON.parse(JSON.stringify(opts.lyric))}]));return p;};
-const frame=p=>{const plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');plan.foreground=J.planMedia(p,plan,null,'foreground');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,320,180);renderer.frame(ctx,plan,1.5,{scale:320/plan.W,noHud:true});return ctx.getImageData(0,0,320,180).data;};
+const frame=(p,t=1.5)=>{const plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');plan.foreground=J.planMedia(p,plan,null,'foreground');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,320,180);renderer.frame(ctx,plan,t,{scale:320/plan.W,noHud:true});return ctx.getImageData(0,0,320,180).data;};
 const at=(d,u,v)=>{const i=(Math.round(v*179)*320+Math.round(u*319))*4;return [d[i],d[i+1],d[i+2]];};
 const blue=px=>px[2]>200&&px[0]<80,green=px=>px[1]>200&&px[0]<80&&px[2]<120;
 const mask=(target,shapes,invert=false)=>({mask:{enabled:true,target,invert,shapes}});
@@ -51,6 +51,22 @@ check(bright(d,0,.45)===0&&bright(d,.5,.74)>0&&bright(d,.78,1)===0,'lyric source
 // Every shape type masks its centre in and the stage corners out.
 for(const type of J.MASK_SHAPES){d=frame(project({media:{details:mask('cut',[{type,cx:.5,cy:.5,w:.5,h:.6,angle:15}])}}));check(blue(at(d,.5,.5))&&!blue(at(d,.03,.05))&&!blue(at(d,.97,.95)),'shape '+type);}
 check(J.normalizeMask({shapes:[{type:'star',cx:.5,cy:.5,w:.2,h:.2}]}).shapes[0].lockAspect===true&&J.normalizeMask({shapes:[{type:'bogus',w:.2,h:.2}]}).shapes.length===0,'normalize shapes');
+// Mask motion: off by default, only moving / revealing techniques, timed over the cut.
+{const n=J.normalizeMask({shapes:[ellipse(.5,.5,.2,.2)]}).motion;check(n.technique==='none'&&n.entrance==='none'&&n.departure==='none'&&n.amount===1&&n.duration===.45,'motion defaults');
+ const bad=J.normalizeMaskMotion({technique:'vignette',entrance:'exit_fade',departure:'enter_fade',amount:9});check(bad.technique==='none'&&bad.entrance==='none'&&bad.departure==='none'&&bad.amount===2,'motion validation');
+ check(J.normalizeMaskMotion({technique:'cam_orbitDrift'}).technique==='cam_orbitDrift'&&J.normalizeMaskMotion({technique:'beatJelly'}).technique==='beatJelly','motion techniques');}
+const moving=(target,motion,shapes=[ellipse(.5,.5,.3,.3)])=>({mask:{enabled:true,target,invert:false,shapes,motion}});
+for(const target of ['cut','source']){
+ const roll=project({media:{details:moving(target,{technique:'rollAcross'})}}),early=frame(roll,.8),late=frame(roll,7.2);
+ check(blue(at(early,.28,.5))&&!blue(at(early,.72,.5))&&blue(at(late,.72,.5))&&!blue(at(late,.28,.5)),'rolling mask '+target);
+ const slide=project({media:{details:moving(target,{entrance:'enter_slide'})}});
+ check(!blue(at(frame(slide,.05),.5,.5))&&blue(at(frame(slide,4),.5,.5)),'sliding entrance '+target);
+ const fadeIn=frame(project({media:{details:moving(target,{entrance:'enter_fade'})}}),.12),mid=at(fadeIn,.5,.5);
+ check(mid[2]>30&&mid[2]<220,'fading mask '+target+' '+mid);
+}
+{const still=frame(project({media:{details:moving('cut',{technique:'none'})}}),.8),none=frame(project({media:{details:mask('cut',[ellipse(.5,.5,.3,.3)])}}),.8);
+ check(still.every((v,i)=>v===none[i]),'no motion = static mask');}
+{const lyr=project({lyrics,lyric:moving('cut',{entrance:'enter_slide'},leftHalf)});check(bright(frame(lyr,.03),0,.45)!==bright(frame(lyr,.5),0,.45),'lyric mask motion');}
 // Effect paste keeps the target's own mask.
 {const p=project({media:{details:mask('cut',[ellipse(.5,.5,.2,.2)])}}),plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');
  const payload=J.readCutEffects(JSON.stringify(J.cutEffectsPayload({...plan.media.cuts[0],mask:undefined,technique:'kenBurns'},'media',plan)));
@@ -101,14 +117,20 @@ t=await shape();assert.ok(Math.abs(t.angle-s.angle-90)<3,'rotated '+s.angle+' ->
 await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=+await section.locator('[data-mask-shape="h"]').inputValue();
 await section.locator('[data-mask-shape="w"]').fill('0.3');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
 assert.equal(+await section.locator('[data-mask-shape="h"]').inputValue(),hBefore);
+// Motion: all None at first; pick a technique, an entrance (a reveal shape) and an exit.
+assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Motion':'モーション');
+assert.deepEqual(await section.locator('select[data-mask-motion]').evaluateAll(els=>els.map(e=>e.value)),['none','none','none']);
+await section.locator('[data-mask-motion="technique"]').selectOption('rollAcross');await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await section.locator('[data-mask-motion="departure"]').selectOption('exit_fade');
+await section.locator('[data-mask-motion="duration"]').fill('0.8');await section.locator('[data-mask-motion="duration"]').dispatchEvent('change');
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
-assert.ok((await section.locator('.hint').textContent()).startsWith(lang?'Cut:':'カット：'));
+assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Cut:':'カット：'));
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].details.mask;return {enabled:m.enabled,target:m.target,invert:m.invert,types:m.shapes.map(s=>s.type),plan:!!J.ui.plan.media.cuts[0].mask};});
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
+assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
 // Lyric cut details show the mask section with the display-area hint.
 await page.locator('#lineList .cut-details-open').first().click();await section.locator('summary').click();
-assert.ok((await section.locator('.hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
+assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
 await modal.getByRole('button',{name:lang?'Cancel':'キャンセル',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(lang||'ja','cut mask passed');await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

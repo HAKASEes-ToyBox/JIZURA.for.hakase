@@ -112,7 +112,7 @@ class Renderer {
       const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
       const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
       J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
-      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut);
+      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut, t, plan);
       ctx.globalAlpha=mediaCut.opacity/100;
       ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
       ctx.drawImage(mediaLayer,0,0);ctx.restore();
@@ -236,7 +236,7 @@ class Renderer {
         const contentMatrix = sourceMask ? X.getTransform() : null;
         this.drawCut(env);
         X.restore();
-        if (sourceMask) J.applyMaskToCanvas(X.canvas, mask, contentMatrix, contentW, contentH);
+        if (sourceMask) J.applyMaskToCanvas(X.canvas, mask, contentMatrix, contentW, contentH, { cut, t: tp, plan });
         if (X !== target) {
           target.save(); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = blend;
           target.filter = blur > .4 ? `blur(${(blur * scale).toFixed(1)}px)` : 'none'; target.drawImage(X.canvas, 0, 0); target.restore();
@@ -250,7 +250,7 @@ class Renderer {
           if (key) this.keyFinish(target, key, layerOptions);
         }
         // The cut mask applies to the finished cut, after its effects, in stage units.
-        if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H);
+        if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H, { cut, t: tq, plan });
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }

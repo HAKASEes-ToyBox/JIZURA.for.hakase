@@ -470,6 +470,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
+.cut-mask-motion h4 { margin: 0 0 4px; font-size: 13px; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }

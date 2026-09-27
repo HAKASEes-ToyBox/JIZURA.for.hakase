@@ -698,18 +698,18 @@ function openCutDetails(layer,index,part=0) {
     return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
   }
   function maskEditor(parent){
-    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || {enabled:false,target:'source',invert:false,shapes:[]};
+    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
     const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
     section.open=openDetails.get('mask') ?? mask.enabled;
-    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div>`;
+    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     section.querySelector('summary').textContent=L('マスク','Mask');
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
     target.add(new Option(L('素材','Source'),'source'));target.add(new Option(L('カット','Cut'),'cut'));
     section.querySelector('[data-mask-field="enabled"]').checked=mask.enabled;target.value=mask.target;section.querySelector('[data-mask-field="invert"]').checked=mask.invert;
-    const hint=section.querySelector('.hint');
+    const hint=section.querySelector('.cut-mask-hint');
     const setHint=()=>{hint.textContent=mask.target==='source'
       ?(lyric?L('素材：表示範囲を基準に文字をマスクします。マスク後の文字にカメラなどの演出がかかります。','Source: masks the lyric within its display area; camera and other effects apply to the masked lyric.')
              :L('素材：素材画像を基準にマスクします。マスク後の素材に演出・エフェクトがかかります。','Source: masks the source image itself; techniques and effects apply to the masked source.'))
@@ -805,7 +805,25 @@ function openCutDetails(layer,index,part=0) {
     });
     const end=()=>{if(!drag)return;drag=null;fields();save();};
     canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
-    setHint();fields();parent.append(section);draw();
+    // Motion: the moving / revealing media techniques, applied to the mask over this cut (all off by default).
+    function motionFields(){
+      const box=section.querySelector('.cut-mask-motion'),grid=box.querySelector('.cut-details-grid'),m=mask.motion;
+      box.querySelector('h4').textContent=L('モーション','Motion');
+      box.querySelector('.hint').textContent=L('マスクの図形に、前景・背景と同じ登場・退場・動きを付けます。','Moves the mask shapes with the same entrances, exits and motions as foreground / background.');
+      grid.replaceChildren();
+      const row=(label,control)=>{const r=document.createElement('label');r.className='cut-detail-field';const s=document.createElement('span');s.textContent=label;r.append(s,control);grid.append(r);return control;};
+      const select=(key,groups)=>{const el=document.createElement('select');el.dataset.maskMotion=key;el.add(new Option(L('なし','None'),'none'));
+        for(const [name,items] of groups){const g=document.createElement('optgroup');g.label=name;for(const [id,def] of items)g.append(new Option(def.name,id));el.append(g);}
+        el.value=m[key];el.addEventListener('change',()=>{m[key]=el.value;save();});return el;};
+      row(L('手法','Technique'),select('technique',J.MASK_MOTION_GROUPS.map(group=>[MEDIA_EFFECT_GROUPS[group],Object.entries(J.MEDIA_TECH).filter(([,d])=>!d.stage&&d.group===group)])));
+      row(L('登場','Entrance'),select('entrance',[[MEDIA_EFFECT_GROUPS.enter,J.mediaPhaseOptions('enter')]]));
+      row(L('退場','Exit'),select('departure',[[MEDIA_EFFECT_GROUPS.exit,J.mediaPhaseOptions('exit')]]));
+      for(const [key,ja,en,min,max] of [['amount','動きの強さ','Motion intensity',0,2],['duration','登場・退場時間（秒）','Entrance / exit (s)',.05,1.5]]){
+        const input=document.createElement('input');input.type='number';input.step='.05';input.min=min;input.max=max;input.value=m[key];input.dataset.maskMotion=key;
+        input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;m[key]=J.clamp(v,min,max);input.value=m[key];save();});row(L(ja,en),input);
+      }
+    }
+    setHint();fields();motionFields();parent.append(section);draw();
   }
   function drawPreview(now){
     previewFrame=requestAnimationFrame(drawPreview);

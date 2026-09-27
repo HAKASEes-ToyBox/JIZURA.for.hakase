@@ -412,7 +412,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
     const fit = placement ? [placement.w * w, placement.h * h] : [sw * scale, sh * scale];
     const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
     const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut) : keyed;
+    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
     ctx.save();
     ctx.translate(placement ? (placement.x + placement.w / 2) * w : w / 2, placement ? (placement.y + placement.h / 2) * h : h / 2);
     ctx.rotate((cut.placement?.angle || 0) * Math.PI / 180);
@@ -439,7 +439,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   ctx.filter = ({ mono: 'grayscale(1)', sepia: 'sepia(1)', contrast: 'contrast(1.6)', blur: 'blur(8px)' })[cut.treat] || 'none';
   const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
   const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut) : keyed;
+  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
@@ -485,7 +485,7 @@ J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
   const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
   const cw=lx.canvas.width,ch=lx.canvas.height;
   J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
-  if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut);
+  if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut, t, plan);
   const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
   if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
     const mask = owner.ensure(owner.foregroundKeyMask || (owner.foregroundKeyMask = document.createElement('canvas')), cw, ch);
