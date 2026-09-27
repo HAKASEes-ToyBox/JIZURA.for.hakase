@@ -162,15 +162,20 @@ function langNote() {
   if (langNote.last !== undefined && langNote.last !== J.lang) { try { renderFontRoles(); } catch (e) {} }   // font menus show the language's faces
   langNote.last = J.lang;
 }
-function replan() {
-  S.plan = J.plan(S.project, audioLike());
-  S.plan.media = J.planMedia(S.project, S.plan, S.audio && S.audio.duration);
-  S.plan.foreground = J.planMedia(S.project, S.plan, S.audio && S.audio.duration, 'foreground');
-  S.plan.duration = Math.max(S.plan.media.duration, S.plan.foreground.duration);
+// The full plan (lyrics + media layers) for a project; also used by the cut details preview.
+function composePlan(project) {
+  const plan = J.plan(project, audioLike());
+  plan.media = J.planMedia(project, plan, S.audio && S.audio.duration);
+  plan.foreground = J.planMedia(project, plan, S.audio && S.audio.duration, 'foreground');
+  plan.duration = Math.max(plan.media.duration, plan.foreground.duration);
   for (const layer of ['media', 'foreground']) {
-    S.plan[layer].duration = S.plan.duration;
-    const last = S.plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = S.plan.duration;
+    plan[layer].duration = plan.duration;
+    const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
   }
+  return plan;
+}
+function replan() {
+  S.plan = composePlan(S.project);
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
   if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
@@ -596,7 +601,33 @@ function openCutDetails(layer,index,part=0) {
   const openDetails = new Map();
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
+  // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
+  const pane=document.createElement('aside');pane.className='cut-details-preview';
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><p class="hint"></p>`;
+  pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric&&!blank?` / ${part+1}`:''}`;
+  pane.querySelector('.progress').setAttribute('aria-label',L('再生位置','Playback position'));
+  pane.querySelector('.hint').textContent=L('このカットの区間をループ再生します。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
+  const formHost=document.createElement('div');formHost.className='cut-details-form';
+  dialog.append(pane,formHost);
   document.body.appendChild(dialog);
+  const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
+  let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
+  const findCut=plan=>blank ? plan.cuts.find(c=>c.blankId===cut.blankId)||plan.cuts[index] : lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
+  const draftProject=()=>{const project=clone(S.project);if(!blank){if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
+  function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
+  Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
+  // Number and text edits only rebuild the preview; the form is left as it is.
+  const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
+  function drawPreview(now){
+    previewFrame=requestAnimationFrame(drawPreview);
+    const plan=previewPlan,c=previewCut;if(!plan||!c)return;
+    const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
+    if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
+    const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
+    try{J.syncMediaPreview(plan,t,true);previewRenderer.frame(previewCanvas.getContext('2d'),plan,t,{scale:w/plan.W,noHud:true});}catch(e){}
+    const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
+    pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
+  }
   const names = {
     text:['歌詞','Lyrics'],layout:['レイアウト','Layout'],enter:['登場','Entrance'],hold:['保持・モーション','Hold / motion'],exit:['退場','Exit'],
     inDur:['登場時間（秒）','Entrance duration (s)'],outDur:['退場時間（秒）','Exit duration (s)'],stagger:['文字の時間差（秒）','Character delay (s)'],
@@ -612,10 +643,8 @@ function openCutDetails(layer,index,part=0) {
   const label = key => names[key] ? L(...names[key]) : key;
   const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
-    const project = clone(S.project);
-    if (lyric) project.lyricCutOptions[key]=draft; else project[layer].cutOverrides[index]=draft;
-    const plan=J.plan(project,audioLike());
-    current=lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : J.planMedia(project,plan,S.audio?.duration,layer).cuts[index];
+    clearTimeout(previewTimer);
+    current=refreshPreview();
     render();
   }
   function write(field,value,native) {
@@ -623,6 +652,7 @@ function openCutDetails(layer,index,part=0) {
       draft.lock = false; locked = false;
     }
     if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
+    schedulePreview();
   }
   function options(field) {
     if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
@@ -695,9 +725,8 @@ function openCutDetails(layer,index,part=0) {
       openDetails.set(path,section.open);
     }
     removedDetail=null;
-    const scrollTop=dialog.scrollTop;
-    dialog.replaceChildren();const form=document.createElement('form');dialog.append(form);
-    const heading=document.createElement('h2');heading.textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;form.append(heading);
+    const scrollTop=formHost.scrollTop;
+    formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
     const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
@@ -726,7 +755,7 @@ function openCutDetails(layer,index,part=0) {
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
     const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
-    dialog.scrollTop=scrollTop;
+    formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
       if(!blank && (locked !== initialLock || !lyric)) {
@@ -740,7 +769,12 @@ function openCutDetails(layer,index,part=0) {
       replan();dialog.close();
     };
   }
-  dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
+  dialog.addEventListener('close',()=>{
+    cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
+    // Hand shared video elements back to the editor's own time.
+    J.syncMediaPreview(S.plan,S.t,false);S.need=true;
+  });
+  refreshPreview();render();dialog.showModal();previewStart=performance.now();previewFrame=requestAnimationFrame(drawPreview);
 }
 // Preview controls are DOM overlays, so they never enter exported frames.
 let itemFrameSignature = '';

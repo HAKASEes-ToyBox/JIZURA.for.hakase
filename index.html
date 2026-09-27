@@ -472,7 +472,22 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .timeline-legend-icon.remove { color: #ff6173; border-color: #ff6173; }
 .timeline-legend-icon.link { border-radius: 50%; color: var(--cyan); border-color: var(--cyan); }
 .timeline-legend-icon.unlink { border-radius: 50%; }
-.cut-details-dialog { width: min(880px, 94vw); max-height: 90vh; overflow: auto; border: 1px solid #555; border-radius: 12px; padding: 24px; background: #191b20; color: #eee; }
+.cut-details-dialog { width: min(1180px, 96vw); height: min(90vh, 920px); max-height: 90vh; overflow: hidden; border: 1px solid #555; border-radius: 12px; padding: 0; background: #191b20; color: #eee; }
+.cut-details-dialog[open] { display: grid; grid-template-columns: minmax(300px, 42%) minmax(0, 1fr); }
+.cut-details-preview { min-height: 0; overflow: auto; padding: 24px; border-right: 1px solid #33353b; background: #15161a; }
+.cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
+.cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
+.cut-details-preview .hint { margin: 10px 0 0; }
+.cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
+@media (max-width: 860px) {
+  .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cut-details-preview { border-right: 0; border-bottom: 1px solid #33353b; padding: 14px 16px; overflow: visible; }
+  .cut-details-preview h2 { margin-bottom: 8px; }
+  .cut-details-preview canvas { width: auto; max-width: 100%; max-height: 30vh; margin: 0 auto; }
+  .cut-details-preview .hint { display: none; }
+  .cut-details-form { padding: 16px; }
+  .cut-details-actions { bottom: -16px; }
+}
 .cut-details-dialog::backdrop { background: #000a; }
 .cut-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .cut-detail-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -480,7 +495,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-detail-field input[type=checkbox] { width: 18px; height: 18px; }
 .cut-details-grid > details { grid-column: 1 / -1; border: 1px solid #45474e; border-radius: 6px; padding: 10px; }
 .cut-details-grid summary { cursor: pointer; margin-bottom: 8px; }
-.cut-details-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; position: sticky; bottom: -24px; background: #191b20; padding: 16px 0; margin-top: 18px; }
+.cut-details-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; position: sticky; bottom: -24px; background: #191b20; z-index: 1; padding: 16px 0; margin-top: 18px; }
 
 /* Preview-only item boundaries and editing controls. */
 .item-frame-toggle { display:flex; align-items:center; gap:6px; padding:6px 0; font-size:12px; }
@@ -507,10 +522,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #effectPreviewDialog { width:min(740px,92vw); max-height:90vh; padding:20px; overflow:auto; }
 #effectPreviewDialog canvas { display:block; width:100%; aspect-ratio:16/9; background:#17171c; }
 #effectPreviewDialog h2 { font-size:16px; padding-right:32px; margin:0 0 14px; }
-#effectPreviewDialog .effect-preview-seek { display:flex; align-items:center; gap:6px; margin-top:10px; }
-#effectPreviewDialog .effect-preview-seek .tc { font:500 12px var(--mono); font-variant-numeric:tabular-nums; }
-#effectPreviewDialog .effect-preview-seek .progress { flex:1; margin-left:6px; }
-#effectPreviewDialog .effect-preview-seek .progress i { transition:none; }
+.effect-preview-seek { display:flex; align-items:center; gap:6px; margin-top:10px; }
+.effect-preview-seek .tc { font:500 12px var(--mono); font-variant-numeric:tabular-nums; }
+.effect-preview-seek .progress { flex:1; margin-left:6px; }
+.effect-preview-seek .progress i { transition:none; }
 #effectPreviewDialog .effect-preview-settings { margin-top:14px; }
 #effectPreviewDialog .effect-preview-settings .note { margin:4px 0 0; }
 .effect-preview-close { position:absolute; top:10px; right:10px; font-size:20px; }
@@ -37561,15 +37576,20 @@ function langNote() {
   if (langNote.last !== undefined && langNote.last !== J.lang) { try { renderFontRoles(); } catch (e) {} }   // font menus show the language's faces
   langNote.last = J.lang;
 }
-function replan() {
-  S.plan = J.plan(S.project, audioLike());
-  S.plan.media = J.planMedia(S.project, S.plan, S.audio && S.audio.duration);
-  S.plan.foreground = J.planMedia(S.project, S.plan, S.audio && S.audio.duration, 'foreground');
-  S.plan.duration = Math.max(S.plan.media.duration, S.plan.foreground.duration);
+// The full plan (lyrics + media layers) for a project; also used by the cut details preview.
+function composePlan(project) {
+  const plan = J.plan(project, audioLike());
+  plan.media = J.planMedia(project, plan, S.audio && S.audio.duration);
+  plan.foreground = J.planMedia(project, plan, S.audio && S.audio.duration, 'foreground');
+  plan.duration = Math.max(plan.media.duration, plan.foreground.duration);
   for (const layer of ['media', 'foreground']) {
-    S.plan[layer].duration = S.plan.duration;
-    const last = S.plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = S.plan.duration;
+    plan[layer].duration = plan.duration;
+    const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
   }
+  return plan;
+}
+function replan() {
+  S.plan = composePlan(S.project);
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
   if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
@@ -37995,7 +38015,33 @@ function openCutDetails(layer,index,part=0) {
   const openDetails = new Map();
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
+  // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
+  const pane=document.createElement('aside');pane.className='cut-details-preview';
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><p class="hint"></p>`;
+  pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric&&!blank?` / ${part+1}`:''}`;
+  pane.querySelector('.progress').setAttribute('aria-label',L('再生位置','Playback position'));
+  pane.querySelector('.hint').textContent=L('このカットの区間をループ再生します。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
+  const formHost=document.createElement('div');formHost.className='cut-details-form';
+  dialog.append(pane,formHost);
   document.body.appendChild(dialog);
+  const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
+  let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
+  const findCut=plan=>blank ? plan.cuts.find(c=>c.blankId===cut.blankId)||plan.cuts[index] : lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
+  const draftProject=()=>{const project=clone(S.project);if(!blank){if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
+  function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
+  Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
+  // Number and text edits only rebuild the preview; the form is left as it is.
+  const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
+  function drawPreview(now){
+    previewFrame=requestAnimationFrame(drawPreview);
+    const plan=previewPlan,c=previewCut;if(!plan||!c)return;
+    const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
+    if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
+    const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
+    try{J.syncMediaPreview(plan,t,true);previewRenderer.frame(previewCanvas.getContext('2d'),plan,t,{scale:w/plan.W,noHud:true});}catch(e){}
+    const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
+    pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
+  }
   const names = {
     text:['歌詞','Lyrics'],layout:['レイアウト','Layout'],enter:['登場','Entrance'],hold:['保持・モーション','Hold / motion'],exit:['退場','Exit'],
     inDur:['登場時間（秒）','Entrance duration (s)'],outDur:['退場時間（秒）','Exit duration (s)'],stagger:['文字の時間差（秒）','Character delay (s)'],
@@ -38011,10 +38057,8 @@ function openCutDetails(layer,index,part=0) {
   const label = key => names[key] ? L(...names[key]) : key;
   const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
-    const project = clone(S.project);
-    if (lyric) project.lyricCutOptions[key]=draft; else project[layer].cutOverrides[index]=draft;
-    const plan=J.plan(project,audioLike());
-    current=lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : J.planMedia(project,plan,S.audio?.duration,layer).cuts[index];
+    clearTimeout(previewTimer);
+    current=refreshPreview();
     render();
   }
   function write(field,value,native) {
@@ -38022,6 +38066,7 @@ function openCutDetails(layer,index,part=0) {
       draft.lock = false; locked = false;
     }
     if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
+    schedulePreview();
   }
   function options(field) {
     if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
@@ -38094,9 +38139,8 @@ function openCutDetails(layer,index,part=0) {
       openDetails.set(path,section.open);
     }
     removedDetail=null;
-    const scrollTop=dialog.scrollTop;
-    dialog.replaceChildren();const form=document.createElement('form');dialog.append(form);
-    const heading=document.createElement('h2');heading.textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;form.append(heading);
+    const scrollTop=formHost.scrollTop;
+    formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
     const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
@@ -38125,7 +38169,7 @@ function openCutDetails(layer,index,part=0) {
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
     const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
-    dialog.scrollTop=scrollTop;
+    formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
       if(!blank && (locked !== initialLock || !lyric)) {
@@ -38139,7 +38183,12 @@ function openCutDetails(layer,index,part=0) {
       replan();dialog.close();
     };
   }
-  dialog.addEventListener('close',()=>dialog.remove());render();dialog.showModal();
+  dialog.addEventListener('close',()=>{
+    cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
+    // Hand shared video elements back to the editor's own time.
+    J.syncMediaPreview(S.plan,S.t,false);S.need=true;
+  });
+  refreshPreview();render();dialog.showModal();previewStart=performance.now();previewFrame=requestAnimationFrame(drawPreview);
 }
 // Preview controls are DOM overlays, so they never enter exported frames.
 let itemFrameSignature = '';

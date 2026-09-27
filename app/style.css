@@ -454,7 +454,22 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .timeline-legend-icon.remove { color: #ff6173; border-color: #ff6173; }
 .timeline-legend-icon.link { border-radius: 50%; color: var(--cyan); border-color: var(--cyan); }
 .timeline-legend-icon.unlink { border-radius: 50%; }
-.cut-details-dialog { width: min(880px, 94vw); max-height: 90vh; overflow: auto; border: 1px solid #555; border-radius: 12px; padding: 24px; background: #191b20; color: #eee; }
+.cut-details-dialog { width: min(1180px, 96vw); height: min(90vh, 920px); max-height: 90vh; overflow: hidden; border: 1px solid #555; border-radius: 12px; padding: 0; background: #191b20; color: #eee; }
+.cut-details-dialog[open] { display: grid; grid-template-columns: minmax(300px, 42%) minmax(0, 1fr); }
+.cut-details-preview { min-height: 0; overflow: auto; padding: 24px; border-right: 1px solid #33353b; background: #15161a; }
+.cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
+.cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
+.cut-details-preview .hint { margin: 10px 0 0; }
+.cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
+@media (max-width: 860px) {
+  .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cut-details-preview { border-right: 0; border-bottom: 1px solid #33353b; padding: 14px 16px; overflow: visible; }
+  .cut-details-preview h2 { margin-bottom: 8px; }
+  .cut-details-preview canvas { width: auto; max-width: 100%; max-height: 30vh; margin: 0 auto; }
+  .cut-details-preview .hint { display: none; }
+  .cut-details-form { padding: 16px; }
+  .cut-details-actions { bottom: -16px; }
+}
 .cut-details-dialog::backdrop { background: #000a; }
 .cut-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .cut-detail-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -462,7 +477,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-detail-field input[type=checkbox] { width: 18px; height: 18px; }
 .cut-details-grid > details { grid-column: 1 / -1; border: 1px solid #45474e; border-radius: 6px; padding: 10px; }
 .cut-details-grid summary { cursor: pointer; margin-bottom: 8px; }
-.cut-details-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; position: sticky; bottom: -24px; background: #191b20; padding: 16px 0; margin-top: 18px; }
+.cut-details-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; position: sticky; bottom: -24px; background: #191b20; z-index: 1; padding: 16px 0; margin-top: 18px; }
 
 /* Preview-only item boundaries and editing controls. */
 .item-frame-toggle { display:flex; align-items:center; gap:6px; padding:6px 0; font-size:12px; }
@@ -489,10 +504,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #effectPreviewDialog { width:min(740px,92vw); max-height:90vh; padding:20px; overflow:auto; }
 #effectPreviewDialog canvas { display:block; width:100%; aspect-ratio:16/9; background:#17171c; }
 #effectPreviewDialog h2 { font-size:16px; padding-right:32px; margin:0 0 14px; }
-#effectPreviewDialog .effect-preview-seek { display:flex; align-items:center; gap:6px; margin-top:10px; }
-#effectPreviewDialog .effect-preview-seek .tc { font:500 12px var(--mono); font-variant-numeric:tabular-nums; }
-#effectPreviewDialog .effect-preview-seek .progress { flex:1; margin-left:6px; }
-#effectPreviewDialog .effect-preview-seek .progress i { transition:none; }
+.effect-preview-seek { display:flex; align-items:center; gap:6px; margin-top:10px; }
+.effect-preview-seek .tc { font:500 12px var(--mono); font-variant-numeric:tabular-nums; }
+.effect-preview-seek .progress { flex:1; margin-left:6px; }
+.effect-preview-seek .progress i { transition:none; }
 #effectPreviewDialog .effect-preview-settings { margin-top:14px; }
 #effectPreviewDialog .effect-preview-settings .note { margin:4px 0 0; }
 .effect-preview-close { position:absolute; top:10px; right:10px; font-size:20px; }
