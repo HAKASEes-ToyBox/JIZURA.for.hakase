@@ -46,7 +46,9 @@ J.SOLO_ZONES = [
   { id: 'full', zone: { x: .04, y: .06, w: .92, h: .88 }, weight: .8, size: [0, .3, .7] },
 ];
 // Lyric size classes (multipliers of the base lyric area) replace the old manual size range.
-J.pickSoloZone = cut => J.rng(J.h(J.placementSeed(cut), 893)).wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
+// Emphasis (*…*) takes the wide central zones; suppression (~…~) keeps to the edges and corners.
+const EMPHASIS_ZONES = { center: 6, full: 3, band: 1.5 }, SUPPRESSED_ZONES = { lower: 1.4, upper: .9, lowerLeft: 1.2, upperRight: 1.2, left: .5, right: .5 };
+J.pickSoloZone = cut => J.rng(J.h(J.placementSeed(cut), 893)).wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis ? EMPHASIS_ZONES[z.id] || 0 : cut.suppressed ? SUPPRESSED_ZONES[z.id] || 0 : z.weight]));
 J.LYRIC_SIZE_CLASSES = { small: [.58, .76], medium: [.86, 1.04], large: [1.14, 1.36] };
 J.lyricSizeScale = (cut, rng, weights = [.3, .45, .25]) => {
   const w = cut.emphasis ? [0, .25, .75] : cut.suppressed ? [.8, .2, 0] : weights;
@@ -145,7 +147,8 @@ J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
   const heroIndex = A.hero ? A.hero(n) : 0;
   const layout = s => cuts.map((_, i) => {
     const [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
-    const w = Math.min(bw * k * s, 1 - 2 * margin), h = Math.min(bh * k * s, 1 - 2 * margin);
+    const strength = cuts[i].emphasis ? 1.45 : cuts[i].suppressed ? .6 : 1;
+    const w = Math.min(bw * k * s * strength, 1 - 2 * margin), h = Math.min(bh * k * s * strength, 1 - 2 * margin);
     const x = J.clamp(cx - w / 2, margin, 1 - margin - w), y = J.clamp(cy - h / 2, margin, 1 - margin - h);
     return { x, y, w, h };
   });

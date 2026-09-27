@@ -100,8 +100,25 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
   return { zone: comp?.zone || null, fgCenter };
 };
+// Emphasised lyrics (*…*) on the full stage are drawn larger; automatic areas express the size instead.
+J.EMPHASIS_TEXT_SCALE = 1.15;
+// Emphasis over a foreground: a large lyric laid over the foreground (drawn in front of it), or a large
+// lyric balancing it from the opposite side. Neither is shrunk into the composition's lyric zone.
+const emphasisOverForeground = (cut, plan, context, rng) => {
+  const portrait = plan.W < plan.H, margin = .03, f = context.fgCenter;
+  if (rng() < .6) {
+    const w = portrait ? rng.range(.86, .94) : rng.range(.78, .94), h = portrait ? rng.range(.42, .6) : rng.range(.56, .8), pull = rng.range(.55, 1);
+    const cx = .5 + (f.x - .5) * pull, cy = .5 + (f.y - .5) * pull;
+    cut.lyricPattern = 'overlay';
+    return { x: J.clamp(cx - w / 2, margin, 1 - margin - w), y: J.clamp(cy - h / 2, margin, 1 - margin - h), w, h, angle: 0, lockAspect: true };
+  }
+  const w = portrait ? rng.range(.8, .94) : rng.range(.66, .86), h = portrait ? rng.range(.36, .5) : rng.range(.5, .7);
+  cut.lyricPattern = 'counter';
+  return J.composeLyricArea?.(cut, { w, h, obstacles: [], fgCenter: f, fixedSize: true }) || { x: (1 - w) / 2, y: (1 - h) / 2, w, h, angle: 0, lockAspect: true };
+};
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({}), context = {}) => {
   const rng = J.rng(J.h(J.placementSeed ? J.placementSeed(cut) : cut.seed, 947));
+  delete cut.lyricPattern;
   if(cut.lyricSize != null){
     const size=Math.max(.04,cut.lyricSize/100),candidates=[];
     // The notation fixes the size; only the position is composed.
@@ -116,6 +133,7 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
     return rng.pick(candidates.filter(c=>c.score<=best+1e-8)).r;
   }
   const portrait = plan.W < plan.H;
+  if (cut.emphasis && context.fgCenter) return emphasisOverForeground(cut, plan, context, rng);
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
   if (portrait && !cut.emphasis) { w = Math.min(.9, w * 1.2); h *= .8; }
@@ -127,7 +145,8 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   const fitScale = Math.min(scale, .94 / w, .94 / h);// large classes still keep the 3% margins
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
   // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
-  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter });
+  // Emphasis keeps its size rather than shrinking into the zone.
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter, fixedSize: !!cut.emphasis && !obstacles.length });
   if (composed) return composed;
   const regions = emptyRegions(obstacles);
   if (regions.length) {
@@ -198,6 +217,7 @@ J.finishLyricPlan = (project, plan, audio) => {
       cut.area = J.autoLyricArea(cut, plan, obstacles, settings, scene);
       cut.areaMode = 'auto';
     }
+    if (cut.area && cut.emphasis && cut.contentScale === J.EMPHASIS_TEXT_SCALE) cut.contentScale = 1;
     // Some layouts choose columns or orientation during planning. Give those
     // choices the resolved area dimensions as well as using them at render time.
     if (cut.area && J.LAYOUTS[cut.layout]?.plan) {
@@ -230,6 +250,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   };
   const assign=(cut,area,mode)=>{
     cut.area=area;cut.areaMode=mode;
+    if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE)cut.contentScale=1;
     const layout=J.LAYOUTS[cut.layout];
     if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
       text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
