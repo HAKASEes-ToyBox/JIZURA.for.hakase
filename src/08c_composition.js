@@ -92,7 +92,22 @@ J.SOLO_ZONES = [
 // Lyric size classes (multipliers of the base lyric area) replace the old manual size range.
 // Emphasis (*…*) takes the wide central zones; suppression (~…~) keeps to the edges and corners.
 const EMPHASIS_ZONES = { center: 6, full: 3, band: 1.5 }, SUPPRESSED_ZONES = { lower: 1.4, upper: .9, lowerLeft: 1.2, upperRight: 1.2, left: .5, right: .5 };
-J.pickSoloZone = cut => J.rng(J.h(J.placementSeed(cut), 893)).wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis ? EMPHASIS_ZONES[z.id] || 0 : cut.suppressed ? SUPPRESSED_ZONES[z.id] || 0 : z.weight]));
+// 「画面中央を避ける」: the middle of the stage that automatic lyric areas keep clear (not for *emphasis*).
+J.CENTER_AVOID = { x: .32, y: .3, w: .36, h: .4 };
+// Zones filling the strips around it (the lyric area is fitted to the strip rather than shrunk).
+J.CENTER_FREE_ZONES = [
+  { id: 'top', zone: { x: .04, y: .035, w: .92, h: .245 }, weight: 1, size: [.2, .5, .3] },
+  { id: 'bottom', zone: { x: .04, y: .72, w: .92, h: .245 }, weight: 1.6, size: [.2, .5, .3] },
+  { id: 'left', zone: { x: .03, y: .06, w: .27, h: .88 }, weight: .8, size: [.3, .5, .2] },
+  { id: 'right', zone: { x: .7, y: .06, w: .27, h: .88 }, weight: .8, size: [.3, .5, .2] },
+  { id: 'topLeft', zone: { x: .03, y: .035, w: .46, h: .245 }, weight: .5, size: [.5, .5, 0] },
+  { id: 'bottomRight', zone: { x: .51, y: .72, w: .46, h: .245 }, weight: .5, size: [.5, .5, 0] },
+];
+J.pickSoloZone = (cut, { avoidCenter = false } = {}) => {
+  const rng = J.rng(J.h(J.placementSeed(cut), 893));
+  if (avoidCenter && !cut.emphasis) return rng.wpick(J.CENTER_FREE_ZONES.map(z => [z, cut.suppressed && /^(top|bottom)$/.test(z.id) ? z.weight * .5 : z.weight]));
+  return rng.wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis ? EMPHASIS_ZONES[z.id] || 0 : cut.suppressed ? SUPPRESSED_ZONES[z.id] || 0 : z.weight]));
+};
 J.LYRIC_SIZE_CLASSES = { small: [.58, .76], medium: [.86, 1.04], large: [1.14, 1.36] };
 J.lyricSizeScale = (cut, rng, weights = [.3, .45, .25]) => {
   const w = cut.emphasis ? [0, .25, .75] : cut.suppressed ? [.5, .5, 0] : weights;
@@ -189,18 +204,55 @@ J.LYRIC_ARRANGEMENTS = {
 function pyramidRows(n) { const sizes = []; let left = n; for (let k = 1; left > 0; k++) { sizes.push(Math.min(k, left)); left -= k; } return { sizes, widest: Math.max(...sizes) }; }
 // Returns target areas, or null when the chosen arrangement cannot fit.
 // maxOverlap: allowed share of the smaller area (0 = none, with a small gap).
-J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
+// avoid: an area (the stage centre) that cuts other than *emphasis* must stay out of. Arrangements are
+// tried in a seeded order; if none keeps it clear as designed, slots inside it are pushed to its edges.
+J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0, avoid = null } = {}) => {
   const n = cuts.length, names = Object.keys(J.LYRIC_ARRANGEMENTS), rng = J.rng(J.h(seed, 991));
-  const name = names[Math.floor(rng() * names.length)], A = J.LYRIC_ARRANGEMENTS[name], margin = .03, gap = maxOverlap ? 0 : .012;
+  const first = Math.floor(rng() * names.length);
+  if (!avoid) return arrangeWith(cuts, names[first], maxOverlap, null, false);
+  // Every arrangement (as designed, or with its central slots pushed out) is scored by the size it keeps;
+  // one of those within 70% of the best is picked, so the lyrics do not shrink just to clear the centre.
+  const results = [];
+  for (const [name, A] of Object.entries(J.CENTER_FREE_ARRANGEMENTS)) { const result = arrangeWith(cuts, name, maxOverlap, avoid, false, A); if (result) results.push(result); }
+  for (const name of names) for (const pushed of [false, true]) {
+    const result = arrangeWith(cuts, name, maxOverlap, avoid, pushed);
+    if (result) { results.push(result); break; }
+  }
+  if (!results.length) return null;
+  const best = Math.max(...results.map(r => r.scale));
+  const good = results.filter(r => r.scale >= best * .7);
+  return good[(first + Math.floor(rng() * good.length)) % good.length];
+};
+const pushOut = (cx, cy, box, pad = .03) => {
+  if (cx <= box.x || cx >= box.x + box.w || cy <= box.y || cy >= box.y + box.h) return [cx, cy];
+  const moves = [[box.x - pad - cx, 0], [box.x + box.w + pad - cx, 0], [0, box.y - pad - cy], [0, box.y + box.h + pad - cy]];
+  const [dx, dy] = moves.reduce((a, b) => Math.hypot(...b) < Math.hypot(...a) ? b : a);
+  return [cx + dx, cy + dy];
+};
+// Arrangements around a kept-clear centre: cells live in the strips (top / bottom bands, side columns).
+const bandSlot = (band, j, m) => [.05 + (j + .5) * .9 / m, band ? .845 : .155, 1];
+const columnSlot = (side, j, m) => [side ? .835 : .165, .06 + (j + .5) * .88 / m, 1];
+J.CENTER_FREE_ARRANGEMENTS = {
+  bands: { slot: (i, n) => bandSlot(i % 2, i >> 1, i % 2 ? n >> 1 : (n + 1) >> 1), cell: n => [.86 / Math.max(1, (n + 1) >> 1), .22] },
+  sides: { slot: (i, n) => columnSlot(i % 2, i >> 1, i % 2 ? n >> 1 : (n + 1) >> 1), cell: n => [.25, .84 / Math.max(1, (n + 1) >> 1)] },
+  corners: { slot: i => [[.22, .155, 1], [.78, .845, 1], [.78, .155, 1], [.22, .845, 1]][i % 4], cell: () => [.4, .22] },
+  topRow: { slot: (i, n) => bandSlot(0, i, n), cell: n => [.86 / n, .22] },
+  bottomRow: { slot: (i, n) => bandSlot(1, i, n), cell: n => [.86 / n, .22] },
+  lShape: { slot: (i, n) => { const m = (n + 1) >> 1; return i < m ? [.05 + (i + .5) * .62 / m, .845, 1] : columnSlot(1, n - 1 - i, n - m + 1); },
+    cell: n => [.6 / Math.max(1, (n + 1) >> 1), .22] },
+};
+const arrangeWith = (cuts, name, maxOverlap, avoid, pushed, A = J.LYRIC_ARRANGEMENTS[name]) => {
+  const n = cuts.length, margin = .03, gap = maxOverlap ? 0 : .012;
   const heroIndex = A.hero ? A.hero(n) : 0;
   const layout = s => cuts.map((_, i) => {
-    const [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
+    let [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
+    if (pushed && avoid && !cuts[i].emphasis) [cx, cy] = pushOut(cx, cy, avoid);
     const strength = cuts[i].emphasis ? 1.45 : cuts[i].suppressed ? .75 : 1;
     const w = Math.min(bw * k * s * strength, 1 - 2 * margin), h = Math.min(bh * k * s * strength, 1 - 2 * margin);
     const x = J.clamp(cx - w / 2, margin, 1 - margin - w), y = J.clamp(cy - h / 2, margin, 1 - margin - h);
     return { x, y, w, h };
   });
-  const fits = rects => rects.every((a, i) => rects.slice(i + 1).every(b => {
+  const fits = rects => rects.every((a, i) => (!avoid || cuts[i].emphasis || overlap(a, avoid) <= 1e-9) && rects.slice(i + 1).every(b => {
     const grown = r => ({ x: r.x - gap / 2, y: r.y - gap / 2, w: r.w + gap, h: r.h + gap });
     return overlap(grown(a), grown(b)) <= maxOverlap * Math.min(a.w * a.h, b.w * b.h) + 1e-12;
   }));

@@ -2514,6 +2514,9 @@ function renderTech() {
   const lyricEffects = J.lyricEffectSettings(S.project);
   $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
+  // 「画面中央を避ける」 (詳細 > 手法) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
+  for (const input of document.querySelectorAll('.avoid-center-toggle')) input.checked = lyricEffects.avoidCenter && lyricEffects.autoPlacement;
+  $('lyricAvoidCenter').disabled = !lyricEffects.autoPlacement;
   $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
   $('lyricGroupAvoidanceStrengthValue').textContent = lyricEffects.lyricAvoidanceStrength.toFixed(2);
   $('lyricAvoidanceStrength').value = lyricEffects.avoidanceStrength;
@@ -2940,6 +2943,11 @@ function bind() {
     S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), avoidanceStrength: +e.target.value };
     $('lyricAvoidanceStrengthValue').textContent = (+e.target.value).toFixed(2);
     markUndoGroup('lyricAvoidanceStrength'); replanSoon(100);
+  });
+  // The easy-mode switch has no separate automatic-placement toggle, so turning it on also enables placement.
+  for (const input of document.querySelectorAll('.avoid-center-toggle')) input.addEventListener('change', e => {
+    S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), avoidCenter: e.target.checked, ...(e.target.checked ? { autoPlacement: true } : {}) };
+    renderTech(); replan();
   });
   for (const [id, key] of [['lyricAutoPlacement', 'autoPlacement'], ['lyricAvoidForeground', 'avoidForeground'], ['lyricRandomBlend', 'randomBlend'], ['lyricRandomOpacity', 'randomOpacity']]) {
     $(id).addEventListener('change', e => { S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), [key]: e.target.checked }; renderTech(); replan(); });

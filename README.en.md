@@ -43,6 +43,8 @@ In **Advanced → Techniques**, enable **Vary lyric position and size automatica
 
 **Avoid overlapping the foreground** considers foreground position, size and rotation during each cut's original time slot. Lyrics retained with `{}` receive individual areas using the same rules as ordinary cuts. If there is no free region, it chooses a position with the least overlap. `*Emphasis*` creates a larger automatic area, enables **Show in front**, and ignores foreground avoidance. You can override the frontmost setting using the cut checkbox or timeline icon. `~Suppression~` makes the area and text smaller and reduces movement, rotation, camera motion and effects.
 
+**Avoid the centre of the stage** (Details → Techniques, below the automatic position and size option; off by default) keeps automatically placed lyrics out of the middle of the stage. It is the same setting as **Keep lyrics out of the centre** in Easy mode, and the two stay in sync (turning it on in Easy mode also turns on automatic placement). Single lyrics use the top and bottom bands and the side columns; 1シーン and 重ねず1シーン groups use arrangements that leave the centre clear (bands, side columns, corners, an L shape and more). *Emphasised* lyrics are exempt and may still use the centre. A size notation such as `30:` too large for the bands keeps its size and moves off the centre point.
+
 ## Lyric cut blend modes and opacity
 
 Each cut in **Lines and cuts** has its own blend mode (Normal, Multiply, Screen or Overlay) and opacity (0–100%). New cuts default to Normal and 100%. Lyrics stacked with `{}` are composited individually.

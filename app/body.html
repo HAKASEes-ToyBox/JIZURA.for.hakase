@@ -159,6 +159,7 @@
             <button id="btnNext2" class="ghost">次の案 ▶</button>
           </div>
           <div class="pick-sets">
+            <label class="check"><input id="eLyricAvoidCenter" class="avoid-center-toggle" type="checkbox"><span>歌詞が画面中央を避ける<small>歌詞を自動配置するとき、画面の中央を空けます。*強調*した歌詞は中央にも置きます。</small></span></label>
           </div>
         </div>
         <div class="easy-sec">
@@ -241,6 +242,7 @@
       <div class="tabpane" data-pane="tech" hidden>
         <div class="pick-sets">
           <label class="check"><input id="lyricAutoPlacement" type="checkbox"><span>配置・サイズにも自動で変化をつける<small>オフでは全画面を使用。手動の表示エリアは維持します。「自動配置に戻す」で手動指定を解除できます。</small></span></label>
+          <label class="check"><input id="lyricAvoidCenter" class="avoid-center-toggle" type="checkbox"><span>画面中央を避ける<small>自動配置で歌詞を画面の中央に置きません。*強調*したカットは対象外です。</small></span></label>
           <label class="check"><input id="lyricAvoidForeground" type="checkbox" checked><span>前景との重なりを避ける<small>自動配置時に前景の表示領域を避けます。*強調*したカットには適用しません。</small></span></label>
           <label class="slider"><span>重なり回避の強度</span><input id="lyricAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricAvoidanceStrengthValue">1.00</output></label>
           <p class="note">1で前景の範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。</p>
