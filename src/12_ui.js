@@ -1463,11 +1463,23 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
-function insertLyricAtPlayhead(text,end) {
+// The inserted line becomes an ordinary line starting at the playhead: it runs until the next line
+// (or empty cut) and the line playing before it ends there, re-fitting its words into the shorter span.
+// At a line's own start it takes the first half of that line's slot, so no cut collapses to nothing.
+function lyricInsertRange(start) {
+  const at=S.plan.lines.find(line=>Math.abs(line.start-start)<.05);
+  const lineEnd=line=>Math.min(S.plan.lines.find(l=>l.index>line.index && l.start>line.start+1e-6)?.start ?? S.plan.duration,
+    S.plan.cuts.find(c=>c.blank && c.start>line.start+1e-6)?.start ?? Infinity);
+  if(at)return {at,end:start+(lineEnd(at)-start)/2};
+  const nextLine=S.plan.lines.find(line=>line.start>start+1e-6)?.start ?? S.plan.duration;
+  const nextBlank=S.plan.cuts.find(c=>c.blank && c.start>start+1e-6)?.start ?? Infinity;
+  return {at:null,end:Math.min(nextLine,nextBlank)};
+}
+function insertLyricAtPlayhead(text) {
   if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
   pause();
-  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous);
-  const next=S.plan.lines.find(line=>line.start>=start-1e-6);
+  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous),range=lyricInsertRange(start);
+  const next=range.at || S.plan.lines.find(line=>line.start>=start-1e-6);
   const rows=previous.replace(/\r/g,'').split('\n');
   const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
   const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
@@ -1479,7 +1491,8 @@ function insertLyricAtPlayhead(text,end) {
   reconcileLyricLines(previous,lyrics);
   const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
   S.project.timing.lineTimes[index]=start;
-  S.project.overrides[index]={single:true,insertionEnd:end};
+  delete S.project.overrides[index];
+  if(range.at)S.project.timing.lineTimes[index+1]=+range.end.toFixed(3);
   S.project.durationOverride=S.plan.duration;
   S.project.lyrics=lyrics;$('lyrics').value=lyrics;
   replan();seek(start);
@@ -1488,7 +1501,7 @@ function openInsertAtPlayhead(layer) {
   if(S.exporting || S.tap || S.t>=S.plan.duration-.04)return;
   pause();
   const start=S.t,lyric=layer==='lyrics',cuts=lyric?S.plan.cuts:S.plan[layer].cuts;
-  const end=cuts.filter(c=>c.start>start+1e-6).reduce((end,c)=>Math.min(end,c.start),S.plan.duration);
+  const end=lyric?lyricInsertRange(start).end:cuts.filter(c=>c.start>start+1e-6).reduce((end,c)=>Math.min(end,c.start),S.plan.duration);
   if(end-start<.04)return;
   const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.className='insert-cut-dialog';dialog.id='insertCutDialog';
   const name=lyric?L('歌詞を挿入','Insert lyrics'):layer==='foreground'?L('前景を挿入','Insert foreground'):L('背景を挿入','Insert background');
@@ -1499,7 +1512,7 @@ function openInsertAtPlayhead(layer) {
     if(lyric){
       const text=input.value.trim().replace(/\r/g,'').replace(/\n/g,'\\n');
       if(J.parseLyrics(text).lines.length!==1){input.setCustomValidity(L('歌詞を1行分入力してください','Enter one lyric line'));input.reportValidity();return;}
-      S.t=start;insertLyricAtPlayhead(text,end);
+      S.t=start;insertLyricAtPlayhead(text);
     }else{
       const m=S.project[layer],index=cuts.filter(c=>c.start<start-1e-6).length,overrides={},times={};
       cuts.forEach((cut,i)=>{const n=i>=index?i+1:i;overrides[n]={...m.cutOverrides[i],itemId:cut.itemId};times[n]=cut.start;});
@@ -1589,7 +1602,10 @@ function reconcileLyricLines(previous, next) {
     let end = i; while (end < newLines.length && !newToOld.has(end)) end++;
     if (end < newLines.length) {
       const before = newToOld.get(i - 1), after = newToOld.get(end);
-      const left = before == null ? 0 : oldStarts[before], right = oldStarts[after];
+      const left = before == null ? 0 : oldStarts[before];
+      // An empty cut between the neighbours would swallow lines placed after it; keep them before it.
+      const blank = (S.project.lyricBlankCuts || []).map(b => +b.start).filter(t => t > left + .3 * (end - i) && t < oldStarts[after]).sort((a, b) => a - b)[0];
+      const right = blank ?? oldStarts[after];
       for (let j = i; j < end; j++) newTimes[j] = +(left + (right - left) * (j - i + 1) / (end - i + 1)).toFixed(3);
     }
     i = end;

@@ -15,7 +15,7 @@ The **Foreground**, **Lyrics**, and **Background** tabs let you place uploaded i
 ## Quick start
 
 1. Paste lyrics into the left panel, one phrase per line. The built-in English sample is shown on a fresh install.
-2. Optionally import audio. JIZURA detects beats and can snap cut boundaries to them. Use **Tap to sync** to mark the start of each line by pressing Space during playback.
+2. Optionally import audio. JIZURA detects beats and can snap cut boundaries to them. Use **Tap to sync** to mark the start of each line by pressing Space during playback. **Insert lyrics** at the playhead adds a new line that runs from the playhead to the next line (or empty lyric cut); the line playing before it ends at the playhead and fits its words into the shorter span. Inserting exactly at a line's start uses the first half of that line's slot.
 3. Press **Create a variation** (or `R`) to randomize the style, mood, motion, palette and arrangement. **Previous** and **Next** navigate variations; **Change one thing** rerolls just one part.
 4. Set aspect ratio, resolution and frame rate, then export MP4. Advanced mode adds a PNG sequence, transparent PNGs, color key backgrounds and individual technique controls.
 
