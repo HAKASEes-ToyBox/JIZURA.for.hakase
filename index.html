@@ -4308,6 +4308,90 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
 };
 })();
 
+/* Scene composition: designed, coordinated placements instead of independent random spots.
+   A foreground cut picks a composition (split, corner, inset, hero…) that fixes its own slot and the
+   zone its lyrics should use; lyrics then choose aligned positions scored for that zone, the
+   foreground overlap (avoidance strength), balance against the foreground, and margins. */
+(() => {
+'use strict';
+// fg: centre and size (largest extent, stage fractions, before the size-scale setting).
+// zone: where lyrics sit in that composition. weight: [landscape, portrait].
+J.COMPOSITIONS = [
+  { id: 'left', fg: { x: .3, y: .5, size: .52 }, zone: { x: .54, y: .14, w: .42, h: .72 }, weight: [1, .35] },
+  { id: 'right', fg: { x: .7, y: .5, size: .52 }, zone: { x: .04, y: .14, w: .42, h: .72 }, weight: [1, .35] },
+  { id: 'top', fg: { x: .5, y: .31, size: .48 }, zone: { x: .1, y: .6, w: .8, h: .34 }, weight: [.6, 1] },
+  { id: 'bottom', fg: { x: .5, y: .69, size: .48 }, zone: { x: .1, y: .06, w: .8, h: .34 }, weight: [.6, 1] },
+  { id: 'cornerBL', fg: { x: .28, y: .66, size: .42 }, zone: { x: .46, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerBR', fg: { x: .72, y: .66, size: .42 }, zone: { x: .04, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerTL', fg: { x: .28, y: .34, size: .42 }, zone: { x: .46, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerTR', fg: { x: .72, y: .34, size: .42 }, zone: { x: .04, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'insetTR', fg: { x: .8, y: .24, size: .3 }, zone: { x: .06, y: .26, w: .62, h: .6 }, weight: [.55, .5] },
+  { id: 'insetBL', fg: { x: .2, y: .76, size: .3 }, zone: { x: .32, y: .14, w: .62, h: .6 }, weight: [.55, .5] },
+  { id: 'hero', fg: { x: .5, y: .44, size: .72 }, zone: { x: .08, y: .74, w: .84, h: .22 }, weight: [.5, .6] },
+  { id: 'heroTop', fg: { x: .5, y: .56, size: .72 }, zone: { x: .08, y: .04, w: .84, h: .22 }, weight: [.35, .5] },
+];
+J.COMPOSITION_BY_ID = Object.fromEntries(J.COMPOSITIONS.map(c => [c.id, c]));
+// Lyric-only scenes: calm, aligned zones rather than arbitrary corners.
+J.SOLO_ZONES = [
+  { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3 },
+  { id: 'lower', zone: { x: .08, y: .56, w: .84, h: .38 }, weight: 1.4 },
+  { id: 'upper', zone: { x: .08, y: .06, w: .84, h: .38 }, weight: .9 },
+  { id: 'left', zone: { x: .05, y: .14, w: .56, h: .72 }, weight: 1 },
+  { id: 'right', zone: { x: .39, y: .14, w: .56, h: .72 }, weight: 1 },
+];
+const lastPick = new WeakMap();
+// Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
+J.pickComposition = (cut, plan, layer = 'foreground') => {
+  const portrait = (plan?.W || 1920) < (plan?.H || 1080), rng = J.rng(J.h(cut.seed, 881));
+  const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
+  const prev = memo[layer]?.index === cut.index - 1 ? memo[layer].id : null;
+  const pool = J.COMPOSITIONS.filter(c => c.id !== prev).map(c => [c, c.weight[portrait ? 1 : 0]]);
+  const comp = rng.wpick(pool);
+  memo[layer] = { index: cut.index, id: comp.id };
+  return comp;
+};
+// Placement for a foreground source of fitted size fit (stage fractions) in a composition's slot.
+J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
+  const rng = J.rng(J.h(cut.seed, 883));
+  let extent = comp.fg.size * sizeScale * (dynamic ? .85 : 1) * rng.range(.94, 1.06);
+  let s = extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
+  // Keep the base frame inside the safe area (motion may still move it).
+  const k = Math.min(1, .95 / w, .95 / h); w *= k; h *= k;
+  const inside = (c, e) => J.clamp(c, e / 2 + .026, .974 - e / 2);// just inside the .025 safe edge
+  return { cx: inside(comp.fg.x + rng.range(-.02, .02), w), cy: inside(comp.fg.y + rng.range(-.02, .02), h), w, h, lockAspect: true, angle: 0 };
+};
+
+const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+// Aligned lyric position for a w × h area: thirds, centre and margin-flush anchors, scored.
+// Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
+// then falls back to searching free regions).
+J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false }) => {
+  const rng = J.rng(J.h(cut.seed, 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
+  if (!zone && !obstacles.length) zone = rng.wpick(J.SOLO_ZONES.map(z => [z.zone, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
+  let best = null;
+  for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4]) {
+    const cw = Math.max(.04, w * k), ch = Math.max(.04, h * k);
+    const xs = new Set([...anchors, cw / 2 + margin, 1 - cw / 2 - margin, ...(zone ? [zone.x + cw / 2, zone.x + zone.w / 2, zone.x + zone.w - cw / 2] : [])]);
+    const ys = new Set([...anchors, .72, .28, ch / 2 + margin, 1 - ch / 2 - margin, ...(zone ? [zone.y + ch / 2, zone.y + zone.h / 2, zone.y + zone.h - ch / 2] : [])]);
+    for (const cx of xs) for (const cy of ys) {
+      const x = J.clamp(cx - cw / 2, cw >= 1 - 2 * margin ? (1 - cw) / 2 : margin, cw >= 1 - 2 * margin ? (1 - cw) / 2 : 1 - margin - cw);
+      const y = J.clamp(cy - ch / 2, ch >= 1 - 2 * margin ? (1 - ch) / 2 : margin, ch >= 1 - 2 * margin ? (1 - ch) / 2 : 1 - margin - ch);
+      const r = { x, y, w: cw, h: ch }, area = cw * ch, covered = obstacles.reduce((sum, b) => sum + overlap(r, b), 0) / area;
+      let score = 6 * covered;
+      if (zone) score += 2 * (1 - overlap(r, zone) / area);
+      if (fgCenter) score -= .8 * Math.hypot(x + cw / 2 - fgCenter.x, y + ch / 2 - fgCenter.y);
+      // Prefer the thirds grid; smaller areas cost a little.
+      score += .25 * Math.min(...anchors.map(a => Math.abs(x + cw / 2 - a))) + .25 * Math.min(...[...anchors, .72, .28].map(a => Math.abs(y + ch / 2 - a)));
+      score += (1 - k) * 1.6 + rng() * .35;
+      const clear = covered <= 1e-9;
+      if (!best || clear && !best.clear || clear === best.clear && score < best.score) best = { score, r, clear };
+    }
+  }
+  if (obstacles.length && !best.clear) return null;
+  return { ...best.r, angle: 0, lockAspect: true };
+};
+})();
+
 /* Uploaded-image/video planning and browser-local asset storage. */
 (() => {
 'use strict';
@@ -4374,7 +4458,13 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
     if (background) return .5 + (J.clamp(target, 0, 1) - .5) * Math.abs(1 - extent);
     return J.clamp(target, extent / 2 + margin, 1 - extent / 2 - margin);
   };
-  const placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
+  let placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
+  // Foregrounds follow a scene composition (split, corner, inset, hero…) that the lyrics then fit around.
+  if (!background && J.pickComposition) {
+    const comp = J.pickComposition(cut, plan, layer);
+    cut.composition = comp.id;
+    placement = J.compositionPlacement(comp, cut, fit, sizeScale, dynamic);
+  }
   const edges = item.croppedEdges || {}, crop = .2;
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges
@@ -4897,10 +4987,25 @@ function emptyRegions(obstacles) {
   return regions;
 }
 
-J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({})) => {
+// context: { zone, fgCenter } from the scene's foreground composition (optional).
+// The scene around a lyric cut: the composition zone of the foreground it shares the most time with,
+// and the centre of the foregrounds shown with it.
+J.lyricScene = (cut, bounds, end = cut.end) => {
+  const shared = bounds.filter(({ cut: f, box }) => box && f.start < end && f.end > cut.start)
+    .map(entry => ({ ...entry, time: Math.min(entry.cut.end, end) - Math.max(entry.cut.start, cut.start) }));
+  if (!shared.length) return {};
+  const main = shared.reduce((a, b) => b.time > a.time ? b : a), comp = J.COMPOSITION_BY_ID?.[main.cut.composition];
+  const weight = shared.reduce((sum, e) => sum + e.time, 0) || 1;
+  const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
+  return { zone: comp?.zone || null, fgCenter };
+};
+J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({}), context = {}) => {
   const rng = J.rng(J.h(cut.seed, 947));
   if(cut.lyricSize != null){
     const size=Math.max(.04,cut.lyricSize/100),candidates=[];
+    // The notation fixes the size; only the position is composed.
+    const composed = J.composeLyricArea?.(cut, { w: size, h: size, obstacles, zone: context.zone, fgCenter: context.fgCenter, fixedSize: true });
+    if (composed) return composed;
     // Explicit sizes override random size bounds and obstacle-driven shrinking.
     for(const x of [0,.25,.5,.75,1])for(const y of [0,.25,.5,.75,1]){
       const r={x:x*(1-size),y:y*(1-size),w:size,h:size,angle:0,lockAspect:true};
@@ -4917,6 +5022,9 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   const scale = rng.range(minSize, maxSize) / 100;
   const fitScale = Math.min(scale, 1 / w, 1 / h);
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
+  // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone: context.zone, fgCenter: context.fgCenter });
+  if (composed) return composed;
   const regions = emptyRegions(obstacles);
   if (regions.length) {
     const candidates = regions.map(r => ({ r, w: Math.min(w, r.w), h: Math.min(h, r.h) }));
@@ -4955,7 +5063,8 @@ J.finishLyricPlan = (project, plan, audio) => {
     }
   }
   const settings = J.lyricEffectSettings(project);
-  const foreground = settings.autoPlacement && settings.avoidForeground && J.planMedia
+  // The foreground's composition guides lyric placement; avoidance additionally turns it into obstacles.
+  const foreground = settings.autoPlacement && J.planMedia
     ? J.planMedia(project, plan, audio?.duration, 'foreground') : null;
   const bounds = foreground ? foreground.cuts.filter(cut => cut.opacity > 0).map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
   for (const cut of plan.cuts) {
@@ -4971,7 +5080,8 @@ J.finishLyricPlan = (project, plan, audio) => {
     } else {
       // Retention extends rendering only. Place each cut using its own time slot
       // so later foregrounds do not force a whole group into one shared area.
-      const obstacles = cut.emphasis || settings.avoidanceStrength === 0 ? [] : bounds
+      const scene = J.lyricScene(cut, bounds);
+      const obstacles = cut.emphasis || !settings.avoidForeground || settings.avoidanceStrength === 0 ? [] : bounds
         .filter(({ cut: f, box }) => box && f.start < cut.end && f.end + .6 > cut.start)
         .map(({ box }) => {
           const s = settings.avoidanceStrength;
@@ -4979,7 +5089,7 @@ J.finishLyricPlan = (project, plan, audio) => {
           const w = (box.w + .04) * s, h = (box.h + .04) * s;
           return { x: box.x + box.w / 2 - w / 2, y: box.y + box.h / 2 - h / 2, w, h };
         });
-      cut.area = J.autoLyricArea(cut, plan, obstacles, settings);
+      cut.area = J.autoLyricArea(cut, plan, obstacles, settings, scene);
       cut.areaMode = 'auto';
     }
     // Some layouts choose columns or orientation during planning. Give those
@@ -5008,8 +5118,10 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
     return {x:area.x+area.w/2-w/2,y:area.y+area.h/2-h/2,w,h};
   };
-  const foreground=settings.autoPlacement&&settings.avoidForeground&&settings.avoidanceStrength>0
-    ? J.planMedia(project,plan,null,'foreground') : null;
+  // The composition zone guides packing whenever lyrics are placed automatically; avoidance adds obstacles.
+  const fgPlan=settings.autoPlacement ? J.planMedia(project,plan,null,'foreground') : null;
+  const foreground=settings.avoidForeground&&settings.avoidanceStrength>0 ? fgPlan : null;
+  const fgBounds=fgPlan?.opacity>0 ? fgPlan.cuts.map(f=>({cut:f,box:J.foregroundBounds(project,plan,f)})) : [];
   for(const cuts of groups.values()){
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
@@ -5020,13 +5132,17 @@ J.applyLyricGroupAvoidance = (project, plan) => {
         return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};
       }):[];
     let regions=emptyRegions(obstacles);if(!regions.length)regions=[{x:.025,y:.025,w:.95,h:.95}];
+    // Free space inside the scene's composition zone comes first (a 20% edge when comparing fits).
+    const zone=J.lyricScene?(J.lyricScene(cuts[0],fgBounds,cuts.at(-1).displayEnd).zone):null;
+    const clip=r=>{const x=Math.max(r.x,zone.x),y=Math.max(r.y,zone.y),w=Math.min(r.x+r.w,zone.x+zone.w)-x,h=Math.min(r.y+r.h,zone.y+zone.h)-y;return w>=.04&&h>=.04?{x,y,w,h,zone:true}:null;};
+    if(zone)regions=[...regions.map(clip).filter(Boolean),...regions];
     const maxW=Math.max(...boxes.map(b=>b.w)),maxH=Math.max(...boxes.map(b=>b.h)),n=cuts.length;
     let best=null;
     // Bounded search even for large lyric groups.
     for(const region of regions)for(const cols of new Set([...Array.from({length:Math.min(n,64)},(_,i)=>i+1),n])){
       const rows=Math.ceil(n/cols),cw=region.w/cols,ch=region.h/rows;
-      const scale=Math.min(1,cw*.94/maxW,ch*.94/maxH);
-      if(!best||scale>best.scale+1e-9)best={region,cols,rows,cw,ch,scale};
+      const scale=Math.min(1,cw*.94/maxW,ch*.94/maxH),rank=scale*(region.zone?1.2:1);
+      if(!best||rank>best.rank+1e-9)best={region,cols,rows,cw,ch,scale,rank};
     }
     cuts.forEach((cut,i)=>{
       const a=areas[i],b=best,scale=J.lerp(1,b.scale,strength);

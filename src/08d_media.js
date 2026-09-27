@@ -64,7 +64,13 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
     if (background) return .5 + (J.clamp(target, 0, 1) - .5) * Math.abs(1 - extent);
     return J.clamp(target, extent / 2 + margin, 1 - extent / 2 - margin);
   };
-  const placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
+  let placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
+  // Foregrounds follow a scene composition (split, corner, inset, hero…) that the lyrics then fit around.
+  if (!background && J.pickComposition) {
+    const comp = J.pickComposition(cut, plan, layer);
+    cut.composition = comp.id;
+    placement = J.compositionPlacement(comp, cut, fit, sizeScale, dynamic);
+  }
   const edges = item.croppedEdges || {}, crop = .2;
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges

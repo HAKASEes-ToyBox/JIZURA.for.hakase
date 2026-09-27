@@ -88,10 +88,25 @@ function emptyRegions(obstacles) {
   return regions;
 }
 
-J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({})) => {
+// context: { zone, fgCenter } from the scene's foreground composition (optional).
+// The scene around a lyric cut: the composition zone of the foreground it shares the most time with,
+// and the centre of the foregrounds shown with it.
+J.lyricScene = (cut, bounds, end = cut.end) => {
+  const shared = bounds.filter(({ cut: f, box }) => box && f.start < end && f.end > cut.start)
+    .map(entry => ({ ...entry, time: Math.min(entry.cut.end, end) - Math.max(entry.cut.start, cut.start) }));
+  if (!shared.length) return {};
+  const main = shared.reduce((a, b) => b.time > a.time ? b : a), comp = J.COMPOSITION_BY_ID?.[main.cut.composition];
+  const weight = shared.reduce((sum, e) => sum + e.time, 0) || 1;
+  const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
+  return { zone: comp?.zone || null, fgCenter };
+};
+J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({}), context = {}) => {
   const rng = J.rng(J.h(cut.seed, 947));
   if(cut.lyricSize != null){
     const size=Math.max(.04,cut.lyricSize/100),candidates=[];
+    // The notation fixes the size; only the position is composed.
+    const composed = J.composeLyricArea?.(cut, { w: size, h: size, obstacles, zone: context.zone, fgCenter: context.fgCenter, fixedSize: true });
+    if (composed) return composed;
     // Explicit sizes override random size bounds and obstacle-driven shrinking.
     for(const x of [0,.25,.5,.75,1])for(const y of [0,.25,.5,.75,1]){
       const r={x:x*(1-size),y:y*(1-size),w:size,h:size,angle:0,lockAspect:true};
@@ -108,6 +123,9 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   const scale = rng.range(minSize, maxSize) / 100;
   const fitScale = Math.min(scale, 1 / w, 1 / h);
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
+  // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone: context.zone, fgCenter: context.fgCenter });
+  if (composed) return composed;
   const regions = emptyRegions(obstacles);
   if (regions.length) {
     const candidates = regions.map(r => ({ r, w: Math.min(w, r.w), h: Math.min(h, r.h) }));
@@ -146,7 +164,8 @@ J.finishLyricPlan = (project, plan, audio) => {
     }
   }
   const settings = J.lyricEffectSettings(project);
-  const foreground = settings.autoPlacement && settings.avoidForeground && J.planMedia
+  // The foreground's composition guides lyric placement; avoidance additionally turns it into obstacles.
+  const foreground = settings.autoPlacement && J.planMedia
     ? J.planMedia(project, plan, audio?.duration, 'foreground') : null;
   const bounds = foreground ? foreground.cuts.filter(cut => cut.opacity > 0).map(cut => ({ cut, box: J.foregroundBounds(project, plan, cut) })) : [];
   for (const cut of plan.cuts) {
@@ -162,7 +181,8 @@ J.finishLyricPlan = (project, plan, audio) => {
     } else {
       // Retention extends rendering only. Place each cut using its own time slot
       // so later foregrounds do not force a whole group into one shared area.
-      const obstacles = cut.emphasis || settings.avoidanceStrength === 0 ? [] : bounds
+      const scene = J.lyricScene(cut, bounds);
+      const obstacles = cut.emphasis || !settings.avoidForeground || settings.avoidanceStrength === 0 ? [] : bounds
         .filter(({ cut: f, box }) => box && f.start < cut.end && f.end + .6 > cut.start)
         .map(({ box }) => {
           const s = settings.avoidanceStrength;
@@ -170,7 +190,7 @@ J.finishLyricPlan = (project, plan, audio) => {
           const w = (box.w + .04) * s, h = (box.h + .04) * s;
           return { x: box.x + box.w / 2 - w / 2, y: box.y + box.h / 2 - h / 2, w, h };
         });
-      cut.area = J.autoLyricArea(cut, plan, obstacles, settings);
+      cut.area = J.autoLyricArea(cut, plan, obstacles, settings, scene);
       cut.areaMode = 'auto';
     }
     // Some layouts choose columns or orientation during planning. Give those
@@ -199,8 +219,10 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
     return {x:area.x+area.w/2-w/2,y:area.y+area.h/2-h/2,w,h};
   };
-  const foreground=settings.autoPlacement&&settings.avoidForeground&&settings.avoidanceStrength>0
-    ? J.planMedia(project,plan,null,'foreground') : null;
+  // The composition zone guides packing whenever lyrics are placed automatically; avoidance adds obstacles.
+  const fgPlan=settings.autoPlacement ? J.planMedia(project,plan,null,'foreground') : null;
+  const foreground=settings.avoidForeground&&settings.avoidanceStrength>0 ? fgPlan : null;
+  const fgBounds=fgPlan?.opacity>0 ? fgPlan.cuts.map(f=>({cut:f,box:J.foregroundBounds(project,plan,f)})) : [];
   for(const cuts of groups.values()){
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
@@ -211,13 +233,17 @@ J.applyLyricGroupAvoidance = (project, plan) => {
         return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};
       }):[];
     let regions=emptyRegions(obstacles);if(!regions.length)regions=[{x:.025,y:.025,w:.95,h:.95}];
+    // Free space inside the scene's composition zone comes first (a 20% edge when comparing fits).
+    const zone=J.lyricScene?(J.lyricScene(cuts[0],fgBounds,cuts.at(-1).displayEnd).zone):null;
+    const clip=r=>{const x=Math.max(r.x,zone.x),y=Math.max(r.y,zone.y),w=Math.min(r.x+r.w,zone.x+zone.w)-x,h=Math.min(r.y+r.h,zone.y+zone.h)-y;return w>=.04&&h>=.04?{x,y,w,h,zone:true}:null;};
+    if(zone)regions=[...regions.map(clip).filter(Boolean),...regions];
     const maxW=Math.max(...boxes.map(b=>b.w)),maxH=Math.max(...boxes.map(b=>b.h)),n=cuts.length;
     let best=null;
     // Bounded search even for large lyric groups.
     for(const region of regions)for(const cols of new Set([...Array.from({length:Math.min(n,64)},(_,i)=>i+1),n])){
       const rows=Math.ceil(n/cols),cw=region.w/cols,ch=region.h/rows;
-      const scale=Math.min(1,cw*.94/maxW,ch*.94/maxH);
-      if(!best||scale>best.scale+1e-9)best={region,cols,rows,cw,ch,scale};
+      const scale=Math.min(1,cw*.94/maxW,ch*.94/maxH),rank=scale*(region.zone?1.2:1);
+      if(!best||rank>best.rank+1e-9)best={region,cols,rows,cw,ch,scale,rank};
     }
     cuts.forEach((cut,i)=>{
       const a=areas[i],b=best,scale=J.lerp(1,b.scale,strength);
