@@ -272,6 +272,7 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
   $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
@@ -311,6 +312,7 @@ function setProjectDuration(seconds) {
   return true;
 }
 function play() {
+  if(S.tap?.countingDown)return;
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
@@ -590,6 +592,8 @@ function openCutDetails(layer,index,part=0) {
   let draft = clone(original), current = clone(cut), start = cut.start;
   let locked = !!(lyric ? S.project.overrides[index]?.lock : original.lock);
   const initialLock = locked;
+  let removedDetail = null;
+  const openDetails = new Map();
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
   document.body.appendChild(dialog);
@@ -602,11 +606,11 @@ function openCutDetails(layer,index,part=0) {
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置・サイズ（画面比率）','Placement / size (stage ratios)'],
     motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
     motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
-    technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => names[key] ? L(...names[key]) : key;
-  const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoDuration','chromaKey','chromaColor'];
+  const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
     const project = clone(S.project);
     if (lyric) project.lyricCutOptions[key]=draft; else project[layer].cutOverrides[index]=draft;
@@ -636,8 +640,9 @@ function openCutDetails(layer,index,part=0) {
   }
   function fieldEditor(parent,field,value,onChange,path=field) {
     if(value && typeof value==='object') {
-      const section=document.createElement('details'); section.open=['area','placement'].includes(field);
-      const title=document.createElement('summary'); title.textContent=label(field); section.append(title);
+      const section=document.createElement('details'); section.dataset.detailSection=path;
+      section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
+      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       for(const [child,v] of Object.entries(value)) {
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
@@ -654,20 +659,21 @@ function openCutDetails(layer,index,part=0) {
         const add=document.createElement('button');add.type='button';add.textContent=L('装飾を追加','Add decoration');
         add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};section.append(add);
       }
-      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${i+1} を削除`,`Remove ${i+1}`);del.onclick=()=>{value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
+      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1} を削除`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
       return;
     }
     const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field);row.append(text);
     const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
-    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
+    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     input.addEventListener('change',()=>{
       const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value):input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
+      if(/^decor\.\d+\.id$/.test(path))preview();
       if(choices && !path.includes('.')) {
         const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
@@ -678,6 +684,18 @@ function openCutDetails(layer,index,part=0) {
     row.append(input);parent.append(row);
   }
   function render() {
+    openDetails.clear();
+    for(const section of dialog.querySelectorAll('details[data-detail-section]')){
+      let path=section.dataset.detailSection;
+      if(removedDetail && path.startsWith(removedDetail.path+'.')){
+        const tail=path.slice(removedDetail.path.length+1).split('.'),i=Number(tail[0]);
+        if(i===removedDetail.index)continue;
+        if(i>removedDetail.index){tail[0]=String(i-1);path=removedDetail.path+'.'+tail.join('.');}
+      }
+      openDetails.set(path,section.open);
+    }
+    removedDetail=null;
+    const scrollTop=dialog.scrollTop;
     dialog.replaceChildren();const form=document.createElement('form');dialog.append(form);
     const heading=document.createElement('h2');heading.textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;form.append(heading);
     const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
@@ -690,7 +708,7 @@ function openCutDetails(layer,index,part=0) {
       grid.lastChild.querySelector('span').textContent=lyric?L('行の構成をロック','Lock line composition'):L('カットをロック','Lock cut');
     }
     for(const field of nativeKeys) {
-      if(['videoLoop','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
+      if(['videoLoop','videoStart','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
       let value=draft[field]??current[field];
       if(['technique','entrance','departure'].includes(field)&&Object.hasOwn(draft,field))value=draft[field]??'';
       if(field==='placement')value ||= {cx:.5,cy:.5,w:1,h:1,angle:0,lockAspect:true};
@@ -708,6 +726,7 @@ function openCutDetails(layer,index,part=0) {
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
     const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
+    dialog.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
       if(!blank && (locked !== initialLock || !lyric)) {
@@ -1476,6 +1495,46 @@ function freezeMediaCuts(layer) {
   m.manualCuts = true;
   m.cutCount = cuts.length;
 }
+function mediaSplitTarget(layer) {
+  if(!S.plan || S.exporting || S.tap || S.plan[layer].cuts.length>=1000)return null;
+  const cut=J.mediaAt(S.plan,S.t,layer);
+  return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
+}
+function splitMediaCut(layer) {
+  const cut=mediaSplitTarget(layer);if(!cut)return;
+  pause();
+  const time=S.t,m=S.project[layer],cuts=S.plan[layer].cuts,index=cut.index;
+  const clone=v=>JSON.parse(JSON.stringify(v)),overrides={},times={};
+  const resolved={...clone(mediaCutOptions(layer,index)),itemId:cut.itemId,
+    technique:cut.technique,entrance:cut.entrance,departure:cut.departure,
+    placement:clone(cut.placement),blend:cut.blend,opacity:cut.opacity,
+    details:Object.fromEntries(J.cutDetailKeys.media.filter(k=>cut[k]!==undefined).map(k=>[k,clone(cut[k])]))};
+  const first=clone(resolved),second=clone(resolved);
+  // No entrance, departure or transition at the newly created interior boundary.
+  first.departure='none';first.lockedDeparture='none';first.details.exit='cut';
+  second.entrance='none';second.lockedEntrance='none';second.details.enter='cut';second.details.trans='none';
+  if(cut.type==='video'){
+    const asset=J.mediaAssets.get(cut.itemId),item=m.items.find(x=>x.id===cut.itemId);
+    const duration=asset?.element?.duration || item?.duration;
+    first.videoStart=cut.videoStart;first.videoDuration=time-cut.start;
+    second.videoStart=Number.isFinite(duration)&&duration>0 ? J.mediaVideoTime(cut,time,duration) : cut.videoStart+time-cut.start;
+    second.videoDuration=cut.end-time;
+    first.videoLoop=second.videoLoop=cut.videoLoop;
+  }
+  cuts.forEach((c,i)=>{
+    const next=i>index?i+1:i;
+    overrides[next]=i===index?first:{...clone(m.cutOverrides[i] || {}),itemId:c.itemId};
+    times[next]=c.start;
+  });
+  overrides[index+1]=second;times[index+1]=time;
+  m.randomOrder=false;m.manualCuts=true;m.cutCount=cuts.length+1;m.cutOverrides=overrides;m.timing.lineTimes=times;
+  S.project.durationOverride=S.plan.duration;
+  const prefix=layer==='foreground'?'f:':'m:';
+  for(const link of S.project.timelineLinks)for(const end of ['a','b']){
+    if(link[end].startsWith(prefix) && +link[end].slice(2)>index)link[end]=prefix+(+link[end].slice(2)+1);
+  }
+  replan();seek(time);
+}
 function insertMediaCut(index, layer = activeMediaLayer() || 'media') {
   const m = S.project[layer], cuts = S.plan[layer].cuts;
   if (cuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
@@ -1588,7 +1647,7 @@ function renderMediaLines() {
     const placement = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
     const placementControl = `<span class="foreground-placement-controls"><button class="foreground-placement-open ghost" type="button" ${placement ? '' : 'disabled'} aria-label="${i + 1}カット目の配置とサイズを編集"><span class="foreground-placement-thumb"><i style="left:${(placement ? placement.x : 0) * 100}%;top:${(placement ? placement.y : 0) * 100}%;width:${(placement ? placement.w : 1) * 100}%;height:${(placement ? placement.h : 1) * 100}%;transform:rotate(${cut.placement ? cut.placement.angle || 0 : 0}deg)"></i></span>配置・サイズを編集</button>${cut.placementMode === 'auto' ? `<span class="tagl">${J.mediaLabel('自動配置', 'Auto placement')}</span>` : ''}${cut.placementMode === 'manual' ? '<button class="foreground-placement-reset ghost" type="button">自動配置に戻す</button>' : ''}</span>`;
     const li = document.createElement('li'); li.className = 'ln media-ln';
-    li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span><input class="time mono" type="number" step="0.01" min="0" value="${cut.start.toFixed(2)}" aria-label="${i + 1}カット目の開始秒">${fileSelect}${mediaThumb(item, 'media-ln-thumb')}<div class="meta"><span class="cuts"><span>${J.mediaTechniqueName(cut)}</span></span><span class="tools">${selectTechnique(ov, cut)}<button class="icon ghost dice" title="このカットを再抽選">${ICON.dice}</button><button class="icon ghost lock" title="このカットをロック" aria-pressed="${ov.lock ? 'true' : 'false'}">${ICON.lock}</button><button class="ghost small remove-media-cut" type="button" aria-label="${i + 1}カット目を削除">削除</button></span>${placementControl}${cut.type === 'video' ? `<label class="media-video-loop"><input type="checkbox" ${cut.videoLoop ? 'checked' : ''}>動画をループ再生</label><label class="media-video-duration">動画の長さ（秒）<input type="number" min="0.04" max="3600" step="0.01" placeholder="自動" value="${ov.videoDuration ?? ''}" aria-label="${i + 1}カット目の動画の長さ（秒）"></label>` : ''}</div>`;
+    li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span><input class="time mono" type="number" step="0.01" min="0" value="${cut.start.toFixed(2)}" aria-label="${i + 1}カット目の開始秒">${fileSelect}${mediaThumb(item, 'media-ln-thumb')}<div class="meta"><span class="cuts"><span>${J.mediaTechniqueName(cut)}</span></span><span class="tools">${selectTechnique(ov, cut)}<button class="icon ghost dice" title="このカットを再抽選">${ICON.dice}</button><button class="icon ghost lock" title="このカットをロック" aria-pressed="${ov.lock ? 'true' : 'false'}">${ICON.lock}</button><button class="ghost small remove-media-cut" type="button" aria-label="${i + 1}カット目を削除">削除</button></span>${placementControl}${cut.type === 'video' ? `<label class="media-video-loop"><input type="checkbox" ${cut.videoLoop ? 'checked' : ''}>動画をループ再生</label><label class="media-video-start-field">${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}<input class="media-video-start" type="number" min="0" step="0.01" value="${cut.videoStart}" aria-label="${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}"></label><label class="media-video-duration">動画の長さ（秒）<input type="number" min="0.04" max="3600" step="0.01" placeholder="自動" value="${ov.videoDuration ?? ''}" aria-label="${i + 1}カット目の動画の長さ（秒）"></label>` : ''}</div>`;
     if (cut.type === 'video') li.querySelector('.meta').insertAdjacentHTML('beforeend', `<span class="media-chroma"><label><input class="media-chroma-toggle" type="checkbox" ${cut.chromaKey ? 'checked' : ''}>クロマキー合成</label><label>色<input class="media-chroma-color" type="color" value="${cut.chromaColor}" aria-label="${i + 1}カット目のクロマキー色" ${cut.chromaKey ? '' : 'disabled'}></label></span>`);
     li.querySelector('.foreground-placement-controls').insertAdjacentHTML('beforebegin', `<div class="media-phase-controls">${selectPhase(ov, cut, 'enter', 'entrance')}${selectPhase(ov, cut, 'exit', 'departure')}</div>`);
     li.querySelectorAll('[data-media-phase]').forEach(select => select.addEventListener('change', e => {
@@ -1606,7 +1665,9 @@ function renderMediaLines() {
     li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
     const videoLoop = li.querySelector('.media-video-loop input');
     if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
-    const videoDuration = li.querySelector('.media-video-duration input');
+    const videoStart = li.querySelector('.media-video-start');
+    if (videoStart) videoStart.addEventListener('change', e => { const value=Number(e.target.value); mediaOv(i,{videoStart:Number.isFinite(value)?Math.max(0,value):0},layer); replan(); });
+    const videoDuration = li.querySelector('.media-video-duration input:not(.media-video-start)');
     if (videoDuration) videoDuration.addEventListener('change', e => { const v = +e.target.value; mediaOv(i, { videoDuration: e.target.value && Number.isFinite(v) && v > 0 ? J.clamp(v, 0.04, 3600) : undefined }, layer); replan(); });
     const placementOpen = li.querySelector('.foreground-placement-open');
     if (placementOpen) placementOpen.addEventListener('click', () => openMediaEditor(i, layer));
@@ -2060,16 +2121,30 @@ async function runExport(kind) {
 function startTap() {
   const layer = activeMediaLayer();
   if (!(layer ? S.plan[layer].cuts.length || S.project[layer].loop : S.plan.lines.length)) return;
-  S.tap = { i: 0, layer, append: !!layer && S.project[layer].loop };
+  pause();
+  S.tap = { i: 0, layer, append: !!layer && S.project[layer].loop, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
   $('tapHint').textContent = S.tap.append ? 'タップするたびに素材をループしてカットを追加します。終了するまで続けられます。' : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
   $('tapPanel').hidden = false; syncTapButtons();
   if (S.tap.append && !S.audio) extendTapPreview(0);
-  seek(0); play(); updateTap();
-  $('tapBtn').focus();
+  seek(0); updateTap();
+  const session=S.tap,deadline=performance.now()+3000;
+  const countdown=$('tapCountdown');countdown.hidden=false;
+  $('tapStop').focus();
+  const tick=()=>{
+    if(S.tap!==session)return;
+    const remaining=Math.ceil((deadline-performance.now())/1000);
+    if(remaining<=0){
+      session.countingDown=false;countdown.hidden=true;syncTapButtons();
+      seek(0);play();$('tapBtn').focus();return;
+    }
+    countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
+    session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));
+  };
+  tick();
 }
 function tapNow() {
-  if (!S.tap) return;
+  if (!S.tap || S.tap.countingDown) return;
   if (S.tap.append) {
     const i = S.tap.i;
     const m = S.project[S.tap.layer];
@@ -2089,8 +2164,10 @@ function tapNow() {
   replan();
   if (S.tap.i >= (layer ? S.plan[layer].cuts.length : S.plan.lines.length)) stopTap(); else updateTap();
 }
-function stopTap() { S.tap = null; $('tapPanel').hidden = true; syncTapButtons(); replan(); }
+function stopTap() { clearTimeout(S.tap?.timer); $('tapCountdown').hidden=true; S.tap = null; $('tapPanel').hidden = true; syncTapButtons(); replan(); }
 function syncTapButtons() {
+  $('tapBtn').disabled=!!S.tap?.countingDown;
+  if(!S.tap)$('tapCountdown').hidden=true;
   for (const id of ['btnTap', 'btnTapMedia']) $(id).setAttribute('aria-pressed', String(!!S.tap));
 }
 function updateTap() {
@@ -2288,6 +2365,8 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
+  $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
