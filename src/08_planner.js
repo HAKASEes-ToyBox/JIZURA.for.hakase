@@ -411,20 +411,20 @@ J.plan = (project, audio) => {
   });
   const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
     .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
+    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
     .sort((a, b) => a.start - b.start);
   for (let i = 0; i < blanks.length; i++) {
     const blank = blanks[i];
-    const nextLine = tm.starts[blank.beforeLine] ?? Infinity;
+    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
     const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
     const end = Math.min(nextLine, nextBlank, plan.duration);
     if (end - blank.start < 0.04) continue;
     for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && cut.line < blank.beforeLine) {
+      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
         cut.end = blank.start; cut.dur = cut.end - cut.start;
       }
     }
-    plan.cuts = plan.cuts.filter(c => !(c.line < blank.beforeLine && c.start >= blank.start && c.start < end));
+    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
     plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
   }
   plan.cuts.sort((a, b) => a.start - b.start);

@@ -652,7 +652,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
       <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
-      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button></div>
+      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button><button id="insertBlankAtPlayhead" type="button" disabled>歌詞無表示カットを挿入</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
       <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
@@ -3901,20 +3901,20 @@ J.plan = (project, audio) => {
   });
   const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
     .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
+    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
     .sort((a, b) => a.start - b.start);
   for (let i = 0; i < blanks.length; i++) {
     const blank = blanks[i];
-    const nextLine = tm.starts[blank.beforeLine] ?? Infinity;
+    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
     const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
     const end = Math.min(nextLine, nextBlank, plan.duration);
     if (end - blank.start < 0.04) continue;
     for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && cut.line < blank.beforeLine) {
+      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
         cut.end = blank.start; cut.dur = cut.end - cut.start;
       }
     }
-    plan.cuts = plan.cuts.filter(c => !(c.line < blank.beforeLine && c.start >= blank.start && c.start < end));
+    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
     plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
   }
   plan.cuts.sort((a, b) => a.start - b.start);
@@ -4946,6 +4946,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 // lifetime. Store indices rather than references to avoid duplicating cut graphs.
 J.lyricCutsAt = (plan, t) => {
   const current = J.cutAt(plan, t), cuts = [];
+  if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
   for (const index of plan.retainedCutIndices || []) {
     const cut = plan.cuts[index];
     if (cut && cut.start <= t && t < cut.displayEnd) cuts.push(cut);
@@ -37219,6 +37220,7 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -37996,6 +37998,19 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
+function canInsertBlankAtPlayhead() {
+  if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
+  if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
+  const end=S.plan.cuts.find(c=>c.line>=0 && c.start>S.t+1e-6)?.start ?? S.plan.duration;
+  return S.t>=0 && end-S.t>=.04;
+}
+function insertBlankAtPlayhead() {
+  if(!canInsertBlankAtPlayhead())return;
+  pause();
+  const start=S.t,next=S.plan.lines.find(line=>line.start>start+1e-6);
+  S.project.lyricBlankCuts.push({id:crypto.randomUUID(),start,beforeLine:next?.index ?? S.plan.lines.length,untilNextCut:true});
+  replan();seek(start);
+}
 function insertLyricBlankCut(rows, position) {
   if (S.project.lyricBlankCuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
   const previous = rows[position - 1], next = rows[position];
@@ -39312,6 +39327,7 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));

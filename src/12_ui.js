@@ -272,6 +272,7 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -1049,6 +1050,19 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
+function canInsertBlankAtPlayhead() {
+  if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
+  if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
+  const end=S.plan.cuts.find(c=>c.line>=0 && c.start>S.t+1e-6)?.start ?? S.plan.duration;
+  return S.t>=0 && end-S.t>=.04;
+}
+function insertBlankAtPlayhead() {
+  if(!canInsertBlankAtPlayhead())return;
+  pause();
+  const start=S.t,next=S.plan.lines.find(line=>line.start>start+1e-6);
+  S.project.lyricBlankCuts.push({id:crypto.randomUUID(),start,beforeLine:next?.index ?? S.plan.lines.length,untilNextCut:true});
+  replan();seek(start);
+}
 function insertLyricBlankCut(rows, position) {
   if (S.project.lyricBlankCuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
   const previous = rows[position - 1], next = rows[position];
@@ -2365,6 +2379,7 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
