@@ -67,7 +67,7 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   let placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
   // Foregrounds follow a scene composition (split, corner, inset, hero…) that the lyrics then fit around.
   if (!background && J.pickComposition) {
-    const comp = J.pickComposition(cut, plan, layer);
+    const comp = J.pickComposition(cut, plan, layer, item.croppedEdges);
     cut.composition = comp.id;
     placement = J.compositionPlacement(comp, cut, fit, dynamic);
   }
@@ -77,11 +77,15 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges
   // leave the middle 60% in frame, enlarging proportionally when necessary.
-  const grow = Math.max(1, edges.left && edges.right ? 1 / ((1 - 2 * crop) * w) : 1, edges.top && edges.bottom ? 1 / ((1 - 2 * crop) * h) : 1);
+  const grow = Math.max(1, edges.left && edges.right ? 1 / ((1 - 2 * crop) * placement.w) : 1, edges.top && edges.bottom ? 1 / ((1 - 2 * crop) * placement.h) : 1);
   placement.w *= grow; placement.h *= grow; placement.croppedAuto = true;
   const anchor = (center, extent, before, after) => J.clamp(before && after ? .5 : before ? extent * (.5 - crop) : after ? 1 - extent * (.5 - crop) : center, 0, 1);
   placement.cx = anchor(placement.cx, placement.w, edges.left, edges.right);
   placement.cy = anchor(placement.cy, placement.h, edges.top, edges.bottom);
+  // A band grown across one axis stays on the stage along its free axis.
+  const inside = (c, e) => e < 1 ? J.clamp(c, e / 2, 1 - e / 2) : c;
+  if (!edges.left && !edges.right) placement.cx = inside(placement.cx, placement.w);
+  if (!edges.top && !edges.bottom) placement.cy = inside(placement.cy, placement.h);
   return placement;
 };
 const defaults = () => ({ items: [], randomOrder: false, loop: false, lyricInsertMode: 'line', groupLyricsAsOneCut: true, cutCount: 0, manualCuts: false, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 });

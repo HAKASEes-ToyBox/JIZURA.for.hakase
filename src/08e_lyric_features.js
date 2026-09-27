@@ -98,7 +98,17 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   const main = shared.reduce((a, b) => b.time > a.time ? b : a), comp = J.COMPOSITION_BY_ID?.[main.cut.composition];
   const weight = shared.reduce((sum, e) => sum + e.time, 0) || 1;
   const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
-  return { zone: comp?.zone || null, fgCenter, composition: comp?.id || null };
+  let zone = comp?.zone || null;
+  // Cropped-edge sources grow with their aspect ratio (opposite edges can make a tall band); when the
+  // designed zone ends up covered, use the largest strip the foreground leaves free.
+  if (comp?.cropped && zone && overlap(zone, main.box) > .25 * zone.w * zone.h) {
+    const b = main.box, m = .04, strips = [
+      { x: m, y: m, w: b.x - 2 * m, h: 1 - 2 * m }, { x: b.x + b.w + m, y: m, w: 1 - b.x - b.w - 2 * m, h: 1 - 2 * m },
+      { x: m, y: m, w: 1 - 2 * m, h: b.y - 2 * m }, { x: m, y: b.y + b.h + m, w: 1 - 2 * m, h: 1 - b.y - b.h - 2 * m },
+    ].filter(s => s.w >= .12 && s.h >= .12);
+    if (strips.length) zone = strips.reduce((a, s) => s.w * s.h > a.w * a.h ? s : a);
+  }
+  return { zone, fgCenter, composition: comp?.id || null };
 };
 // Emphasised lyrics (*…*) on the full stage are drawn larger; automatic areas express the size instead.
 J.EMPHASIS_TEXT_SCALE = 1.15;

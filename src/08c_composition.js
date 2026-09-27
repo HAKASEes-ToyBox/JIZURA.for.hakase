@@ -34,6 +34,48 @@ J.COMPOSITIONS = [
 // Only for scenes with an emphasised lyric (*…*): a large foreground with a large lyric laid over it.
 J.EMPHASIS_COMPOSITION = { id: 'bothLarge', fg: { x: .5, y: .5, size: [.72, .88] }, zone: { x: .04, y: .1, w: .92, h: .8 }, weight: [0, 0] };
 J.COMPOSITION_BY_ID = Object.fromEntries([...J.COMPOSITIONS, J.EMPHASIS_COMPOSITION].map(c => [c.id, c]));
+// Sources with cropped edges (見切れ辺) bleed off those stage edges, so their compositions are built around
+// the edges: the lyric zone sits on the free side. Written for the left edge / the bottom-left corner
+// and mirrored; opposite edges span the stage as a band (or fill it). The cropped axes are anchored to
+// the stage edge by autoMediaPlacement, so fg.x / fg.y matter only on free axes.
+const SINGLE_EDGE = [// left edge
+  { id: 'mid', fg: { x: .3, y: .5, size: [.5, .66] }, zone: { x: .52, y: .14, w: .44, h: .72 }, weight: 1.4 },
+  { id: 'high', fg: { x: .26, y: .32, size: [.36, .5] }, zone: { x: .44, y: .4, w: .52, h: .52 }, weight: 1 },
+  { id: 'low', fg: { x: .26, y: .68, size: [.36, .5] }, zone: { x: .44, y: .08, w: .52, h: .52 }, weight: 1 },
+  { id: 'giant', fg: { x: .4, y: .5, size: [.78, .9] }, zone: { x: .68, y: .56, w: .29, h: .38 }, weight: .6 },
+  { id: 'peek', fg: { x: .12, y: .5, size: [.2, .28] }, zone: { x: .26, y: .14, w: .7, h: .72 }, weight: .7 },
+];
+const CORNER = [// bottom-left corner
+  { id: 'corner', fg: { x: .26, y: .7, size: [.4, .54] }, zone: { x: .44, y: .06, w: .52, h: .52 }, weight: 1.4 },
+  { id: 'big', fg: { x: .34, y: .64, size: [.64, .78] }, zone: { x: .64, y: .06, w: .33, h: .38 }, weight: .8 },
+  { id: 'peek', fg: { x: .12, y: .86, size: [.2, .28] }, zone: { x: .24, y: .1, w: .7, h: .62 }, weight: .7 },
+];
+const BAND = [// left + right: a horizontal band across the stage
+  { id: 'bandLow', fg: { x: .5, y: .72, size: [.5, .7] }, zone: { x: .08, y: .06, w: .84, h: .38 }, weight: 1.2 },
+  { id: 'bandHigh', fg: { x: .5, y: .28, size: [.5, .7] }, zone: { x: .08, y: .56, w: .84, h: .38 }, weight: 1 },
+];
+const mirrorX = r => r && { ...r, x: 1 - r.x - (r.w || 0) }, mirrorY = r => r && { ...r, y: 1 - r.y - (r.h || 0) };
+const swap = r => r && { ...r, x: r.y, y: r.x, ...(r.w != null ? { w: r.h, h: r.w } : {}) };
+const transform = (list, f) => list.map(c => ({ ...c, fg: { ...f({ x: c.fg.x, y: c.fg.y }), size: c.fg.size }, zone: f(c.zone) }));
+const croppedCache = new Map();
+J.croppedCompositions = edges => {
+  const e = ['left', 'right', 'top', 'bottom'].filter(k => edges?.[k] === true);
+  if (!e.length) return null;
+  const key = e.join('+');
+  if (croppedCache.has(key)) return croppedCache.get(key);
+  const has = k => e.includes(k), h = has('left') && has('right'), v = has('top') && has('bottom');
+  let list;
+  if (h && v) list = [{ id: 'fill', fg: { x: .5, y: .5, size: [.9, .9] }, zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 1 }];
+  else if (h) list = has('top') ? BAND.slice(1, 2) : has('bottom') ? BAND.slice(0, 1) : BAND;
+  else if (v) list = transform(BAND, r => swap(r)).map(c => has('left') ? c : has('right') ? transform([c], mirrorX)[0] : c)
+    .filter(c => has('left') ? c.fg.x < .5 : has('right') ? c.fg.x > .5 : true);
+  else if (e.length === 2) list = transform(CORNER, r => { r = has('right') ? mirrorX(r) : r; return has('top') ? mirrorY(r) : r; });
+  else list = transform(SINGLE_EDGE, r => has('left') ? r : has('right') ? mirrorX(r) : has('top') ? swap(r) : mirrorY(swap(r)));
+  list = list.map(c => ({ ...c, id: 'crop:' + key + ':' + c.id, weight: [c.weight, c.weight], cropped: key }));
+  for (const c of list) J.COMPOSITION_BY_ID[c.id] = c;
+  croppedCache.set(key, list);
+  return list;
+};
 // Lyric-only scenes: aligned zones; size gives the chance of small / medium / large lyric areas there.
 J.SOLO_ZONES = [
   { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3, size: [.2, .45, .35] },
@@ -94,11 +136,12 @@ const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
 // The chain runs on each cut's own seed ("base"), so re-laying out one cut (placement seed) never
 // changes its neighbours; that cut alone re-picks, avoiding the previous cut's actual composition.
-J.pickComposition = (cut, plan, layer = 'foreground') => {
+J.pickComposition = (cut, plan, layer = 'foreground', edges = null) => {
   const portrait = (plan?.W || 1920) < (plan?.H || 1080);
   const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
   const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
-  const pick = (seed, avoid) => J.rng(J.h(seed, 881)).wpick(J.COMPOSITIONS.filter(c => c.id !== avoid).map(c => [c, c.weight[portrait ? 1 : 0]]));
+  const pool = J.croppedCompositions(edges) || J.COMPOSITIONS;
+  const pick = (seed, avoid) => { const list = pool.filter(c => c.id !== avoid); return J.rng(J.h(seed, 881)).wpick((list.length ? list : pool).map(c => [c, c.weight[portrait ? 1 : 0]])); };
   const base = pick(cut.seed, last?.baseId);
   let comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
   // A foreground shown with an emphasised lyric sometimes goes large together with it.
