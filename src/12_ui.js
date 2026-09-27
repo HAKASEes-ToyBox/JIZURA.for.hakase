@@ -587,7 +587,7 @@ function detailButton(onClick) {
   button.title = J.mediaLabel('カットの詳細編集','Edit cut details'); button.setAttribute('aria-label',button.title);
   button.innerHTML = ICON.details; button.addEventListener('click',onClick); return button;
 }
-let cutPreviewSolo=false;// remembered while the page is open
+let cutPreviewSolo=false,cutPreviewFocus=false;// remembered while the page is open
 function openCutDetails(layer,index,part=0) {
   const lyric = layer === 'lyrics', L = J.mediaLabel, clone = value => JSON.parse(JSON.stringify(value));
   const blank = lyric && part === 'blank';
@@ -604,12 +604,14 @@ function openCutDetails(layer,index,part=0) {
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
-  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><p class="hint"></p>`;
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label><p class="hint"></p>`;
   pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric&&!blank?` / ${part+1}`:''}`;
   pane.querySelector('.progress').setAttribute('aria-label',L('再生位置','Playback position'));
   pane.querySelector('.hint').textContent=L('このカットの区間をループ再生します。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
   const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
   solo.addEventListener('change',()=>{cutPreviewSolo=solo.checked;});
+  const focus=pane.querySelector('[data-preview-focus]');focus.checked=cutPreviewFocus;focus.nextElementSibling.textContent=L('編集対象にフォーカス','Focus on the edited cut');
+  focus.addEventListener('change',()=>{cutPreviewFocus=focus.checked;});
   const formHost=document.createElement('div');formHost.className='cut-details-form';
   dialog.append(pane,formHost);
   document.body.appendChild(dialog);
@@ -628,14 +630,62 @@ function openCutDetails(layer,index,part=0) {
   const soloPlan=(plan,c)=>{
     if(soloSource!==plan){soloSource=plan;soloShown=lyric?{...plan,retainedCutIndices:(plan.retainedCutIndices||[]).filter(i=>i===c.index)}:{...plan,cuts:[],retainedCutIndices:[],events:[]};}
     return soloShown;
-  };  function drawPreview(now){
+  };
+  // "Focus on the edited cut": the union of the cut's drawn pixels over its duration (stage
+  // fractions), found by drawing only the cut, transparently and small, at ten times.
+  const probe=document.createElement('canvas'),probeRenderer=new J.Renderer();
+  let focusSource=null,focusRect=null;
+  function focusOf(plan,c){
+    if(focusSource===plan)return focusRect;
+    focusSource=plan;focusRect=null;
+    const pw=240,ph=Math.max(1,Math.round(pw*plan.H/plan.W));probe.width=pw;probe.height=ph;
+    const px=probe.getContext('2d',{willReadFrequently:true}),end=Math.min(c.end,plan.duration);
+    // Sample the settled part: entrance/exit motion may travel far and would shrink the focus.
+    const phase=lyric?null:Math.min(c.effectSettings?.duration||.45,(c.end-c.start)*.3);
+    const settleIn=lyric?(c.inDur||0)+(c.stagger||0)*Math.max(0,[...(c.text||'')].length-1):phase,settleOut=lyric?c.outDur||0:phase;
+    let from=c.start+settleIn,to=end-settleOut;if(to-from<.05){from=c.start;to=end;}
+    const length=Math.max(.05,to-from);
+    let x0=Infinity,y0=Infinity,x1=-1,y1=-1;
+    for(let k=0;k<10;k++){
+      const t=from+length*(k+.5)/10;
+      px.setTransform(1,0,0,1,0,0);px.globalAlpha=1;px.globalCompositeOperation='source-over';px.filter='none';px.clearRect(0,0,pw,ph);
+      try{
+        if(lyric)probeRenderer.frame(px,soloPlan(plan,c),t,{scale:pw/plan.W,noHud:true,noPost:true,transparent:true,...soloOptions});
+        else J.drawMediaCut(px,c,t,{source:J.isMediaCopy(c.itemId)?J.mediaCopySource(plan,c,t,probeRenderer,pw,ph):null});
+      }catch(e){continue;}
+      const d=px.getImageData(0,0,pw,ph).data;
+      for(let y=0;y<ph;y++)for(let x=0;x<pw;x++)if(d[(y*pw+x)*4+3]>8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+    }
+    if(x1>=0)focusRect={x:x0/pw,y:y0/ph,w:(x1-x0+1)/pw,h:(y1-y0+1)/ph};
+    return focusRect;
+  }
+  // The stage window shown when focusing: the cut plus a margin, kept inside the stage.
+  function focusWindow(r){
+    if(!r)return null;
+    const size=Math.min(1,Math.max(r.w,r.h,.04)*1.12),clampTo=(center)=>J.clamp(center-size/2,0,1-size);
+    return size>=1?null:{x:clampTo(r.x+r.w/2),y:clampTo(r.y+r.h/2),size};
+  }
+  const zoomCanvas=document.createElement('canvas');
+  function drawPreview(now){
     previewFrame=requestAnimationFrame(drawPreview);
     const plan=previewPlan,c=previewCut;if(!plan||!c)return;
     const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
     if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
     const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
     const shown=cutPreviewSolo?soloPlan(plan,c):plan;
-    try{J.syncMediaPreview(shown,t,true);previewRenderer.frame(previewCanvas.getContext('2d'),shown,t,{scale:w/plan.W,noHud:true,...(cutPreviewSolo?soloOptions:{})});}catch(e){}
+    const view=cutPreviewFocus?focusWindow(focusOf(plan,c)):null,options={noHud:true,...(cutPreviewSolo?soloOptions:{})};
+    try{
+      J.syncMediaPreview(shown,t,true);
+      if(!view)previewRenderer.frame(previewCanvas.getContext('2d'),shown,t,{...options,scale:w/plan.W});
+      else{
+        // Render large enough that the window fills the preview sharply (at most full stage resolution).
+        const zw=Math.round(Math.min(plan.W,w/view.size)),zh=Math.round(zw*plan.H/plan.W);
+        if(zoomCanvas.width!==zw||zoomCanvas.height!==zh){zoomCanvas.width=zw;zoomCanvas.height=zh;}
+        previewRenderer.frame(zoomCanvas.getContext('2d'),shown,t,{...options,scale:zw/plan.W});
+        const pc=previewCanvas.getContext('2d');pc.setTransform(1,0,0,1,0,0);pc.globalAlpha=1;pc.globalCompositeOperation='copy';pc.imageSmoothingEnabled=true;
+        pc.drawImage(zoomCanvas,view.x*zw,view.y*zh,view.size*zw,view.size*zh,0,0,w,h);pc.globalCompositeOperation='source-over';
+      }
+    }catch(e){}
     const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
     pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
   }

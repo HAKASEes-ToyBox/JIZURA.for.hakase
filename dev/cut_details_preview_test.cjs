@@ -10,8 +10,8 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await page.goto(url);
   await page.evaluate(()=>{
     const p=J.defaultProject();p.lyrics='[00:00]最初の歌詞/次の歌詞\n[00:04]最後の歌詞';p.durationOverride=8;
-    // Foreground: green on the left quarter only (transparent elsewhere); background: solid blue.
-    for(const [id,color,w] of [['fg','#0c0',40],['bg','#00d',160]]){const img=document.createElement('canvas');img.width=160;img.height=90;const g=img.getContext('2d');g.fillStyle=color;g.fillRect(0,0,w,90);J.mediaAssets.set(id,{element:img,type:'image'});}
+    // Foreground: a small green block (transparent elsewhere); background: solid blue.
+    for(const [id,color,rect] of [['fg','#0c0',[20,30,40,30]],['bg','#00d',[0,0,160,90]]]){const img=document.createElement('canvas');img.width=160;img.height=90;const g=img.getContext('2d');g.fillStyle=color;g.fillRect(...rect);J.mediaAssets.set(id,{element:img,type:'image'});}
     for(const [layer,id] of [['foreground','fg'],['media','bg']])p[layer]={...p[layer],items:[{id,name:id+'.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:2,timing:{lineTimes:{0:0,1:4}},cutOverrides:{0:{itemId:id,technique:'none'},1:{itemId:id,technique:'none'}}};
     J.ui.project=p;J.uiApi.syncUI();J.uiApi.replan();
   });
@@ -64,6 +64,18 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await open('foreground');assert.equal(await solo.isChecked(),true);seen=await colors();assert.ok(seen.green>0&&seen.blue===0,'foreground only '+JSON.stringify(seen));await close();
   await open('media');seen=await colors();assert.ok(seen.blue>0&&seen.green===0,'background only '+JSON.stringify(seen));
   await solo.uncheck();await page.waitForTimeout(300);seen=await colors();assert.ok(seen.green>0&&seen.blue>0,'solo off '+JSON.stringify(seen));await close();
+  // "Focus on the edited cut": the cut is enlarged to fill the preview; full-frame cuts stay as they are.
+  const share=()=>pane.locator('canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let green=0,blue=0,bright=0,n=0;for(let i=0;i<d.length;i+=8){n++;if(d[i+1]>150&&d[i]<80&&d[i+2]<80)green++;if(d[i+2]>150&&d[i]<80&&d[i+1]<80)blue++;if(d[i]>170&&d[i+1]>170&&d[i+2]>170)bright++;}return {green:green/n,blue:blue/n,bright:bright/n};});
+  await open('foreground');const focus=modal.locator('[data-preview-focus]');
+  assert.equal(await modal.locator('.cut-details-focus span').textContent(),locale?'Focus on the edited cut':'編集対象にフォーカス');
+  assert.equal(await focus.isChecked(),false);const wide=await share();assert.ok(wide.green>.02&&wide.green<.15,'foreground unfocused '+JSON.stringify(wide));
+  await focus.check();await page.waitForTimeout(300);const close_=await share();assert.ok(close_.green>.4&&close_.green>wide.green*4,'foreground focused '+JSON.stringify(close_));await close();
+  await open('media');assert.equal(await focus.isChecked(),true);const full=await share();assert.ok(full.blue>.6,'full-frame background '+JSON.stringify(full));await close();
+  await open('lyrics');await modal.locator('[data-preview-solo]').check();await focus.uncheck();await page.waitForTimeout(300);
+  let small=0,large=0;for(let i=0;i<6;i++){small=Math.max(small,(await share()).bright);await page.waitForTimeout(60);}
+  await focus.check();await page.waitForTimeout(300);for(let i=0;i<6;i++){large=Math.max(large,(await share()).bright);await page.waitForTimeout(60);}
+  assert.ok(large>small*1.5&&large>0,'lyrics focused '+small+' -> '+large);
+  await focus.uncheck();await modal.locator('[data-preview-solo]').uncheck();await close();
   assert.deepEqual(errors,[]);console.log(locale||'ja',viewport.width,'cut details preview passed');await page.close();
  }} finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});
