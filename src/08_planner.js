@@ -202,7 +202,10 @@ J.computeTiming = (project, parsed, audio) => {
     starts.push(s);
   });
   const ends = starts.map((s, i) => {
-    if (i < starts.length - 1) return Math.max(s + 0.35, starts[i + 1]);
+    const inserted=project.overrides?.[i]?.insertionEnd;
+    if(Number.isFinite(inserted))return Math.max(s+.04,inserted);
+    const next=starts.findIndex((_,j)=>j>i && !Number.isFinite(project.overrides?.[j]?.insertionEnd));
+    if(next>=0)return Math.max(s+.35,starts[next]);
     const n = [...lines[i].text].length;
     let d = J.clamp(0.8 + n * 0.17, 1.5, 5.2) * (T.lineScale || 1);
     if (beat) d = Math.max(2, Math.round(d / beat)) * beat;
@@ -282,7 +285,7 @@ J.plan = (project, audio) => {
     const n = [...ln.text.replace(/\s+/g, '')].length;
     const cutTimes = (project.timing && project.timing.cutTimes) || {};
     const interludeTime = cutTimes[`${li}:interlude`];
-    const naturalVisEnd = ln.effectsOnly ? e : Math.min(e, s + Math.max(3.6, n * 0.5 + 1.2));
+    const naturalVisEnd = ln.effectsOnly || ov.insertionEnd!=null ? e : Math.min(e, s + Math.max(3.6, n * 0.5 + 1.2));
     const visEnd = ln.effectsOnly ? e : interludeTime != null && Number.isFinite(+interludeTime) && e - s > 1.81
       ? J.clamp(+interludeTime, s + 0.5, e - 1.31) : naturalVisEnd;
     const D = visEnd - s;
@@ -377,7 +380,7 @@ J.plan = (project, audio) => {
         if (layout==='lowerThird') params.label='copy';
         if (layout==='arcTop') params.under='copy';
       }
-      const cut = makeCut({ text: txt, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, insertedAtPlayhead: ov.insertionEnd!=null, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
@@ -411,6 +414,11 @@ J.plan = (project, audio) => {
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, part: 'interlude', start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
   });
+  for(const [line,ov] of Object.entries(project.overrides || {}))if(Number.isFinite(ov.insertionEnd)){
+    const start=tm.starts[+line],end=ov.insertionEnd;
+    for(const cut of plan.cuts)if(cut.line!==+line && cut.start<start && cut.end>start){cut.end=start;cut.dur=cut.end-cut.start;}
+    plan.cuts=plan.cuts.filter(c=>c.line===+line || c.start<start || c.start>=end);
+  }
   const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
     .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
     .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))

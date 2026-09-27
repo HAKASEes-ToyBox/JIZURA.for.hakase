@@ -282,7 +282,7 @@ function updateTimeUI() {
   $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
   if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
-  $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
+  for(const id of ['insertLyricAtPlayhead','insertForegroundAtPlayhead','insertBackgroundAtPlayhead'])$(id).disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -1059,7 +1059,7 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
-function insertEmptyLyricAtPlayhead() {
+function insertLyricAtPlayhead(text,end) {
   if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
   pause();
   const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous);
@@ -1068,15 +1068,49 @@ function insertEmptyLyricAtPlayhead() {
   const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
   const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
   const timestamp=allTimed ? `[${Math.floor(start/60)}:${(start%60).toFixed(3)}]` : '';
-  rows.splice(sourceLine,0,timestamp+'｜　　　　｜');
+  rows.splice(sourceLine,0,timestamp+text);
   const lyrics=rows.join('\n');
   // Keep existing line starts stable while adding a new line at the playhead.
   for(const line of S.plan.lines)S.project.timing.lineTimes[line.index]=line.start;
   reconcileLyricLines(previous,lyrics);
   const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
   S.project.timing.lineTimes[index]=start;
+  S.project.overrides[index]={single:true,insertionEnd:end};
+  S.project.durationOverride=S.plan.duration;
   S.project.lyrics=lyrics;$('lyrics').value=lyrics;
   replan();seek(start);
+}
+function openInsertAtPlayhead(layer) {
+  if(S.exporting || S.tap || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,lyric=layer==='lyrics',cuts=lyric?S.plan.cuts:S.plan[layer].cuts;
+  const end=cuts.filter(c=>c.start>start+1e-6).reduce((end,c)=>Math.min(end,c.start),S.plan.duration);
+  if(end-start<.04)return;
+  const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.className='insert-cut-dialog';dialog.id='insertCutDialog';
+  const name=lyric?L('歌詞を挿入','Insert lyrics'):layer==='foreground'?L('前景を挿入','Insert foreground'):L('背景を挿入','Insert background');
+  dialog.innerHTML=`<form><h2>${name}</h2><label>${lyric?L('歌詞','Lyrics'):L('素材','Asset')}${lyric?'<textarea rows="3" required></textarea>':`<select><option value="">${L('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...S.project[layer].items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}</select>`}</label><p class="hint">${J.fmtTime(start)} ～ ${J.fmtTime(end)}</p><div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('挿入','Insert')}</button></div></form>`;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{
+    e.preventDefault();const input=dialog.querySelector('textarea,select');
+    if(lyric){
+      const text=input.value.trim().replace(/\r/g,'').replace(/\n/g,'\\n');
+      if(J.parseLyrics(text).lines.length!==1){input.setCustomValidity(L('歌詞を1行分入力してください','Enter one lyric line'));input.reportValidity();return;}
+      S.t=start;insertLyricAtPlayhead(text,end);
+    }else{
+      const m=S.project[layer],index=cuts.filter(c=>c.start<start-1e-6).length,overrides={},times={};
+      cuts.forEach((cut,i)=>{const n=i>=index?i+1:i;overrides[n]={...m.cutOverrides[i],itemId:cut.itemId};times[n]=cut.start;});
+      // Replace a boundary at the exact playhead instead of making a zero-length cut.
+      if(cuts[index] && Math.abs(cuts[index].start-start)<1e-6){delete overrides[index+1];delete times[index+1];for(let i=index+2;i<=cuts.length;i++){overrides[i-1]=overrides[i];times[i-1]=times[i];delete overrides[i];delete times[i];}}
+      overrides[index]={itemId:input.value||null,technique:null};times[index]=start;
+      const replacing=cuts[index] && Math.abs(cuts[index].start-start)<1e-6;
+      m.manualCuts=true;m.cutCount=cuts.length+(replacing?0:1);m.cutOverrides=overrides;m.timing.lineTimes=times;m.randomOrder=false;
+      if(!replacing){const prefix=layer==='foreground'?'f:':'m:';for(const link of S.project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith(prefix)&&+link[side].slice(2)>=index)link[side]=prefix+(+link[side].slice(2)+1);}
+      S.project.durationOverride=S.plan.duration;replan();seek(start);
+    }
+    dialog.close();
+  };
+  dialog.querySelector('textarea')?.addEventListener('input',e=>e.target.setCustomValidity(''));
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();dialog.querySelector('textarea,select').focus();
 }
 function canInsertBlankAtPlayhead() {
   if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
@@ -2427,7 +2461,7 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
-  $('insertEmptyLyricAtPlayhead').addEventListener('click',insertEmptyLyricAtPlayhead);
+  for(const [id,layer] of [['insertLyricAtPlayhead','lyrics'],['insertForegroundAtPlayhead','foreground'],['insertBackgroundAtPlayhead','media']])$(id).addEventListener('click',()=>openInsertAtPlayhead(layer));
   $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   for(const layer of ['foreground','lyrics','media']){
     const button=document.createElement('button');button.type='button';button.dataset.layer=layer;

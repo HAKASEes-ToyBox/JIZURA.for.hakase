@@ -357,16 +357,19 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    "歌詞を挿入": "Insert lyrics",
+    "前景を挿入": "Insert foreground",
+    "背景を挿入": "Insert background",
     "全画面でプレビュー": "Fullscreen preview",
     "全画面を終了": "Exit fullscreen",
     "再生位置で：": "At playhead:",
     "空の歌詞を挿入": "Insert empty lyric",
-    "歌詞無表示カットを挿入": "Insert blank lyric cut",
+    "歌詞無表示を挿入": "Insert blank lyric cut",
     'カットの配置・サイズ（100で画面全体、50で幅・高さが半分。自動配置の最小・最大倍率より優先）。数字とコロンを表示する場合は': 'Cut placement size (100 = full frame, 50 = half width and height; overrides automatic size limits). To display the number and colon, use',
     '50:歌詞': '50:Lyrics',
     '50\\:歌詞': '50\\:Lyrics',
-    "前景カットを分割": "Split foreground cut",
-    "背景カットを分割": "Split background cut",
+    "前景を分割": "Split foreground cut",
+    "背景を分割": "Split background cut",
     '一括挿入する項目': 'Items to insert in bulk',
     '注釈レイアウトの小さな文字（対応している演出のみ）': 'Smaller text in annotation layouts (supported effects only)',
     '歌詞入力補助': 'Lyric input tools',
