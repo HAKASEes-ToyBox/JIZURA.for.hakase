@@ -211,11 +211,38 @@ J.finishLyricPlan = (project, plan, audio) => {
 // Pack rotated display areas rather than stretching text or changing timeline times.
 J.applyLyricGroupAvoidance = (project, plan) => {
   const settings=J.lyricEffectSettings(project),strength=settings.lyricAvoidanceStrength;
-  if(strength===0)return;
-  const groups=new Map();
-  for(const cut of plan.cuts)if(cut.avoidOverlap && cut.group!=null && Number.isInteger(cut.part) && !cut.effectsOnly){
-    if(!groups.has(cut.group))groups.set(cut.group,[]);groups.get(cut.group).push(cut);
+  const groups=new Map(),shared=new Map();
+  for(const cut of plan.cuts)if(cut.group!=null && Number.isInteger(cut.part) && !cut.effectsOnly){
+    const into=cut.avoidOverlap?groups:shared;
+    if(!into.has(cut.group))into.set(cut.group,[]);into.get(cut.group).push(cut);
   }
+  // Scenes with a foreground keep the composition-zone packing; without one, several lyrics get a
+  // designed arrangement. Manual areas are left to the packing below.
+  const anyForeground=project.foreground?.items?.length ? J.planMedia(project,plan,null,'foreground') : null;
+  const withoutForeground=cuts=>!anyForeground?.cuts.some(f=>f.itemId&&f.opacity>0&&f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start);
+  const arranged=(cuts,maxOverlap)=>{
+    if(!J.arrangeLyricGroup || cuts.some(c=>c.areaMode==='manual') || !withoutForeground(cuts))return null;
+    const boxes=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1});
+    return J.arrangeLyricGroup(cuts,boxes,{seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap});
+  };
+  const assign=(cut,area,mode)=>{
+    cut.area=area;cut.areaMode=mode;
+    const layout=J.LAYOUTS[cut.layout];
+    if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
+      text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
+    },plan.style);
+    if(cut.text.includes('\n'))cut.params.sx=1;
+    const customParams=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details?.params;
+    if(customParams && typeof customParams==='object')Object.assign(cut.params,customParams);
+  };
+  // 1シーン (overlap allowed): with automatic placement, spread the lyrics along an arrangement rather
+  // than piling them up in the middle; up to a third of the smaller area may still overlap.
+  if(settings.autoPlacement)for(const cuts of shared.values()){
+    if(cuts.length<2)continue;
+    const result=arranged(cuts,.33);
+    if(result)cuts.forEach((cut,i)=>{assign(cut,{...(cut.area||{angle:0,lockAspect:true}),...result.rects[i]},'auto');cut.arrangement=result.name;});
+  }
+  if(strength===0)return;
   const bounds=area=>{
     const angle=(area.angle||0)*J.DEG,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
     const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
@@ -228,6 +255,16 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   for(const cuts of groups.values()){
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
+    // 重ねず1シーン without a foreground: arranged with no overlap; strength blends from the current areas.
+    const result=arranged(cuts,0);
+    if(result){
+      cuts.forEach((cut,i)=>{
+        const a=areas[i],r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
+        const cx=J.lerp(a.x+a.w/2,r.x+r.w/2,strength),cy=J.lerp(a.y+a.h/2,r.y+r.h/2,strength);
+        assign(cut,{...a,x:cx-w/2,y:cy-h/2,w,h},'group');cut.arrangement=result.name;
+      });
+      continue;
+    }
     if(!boxes.some((box,i)=>boxes.slice(i+1).some(other=>overlap(box,other)>1e-8)))continue;
     const obstacles=foreground?.opacity>0?foreground.cuts.filter(f=>f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
       .map(f=>J.foregroundBounds(project,plan,f)).filter(Boolean).map(b=>{
@@ -251,15 +288,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
       const a=areas[i],b=best,scale=J.lerp(1,b.scale,strength);
       const cx=J.lerp(a.x+a.w/2,b.region.x+(i%b.cols+.5)*b.cw,strength);
       const cy=J.lerp(a.y+a.h/2,b.region.y+(Math.floor(i/b.cols)+.5)*b.ch,strength);
-      cut.area={...a,x:cx-a.w*scale/2,y:cy-a.h*scale/2,w:a.w*scale,h:a.h*scale};
-      cut.areaMode='group';
-      const layout=J.LAYOUTS[cut.layout];
-      if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
-        text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
-      },plan.style);
-      if(cut.text.includes('\n'))cut.params.sx=1;
-      const customParams=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details?.params;
-      if(customParams && typeof customParams==='object')Object.assign(cut.params,customParams);
+      assign(cut,{...a,x:cx-a.w*scale/2,y:cy-a.h*scale/2,w:a.w*scale,h:a.h*scale},'group');
     });
   }
 };

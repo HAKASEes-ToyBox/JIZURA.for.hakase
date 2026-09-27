@@ -56,7 +56,46 @@ J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
   return { cx: inside(comp.fg.x + rng.range(-.02, .02), w), cy: inside(comp.fg.y + rng.range(-.02, .02), h), w, h, lockAspect: true, angle: 0 };
 };
 
-const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+// Several lyrics on screen with no foreground: a designed arrangement (cascade, zigzag, hero, columns,
+// scatter, wave, stack) with size rhythm, instead of a uniform grid.
+// slot(i, n, t) -> [cx, cy, relative scale]; cell(n) -> the arrangement's base area [w, h] per lyric,
+// sized so the pattern uses the stage well (layouts re-plan for the area's proportions).
+const span = .84; // usable stage extent between the margins
+J.LYRIC_ARRANGEMENTS = {
+  diagonalDown: { slot: (i, n, t) => [.3 + .4 * t, .1 + span * (i + .5) / n, 1], cell: n => [.52, span / n] },
+  diagonalUp: { slot: (i, n, t) => [.3 + .4 * t, .9 - span * (i + .5) / n, 1], cell: n => [.52, span / n] },
+  zigzag: { slot: (i, n) => [i % 2 ? .7 : .3, .1 + span * (i + 1) / (n + 1), i % 2 ? .92 : 1], cell: n => [.46, Math.min(.5, 2 * span / (n + 1))] },
+  cascade: { slot: (i, n, t) => [.36 + .28 * t, .1 + span * (i + .5) / n, 1 - .1 * t], cell: n => [.6, span / n] },
+  heroFirst: { slot: (i, n) => i === 0 ? [.5, .3, 1] : [.08 + .84 * (i - .5) / (n - 1), .76, 1], cell: n => [.84, .4], small: n => [.84 / (n - 1), .26] },
+  heroLast: { slot: (i, n) => i === n - 1 ? [.5, .68, 1] : [.08 + .84 * (i + .5) / (n - 1), .24, 1], cell: n => [.84, .4], small: n => [.84 / (n - 1), .26], hero: n => n - 1 },
+  columns: { slot: (i, n) => { const rows = Math.ceil(n / 2), row = Math.floor(i / 2), col = i % 2; return [col ? .72 : .28, .1 + span * (row + .5 + col * .35) / (rows + .35), 1]; }, cell: n => [.44, span / (Math.ceil(n / 2) + .35)] },
+  scatter: { slot: (i, n) => [.25 + .5 * ((.5 + i * .618034) % 1), .1 + span * (i + .5) / n, 1 - .2 * ((i * .381966) % 1)], cell: n => [.46, Math.min(.5, 1.5 * span / n)] },
+  wave: { slot: (i, n, t) => [.08 + .84 * (i + .5) / n, .5 + .22 * Math.sin(t * Math.PI * 1.6 - .8), i % 2 ? .88 : 1], cell: n => [.84 / n, .42] },
+  stack: { slot: (i, n) => [.5, .1 + span * (i + .5) / n, i % 2 ? .84 : 1], cell: n => [.72, span / n] },
+};
+// Returns target areas, or null when the chosen arrangement cannot fit.
+// maxOverlap: allowed share of the smaller area (0 = none, with a small gap).
+J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
+  const n = cuts.length, names = Object.keys(J.LYRIC_ARRANGEMENTS), rng = J.rng(J.h(seed, 991));
+  const name = names[Math.floor(rng() * names.length)], A = J.LYRIC_ARRANGEMENTS[name], margin = .03, gap = maxOverlap ? 0 : .012;
+  const heroIndex = A.hero ? A.hero(n) : 0;
+  const layout = s => cuts.map((_, i) => {
+    const [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
+    const w = Math.min(bw * k * s, 1 - 2 * margin), h = Math.min(bh * k * s, 1 - 2 * margin);
+    const x = J.clamp(cx - w / 2, margin, 1 - margin - w), y = J.clamp(cy - h / 2, margin, 1 - margin - h);
+    return { x, y, w, h };
+  });
+  const fits = rects => rects.every((a, i) => rects.slice(i + 1).every(b => {
+    const grown = r => ({ x: r.x - gap / 2, y: r.y - gap / 2, w: r.w + gap, h: r.h + gap });
+    return overlap(grown(a), grown(b)) <= maxOverlap * Math.min(a.w * a.h, b.w * b.h) + 1e-12;
+  }));
+  // Largest uniform scale (up to the current size) at which the arrangement fits.
+  let lo = .12, hi = 1;
+  if (!fits(layout(lo))) return null;
+  if (fits(layout(hi))) lo = hi; else for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (fits(layout(mid))) lo = mid; else hi = mid; }
+  return { name, rects: layout(lo), scale: lo };
+};
+const overlap = (a, b) =>Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
 // Aligned lyric position for a w × h area: thirds, centre and margin-flush anchors, scored.
 // Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
 // then falls back to searching free regions).

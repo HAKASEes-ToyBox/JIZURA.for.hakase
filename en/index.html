@@ -4366,7 +4366,46 @@ J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
   return { cx: inside(comp.fg.x + rng.range(-.02, .02), w), cy: inside(comp.fg.y + rng.range(-.02, .02), h), w, h, lockAspect: true, angle: 0 };
 };
 
-const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+// Several lyrics on screen with no foreground: a designed arrangement (cascade, zigzag, hero, columns,
+// scatter, wave, stack) with size rhythm, instead of a uniform grid.
+// slot(i, n, t) -> [cx, cy, relative scale]; cell(n) -> the arrangement's base area [w, h] per lyric,
+// sized so the pattern uses the stage well (layouts re-plan for the area's proportions).
+const span = .84; // usable stage extent between the margins
+J.LYRIC_ARRANGEMENTS = {
+  diagonalDown: { slot: (i, n, t) => [.3 + .4 * t, .1 + span * (i + .5) / n, 1], cell: n => [.52, span / n] },
+  diagonalUp: { slot: (i, n, t) => [.3 + .4 * t, .9 - span * (i + .5) / n, 1], cell: n => [.52, span / n] },
+  zigzag: { slot: (i, n) => [i % 2 ? .7 : .3, .1 + span * (i + 1) / (n + 1), i % 2 ? .92 : 1], cell: n => [.46, Math.min(.5, 2 * span / (n + 1))] },
+  cascade: { slot: (i, n, t) => [.36 + .28 * t, .1 + span * (i + .5) / n, 1 - .1 * t], cell: n => [.6, span / n] },
+  heroFirst: { slot: (i, n) => i === 0 ? [.5, .3, 1] : [.08 + .84 * (i - .5) / (n - 1), .76, 1], cell: n => [.84, .4], small: n => [.84 / (n - 1), .26] },
+  heroLast: { slot: (i, n) => i === n - 1 ? [.5, .68, 1] : [.08 + .84 * (i + .5) / (n - 1), .24, 1], cell: n => [.84, .4], small: n => [.84 / (n - 1), .26], hero: n => n - 1 },
+  columns: { slot: (i, n) => { const rows = Math.ceil(n / 2), row = Math.floor(i / 2), col = i % 2; return [col ? .72 : .28, .1 + span * (row + .5 + col * .35) / (rows + .35), 1]; }, cell: n => [.44, span / (Math.ceil(n / 2) + .35)] },
+  scatter: { slot: (i, n) => [.25 + .5 * ((.5 + i * .618034) % 1), .1 + span * (i + .5) / n, 1 - .2 * ((i * .381966) % 1)], cell: n => [.46, Math.min(.5, 1.5 * span / n)] },
+  wave: { slot: (i, n, t) => [.08 + .84 * (i + .5) / n, .5 + .22 * Math.sin(t * Math.PI * 1.6 - .8), i % 2 ? .88 : 1], cell: n => [.84 / n, .42] },
+  stack: { slot: (i, n) => [.5, .1 + span * (i + .5) / n, i % 2 ? .84 : 1], cell: n => [.72, span / n] },
+};
+// Returns target areas, or null when the chosen arrangement cannot fit.
+// maxOverlap: allowed share of the smaller area (0 = none, with a small gap).
+J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
+  const n = cuts.length, names = Object.keys(J.LYRIC_ARRANGEMENTS), rng = J.rng(J.h(seed, 991));
+  const name = names[Math.floor(rng() * names.length)], A = J.LYRIC_ARRANGEMENTS[name], margin = .03, gap = maxOverlap ? 0 : .012;
+  const heroIndex = A.hero ? A.hero(n) : 0;
+  const layout = s => cuts.map((_, i) => {
+    const [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
+    const w = Math.min(bw * k * s, 1 - 2 * margin), h = Math.min(bh * k * s, 1 - 2 * margin);
+    const x = J.clamp(cx - w / 2, margin, 1 - margin - w), y = J.clamp(cy - h / 2, margin, 1 - margin - h);
+    return { x, y, w, h };
+  });
+  const fits = rects => rects.every((a, i) => rects.slice(i + 1).every(b => {
+    const grown = r => ({ x: r.x - gap / 2, y: r.y - gap / 2, w: r.w + gap, h: r.h + gap });
+    return overlap(grown(a), grown(b)) <= maxOverlap * Math.min(a.w * a.h, b.w * b.h) + 1e-12;
+  }));
+  // Largest uniform scale (up to the current size) at which the arrangement fits.
+  let lo = .12, hi = 1;
+  if (!fits(layout(lo))) return null;
+  if (fits(layout(hi))) lo = hi; else for (let k = 0; k < 22; k++) { const mid = (lo + hi) / 2; if (fits(layout(mid))) lo = mid; else hi = mid; }
+  return { name, rects: layout(lo), scale: lo };
+};
+const overlap = (a, b) =>Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
 // Aligned lyric position for a w × h area: thirds, centre and margin-flush anchors, scored.
 // Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
 // then falls back to searching free regions).
@@ -5115,11 +5154,38 @@ J.finishLyricPlan = (project, plan, audio) => {
 // Pack rotated display areas rather than stretching text or changing timeline times.
 J.applyLyricGroupAvoidance = (project, plan) => {
   const settings=J.lyricEffectSettings(project),strength=settings.lyricAvoidanceStrength;
-  if(strength===0)return;
-  const groups=new Map();
-  for(const cut of plan.cuts)if(cut.avoidOverlap && cut.group!=null && Number.isInteger(cut.part) && !cut.effectsOnly){
-    if(!groups.has(cut.group))groups.set(cut.group,[]);groups.get(cut.group).push(cut);
+  const groups=new Map(),shared=new Map();
+  for(const cut of plan.cuts)if(cut.group!=null && Number.isInteger(cut.part) && !cut.effectsOnly){
+    const into=cut.avoidOverlap?groups:shared;
+    if(!into.has(cut.group))into.set(cut.group,[]);into.get(cut.group).push(cut);
   }
+  // Scenes with a foreground keep the composition-zone packing; without one, several lyrics get a
+  // designed arrangement. Manual areas are left to the packing below.
+  const anyForeground=project.foreground?.items?.length ? J.planMedia(project,plan,null,'foreground') : null;
+  const withoutForeground=cuts=>!anyForeground?.cuts.some(f=>f.itemId&&f.opacity>0&&f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start);
+  const arranged=(cuts,maxOverlap)=>{
+    if(!J.arrangeLyricGroup || cuts.some(c=>c.areaMode==='manual') || !withoutForeground(cuts))return null;
+    const boxes=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1});
+    return J.arrangeLyricGroup(cuts,boxes,{seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap});
+  };
+  const assign=(cut,area,mode)=>{
+    cut.area=area;cut.areaMode=mode;
+    const layout=J.LAYOUTS[cut.layout];
+    if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
+      text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
+    },plan.style);
+    if(cut.text.includes('\n'))cut.params.sx=1;
+    const customParams=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details?.params;
+    if(customParams && typeof customParams==='object')Object.assign(cut.params,customParams);
+  };
+  // 1シーン (overlap allowed): with automatic placement, spread the lyrics along an arrangement rather
+  // than piling them up in the middle; up to a third of the smaller area may still overlap.
+  if(settings.autoPlacement)for(const cuts of shared.values()){
+    if(cuts.length<2)continue;
+    const result=arranged(cuts,.33);
+    if(result)cuts.forEach((cut,i)=>{assign(cut,{...(cut.area||{angle:0,lockAspect:true}),...result.rects[i]},'auto');cut.arrangement=result.name;});
+  }
+  if(strength===0)return;
   const bounds=area=>{
     const angle=(area.angle||0)*J.DEG,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
     const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
@@ -5132,6 +5198,16 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   for(const cuts of groups.values()){
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
+    // 重ねず1シーン without a foreground: arranged with no overlap; strength blends from the current areas.
+    const result=arranged(cuts,0);
+    if(result){
+      cuts.forEach((cut,i)=>{
+        const a=areas[i],r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
+        const cx=J.lerp(a.x+a.w/2,r.x+r.w/2,strength),cy=J.lerp(a.y+a.h/2,r.y+r.h/2,strength);
+        assign(cut,{...a,x:cx-w/2,y:cy-h/2,w,h},'group');cut.arrangement=result.name;
+      });
+      continue;
+    }
     if(!boxes.some((box,i)=>boxes.slice(i+1).some(other=>overlap(box,other)>1e-8)))continue;
     const obstacles=foreground?.opacity>0?foreground.cuts.filter(f=>f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
       .map(f=>J.foregroundBounds(project,plan,f)).filter(Boolean).map(b=>{
@@ -5155,15 +5231,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
       const a=areas[i],b=best,scale=J.lerp(1,b.scale,strength);
       const cx=J.lerp(a.x+a.w/2,b.region.x+(i%b.cols+.5)*b.cw,strength);
       const cy=J.lerp(a.y+a.h/2,b.region.y+(Math.floor(i/b.cols)+.5)*b.ch,strength);
-      cut.area={...a,x:cx-a.w*scale/2,y:cy-a.h*scale/2,w:a.w*scale,h:a.h*scale};
-      cut.areaMode='group';
-      const layout=J.LAYOUTS[cut.layout];
-      if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
-        text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
-      },plan.style);
-      if(cut.text.includes('\n'))cut.params.sx=1;
-      const customParams=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details?.params;
-      if(customParams && typeof customParams==='object')Object.assign(cut.params,customParams);
+      assign(cut,{...a,x:cx-a.w*scale/2,y:cy-a.h*scale/2,w:a.w*scale,h:a.h*scale},'group');
     });
   }
 };
