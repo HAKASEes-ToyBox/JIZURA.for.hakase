@@ -240,6 +240,8 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 // lifetime. Store indices rather than references to avoid duplicating cut graphs.
 J.lyricCutsAt = (plan, t) => {
   const current = J.cutAt(plan, t), cuts = [];
+  const inserted=plan.cuts.find(c=>c.insertedAtPlayhead && t>=c.start && t<c.end);
+  if(inserted)return [inserted];
   if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
   for (const index of plan.retainedCutIndices || []) {
     const cut = plan.cuts[index];
