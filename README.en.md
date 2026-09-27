@@ -1,5 +1,7 @@
 # 字面一 JIZURA ONE STOP EDITION
 
+**Agent-driven production:** [Local MCP setup and tool guide (Japanese)](mcp/README.md). Supports theme-guided editing, frame/audio previews, portable project files and exports.
+
 Turn lyrics into animated lyric videos in your browser. JIZURA combines layouts, entrances, holds, exits, decorations, text treatments, backgrounds, camera moves, effects and transitions. Change the seed or press **Create a variation** to explore another arrangement.
 
 **[Open the English fork app](https://hirazisora.github.io/JIZURA/en/)** · [日本語版](https://hirazisora.github.io/JIZURA/) · [Japanese guide](README.md)

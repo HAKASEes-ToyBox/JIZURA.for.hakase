@@ -41930,7 +41930,10 @@ function boot() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
 // hooks for hosts that embed the app (the After Effects CEP panel)
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview };
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
+  openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
+  insertBlankAtPlayhead, removeLyricCut, removeMediaCut, connectTimelineBoundaries,
+  boundaryGroupLimits, commitTimelineBoundary };
 })();
 
 </script>
