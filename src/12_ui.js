@@ -2327,11 +2327,35 @@ function renderMediaEffects(layer) {
     section.appendChild(list);
     box.appendChild(section);
   }
-  setting('autoPlacement').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   {
-    // Lyric decorations (Details → Techniques → Decoration) on automatic media cuts; off by default.
+    // Decorations for this layer, laid out like the technique groups; used when "Enable decorations" is on.
+    const items = J.order('decor').filter(key => J.DECOR[key]).map(key => [key, J.DECOR[key]]);
+    const count = s => `${items.filter(([key]) => J.mediaDecorOn(s, key)).length}/${items.length}`;
+    const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = 'decor';
+    section.open = openMediaGroups[layer].has('decor');
+    section.addEventListener('toggle', () => { if (!section.isConnected) return; if (section.open) openMediaGroups[layer].add('decor'); else openMediaGroups[layer].delete('decor'); });
+    section.innerHTML = `<summary><span class="tg-name">${L('装飾', 'Decoration')}</span><span class="tg-cnt mono">${count(settings)}</span></summary><p class="note">${L('「装飾を有効にする」がONのとき、チェックした装飾を「自動」の画像・動画で使います。背面の装飾は素材の下に描かれます。', 'With Enable decorations on, Auto images and videos use the checked decorations. Back decorations are drawn under the source.')}</p><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
+    const list = document.createElement('div'); list.className = 'checks';
+    for (const [key, def] of items) {
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
+      row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
+      row.querySelector('input').addEventListener('change', e => {
+        const next = J.mediaEffectSettings(S.project, layer); next.decorEnabled[key] = e.target.checked; S.project[layer].effects = next;
+        section.querySelector('.tg-cnt').textContent = count(next); replan();
+      }); row.appendChild(J.effectPreviewButton('decor', key)); list.appendChild(row);
+    }
+    section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
+      const next = J.mediaEffectSettings(S.project, layer), act = button.dataset.mediaGroupAction;
+      for (const [key] of items) next.decorEnabled[key] = act === 'on' ? true : act === 'off' ? false : !J.mediaDecorOn(next, key);
+      S.project[layer].effects = next; openMediaGroups[layer].add('decor'); renderMediaEffects(layer); replan();
+    }));
+    section.appendChild(list); box.appendChild(section);
+  }
+  setting('autoPlacement').onchange =e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
+  {
+    // Decorations (checked in this layer's Decoration group) on automatic media cuts; off by default.
     const row = document.createElement('label'); row.className = 'check';
-    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('装飾を有効にする', 'Enable decorations')}<small>${L('「自動」の画像・動画に、詳細 → 手法の装飾を付けます。', 'Adds decorations from Details → Techniques to Auto images and videos.')}</small></span>`;
+    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('装飾を有効にする', 'Enable decorations')}<small>${L('「自動」の画像・動画に、下の「装飾」でチェックした装飾を付けます。', 'Adds the decorations checked below to Auto images and videos.')}</small></span>`;
     row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.decor = e.target.checked; S.project[layer].effects = next; replan(); };
     setting('autoPlacement').closest('label').before(row);
   }

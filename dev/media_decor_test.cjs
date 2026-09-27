@@ -4,23 +4,32 @@ const root=path.join(__dirname,'..');
 const result=await page.evaluate(()=>{
 const failures=[],check=(ok,m)=>{if(!ok)failures.push(m)},warnings=[],warn=console.warn;console.warn=(...a)=>warnings.push(a.map(String).join(' '));
 try{
-const setup=(layer,overrides,decor,enabled)=>{const p=J.defaultProject(),m=p[layer];m.items=[{id:'a',name:'a.png',type:'image',width:160,height:90},{id:'b',name:'b.png',type:'image',width:160,height:90}];m.manualCuts=true;m.cutCount=overrides.length;m.timing.lineTimes=Object.fromEntries(overrides.map((_,i)=>[i,i*2]));m.cutOverrides=Object.fromEntries(overrides.map((o,i)=>[i,{itemId:i%2?'b':'a',entrance:'none',departure:'none',...o}]));m.effects={...J.mediaEffectSettings(p,layer),decor};if(enabled)p.enabled={...p.enabled,decor:enabled};return p;};
+const setup=(layer,overrides,decor,decorEnabled)=>{const p=J.defaultProject(),m=p[layer];m.items=[{id:'a',name:'a.png',type:'image',width:160,height:90},{id:'b',name:'b.png',type:'image',width:160,height:90}];m.manualCuts=true;m.cutCount=overrides.length;m.timing.lineTimes=Object.fromEntries(overrides.map((_,i)=>[i,i*2]));m.cutOverrides=Object.fromEntries(overrides.map((o,i)=>[i,{itemId:i%2?'b':'a',entrance:'none',departure:'none',...o}]));m.effects={...J.mediaEffectSettings(p,layer),decor,...(decorEnabled?{decorEnabled}:{})};return p;};
 const cuts=(p,layer)=>{const plan=J.plan(p);return J.planMedia(p,plan,null,layer).cuts;};
 for(const layer of ['foreground','media']){
  check(J.mediaEffectSettings(J.defaultProject(),layer).decor===false,layer+' default off');
  const autos=Array.from({length:12},()=>({technique:null}));
  check(cuts(setup(layer,autos,false),layer).every(c=>Array.isArray(c.decor)&&!c.decor.length),layer+' off gives no decor');
- const on=cuts(setup(layer,autos,true),layer),pool=J.mediaDecorCandidates(J.defaultProject());
+ const on=cuts(setup(layer,autos,true),layer),pool=J.mediaDecorCandidates(J.defaultProject(),layer);
  check(pool.length>10&&pool.every(k=>J.DECOR[k].layer==='front'),layer+' front-only pool');
  check(on.every(c=>c.decor.length>=1&&c.decor.length<=2&&c.decor.every(d=>pool.includes(d.id))),layer+' auto decor '+JSON.stringify(on.map(c=>c.decor.map(d=>d.id))));
  check(new Set(on.map(c=>c.decor.map(d=>d.id).join())).size>3,layer+' varied');
  check(JSON.stringify(on.map(c=>c.decor))===JSON.stringify(cuts(setup(layer,autos,true),layer).map(c=>c.decor)),layer+' deterministic');
  const mixed=cuts(setup(layer,[{technique:'kenBurns'},{technique:'none'},{technique:null}],true),layer);
  check(!mixed[0].decor.length&&!mixed[1].decor.length&&mixed[2].decor.length,layer+' explicit/none stay plain');
- const only=Object.fromEntries(J.order('decor').map(k=>[k,k==='brackets']));
- check(cuts(setup(layer,autos,true,only),layer).every(c=>c.decor.length===1&&c.decor[0].id==='brackets'),layer+' follows lyric decor checkboxes');
+ // The layer's own decoration checks decide; back decorations join once checked.
+ const only=id=>Object.fromEntries(J.order('decor').map(k=>[k,k===id]));
+ check(cuts(setup(layer,autos,true,only('brackets')),layer).every(c=>c.decor.length===1&&c.decor[0].id==='brackets'),layer+' follows layer decor checks');
+ const back=J.order('decor').find(k=>J.DECOR[k]?.layer==='back'&&J.randomOk(J.defaultProject(),'decor',k));
+ check(cuts(setup(layer,autos,true,only(back)),layer).every(c=>c.decor.length===1&&c.decor[0].id===back),layer+' checked back decor '+back);
+ check(J.mediaDecorCandidates(J.defaultProject(),layer).every(k=>J.DECOR[k].layer==='front'),layer+' back off by default');
  check(!JSON.stringify(on[0]).includes('decorStage'),layer+' stage not serialized');
 }
+// Layers are independent, and Randomize / themes set the decoration checks.
+{const p=J.defaultProject();p.foreground.effects={...J.mediaEffectSettings(p,'foreground'),decorEnabled:Object.fromEntries(J.order('decor').map(k=>[k,k==='brackets']))};
+ check(J.mediaDecorCandidates(p,'foreground').join()==='brackets'&&J.mediaDecorCandidates(p,'media').length>10,'independent layers');
+ for(let seed=1;seed<=20;seed++){const s=J.randomMediaEffectSettings(p,'media',J.rng(seed));const on=Object.keys(s.decorEnabled).filter(k=>s.decorEnabled[k]);check(on.length>0&&on.every(k=>J.DECOR[k].layer==='front'),'randomize decor '+seed);}
+ for(const id of Object.keys(J.THEMES)){const q=J.defaultProject();q.themes=[id];const look=J.omakase(q,J.rng(4));for(const layer of ['foreground','media']){const e=look[layer].effects.decorEnabled;check(Object.keys(e).every(k=>!e[k]||(look.enabled.decor[k]&&J.DECOR[k].layer==='front')),id+' theme decor '+layer);}}}
 // Rendering: every decoration draws without errors; back ones sit under an opaque source, front ones over it.
 const src=document.createElement('canvas');src.width=160;src.height=90;src.getContext('2d').fillStyle='#e33';src.getContext('2d').fillRect(0,0,160,90);
 const out=document.createElement('canvas');out.width=640;out.height=360;const ctx=out.getContext('2d');
@@ -44,6 +53,11 @@ for(const layer of ['foreground','media']){
  await page.locator(`[data-tab="${layer}Fx"]`).click();const box=page.locator(`#${layer}EffectsPanel [data-media-setting="decor"]`);
  assert.equal(await box.isChecked(),false);assert.ok((await box.locator('xpath=..').textContent()).startsWith(lang?'Enable decorations':'装飾を有効にする'));
  await box.check();assert.equal(await page.evaluate(layer=>J.ui.project[layer].effects.decor,layer),true);await box.uncheck();
+ const group=page.locator(`#${layer}EffectsPanel [data-media-group="decor"]`);assert.equal((await group.locator('.tg-name').textContent()),lang?'Decoration':'装飾');await group.locator('summary').click();
+ const front=await page.evaluate(()=>J.order('decor').filter(k=>J.DECOR[k]).map(k=>J.DECOR[k].layer==='front'));assert.deepEqual(await group.locator('[data-media-decor]').evaluateAll(els=>els.map(e=>e.checked)),front);
+ assert.equal(await group.locator('.tg-cnt').textContent(),front.filter(Boolean).length+'/'+front.length);
+ await group.locator('[data-media-decor="brackets"]').uncheck();assert.equal(await page.evaluate(layer=>J.ui.project[layer].effects.decorEnabled.brackets,layer),false);
+ await group.locator('[data-media-group-action="off"]').click();assert.equal(await page.locator(`#${layer}EffectsPanel [data-media-group="decor"] .tg-cnt`).textContent(),'0/'+front.length);
 }
 await page.evaluate(()=>{const p=J.ui.project;const img=document.createElement('canvas');img.width=160;img.height=90;J.mediaAssets.set('md',{element:img,type:'image'});p.media={...p.media,items:[{id:'md',name:'md.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'md',technique:'kenBurns'}}};J.uiApi.syncUI();J.uiApi.replan();});
 await page.locator('#timelineLinks [data-action="details"][data-layer="media"]').first().dispatchEvent('pointerdown',{button:0});

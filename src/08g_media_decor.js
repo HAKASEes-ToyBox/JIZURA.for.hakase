@@ -5,12 +5,13 @@
 'use strict';
 // Same parameters the lyric planner gives each decoration.
 const decorParams = (rng, k) => ({ id: k, seed: rng.int(1, 1e9), n: rng.int(1, 3) + (k === 'shapes' ? 3 : 0) + (k === 'sparks' ? 4 : 0), right: rng.chance(0.5), low: rng.chance(0.5), accent: rng.chance(0.4), corner: rng.chance(0.5), big: rng.chance(0.4), mode: rng.pick(['count', 'index']), from: rng.int(0, 20), to: rng.int(30, 999), v: rng.int(0, 5), r: rng() });
-// Candidates follow the lyric decor checkboxes and random rules (追加分, 和風, part sets).
-// Only front decorations: back ones sit under the source and vanish behind opaque images
-// (they can still be added by hand in the cut details, e.g. for transparent assets).
-J.mediaDecorCandidates = project => J.order('decor').filter(k => J.DECOR[k]?.layer === 'front' && (project.enabled?.decor || {})[k] !== false && (!J.randomOk || J.randomOk(project, 'decor', k)));
-J.pickMediaDecor = (project, cut, style, fx) => {
-  const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
+// Candidates: the layer's own decoration checks (Details → Foreground / Background) and the
+// random rules (追加分, 和風, part sets). Unset checks default to front decorations only, since
+// back ones sit under the source and vanish behind opaque images.
+J.mediaDecorOn = (settings, k) => settings?.decorEnabled?.[k] ?? J.DECOR[k]?.layer === 'front';
+J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
+J.pickMediaDecor = (project, cut, style, fx, layer = 'media') => {
+  const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project, layer).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
   // One or two, more often two when the lyric decor slider is high.
   const count = Math.min(cands.length, rng.chance(.25 + .5 * (fx?.decor ?? .5)) ? 2 : 1), out = [];
   for (let i = 0; i < count; i++) { const k = rng.wpick(cands); cands.splice(cands.findIndex(c => c[0] === k), 1); out.push(decorParams(rng, k)); }
@@ -23,7 +24,7 @@ J.planMedia = function(project, lyricPlan, audioDuration, layer = 'media') {
     const ov = Object.assign({}, m.overrides?.[cut.itemId] || {}, m.cutOverrides?.[cut.index] || {});
     // Only automatic ("おまかせ") techniques get decorations; explicit ones and No effects stay plain.
     const auto = ov.technique === null || ov.technique === undefined && ov.seed != null;
-    cut.decor = cut.itemId && cut.technique && !['none', 'legacy'].includes(cut.technique) && auto && cut.effectSettings?.decor && lyricPlan?.style ? J.pickMediaDecor(project, cut, lyricPlan.style, lyricPlan.fx) : [];
+    cut.decor = cut.itemId && cut.technique && !['none', 'legacy'].includes(cut.technique) && auto && cut.effectSettings?.decor && lyricPlan?.style ? J.pickMediaDecor(project, cut, lyricPlan.style, lyricPlan.fx, layer) : [];
     if (lyricPlan?.style) Object.defineProperty(cut, 'decorStage', { value: { W: lyricPlan.W, H: lyricPlan.H, style: lyricPlan.style, fx: lyricPlan.fx, fps: lyricPlan.fps }, configurable: true, writable: true });
   }
   return result;

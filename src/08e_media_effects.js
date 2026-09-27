@@ -53,13 +53,14 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   settings.sizeMin = Math.min(sizeMin, sizeMax); settings.sizeMax = Math.max(sizeMin, sizeMax);
   settings.enabled = settings.enabled && typeof settings.enabled === 'object' ? Object.assign({}, settings.enabled) : {};
   settings.decor = settings.decor === true;
+  settings.decorEnabled = settings.decorEnabled && typeof settings.decorEnabled === 'object' ? Object.assign({}, settings.decorEnabled) : {};
   return settings;
 };
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
@@ -69,6 +70,10 @@ J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
   const pick = () => keys[Math.floor(rnd() * keys.length)];
   if (keys.length && !keys.some(key => settings.enabled[key])) settings.enabled[pick()] = true;
   if (keys.length > 1 && keys.every(key => settings.enabled[key])) settings.enabled[pick()] = false;
+  // Decorations: a random set of front ones (back ones sit under the source), at least one.
+  const decor = (J.order ? J.order('decor') : []).filter(key => J.DECOR?.[key]), front = decor.filter(key => J.DECOR[key].layer === 'front');
+  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < .55]));
+  if (front.length && !front.some(key => settings.decorEnabled[key])) settings.decorEnabled[front[Math.floor(rnd() * front.length)]] = true;
   return settings;
 };
 J.mediaTechnique = (project, ov, rng, layer = 'media') => {

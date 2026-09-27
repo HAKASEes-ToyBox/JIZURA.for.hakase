@@ -61,7 +61,7 @@
 自動選定の初期値は歌詞のランダムの規則に従います。追加分・和風・パーツセット（ホラーなど）の設定でランダムの対象外になっているカメラは、初期状態でOFFです（手動では常に選べます）。曲テーマでは、各テーマの歌詞カメラの候補が前景・背景にも使われます。
 ## 装飾の流用
 
-詳細 → 前景／背景の「装飾を有効にする」（初期値：OFF）をONにすると、手法が「自動」の画像・動画カットに、詳細 → 手法の「装飾」を付けます。候補は歌詞の装飾のチェックとランダムの規則（追加分・和風・パーツセット）に従い、素材の手前に描く装飾から1〜2個をカットごとに選びます。シャッフルで変わり、ロックしたカットでは維持されます。手動で選んだ手法・演出無し・従来の設定のカットには付けません。
+詳細 → 前景／背景の「装飾を有効にする」（初期値：OFF）をONにすると、手法が「自動」の画像・動画カットに、詳細 → 手法の「装飾」を付けます。候補は詳細 → 前景／背景の「装飾」欄で前景・背景ごとにチェックでき（初期値は素材の手前に描く装飾がON、背面の装飾がOFF）、ランダムの規則（追加分・和風・パーツセット）にも従います。カットごとに1〜2個を選びます。「おまかせ」では装飾のチェックもランダムに設定し、曲テーマではテーマの装飾候補を反映します。シャッフルで変わり、ロックしたカットでは維持されます。手動で選んだ手法・演出無し・従来の設定のカットには付けません。
 
 装飾は素材の枠を歌詞の表示範囲とみなして描き、素材と同じ動き・マスク・加工がかかります。カットの詳細編集の「装飾」から、どのカットにも手動で追加・削除できます（背面の装飾は素材の下に描くため、透過素材で使えます）。演出コピペの対象にも含まれます。
 ## English
@@ -86,7 +86,7 @@ The third pack adds, for both foreground and background: 14 entrances and 14 mat
 
 The 36 lyric cameras (Details → Techniques → Camera) are also available as **Camera: …** techniques under Camera for the foreground and background. They move with the media frame, follow the same beats as the lyrics, and scale with Motion intensity. By default, Auto uses the cameras that lyric random picks may use (Extra parts, Japanese motifs and part sets such as Horror); the others start unchecked but can always be chosen by hand. Themes share their lyric camera pool with both media layers.
 
-**Enable decorations** in Details → Foreground / Background (off by default) adds lyric decorations from Details → Techniques to Auto image and video cuts. One or two front decorations are chosen per cut from the lyric decoration checkboxes and random rules (Extra parts, Japanese motifs, part sets); they change with Shuffle and stay on locked cuts. Explicit techniques, No effects and Legacy settings stay plain. Decorations use the media frame as their display area and follow its motion, masks and treatments. Add or remove them on any cut under Decoration in the cut details (back decorations sit under the source, so they suit transparent assets); effect copy/paste includes them.
+**Enable decorations** in Details → Foreground / Background (off by default) adds lyric decorations from Details → Techniques to Auto image and video cuts. One or two decorations are chosen per cut from the layer's own Decoration group in Details → Foreground / Background (front decorations on and back ones off by default) and the random rules (Extra parts, Japanese motifs, part sets); they change with Shuffle and stay on locked cuts. Randomize also randomizes the decoration checks, and themes apply their decoration pool. Explicit techniques, No effects and Legacy settings stay plain. Decorations use the media frame as their display area and follow its motion, masks and treatments. Add or remove them on any cut under Decoration in the cut details (back decorations sit under the source, so they suit transparent assets); effect copy/paste includes them.
 
 Random order remains available after adding/removing cuts or tap sync when at least two files are uploaded. While enabled, media is assigned in a seeded shuffled cycle; blank and locked cuts are preserved. Turn it off to restore the underlying assignments and select files individually.
 

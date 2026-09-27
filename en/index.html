@@ -5024,13 +5024,14 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   settings.sizeMin = Math.min(sizeMin, sizeMax); settings.sizeMax = Math.max(sizeMin, sizeMax);
   settings.enabled = settings.enabled && typeof settings.enabled === 'object' ? Object.assign({}, settings.enabled) : {};
   settings.decor = settings.decor === true;
+  settings.decorEnabled = settings.decorEnabled && typeof settings.decorEnabled === 'object' ? Object.assign({}, settings.decorEnabled) : {};
   return settings;
 };
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
@@ -5040,6 +5041,10 @@ J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
   const pick = () => keys[Math.floor(rnd() * keys.length)];
   if (keys.length && !keys.some(key => settings.enabled[key])) settings.enabled[pick()] = true;
   if (keys.length > 1 && keys.every(key => settings.enabled[key])) settings.enabled[pick()] = false;
+  // Decorations: a random set of front ones (back ones sit under the source), at least one.
+  const decor = (J.order ? J.order('decor') : []).filter(key => J.DECOR?.[key]), front = decor.filter(key => J.DECOR[key].layer === 'front');
+  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < .55]));
+  if (front.length && !front.some(key => settings.decorEnabled[key])) settings.decorEnabled[front[Math.floor(rnd() * front.length)]] = true;
   return settings;
 };
 J.mediaTechnique = (project, ov, rng, layer = 'media') => {
@@ -5375,12 +5380,13 @@ J.drawMediaVariation = (ctx, source, fit, cut, p, amount) => {
 'use strict';
 // Same parameters the lyric planner gives each decoration.
 const decorParams = (rng, k) => ({ id: k, seed: rng.int(1, 1e9), n: rng.int(1, 3) + (k === 'shapes' ? 3 : 0) + (k === 'sparks' ? 4 : 0), right: rng.chance(0.5), low: rng.chance(0.5), accent: rng.chance(0.4), corner: rng.chance(0.5), big: rng.chance(0.4), mode: rng.pick(['count', 'index']), from: rng.int(0, 20), to: rng.int(30, 999), v: rng.int(0, 5), r: rng() });
-// Candidates follow the lyric decor checkboxes and random rules (追加分, 和風, part sets).
-// Only front decorations: back ones sit under the source and vanish behind opaque images
-// (they can still be added by hand in the cut details, e.g. for transparent assets).
-J.mediaDecorCandidates = project => J.order('decor').filter(k => J.DECOR[k]?.layer === 'front' && (project.enabled?.decor || {})[k] !== false && (!J.randomOk || J.randomOk(project, 'decor', k)));
-J.pickMediaDecor = (project, cut, style, fx) => {
-  const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
+// Candidates: the layer's own decoration checks (Details → Foreground / Background) and the
+// random rules (追加分, 和風, part sets). Unset checks default to front decorations only, since
+// back ones sit under the source and vanish behind opaque images.
+J.mediaDecorOn = (settings, k) => settings?.decorEnabled?.[k] ?? J.DECOR[k]?.layer === 'front';
+J.mediaDecorCandidates = (project, layer = 'media') => { const settings = J.mediaEffectSettings(project, layer); return J.order('decor').filter(k => J.DECOR[k] && J.mediaDecorOn(settings, k) && (!J.randomOk || J.randomOk(project, 'decor', k))); };
+J.pickMediaDecor = (project, cut, style, fx, layer = 'media') => {
+  const rng = J.rng(J.h(cut.seed, 947)), cands = J.mediaDecorCandidates(project, layer).map(k => [k, (style?.decor?.[k] ?? 1) * (J.DECOR[k].w != null ? J.DECOR[k].w * .5 : .35)]).filter(([, w]) => w > 0);
   // One or two, more often two when the lyric decor slider is high.
   const count = Math.min(cands.length, rng.chance(.25 + .5 * (fx?.decor ?? .5)) ? 2 : 1), out = [];
   for (let i = 0; i < count; i++) { const k = rng.wpick(cands); cands.splice(cands.findIndex(c => c[0] === k), 1); out.push(decorParams(rng, k)); }
@@ -5393,7 +5399,7 @@ J.planMedia = function(project, lyricPlan, audioDuration, layer = 'media') {
     const ov = Object.assign({}, m.overrides?.[cut.itemId] || {}, m.cutOverrides?.[cut.index] || {});
     // Only automatic ("おまかせ") techniques get decorations; explicit ones and No effects stay plain.
     const auto = ov.technique === null || ov.technique === undefined && ov.seed != null;
-    cut.decor = cut.itemId && cut.technique && !['none', 'legacy'].includes(cut.technique) && auto && cut.effectSettings?.decor && lyricPlan?.style ? J.pickMediaDecor(project, cut, lyricPlan.style, lyricPlan.fx) : [];
+    cut.decor = cut.itemId && cut.technique && !['none', 'legacy'].includes(cut.technique) && auto && cut.effectSettings?.decor && lyricPlan?.style ? J.pickMediaDecor(project, cut, lyricPlan.style, lyricPlan.fx, layer) : [];
     if (lyricPlan?.style) Object.defineProperty(cut, 'decorStage', { value: { W: lyricPlan.W, H: lyricPlan.H, style: lyricPlan.style, fx: lyricPlan.fx, fps: lyricPlan.fps }, configurable: true, writable: true });
   }
   return result;
@@ -37322,6 +37328,8 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
       if (pool.length && !pool.some(id=>on.has(id))) on.add(pick(pool));
     }
     settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(id=>[id,on.has(id)]));
+    // Media decorations follow the theme's lyric decoration pool (front ones only).
+    settings.decorEnabled = Object.fromEntries(J.order('decor').filter(id=>J.DECOR[id]).map(id=>[id,!!look.enabled.decor?.[id] && J.DECOR[id].layer==='front']));
     settings.motion = J.lerp(...theme.motion,rnd()); settings.duration = J.lerp(...theme.duration,rnd());
     look[layer] = {...project[layer],effects:settings};
   }
@@ -40055,11 +40063,35 @@ function renderMediaEffects(layer) {
     section.appendChild(list);
     box.appendChild(section);
   }
-  setting('autoPlacement').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   {
-    // Lyric decorations (Details → Techniques → Decoration) on automatic media cuts; off by default.
+    // Decorations for this layer, laid out like the technique groups; used when "Enable decorations" is on.
+    const items = J.order('decor').filter(key => J.DECOR[key]).map(key => [key, J.DECOR[key]]);
+    const count = s => `${items.filter(([key]) => J.mediaDecorOn(s, key)).length}/${items.length}`;
+    const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = 'decor';
+    section.open = openMediaGroups[layer].has('decor');
+    section.addEventListener('toggle', () => { if (!section.isConnected) return; if (section.open) openMediaGroups[layer].add('decor'); else openMediaGroups[layer].delete('decor'); });
+    section.innerHTML = `<summary><span class="tg-name">${L('Decoration', 'Decoration')}</span><span class="tg-cnt mono">${count(settings)}</span></summary><p class="note">${L('「Decorationを有効にする」がONのとき、チェックしたDecorationを「Auto」の画像 · 動画で使います。背面のDecorationは素材の下に描かれます。', 'With Enable decorations on, Auto images and videos use the checked decorations. Back decorations are drawn under the source.')}</p><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('All on', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('All off', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('Invert', 'Invert')}</button></div>`;
+    const list = document.createElement('div'); list.className = 'checks';
+    for (const [key, def] of items) {
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
+      row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
+      row.querySelector('input').addEventListener('change', e => {
+        const next = J.mediaEffectSettings(S.project, layer); next.decorEnabled[key] = e.target.checked; S.project[layer].effects = next;
+        section.querySelector('.tg-cnt').textContent = count(next); replan();
+      }); row.appendChild(J.effectPreviewButton('decor', key)); list.appendChild(row);
+    }
+    section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
+      const next = J.mediaEffectSettings(S.project, layer), act = button.dataset.mediaGroupAction;
+      for (const [key] of items) next.decorEnabled[key] = act === 'on' ? true : act === 'off' ? false : !J.mediaDecorOn(next, key);
+      S.project[layer].effects = next; openMediaGroups[layer].add('decor'); renderMediaEffects(layer); replan();
+    }));
+    section.appendChild(list); box.appendChild(section);
+  }
+  setting('autoPlacement').onchange =e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
+  {
+    // Decorations (checked in this layer's Decoration group) on automatic media cuts; off by default.
     const row = document.createElement('label'); row.className = 'check';
-    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('Decorationを有効にする', 'Enable decorations')}<small>${L('「Auto」の画像 · 動画に、詳細 → 手法のDecorationを付けます。', 'Adds decorations from Details → Techniques to Auto images and videos.')}</small></span>`;
+    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('Decorationを有効にする', 'Enable decorations')}<small>${L('「Auto」の画像 · 動画に、下の「Decoration」でチェックしたDecorationを付けます。', 'Adds the decorations checked below to Auto images and videos.')}</small></span>`;
     row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.decor = e.target.checked; S.project[layer].effects = next; replan(); };
     setting('autoPlacement').closest('label').before(row);
   }

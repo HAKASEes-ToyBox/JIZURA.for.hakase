@@ -110,6 +110,8 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
       if (pool.length && !pool.some(id=>on.has(id))) on.add(pick(pool));
     }
     settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(id=>[id,on.has(id)]));
+    // Media decorations follow the theme's lyric decoration pool (front ones only).
+    settings.decorEnabled = Object.fromEntries(J.order('decor').filter(id=>J.DECOR[id]).map(id=>[id,!!look.enabled.decor?.[id] && J.DECOR[id].layer==='front']));
     settings.motion = J.lerp(...theme.motion,rnd()); settings.duration = J.lerp(...theme.duration,rnd());
     look[layer] = {...project[layer],effects:settings};
   }
