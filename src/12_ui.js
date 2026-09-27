@@ -1944,7 +1944,22 @@ function mediaSplitTarget(layer) {
   const cut=J.mediaAt(S.plan,S.t,layer);
   return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
 }
-function splitMediaCut(layer) {
+function openSplitMediaCut(layer) {
+  if(!mediaSplitTarget(layer))return;
+  pause();
+  const time=S.t,L=J.mediaLabel,dialog=document.createElement('dialog');
+  dialog.id='splitMediaCutDialog';dialog.className='insert-cut-dialog';
+  dialog.innerHTML=`<form><h2>${layer==='foreground'?L('前景を分割','Split foreground'):L('背景を分割','Split background')}</h2><div class="split-effect-options"><label><input type="checkbox" name="left">${L('左をランダム演出にする','Randomize left effects')}</label><label><input type="checkbox" name="right">${L('右をランダム演出にする','Randomize right effects')}</label></div><p class="hint">${L('OFFの場合は現在の演出設定を引き継ぎます。','Unchecked sides inherit the current effects.')}</p><div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('分割','Split')}</button></div></form>`;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{
+    e.preventDefault();S.t=time;
+    splitMediaCut(layer,dialog.querySelector('[name=left]').checked,dialog.querySelector('[name=right]').checked);
+    dialog.close();
+  };
+  dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+}
+function splitMediaCut(layer,randomLeft=false,randomRight=false) {
   const cut=mediaSplitTarget(layer);if(!cut)return;
   pause();
   const time=S.t,m=S.project[layer],cuts=S.plan[layer].cuts,index=cut.index;
@@ -1954,9 +1969,15 @@ function splitMediaCut(layer) {
     placement:clone(cut.placement),blend:cut.blend,opacity:cut.opacity,
     details:Object.fromEntries(J.cutDetailKeys.media.filter(k=>cut[k]!==undefined).map(k=>[k,clone(cut[k])]))};
   const first=clone(resolved),second=clone(resolved);
-  // No entrance, departure or transition at the newly created interior boundary.
-  first.departure='none';first.lockedDeparture='none';first.details.exit='cut';
-  second.entrance='none';second.lockedEntrance='none';second.details.enter='cut';second.details.trans='none';
+  for(const [side,random] of [[first,randomLeft],[second,randomRight]]){
+    if(!random)continue;
+    // Clear resolved effects, including copied detail overrides, while keeping
+    // the asset, placement, compositing, mask and source playback settings.
+    side.details=side.details.mask?{mask:side.details.mask}:{};
+    for(const key of ['technique','entrance','departure','layout','enter','hold','exit','treat','trans'])side[key]=null;
+    side.lock=false;side.seed=(side.seed|0)+1;
+    for(const key of Object.keys(side))if(key.startsWith('locked'))delete side[key];
+  }
   if(cut.type==='video'){
     const asset=J.mediaAssets.get(cut.itemId),item=m.items.find(x=>x.id===cut.itemId);
     const duration=asset?.element?.duration || item?.duration;
@@ -2899,8 +2920,8 @@ function bind() {
     button.addEventListener('click',()=>{if(S.exporting)return;S.project.layerVisibility ||= {};S.project.layerVisibility[layer]=S.project.layerVisibility[layer]===false;replan();});
     $('layerVisibilityControls').append(button);
   }
-  $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
-  $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
+  $('splitForegroundCut').addEventListener('click',()=>openSplitMediaCut('foreground'));
+  $('splitBackgroundCut').addEventListener('click',()=>openSplitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
