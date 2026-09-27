@@ -90,6 +90,16 @@ function emptyRegions(obstacles) {
 
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({})) => {
   const rng = J.rng(J.h(cut.seed, 947));
+  if(cut.lyricSize != null){
+    const size=Math.max(.04,cut.lyricSize/100),candidates=[];
+    // Explicit sizes override random size bounds and obstacle-driven shrinking.
+    for(const x of [0,.25,.5,.75,1])for(const y of [0,.25,.5,.75,1]){
+      const r={x:x*(1-size),y:y*(1-size),w:size,h:size,angle:0,lockAspect:true};
+      candidates.push({r,score:obstacles.reduce((sum,b)=>sum+overlap(r,b),0)});
+    }
+    const best=Math.min(...candidates.map(c=>c.score));
+    return rng.pick(candidates.filter(c=>c.score<=best+1e-8)).r;
+  }
   const portrait = plan.W < plan.H;
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
@@ -230,6 +240,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 // lifetime. Store indices rather than references to avoid duplicating cut graphs.
 J.lyricCutsAt = (plan, t) => {
   const current = J.cutAt(plan, t), cuts = [];
+  if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
   for (const index of plan.retainedCutIndices || []) {
     const cut = plan.cuts[index];
     if (cut && cut.start <= t && t < cut.displayEnd) cuts.push(cut);

@@ -317,6 +317,7 @@ const captureMediaVideo = (plan, cut, layer) => {
 };
 J.prepareMediaFrame = async (plan, t, signal) => {
   for (const layer of ['media', 'foreground']) {
+    if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer); if (!cut) continue;
     const prev = cut.index > 0 && plan[layer].cuts[cut.index - 1], snapshot = transitionFrame(layer);
     if (prev && prev.type === 'video' && cut.trans && t - cut.start < cut.transDur && (!snapshot || snapshot.plan !== plan || snapshot.index !== prev.index)) {
@@ -330,6 +331,7 @@ J.prepareMediaFrame = async (plan, t, signal) => {
 J.syncMediaPreview = (plan, t, playing) => {
   const active = new Map();
   for (const layer of ['media', 'foreground']) {
+    if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer), last = layer === 'media' ? J._previewMediaCut : J._previewForegroundCut;
     const prev = cut && cut.index > 0 && plan[layer].cuts[cut.index - 1];
     if (prev && prev.type === 'video' && cut.trans && t - cut.start < cut.transDur && last && last.plan === plan && last.index === prev.index) captureMediaVideo(plan, prev, layer);

@@ -195,7 +195,7 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 /* ---------- stage ---------- */
 .col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
-.viewport canvas { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
+.viewport canvas { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
 .area-edit-overlay { position: absolute; z-index: 4; cursor: crosshair; touch-action: none; background: rgba(0,0,0,0.32); }
 .area-edit-rect { position: absolute; box-sizing: border-box; border: 2px solid var(--amber); background: rgba(245,165,12,0.12); box-shadow: 0 0 0 1px #000; pointer-events: none; }
 :root { --rotate-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23101620' stroke-width='2'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23101620' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair; }
@@ -224,8 +224,8 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .overlay-msg { position: absolute; left: 12px; bottom: 12px; background: rgba(12,12,14,0.85); border: 1px solid var(--line2); padding: 6px 10px; border-radius: var(--r); font-size: 12px; }
 .transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .transport .tc { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
-.duration-value { border: 0; background: transparent; padding: 2px 3px; color: var(--muted); cursor: text; white-space: nowrap; }
-.duration-value:hover, .duration-value:focus-visible { color: var(--amber); text-decoration: underline; }
+.duration-value { border: 1px solid var(--line2); border-radius: var(--r); background: var(--ink); padding: 5px 8px; color: var(--text); box-shadow: inset 0 1px 3px #0006; cursor: text; white-space: nowrap; }
+.duration-value:hover, .duration-value:focus-visible { color: var(--amber); border-color: var(--amber); }
 .duration-value.manual { color: var(--amber); }
 .duration-input { width: 88px; min-width: 88px; padding: 2px 4px; }
 .duration-input[hidden], .duration-value[hidden] { display: none; }
@@ -536,6 +536,41 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
 #tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
 
+.timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
+.timeline-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.timeline-toolbar .timeline-split { flex: 1; min-width: 0; }
+.timeline-toolbar .timeline-zoom { flex-shrink: 0; }
+.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.col-stage { align-self: start; gap: 6px; }
+.preview-options { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preview-options .item-frame-toggle { margin: 0; }
+.viewport:fullscreen { width: 100vw; height: 100dvh; border: 0; }
+.fullscreen-exit { display: none; position: absolute; top: 16px; right: 16px; z-index: 10; }
+.viewport:fullscreen .fullscreen-exit { display: block; }
+.viewport:fullscreen .item-frames, .viewport:fullscreen .area-edit-overlay { display: none; }
+@media (max-height: 800px), (max-width: 760px) {
+  .col-stage { padding: 8px; gap: 4px; }
+  .col-stage .transport { gap: 5px; }
+  .col-stage .timeline-split button { padding: 4px 6px; font-size: 11px; }
+  .col-stage .timeline-position-label { margin: 2px 0; }
+  .col-stage #foregroundTimeline, .col-stage #mediaTimeline { height: 44px; }
+  .col-stage #timeline { height: 58px; }
+  .col-stage .timeline-legend { gap: 3px 8px; font-size: 10px; }
+}
+
+.timeline-toolbar .timeline-position-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
+.fullscreen-transport { display: none; }
+.viewport:fullscreen .fullscreen-transport { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(15,15,18,.85); }
+.fullscreen-transport input[type=range] { flex: 1; min-width: 0; accent-color: var(--amber); }
+.fullscreen-transport .tc { font: 12px var(--mono); white-space: nowrap; }
+
+.timeline-with-visibility { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 6px; min-width: 0; }
+.layer-visibility-controls { position: relative; }
+.layer-visibility-controls button { position: absolute; left: 0; width: 30px; height: 30px; padding: 5px; color: var(--cyan); }
+.layer-visibility-controls button[aria-pressed=false] { color: var(--muted); }
+.layer-visibility-controls svg { display: block; width: 18px; height: 18px; }
+
 </style>
 </head>
 <body>
@@ -595,6 +630,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
             <li><code>*emphasis*</code> … a larger automatic area, displayed above the foreground without avoiding it.</li>
             <li><code>~whisper~</code> … a smaller display with gentler motion.</li>
             <li>A trailing <code>!</code> … adds a flash and shake</li>
+            <li><code>50:Lyrics</code> … Cut placement size (100 = full frame, 50 = half width and height; overrides automatic size limits). To display the number and colon, use <code>50\:Lyrics</code></li>
             <li><code>lyrics|reading or note</code> … Smaller text in annotation layouts (supported effects only)</li>
             <li><code>[01:23.45]Lyrics</code> … uses an LRC timestamp</li>
             <li><code>#</code> starts a comment (ignored)</li>
@@ -656,8 +692,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="Preview">
-      <div class="viewport" id="viewport"><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">Drag to select the lyrics display area</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">Drag to select the lyrics display area</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="previewFullscreen" type="button" class="ghost small">Fullscreen preview</button></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">Reset to full area</button><button id="areaResetAuto" class="ghost" type="button">Reset automatic placement</button><button id="areaApplyOne" class="primary" disabled>Apply to this line</button><button id="areaApplyFollowing" disabled>Apply from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="Play">▶</button>
@@ -672,18 +708,20 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnShuffle" class="accent" title="Shuffle the arrangement, keeping locked lines">Shuffle</button>
         <button id="btnOmakase" class="primary" title="Randomize style, mood, effects and colors (R)">Randomize</button>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="Timeline icon legend"></div>
-      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button></div>
+      <div class="timeline-toolbar">
+      <div class="timeline-position-label">At playhead:</div>
+      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>Insert empty lyric</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
-      <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
+      </div>
+      <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
         <canvas id="timeline" aria-label="Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
         <canvas id="mediaTimeline" aria-label="Background timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
         <svg id="timelineLinks" class="timeline-links" aria-label="Timeline boundary links"></svg>
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="Drag to change total video duration" aria-label="Drag to change total video duration"><span aria-hidden="true">◀▶</span></button>
       </div></div>
-      <p class="hint timeline-link-hint">Drag ◀▶ at the end to change the total duration, or click the duration beside playback time to enter it. Drag a chain icon to one on another timeline to link boundaries; use × to unlink.</p>
-      <div class="cutinfo" id="cutInfo"></div>
+      </div>
+      <div id="timelineLegend" class="timeline-legend" aria-label="Timeline icon legend"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
@@ -3541,6 +3579,7 @@ J.defaultProject = () => ({
   lyricEffects: { autoPlacement: false, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   lyricBlankCuts: [],
   timelineLinks: [],
+  layerVisibility: {foreground:true,lyrics:true,media:true},
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   foreground: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   colors: { enabled: false },
@@ -3555,10 +3594,10 @@ J.komaOf = fx => (fx.koma != null ? +fx.koma : (fx.onTwos === false ? 0 : 12));
 J.stepDur = (fx, fps) => { const k = J.komaOf(fx); return k > 0 ? 1 / k : 1 / (fps || 24); };
 
 /* ---------------- lyric parsing ---------------- */
-const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B' };
+const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B', ':': '\uE00C' };
 const lyricUnescapes = Object.fromEntries(Object.entries(lyricEscapes).map(([literal, token]) => [token, literal]));
-const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
-const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00B]/g, token => lyricUnescapes[token]);
+const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~:n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
+const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00C]/g, token => lyricUnescapes[token]);
 J.parseLyrics = (raw) => {
   const lines = []; const meta = {};
   let pendingGap = false, group = null, nextGroup = 0, avoidOverlap = false;
@@ -3567,18 +3606,25 @@ J.parseLyrics = (raw) => {
     group = nextGroup++; avoidOverlap = text.startsWith('{-');
     return text.slice(avoidOverlap ? 2 : 1).trim();
   };
-  for (let src of String(raw || '').replace(/\r/g, '').split('\n')) {
+  for (const [sourceLine,src] of String(raw || '').replace(/\r/g, '').split('\n').entries()) {
     let s0 = protectLyricEscapes(src.trim());
     if (!s0) { if (lines.length) pendingGap = true; continue; }
     if (s0.startsWith('#')) continue;
     const mm = s0.match(/^\[(ti|ar|al|by|offset):(.*)\]$/i);
     if (mm) { meta[mm[1].toLowerCase()] = restoreLyricEscapes(mm[2].trim()); continue; }
-    s0 = openGroup(s0);
+    let lyricSize = null;
+    const readSize = text => {
+      const match=text.match(/^(\d+(?:\.\d+)?):\s*/);
+      if(!match || lyricSize!==null || !Number.isFinite(+match[1]))return text;
+      lyricSize=J.clamp(+match[1],0,1000);
+      return text.slice(match[0].length);
+    };
+    s0 = openGroup(readSize(s0));
     let s = s0; const times = [];
     let m;
     while ((m = s.match(/^\[(\d+):(\d+(?:[.:]\d+)?)\]/))) { times.push(+m[1] * 60 + parseFloat(m[2].replace(':', '.'))); s = s.slice(m[0].length); }
     s = s.trim();
-    s = openGroup(s);
+    s = readSize(openGroup(readSize(s)));
     const closeGroup = s.endsWith(avoidOverlap ? '-}' : '}');
     if (closeGroup) s = s.slice(0, avoidOverlap ? -2 : -1).trim();
     let note = null;
@@ -3610,7 +3656,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group, lineAvoidOverlap = avoidOverlap;
     if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), sourceLine, lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -3746,6 +3792,7 @@ J.plan = (project, audio) => {
   const en = {};
   for (const g of J.GROUP_KEYS) { en[g] = {}; const src = (project.enabled || {})[g] || {}; for (const k of J.order(g)) en[g][k] = src[k] !== false && (!J.randomOk || J.randomOk(project, g, k)); }
   const plan = {
+    layerVisibility: {...project.layerVisibility},
     version: 1, generator: 'JIZURA', title, artist, W, H, fps: project.fps || 24,
     duration: tm.duration, styleKey: project.style, style: st, fx, seed: project.seed,
     lines: [], cuts: [], events: [], beats: audio && audio.beats ? audio.beats.slice() : [],
@@ -3879,7 +3926,7 @@ J.plan = (project, audio) => {
         if (layout==='lowerThird') params.label='copy';
         if (layout==='arcTop') params.under='copy';
       }
-      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
@@ -3915,20 +3962,20 @@ J.plan = (project, audio) => {
   });
   const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
     .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
+    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
     .sort((a, b) => a.start - b.start);
   for (let i = 0; i < blanks.length; i++) {
     const blank = blanks[i];
-    const nextLine = tm.starts[blank.beforeLine] ?? Infinity;
+    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
     const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
     const end = Math.min(nextLine, nextBlank, plan.duration);
     if (end - blank.start < 0.04) continue;
     for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && cut.line < blank.beforeLine) {
+      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
         cut.end = blank.start; cut.dur = cut.end - cut.start;
       }
     }
-    plan.cuts = plan.cuts.filter(c => !(c.line < blank.beforeLine && c.start >= blank.start && c.start < end));
+    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
     plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
   }
   plan.cuts.sort((a, b) => a.start - b.start);
@@ -4549,6 +4596,7 @@ const captureMediaVideo = (plan, cut, layer) => {
 };
 J.prepareMediaFrame = async (plan, t, signal) => {
   for (const layer of ['media', 'foreground']) {
+    if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer); if (!cut) continue;
     const prev = cut.index > 0 && plan[layer].cuts[cut.index - 1], snapshot = transitionFrame(layer);
     if (prev && prev.type === 'video' && cut.trans && t - cut.start < cut.transDur && (!snapshot || snapshot.plan !== plan || snapshot.index !== prev.index)) {
@@ -4562,6 +4610,7 @@ J.prepareMediaFrame = async (plan, t, signal) => {
 J.syncMediaPreview = (plan, t, playing) => {
   const active = new Map();
   for (const layer of ['media', 'foreground']) {
+    if(plan.layerVisibility?.[layer]===false)continue;
     const cut = J.mediaAt(plan, t, layer), last = layer === 'media' ? J._previewMediaCut : J._previewForegroundCut;
     const prev = cut && cut.index > 0 && plan[layer].cuts[cut.index - 1];
     if (prev && prev.type === 'video' && cut.trans && t - cut.start < cut.transDur && last && last.plan === plan && last.index === prev.index) captureMediaVideo(plan, prev, layer);
@@ -4816,6 +4865,16 @@ function emptyRegions(obstacles) {
 
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({})) => {
   const rng = J.rng(J.h(cut.seed, 947));
+  if(cut.lyricSize != null){
+    const size=Math.max(.04,cut.lyricSize/100),candidates=[];
+    // Explicit sizes override random size bounds and obstacle-driven shrinking.
+    for(const x of [0,.25,.5,.75,1])for(const y of [0,.25,.5,.75,1]){
+      const r={x:x*(1-size),y:y*(1-size),w:size,h:size,angle:0,lockAspect:true};
+      candidates.push({r,score:obstacles.reduce((sum,b)=>sum+overlap(r,b),0)});
+    }
+    const best=Math.min(...candidates.map(c=>c.score));
+    return rng.pick(candidates.filter(c=>c.score<=best+1e-8)).r;
+  }
   const portrait = plan.W < plan.H;
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
@@ -4956,6 +5015,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 // lifetime. Store indices rather than references to avoid duplicating cut graphs.
 J.lyricCutsAt = (plan, t) => {
   const current = J.cutAt(plan, t), cuts = [];
+  if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
   for (const index of plan.retainedCutIndices || []) {
     const cut = plan.cuts[index];
     if (cut && cut.start <= t && t < cut.displayEnd) cuts.push(cut);
@@ -5987,6 +6047,15 @@ J.plan = function(project, ...args) {
     cut.groupExit = last.get(cut.group).exit; cut.groupOutDur = last.get(cut.group).outDur;
   }
   J.applyLyricGroupAvoidance(project,plan);
+  // The lyric directive owns area size even when saved detail overrides or
+  // retained-group avoidance have supplied an area. Preserve position/rotation.
+  for(const cut of plan.cuts)if(cut.lyricSize!=null && cut.line>=0 && Number.isInteger(cut.part)){
+    const a=cut.area || {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
+    const size=Math.max(.04,cut.lyricSize/100);
+    const area={...a,x:a.x+(a.w-size)/2,y:a.y+(a.h-size)/2,w:size,h:size};
+    J.applyCutDetails(cut,{area},plan,'lyrics');
+    cut.areaMode='notation';
+  }
   return plan;
 };
 const planMedia = J.planMedia;
@@ -6148,6 +6217,8 @@ class Renderer {
 
   /* main entry: draw frame at time t into ctx (canvas px = design * scale) */
   frame(ctx, plan, t, opt = {}) {
+    const hidden=plan.layerVisibility || {};
+    opt={...opt,noForeground:opt.noForeground || hidden.foreground===false,noMedia:opt.noMedia || hidden.media===false,noLyrics:opt.noLyrics || hidden.lyrics===false,noHud:opt.noHud || hidden.lyrics===false,noPost:opt.noPost || hidden.lyrics===false};
     const W = plan.W, H = plan.H, scale = opt.scale || 1;
     const cw = ctx.canvas.width, ch = ctx.canvas.height;
     const foregroundCut = plan.foreground && J.mediaAt(plan, t, 'foreground');
@@ -6206,6 +6277,7 @@ class Renderer {
       ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
       ctx.drawImage(mediaLayer,0,0);ctx.restore();
     }
+    else if (hidden.media===false && !opt.transparent) { ctx.fillStyle='#000';ctx.fillRect(0,0,W,H); }
     else if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
     else if (!opt.transparent) {
       ctx.fillStyle = sc.bg; ctx.fillRect(0, 0, W, H);
@@ -6246,7 +6318,7 @@ class Renderer {
     const beatInfo = plan.beats && plan.beats.length ? beatAt(plan.beats, tq) : null;
     const energy = plan.energy ? plan.energy[Math.min(plan.energy.length - 1, Math.max(0, Math.floor(t * plan.energyRate)))] : null;
     // ---------- background graphic (per line) ----------
-    if ((opt.copyLyrics || plan.media?.applyLyricBackground !== false && !opt.transparent) && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
+    if (hidden.lyrics!==false && hidden.media!==false && (opt.copyLyrics || plan.media?.applyLyricBackground !== false && !opt.transparent) && !key && mainCut && mainCut.bg && mainCut.bg !== 'none' && J.BG[mainCut.bg]) {
       const env = this.makeEnv(ctx, plan, mainCut, sc, { pass: 'main', t: tq, lt: tq - mainCut.start, ltb: tq - mainCut.start, step, scale, allowFilter, energy, beat: beatInfo, bgOnly: true });
       ctx.save();
       try { J.BG[mainCut.bg].draw(env, mainCut.bgP || {}); } catch (e) { console.warn('bg', mainCut.bg, e); }
@@ -6855,6 +6927,8 @@ J.AE_MAP = {
 // picks the closest counterpart itself (from the exported metadata / J.AE_MAP) for anything it lacks.
 J.planForAE = (plan, project) => {
   const clean = JSON.parse(JSON.stringify(plan, (k, v) => (k === 'energy' || k === 'buffer' || k === 'peaks' ? undefined : v)));
+  if(plan.layerVisibility?.lyrics===false){clean.cuts=[];clean.lines=[];clean.events=[];clean.retainedCutIndices=[];clean.hud=false;}
+  for(const layer of ['foreground','media'])if(plan.layerVisibility?.[layer]===false && clean[layer])clean[layer].cuts=[];
   clean.version = 2;
   clean.width = J.outputSize(project)[0]; clean.height = J.outputSize(project)[1];
   clean.extra = project.extra === true; clean.wa = project.wa !== false;
@@ -37971,7 +38045,11 @@ function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
   let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  const maxH = Math.max(220, window.innerHeight * 0.68);
+  const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
+  const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const full=document.fullscreenElement===vp;
+  const maxH=full ? window.innerHeight : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -38013,6 +38091,13 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  document.querySelectorAll('#layerVisibilityControls button').forEach(button=>button.disabled=!!S.exporting);
+  $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
+  $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('Pause','Pause'):J.mediaLabel('Play','Play'));
+  $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
+  if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
+  $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
+  $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -38582,6 +38667,7 @@ function drawItemFrames() {
   Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
   const items=[];
   for(const layer of ['foreground','lyrics','media']) {
+    if(S.plan.layerVisibility?.[layer]===false)continue;
     if(layer==='lyrics') {
       for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
     } else {
@@ -38697,6 +38783,16 @@ function performTimelineAction(control) {
 function drawTimelineLinks() {
   const svg = $('timelineLinks'), stack = $('timelineStack');
   if (!svg || !S.plan) return;
+  for(const [layer,id] of [['foreground','foregroundTimeline'],['lyrics','timeline'],['media','mediaTimeline']]){
+    const canvas=$(id),button=$('layerVisibilityControls').querySelector(`[data-layer="${layer}"]`);
+    if(!button)continue;
+    const visible=S.project.layerVisibility?.[layer]!==false;
+    button.style.top=(canvas.offsetTop+(canvas.clientHeight-30)/2)+'px';
+    button.setAttribute('aria-pressed',String(visible));
+    button.querySelector('.eye-slash').style.display=visible?'none':'';
+    button.title=J.mediaLabel({foreground:'Foreground',lyrics:'歌詞',media:'Background'}[layer],{foreground:'Foreground',lyrics:'Lyrics',media:'Background'}[layer])+': '+J.mediaLabel(visible?'非表示にする':'表示する',visible?'Hide':'Show');
+    button.setAttribute('aria-label',button.title);
+  }
   const width = stack.clientWidth, height = stack.clientHeight;
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   const markers = timelineMarkers();
@@ -38864,22 +38960,42 @@ function updateCutInfo() {
   S.mediaLineEls.forEach((el, i) => el.classList.toggle('cur', !!active && i === active.index));
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
-  const el = $('cutInfo');
-  if (!cut && !mc && !fc) { el.innerHTML = '<span class="hint">No cut at this position</span>'; return; }
-  const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
-  const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
-  el.innerHTML = (cut && cut.blank ? [chip('l', 'Lyrics', 'Blank')] : cut ? [
-    `<span class="chip mono">#${String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'Layout', n(J.LAYOUTS, cut.layout)), chip('e', 'Entrance', n(J.ENTER, cut.enter)), chip('h', 'Hold', n(J.HOLD, cut.hold)), chip('x', 'Exit', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', 'Decoration', cut.decor.map(d => n(J.DECOR, d.id)).join(' · ')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', 'Treatment', n(J.TREAT, cut.treat)) : '',
-    cut.bg && cut.bg !== 'none' ? chip('b', 'Background', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'Camera', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'Transition', n(J.TRANS, cut.trans)) : '',
-  ] : []).concat(...[mc, fc].map((mediaCut, i) => mediaCut ? [chip('b', i ? 'Foreground' : 'Background', escapeHtml(mediaCut.name)), chip('l', J.mediaLabel('手法', 'Technique'), J.mediaTechniqueName(mediaCut)), mediaCut.placement && mediaCut.placement.angle ? chip('c', 'Rotation', `${mediaCut.placement.angle}°`) : '', mediaCut.chromaKey ? chip('c', 'Chroma key', mediaCut.chromaColor) : ''] : [])).join('');
+
 }
 
 /* ---------------- line list ---------------- */
+function insertEmptyLyricAtPlayhead() {
+  if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous);
+  const next=S.plan.lines.find(line=>line.start>=start-1e-6);
+  const rows=previous.replace(/\r/g,'').split('\n');
+  const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
+  const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
+  const timestamp=allTimed ? `[${Math.floor(start/60)}:${(start%60).toFixed(3)}]` : '';
+  rows.splice(sourceLine,0,timestamp+'｜　　　　｜');
+  const lyrics=rows.join('\n');
+  // Keep existing line starts stable while adding a new line at the playhead.
+  for(const line of S.plan.lines)S.project.timing.lineTimes[line.index]=line.start;
+  reconcileLyricLines(previous,lyrics);
+  const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
+  S.project.timing.lineTimes[index]=start;
+  S.project.lyrics=lyrics;$('lyrics').value=lyrics;
+  replan();seek(start);
+}
+function canInsertBlankAtPlayhead() {
+  if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
+  if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
+  const end=S.plan.cuts.find(c=>c.line>=0 && c.start>S.t+1e-6)?.start ?? S.plan.duration;
+  return S.t>=0 && end-S.t>=.04;
+}
+function insertBlankAtPlayhead() {
+  if(!canInsertBlankAtPlayhead())return;
+  pause();
+  const start=S.t,next=S.plan.lines.find(line=>line.start>start+1e-6);
+  S.project.lyricBlankCuts.push({id:crypto.randomUUID(),start,beforeLine:next?.index ?? S.plan.lines.length,untilNextCut:true});
+  replan();seek(start);
+}
 function insertLyricBlankCut(rows, position) {
   if (S.project.lyricBlankCuts.length >= 1000) { toast('Maximum number of cuts reached'); return; }
   const previous = rows[position - 1], next = rows[position];
@@ -39908,9 +40024,13 @@ function requestFilename(kind) {
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
   return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
 }
+function confirmHiddenLayers() {
+  return !['foreground','lyrics','media'].some(layer=>S.project.layerVisibility?.[layer]===false) || window.confirm(J.mediaLabel('非表示のレイヤーは書き出しに含まれません。よろしいですか？','Hidden layers will not be included in the export. Continue?'));
+}
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
+  if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
   pause();
@@ -40227,6 +40347,14 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('insertEmptyLyricAtPlayhead').addEventListener('click',insertEmptyLyricAtPlayhead);
+  $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
+  for(const layer of ['foreground','lyrics','media']){
+    const button=document.createElement('button');button.type='button';button.dataset.layer=layer;
+    button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg>';
+    button.addEventListener('click',()=>{if(S.exporting)return;S.project.layerVisibility ||= {};S.project.layerVisibility[layer]=S.project.layerVisibility[layer]===false;replan();});
+    $('layerVisibilityControls').append(button);
+  }
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
@@ -40365,6 +40493,17 @@ function bind() {
   $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
+  $('previewFullscreen').addEventListener('click',async()=>{
+    try { await $('viewport').requestFullscreen(); }
+    catch { toast(J.mediaLabel('この環境ではFill canvas表示を開始できません','Fullscreen is unavailable in this environment')); }
+  });
+  $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
+  document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
+  $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
+  const fullscreenScrub=$('fullscreenScrub');
+  fullscreenScrub.addEventListener('input',()=>{S.scrubbing=true;seek(fullscreenScrub.value/10000*S.plan.duration);updateTimeUI();});
+  fullscreenScrub.addEventListener('change',()=>{S.scrubbing=false;updateTimeUI();});
+  document.addEventListener('fullscreenchange',()=>{S.scrubbing=false;updateTimeUI();});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnUndo').addEventListener('click', () => undoMove(-1));
   $('btnRedo').addEventListener('click', () => undoMove(1));
@@ -40671,6 +40810,7 @@ function bind() {
   });
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
+    if(!confirmHiddenLayers())return;
     const filename = await requestFilename('ae'); if (!filename) return;
     try { await J.saveFile(filename, JSON.stringify(J.planForAE(S.plan, S.project), null, 1)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：','Could not save: ') + err.message); }
@@ -40699,6 +40839,7 @@ function bind() {
   });
   window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); drawTimelineLinks(); });
   if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); drawTimelineLinks(); }).observe($('viewport'));
+  if(window.ResizeObserver){const observer=new ResizeObserver(sizeViewport);for(const el of document.querySelector('.col-stage').children)if(el.id!=='viewport')observer.observe(el);}
   if (window.ResizeObserver) new ResizeObserver(drawTimelineLinks).observe($('timelineStack'));
 }
 

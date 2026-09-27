@@ -53,6 +53,7 @@
             <li><code>*透明*</code> … 強調（自動表示エリアを大きくし、前景より手前に表示。前景回避の対象外）</li>
             <li><code>~ささやき~</code> … 抑制（表示と動きを小さく）</li>
             <li>行末の <code>!</code> … フラッシュと揺れを入れる</li>
+            <li><code>50:歌詞</code> … カットの配置・サイズ（100で画面全体、50で幅・高さが半分。自動配置の最小・最大倍率より優先）。数字とコロンを表示する場合は <code>50\:歌詞</code></li>
             <li><code>歌詞|ruby or note</code> … 注釈レイアウトの小さな文字（対応している演出のみ）</li>
             <li><code>[01:23.45]歌詞</code> … LRC のタイムスタンプをそのまま使用</li>
             <li><code>#</code> で始まる行 … コメント（無視）</li>
@@ -114,8 +115,8 @@
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="プレビュー">
-      <div class="viewport" id="viewport"><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">ドラッグして歌詞の表示範囲を指定</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">全画面を終了</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="再生">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="再生位置"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">ドラッグして歌詞の表示範囲を指定</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>アスペクト比を固定</label><label>幅（画面比％）<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>高さ（画面比％）<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">角度（°）<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">全域へリセット</button><button id="areaResetAuto" class="ghost" type="button">自動配置に戻す</button><button id="areaApplyOne" class="primary" disabled>この行だけに適用</button><button id="areaApplyFollowing" disabled>これ以降全てに適用</button><button id="areaCancel" class="ghost">キャンセル</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="再生">▶</button>
@@ -130,18 +131,20 @@
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
-      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button></div>
+      <div class="timeline-toolbar">
+      <div class="timeline-position-label">再生位置で：</div>
+      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button><button id="insertBlankAtPlayhead" type="button" disabled>歌詞無表示カットを挿入</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>空の歌詞を挿入</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
-      <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
+      </div>
+      <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
         <canvas id="timeline" aria-label="歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
         <canvas id="mediaTimeline" aria-label="背景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
         <svg id="timelineLinks" class="timeline-links" aria-label="タイムラインの境界リンク"></svg>
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="ドラッグして動画全体の長さを変更" aria-label="動画全体の長さをドラッグして変更"><span aria-hidden="true">◀▶</span></button>
       </div></div>
-      <p class="hint timeline-link-hint">末尾の◀▶をドラッグして全体の長さを変更。再生時間の分母をクリックして直接入力。鎖マークを別のタイムラインの鎖へドラッグしてリンク。×で解除。</p>
-      <div class="cutinfo" id="cutInfo"></div>
+      </div>
+      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->

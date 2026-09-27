@@ -30,6 +30,7 @@ J.defaultProject = () => ({
   lyricEffects: { autoPlacement: false, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   lyricBlankCuts: [],
   timelineLinks: [],
+  layerVisibility: {foreground:true,lyrics:true,media:true},
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   foreground: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   colors: { enabled: false },
@@ -44,10 +45,10 @@ J.komaOf = fx => (fx.koma != null ? +fx.koma : (fx.onTwos === false ? 0 : 12));
 J.stepDur = (fx, fps) => { const k = J.komaOf(fx); return k > 0 ? 1 / k : 1 / (fps || 24); };
 
 /* ---------------- lyric parsing ---------------- */
-const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B' };
+const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B', ':': '\uE00C' };
 const lyricUnescapes = Object.fromEntries(Object.entries(lyricEscapes).map(([literal, token]) => [token, literal]));
-const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
-const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00B]/g, token => lyricUnescapes[token]);
+const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~:n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
+const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00C]/g, token => lyricUnescapes[token]);
 J.parseLyrics = (raw) => {
   const lines = []; const meta = {};
   let pendingGap = false, group = null, nextGroup = 0, avoidOverlap = false;
@@ -56,18 +57,25 @@ J.parseLyrics = (raw) => {
     group = nextGroup++; avoidOverlap = text.startsWith('{-');
     return text.slice(avoidOverlap ? 2 : 1).trim();
   };
-  for (let src of String(raw || '').replace(/\r/g, '').split('\n')) {
+  for (const [sourceLine,src] of String(raw || '').replace(/\r/g, '').split('\n').entries()) {
     let s0 = protectLyricEscapes(src.trim());
     if (!s0) { if (lines.length) pendingGap = true; continue; }
     if (s0.startsWith('#')) continue;
     const mm = s0.match(/^\[(ti|ar|al|by|offset):(.*)\]$/i);
     if (mm) { meta[mm[1].toLowerCase()] = restoreLyricEscapes(mm[2].trim()); continue; }
-    s0 = openGroup(s0);
+    let lyricSize = null;
+    const readSize = text => {
+      const match=text.match(/^(\d+(?:\.\d+)?):\s*/);
+      if(!match || lyricSize!==null || !Number.isFinite(+match[1]))return text;
+      lyricSize=J.clamp(+match[1],0,1000);
+      return text.slice(match[0].length);
+    };
+    s0 = openGroup(readSize(s0));
     let s = s0; const times = [];
     let m;
     while ((m = s.match(/^\[(\d+):(\d+(?:[.:]\d+)?)\]/))) { times.push(+m[1] * 60 + parseFloat(m[2].replace(':', '.'))); s = s.slice(m[0].length); }
     s = s.trim();
-    s = openGroup(s);
+    s = readSize(openGroup(readSize(s)));
     const closeGroup = s.endsWith(avoidOverlap ? '-}' : '}');
     if (closeGroup) s = s.slice(0, avoidOverlap ? -2 : -1).trim();
     let note = null;
@@ -99,7 +107,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group, lineAvoidOverlap = avoidOverlap;
     if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), sourceLine, lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -235,6 +243,7 @@ J.plan = (project, audio) => {
   const en = {};
   for (const g of J.GROUP_KEYS) { en[g] = {}; const src = (project.enabled || {})[g] || {}; for (const k of J.order(g)) en[g][k] = src[k] !== false && (!J.randomOk || J.randomOk(project, g, k)); }
   const plan = {
+    layerVisibility: {...project.layerVisibility},
     version: 1, generator: 'JIZURA', title, artist, W, H, fps: project.fps || 24,
     duration: tm.duration, styleKey: project.style, style: st, fx, seed: project.seed,
     lines: [], cuts: [], events: [], beats: audio && audio.beats ? audio.beats.slice() : [],
@@ -368,7 +377,7 @@ J.plan = (project, audio) => {
         if (layout==='lowerThird') params.label='copy';
         if (layout==='arcTop') params.under='copy';
       }
-      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
@@ -404,20 +413,20 @@ J.plan = (project, audio) => {
   });
   const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
     .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
+    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
     .sort((a, b) => a.start - b.start);
   for (let i = 0; i < blanks.length; i++) {
     const blank = blanks[i];
-    const nextLine = tm.starts[blank.beforeLine] ?? Infinity;
+    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
     const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
     const end = Math.min(nextLine, nextBlank, plan.duration);
     if (end - blank.start < 0.04) continue;
     for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && cut.line < blank.beforeLine) {
+      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
         cut.end = blank.start; cut.dur = cut.end - cut.start;
       }
     }
-    plan.cuts = plan.cuts.filter(c => !(c.line < blank.beforeLine && c.start >= blank.start && c.start < end));
+    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
     plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
   }
   plan.cuts.sort((a, b) => a.start - b.start);

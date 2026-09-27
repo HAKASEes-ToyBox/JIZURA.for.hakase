@@ -71,6 +71,15 @@ J.plan = function(project, ...args) {
     cut.groupExit = last.get(cut.group).exit; cut.groupOutDur = last.get(cut.group).outDur;
   }
   J.applyLyricGroupAvoidance(project,plan);
+  // The lyric directive owns area size even when saved detail overrides or
+  // retained-group avoidance have supplied an area. Preserve position/rotation.
+  for(const cut of plan.cuts)if(cut.lyricSize!=null && cut.line>=0 && Number.isInteger(cut.part)){
+    const a=cut.area || {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
+    const size=Math.max(.04,cut.lyricSize/100);
+    const area={...a,x:a.x+(a.w-size)/2,y:a.y+(a.h-size)/2,w:size,h:size};
+    J.applyCutDetails(cut,{area},plan,'lyrics');
+    cut.areaMode='notation';
+  }
   return plan;
 };
 const planMedia = J.planMedia;
