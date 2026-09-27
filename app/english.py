@@ -357,7 +357,7 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
-    '歌詞サイズ（100が全画面基準、50で半分。0〜1000、小数可）。数字とコロンを表示する場合は': 'Lyric size (100 = full-screen reference, 50 = half; 0–1000, decimals allowed). To display the number and colon, use',
+    'カットの配置・サイズ（100で画面全体、50で幅・高さが半分。自動配置の最小・最大倍率より優先）。数字とコロンを表示する場合は': 'Cut placement size (100 = full frame, 50 = half width and height; overrides automatic size limits). To display the number and colon, use',
     '50:歌詞': '50:Lyrics',
     '50\\:歌詞': '50\\:Lyrics',
     "前景カットを分割": "Split foreground cut",

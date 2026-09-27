@@ -573,7 +573,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
             <li><code>*emphasis*</code> … a larger automatic area, displayed above the foreground without avoiding it.</li>
             <li><code>~whisper~</code> … a smaller display with gentler motion.</li>
             <li>A trailing <code>!</code> … adds a flash and shake</li>
-            <li><code>50:Lyrics</code> … Lyric size (100 = full-screen reference, 50 = half; 0–1000, decimals allowed). To display the number and colon, use <code>50\:Lyrics</code></li>
+            <li><code>50:Lyrics</code> … Cut placement size (100 = full frame, 50 = half width and height; overrides automatic size limits). To display the number and colon, use <code>50\:Lyrics</code></li>
             <li><code>lyrics|reading or note</code> … Smaller text in annotation layouts (supported effects only)</li>
             <li><code>[01:23.45]Lyrics</code> … uses an LRC timestamp</li>
             <li><code>#</code> starts a comment (ignored)</li>
@@ -4796,6 +4796,16 @@ function emptyRegions(obstacles) {
 
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({})) => {
   const rng = J.rng(J.h(cut.seed, 947));
+  if(cut.lyricSize != null){
+    const size=Math.max(.04,cut.lyricSize/100),candidates=[];
+    // Explicit sizes override random size bounds and obstacle-driven shrinking.
+    for(const x of [0,.25,.5,.75,1])for(const y of [0,.25,.5,.75,1]){
+      const r={x:x*(1-size),y:y*(1-size),w:size,h:size,angle:0,lockAspect:true};
+      candidates.push({r,score:obstacles.reduce((sum,b)=>sum+overlap(r,b),0)});
+    }
+    const best=Math.min(...candidates.map(c=>c.score));
+    return rng.pick(candidates.filter(c=>c.score<=best+1e-8)).r;
+  }
   const portrait = plan.W < plan.H;
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
@@ -5555,6 +5565,15 @@ J.plan = function(project, ...args) {
     cut.groupExit = last.get(cut.group).exit; cut.groupOutDur = last.get(cut.group).outDur;
   }
   J.applyLyricGroupAvoidance(project,plan);
+  // The lyric directive owns area size even when saved detail overrides or
+  // retained-group avoidance have supplied an area. Preserve position/rotation.
+  for(const cut of plan.cuts)if(cut.lyricSize!=null && cut.line>=0 && Number.isInteger(cut.part)){
+    const a=cut.area || {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
+    const size=Math.max(.04,cut.lyricSize/100);
+    const area={...a,x:a.x+(a.w-size)/2,y:a.y+(a.h-size)/2,w:size,h:size};
+    J.applyCutDetails(cut,{area},plan,'lyrics');
+    cut.areaMode='notation';
+  }
   return plan;
 };
 const planMedia = J.planMedia;
@@ -5879,7 +5898,7 @@ class Renderer {
           X.translate(-areaX - contentW / 2, -areaY - contentH / 2);
           X.beginPath(); X.rect(areaX, areaY, contentW, contentH); X.clip();
         }
-        const cs = J.lerp(1, cam.s ?? 1, motion) * (cut.contentScale ?? 1) * (cut.lyricSize == null ? 1 : cut.lyricSize / 100);
+        const cs = J.lerp(1, cam.s ?? 1, motion) * (cut.contentScale ?? 1);
         X.translate(areaX + contentW / 2 + (shx + P.off[0] + (cam.x || 0)) * motion, areaY + contentH / 2 + (shy + P.off[1] + (cam.y || 0)) * motion);
         if (cam.rot) X.rotate(cam.rot * J.DEG * motion);
         if (cam.skx) X.transform(1, 0, Math.tan(cam.skx * J.DEG * motion), 1, 0, 0);
