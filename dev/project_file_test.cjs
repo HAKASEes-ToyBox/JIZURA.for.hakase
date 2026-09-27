@@ -7,7 +7,7 @@ for(let i=0;i<16000;i++)wav.writeInt16LE(Math.round(Math.sin(i/16000*440*2*Math.
  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
  try{for(const lang of ['', 'en/']){
   const errors=[],setup=async()=>{const c=await browser.newContext({viewport:{width:1500,height:1000}}),p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));await p.goto('http://127.0.0.1:8765/'+lang);await p.locator('#modePro').click();return p};
-  const p=await setup();assert.equal(await p.title(),'字面一 JIZURA ONE STOP EDITION');assert.equal(await p.locator('#fileProject').getAttribute('accept'),'.jizuraichi');
+  const p=await setup();assert.equal(await p.title(),'字面一 JIZURA ONE STOP EDITION');assert.equal(await p.locator('#fileProject').getAttribute('accept'),null);
   await p.locator('#projectMenu summary').click();await p.locator('#btnNew').click();await p.locator('#newProjectAspect').selectOption('9:16');await p.locator('#btnCreateProject').click();
   assert.deepEqual(await p.evaluate(()=>[J.ui.project.lyrics,J.ui.project.aspect,J.ui.plan.cuts.length,J.mediaAssets.size,J.ui.audio]),['','9:16',0,0,null]);
   await p.locator('#songTitle').fill('Portable test');await p.locator('#songTitle').dispatchEvent('input');
