@@ -243,14 +243,6 @@
       <div class="tabpane" data-pane="tech" hidden>
         <div class="pick-sets">
           <label class="check"><input id="lyricAutoPlacement" type="checkbox"><span>配置・サイズにも自動で変化をつける<small>オフでは全画面を使用。手動の表示エリアは維持します。「自動配置に戻す」で手動指定を解除できます。</small></span></label>
-          <div id="lyricAutoSizeRange" class="lyric-auto-size-range">
-            <div class="range-title">最小・最大サイズ倍率（％）</div>
-            <div class="range-pair" id="lyricAutoSizeSlider" style="--range-min:15%;--range-max:25%">
-              <input id="lyricAutoSizeMin" type="range" min="0" max="500" step="5" value="75" aria-label="自動サイズの最小倍率">
-              <input id="lyricAutoSizeMax" type="range" min="0" max="500" step="5" value="125" aria-label="自動サイズの最大倍率">
-            </div>
-            <div class="range-pair-values"><span>最小 <output id="lyricAutoSizeMinValue">75%</output></span><span>最大 <output id="lyricAutoSizeMaxValue">125%</output></span></div>
-          </div>
           <label class="check"><input id="lyricAvoidForeground" type="checkbox" checked><span>前景との重なりを避ける<small>自動配置時に前景の表示領域を避けます。*強調*したカットには適用しません。</small></span></label>
           <label class="slider"><span>重なり回避の強度</span><input id="lyricAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricAvoidanceStrengthValue">1.00</output></label>
           <p class="note">1で前景の範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。</p>

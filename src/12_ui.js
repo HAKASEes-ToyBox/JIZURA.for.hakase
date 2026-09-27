@@ -2318,13 +2318,6 @@ function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.reg
 function renderTech() {
   const lyricEffects = J.lyricEffectSettings(S.project);
   $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
-  $('lyricAutoSizeRange').hidden = !lyricEffects.autoPlacement;
-  $('lyricAutoSizeMin').value = lyricEffects.sizeMin;
-  $('lyricAutoSizeMax').value = lyricEffects.sizeMax;
-  $('lyricAutoSizeMinValue').textContent = `${lyricEffects.sizeMin}%`;
-  $('lyricAutoSizeMaxValue').textContent = `${lyricEffects.sizeMax}%`;
-  $('lyricAutoSizeSlider').style.setProperty('--range-min', `${lyricEffects.sizeMin / 5}%`);
-  $('lyricAutoSizeSlider').style.setProperty('--range-max', `${lyricEffects.sizeMax / 5}%`);
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
   $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
   $('lyricGroupAvoidanceStrengthValue').textContent = lyricEffects.lyricAvoidanceStrength.toFixed(2);
@@ -2575,7 +2568,7 @@ function renderMediaEffects(layer) {
   const shuffleLabel = layer === 'foreground' ? L('前景をシャッフル', 'Shuffle foreground') : L('背景をシャッフル', 'Shuffle background');
   const setting = key => box.querySelector(`[data-media-setting="${key}"]`);
   const action = key => box.querySelector(`[data-media-action="${key}"]`);
-  box.innerHTML = `<p class="note">${layerNote} ${L('チェックした手法を「自動」とシャッフルで使用します。手動指定した手法とロック済みカットは維持されます。', 'Checked techniques are used by Auto and Shuffle. Explicit selections and locked cuts are preserved.')}</p><label class="check"><input data-media-setting="autoPlacement" type="checkbox" ${settings.autoPlacement !== false ? 'checked' : ''}><span>${L('配置・サイズにも自動で変化を付ける', 'Vary position and size automatically')}<small>${L('手動配置とロックは維持します。演出無しは中央に全体表示します。', 'Manual placement and locks are preserved. No effects keeps the centered full view.')}</small></span></label><div class="media-auto-size-range" data-media-size-range ${settings.autoPlacement !== false ? '' : 'hidden'}><div class="range-title">${L('最小・最大サイズ倍率（％）', 'Minimum / maximum area scale (%)')}</div><div class="range-pair" data-media-size-slider><input type="range" min="0" max="500" step="5" value="${settings.sizeMin}" data-media-size="min" aria-label="${L('自動サイズの最小倍率', 'Minimum automatic size scale')}"><input type="range" min="0" max="500" step="5" value="${settings.sizeMax}" data-media-size="max" aria-label="${L('自動サイズの最大倍率', 'Maximum automatic size scale')}"></div><div class="range-pair-values"><span>${L('最小 ', 'Min ')}<output data-media-size-value="min">${settings.sizeMin}%</output></span><span>${L('最大 ', 'Max ')}<output data-media-size-value="max">${settings.sizeMax}%</output></span></div></div><div class="media-effect-sliders"></div><div class="row"><button type="button" data-media-action="shuffle">${shuffleLabel}</button><button type="button" data-media-action="enable">${L('全て有効', 'Enable all')}</button><button type="button" data-media-action="disable">${L('全て無効', 'Disable all')}</button></div>`;
+  box.innerHTML = `<p class="note">${layerNote} ${L('チェックした手法を「自動」とシャッフルで使用します。手動指定した手法とロック済みカットは維持されます。', 'Checked techniques are used by Auto and Shuffle. Explicit selections and locked cuts are preserved.')}</p><label class="check"><input data-media-setting="autoPlacement" type="checkbox" ${settings.autoPlacement !== false ? 'checked' : ''}><span>${L('配置・サイズにも自動で変化を付ける', 'Vary position and size automatically')}<small>${L('手動配置とロックは維持します。演出無しは中央に全体表示します。', 'Manual placement and locks are preserved. No effects keeps the centered full view.')}</small></span></label><div class="media-effect-sliders"></div><div class="row"><button type="button" data-media-action="shuffle">${shuffleLabel}</button><button type="button" data-media-action="enable">${L('全て有効', 'Enable all')}</button><button type="button" data-media-action="disable">${L('全て無効', 'Disable all')}</button></div>`;
   const randomNote = document.createElement('p'); randomNote.className = 'note';
   randomNote.textContent = L('「おまかせ」では前景・背景それぞれの手法チェックをランダムに設定します。', 'Randomize selects a random set of checked techniques independently for foreground and background.');
   box.appendChild(randomNote);
@@ -2651,23 +2644,6 @@ function renderMediaEffects(layer) {
     row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.applyLyricBackground = e.target.checked; S.project[layer].effects = next; replan(); };
     box.prepend(row);
   }
-  const sizeRange = box.querySelector('[data-media-size-range]');
-  const sizeSlider = sizeRange.querySelector('[data-media-size-slider]');
-  const syncSizeSlider = (min, max) => {
-    sizeSlider.style.setProperty('--range-min', `${min / 5}%`); sizeSlider.style.setProperty('--range-max', `${max / 5}%`);
-    sizeRange.querySelector('[data-media-size-value="min"]').textContent = `${min}%`;
-    sizeRange.querySelector('[data-media-size-value="max"]').textContent = `${max}%`;
-  };
-  sizeSlider.querySelectorAll('[data-media-size]').forEach(input => input.addEventListener('input', () => {
-    const changed = input.dataset.mediaSize;
-    let min = +sizeSlider.querySelector('[data-media-size="min"]').value, max = +sizeSlider.querySelector('[data-media-size="max"]').value;
-    if (changed === 'min' && min > max) max = min;
-    if (changed === 'max' && max < min) min = max;
-    const next = J.mediaEffectSettings(S.project, layer); next.sizeMin = min; next.sizeMax = max; S.project[layer].effects = next;
-    sizeSlider.querySelector('[data-media-size="min"]').value = min; sizeSlider.querySelector('[data-media-size="max"]').value = max;
-    syncSizeSlider(min, max); markUndoGroup(`mediaEffects:${layer}:size`); replanSoon(100);
-  }));
-  syncSizeSlider(settings.sizeMin, settings.sizeMax);
   action('shuffle').onclick = () => { shuffleMediaEffects([layer]); S.project[layer].seed++; replan(); };
   const all = value => { const next = J.mediaEffectSettings(S.project, layer); next.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(key => [key, value])); S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   action('enable').onclick = () => all(true); action('disable').onclick = () => all(false);
@@ -2776,20 +2752,6 @@ function bind() {
   for (const [id, key] of [['lyricAutoPlacement', 'autoPlacement'], ['lyricAvoidForeground', 'avoidForeground'], ['lyricRandomBlend', 'randomBlend'], ['lyricRandomOpacity', 'randomOpacity']]) {
     $(id).addEventListener('change', e => { S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), [key]: e.target.checked }; renderTech(); replan(); });
   }
-  const updateAutoLyricSize = changed => {
-    let min = +$('lyricAutoSizeMin').value, max = +$('lyricAutoSizeMax').value;
-    if (changed === 'min' && min > max) max = min;
-    if (changed === 'max' && max < min) min = max;
-    const settings = { ...J.lyricEffectSettings(S.project), sizeMin: min, sizeMax: max };
-    S.project.lyricEffects = settings;
-    $('lyricAutoSizeMin').value = min; $('lyricAutoSizeMax').value = max;
-    $('lyricAutoSizeMinValue').textContent = `${min}%`; $('lyricAutoSizeMaxValue').textContent = `${max}%`;
-    $('lyricAutoSizeSlider').style.setProperty('--range-min', `${min / 5}%`);
-    $('lyricAutoSizeSlider').style.setProperty('--range-max', `${max / 5}%`);
-    markUndoGroup('lyricAutoSize'); replanSoon(100);
-  };
-  $('lyricAutoSizeMin').addEventListener('input', () => updateAutoLyricSize('min'));
-  $('lyricAutoSizeMax').addEventListener('input', () => updateAutoLyricSize('max'));
   for (const [id, key] of [['lyricOpacityMin', 'opacityMin'], ['lyricOpacityMax', 'opacityMax']]) {
     $(id).addEventListener('change', e => {
       const settings = J.lyricEffectSettings(S.project);

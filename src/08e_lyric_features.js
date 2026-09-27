@@ -119,12 +119,15 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
   if (portrait && !cut.emphasis) { w = Math.min(.9, w * 1.2); h *= .8; }
-  const minSize = Math.min(settings.sizeMin, settings.sizeMax), maxSize = Math.max(settings.sizeMin, settings.sizeMax);
-  const scale = rng.range(minSize, maxSize) / 100;
-  const fitScale = Math.min(scale, 1 / w, 1 / h);
+  // Size contrast comes from the placement pattern: a lyric-only zone, or the composition zone's size.
+  const solo = !obstacles.length && !context.zone && J.pickSoloZone ? J.pickSoloZone(cut) : null;
+  const zone = context.zone || solo?.zone, room = zone ? zone.w * zone.h : 1;
+  const weights = solo?.size || (room < .12 ? [.7, .3, 0] : room < .3 ? [.35, .5, .15] : undefined);
+  const scale = J.lyricSizeScale ? J.lyricSizeScale(cut, rng, weights) : 1;
+  const fitScale = Math.min(scale, .94 / w, .94 / h);// large classes still keep the 3% margins
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
   // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
-  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone: context.zone, fgCenter: context.fgCenter });
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter });
   if (composed) return composed;
   const regions = emptyRegions(obstacles);
   if (regions.length) {

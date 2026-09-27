@@ -388,7 +388,6 @@ FORK_BODY = {
     '設定のみ読み込み': 'Import settings only',
     "全角の縦線で囲んだ空白は、文字なし・演出のみの歌詞行になります": "Spaces between full-width vertical bars create a lyric line with effects only and no text",
     '配置・サイズにも自動で変化をつける': 'Vary lyric position and size automatically',
-    '最小・最大サイズ倍率（％）': 'Minimum / maximum area scale (%)',
     '自動サイズの最小倍率': 'Minimum automatic size scale', '自動サイズの最大倍率': 'Maximum automatic size scale',
     '最小 ': 'Min ', '最大 ': 'Max ',
     'オフでは全画面を使用。手動の表示エリアは維持します。「自動配置に戻す」で手動指定を解除できます。': 'When off, use the full stage. Manual areas are preserved; use Reset automatic placement to clear them.',

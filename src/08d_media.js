@@ -54,7 +54,7 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   const dynamic = group === 'dynamic' || group === 'graphic';
   const background = layer === 'media';
   const settings = cut.effectSettings || J.mediaEffectSettings(project, layer);
-  const sizeScale = rng.range(settings.sizeMin ?? 75, settings.sizeMax ?? 125) / 100;
+  const sizeScale = rng.range(.75, 1.25);// legacy framing only; patterns below size the placement
   const baseScale = background ? rng.range(1, 1.35) : J.clamp(size * .9 * rng.range(.92, 1.08), .36, dynamic ? .72 : .94);
   const scale = background ? Math.max(1, baseScale * sizeScale) : J.clamp(baseScale * sizeScale, .005, 4);
   const w = fit.w * scale, h = fit.h * scale, margin = dynamic ? .07 : .03;
@@ -69,8 +69,10 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   if (!background && J.pickComposition) {
     const comp = J.pickComposition(cut, plan, layer);
     cut.composition = comp.id;
-    placement = J.compositionPlacement(comp, cut, fit, sizeScale, dynamic);
+    placement = J.compositionPlacement(comp, cut, fit, dynamic);
   }
+  // Backgrounds use framing patterns (whole, fill, zooms anchored to sides or corners, detail crops).
+  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit);
   const edges = item.croppedEdges || {}, crop = .2;
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges

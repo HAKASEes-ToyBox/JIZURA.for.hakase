@@ -433,18 +433,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .media-lyric-insert .field {margin-bottom:8px}
 .media-lyric-insert > button {width:100%;white-space:normal}
 .media-lyric-insert .hint {margin:6px 0 0}
-.lyric-auto-size-range { margin: -2px 0 10px 24px; max-width: 420px; }
-.media-auto-size-range { margin: -2px 0 10px 24px; max-width: 420px; }
-.range-title { font-size: 11px; color: var(--muted); }
-.range-pair { position: relative; height: 24px; display: flex; align-items: center; touch-action: pan-y; }
-.range-pair::before { content: ''; position: absolute; inset: 10px 0; border-radius: 5px; background: linear-gradient(to right, var(--line) 0 var(--range-min), var(--amber) var(--range-min) var(--range-max), var(--line) var(--range-max) 100%); }
-.range-pair input { position: absolute; inset: 0; width: 100%; height: 24px; margin: 0; appearance: none; background: transparent; pointer-events: none; }
-.range-pair input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
-.range-pair input::-moz-range-track { height: 4px; background: transparent; }
-.range-pair input::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; border: 2px solid var(--panel); border-radius: 50%; background: var(--amber); appearance: none; pointer-events: auto; cursor: ew-resize; }
-.range-pair input::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid var(--panel); border-radius: 50%; background: var(--amber); pointer-events: auto; cursor: ew-resize; }
-.range-pair-values { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
-.range-pair-values output { color: var(--text); font-variant-numeric: tabular-nums; }
 .media-tech-group .checks {grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .media-technique {max-width:240px}
 .media-effects-panel {max-height:calc(100vh - 190px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}
@@ -837,14 +825,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
       <div class="tabpane" data-pane="tech" hidden>
         <div class="pick-sets">
           <label class="check"><input id="lyricAutoPlacement" type="checkbox"><span>Vary lyric position and size automatically<small>When off, use the full stage. Manual areas are preserved; use Reset automatic placement to clear them.</small></span></label>
-          <div id="lyricAutoSizeRange" class="lyric-auto-size-range">
-            <div class="range-title">Minimum / maximum area scale (%)</div>
-            <div class="range-pair" id="lyricAutoSizeSlider" style="--range-min:15%;--range-max:25%">
-              <input id="lyricAutoSizeMin" type="range" min="0" max="500" step="5" value="75" aria-label="Minimum automatic size scale">
-              <input id="lyricAutoSizeMax" type="range" min="0" max="500" step="5" value="125" aria-label="Maximum automatic size scale">
-            </div>
-            <div class="range-pair-values"><span>Min <output id="lyricAutoSizeMinValue">75%</output></span><span>Max <output id="lyricAutoSizeMaxValue">125%</output></span></div>
-          </div>
           <label class="check"><input id="lyricAvoidForeground" type="checkbox" checked><span>Avoid overlapping the foreground<small>Automatic areas avoid foreground placement. Cuts marked with *emphasis* are exempt.</small></span></label>
           <label class="slider"><span>Foreground avoidance strength</span><input id="lyricAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricAvoidanceStrengthValue">1.00</output></label>
           <p class="note">1でForegroundの範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。</p>
@@ -4314,32 +4294,87 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
    foreground overlap (avoidance strength), balance against the foreground, and margins. */
 (() => {
 'use strict';
-// fg: centre and size (largest extent, stage fractions, before the size-scale setting).
-// zone: where lyrics sit in that composition. weight: [landscape, portrait].
+// fg: centre and size range [min, max] (largest extent, stage fractions): the size contrast is part of
+// the pattern (tiny insets, giant heroes) rather than a user setting. zone: where the lyrics sit.
+// weight: [landscape, portrait].
 J.COMPOSITIONS = [
-  { id: 'left', fg: { x: .3, y: .5, size: .52 }, zone: { x: .54, y: .14, w: .42, h: .72 }, weight: [1, .35] },
-  { id: 'right', fg: { x: .7, y: .5, size: .52 }, zone: { x: .04, y: .14, w: .42, h: .72 }, weight: [1, .35] },
-  { id: 'top', fg: { x: .5, y: .31, size: .48 }, zone: { x: .1, y: .6, w: .8, h: .34 }, weight: [.6, 1] },
-  { id: 'bottom', fg: { x: .5, y: .69, size: .48 }, zone: { x: .1, y: .06, w: .8, h: .34 }, weight: [.6, 1] },
-  { id: 'cornerBL', fg: { x: .28, y: .66, size: .42 }, zone: { x: .46, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
-  { id: 'cornerBR', fg: { x: .72, y: .66, size: .42 }, zone: { x: .04, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
-  { id: 'cornerTL', fg: { x: .28, y: .34, size: .42 }, zone: { x: .46, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
-  { id: 'cornerTR', fg: { x: .72, y: .34, size: .42 }, zone: { x: .04, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
-  { id: 'insetTR', fg: { x: .8, y: .24, size: .3 }, zone: { x: .06, y: .26, w: .62, h: .6 }, weight: [.55, .5] },
-  { id: 'insetBL', fg: { x: .2, y: .76, size: .3 }, zone: { x: .32, y: .14, w: .62, h: .6 }, weight: [.55, .5] },
-  { id: 'hero', fg: { x: .5, y: .44, size: .72 }, zone: { x: .08, y: .74, w: .84, h: .22 }, weight: [.5, .6] },
-  { id: 'heroTop', fg: { x: .5, y: .56, size: .72 }, zone: { x: .08, y: .04, w: .84, h: .22 }, weight: [.35, .5] },
+  { id: 'left', fg: { x: .3, y: .5, size: [.44, .6] }, zone: { x: .54, y: .14, w: .42, h: .72 }, weight: [1, .35] },
+  { id: 'right', fg: { x: .7, y: .5, size: [.44, .6] }, zone: { x: .04, y: .14, w: .42, h: .72 }, weight: [1, .35] },
+  { id: 'top', fg: { x: .5, y: .31, size: [.4, .56] }, zone: { x: .1, y: .6, w: .8, h: .34 }, weight: [.6, 1] },
+  { id: 'bottom', fg: { x: .5, y: .69, size: [.4, .56] }, zone: { x: .1, y: .06, w: .8, h: .34 }, weight: [.6, 1] },
+  { id: 'cornerBL', fg: { x: .28, y: .66, size: [.34, .5] }, zone: { x: .46, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerBR', fg: { x: .72, y: .66, size: [.34, .5] }, zone: { x: .04, y: .08, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerTL', fg: { x: .28, y: .34, size: [.34, .5] }, zone: { x: .46, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'cornerTR', fg: { x: .72, y: .34, size: [.34, .5] }, zone: { x: .04, y: .4, w: .5, h: .52 }, weight: [.8, .7] },
+  { id: 'insetTR', fg: { x: .8, y: .24, size: [.24, .32] }, zone: { x: .06, y: .26, w: .62, h: .6 }, weight: [.55, .5] },
+  { id: 'insetBL', fg: { x: .2, y: .76, size: [.24, .32] }, zone: { x: .32, y: .14, w: .62, h: .6 }, weight: [.55, .5] },
+  { id: 'hero', fg: { x: .5, y: .44, size: [.66, .8] }, zone: { x: .08, y: .74, w: .84, h: .22 }, weight: [.5, .6] },
+  { id: 'heroTop', fg: { x: .5, y: .56, size: [.66, .8] }, zone: { x: .08, y: .04, w: .84, h: .22 }, weight: [.35, .5] },
+  // Strong size contrast: a tiny accent against large lyrics, or a giant foreground with a small caption.
+  { id: 'miniTL', fg: { x: .15, y: .2, size: [.14, .2] }, zone: { x: .2, y: .22, w: .74, h: .66 }, weight: [.45, .45] },
+  { id: 'miniBR', fg: { x: .85, y: .8, size: [.14, .2] }, zone: { x: .06, y: .12, w: .74, h: .66 }, weight: [.45, .45] },
+  { id: 'miniTR', fg: { x: .85, y: .2, size: [.14, .2] }, zone: { x: .06, y: .22, w: .74, h: .66 }, weight: [.35, .35] },
+  { id: 'giantLeft', fg: { x: .4, y: .5, size: [.82, .92] }, zone: { x: .7, y: .6, w: .27, h: .34 }, weight: [.35, .2] },
+  { id: 'giantRight', fg: { x: .6, y: .5, size: [.82, .92] }, zone: { x: .03, y: .06, w: .27, h: .34 }, weight: [.35, .2] },
+  // Thirds with a mid-size subject and a narrow lyric column.
+  { id: 'thirdLeft', fg: { x: .36, y: .46, size: [.5, .64] }, zone: { x: .69, y: .2, w: .28, h: .62 }, weight: [.6, .3] },
+  { id: 'thirdRight', fg: { x: .64, y: .54, size: [.5, .64] }, zone: { x: .03, y: .18, w: .28, h: .62 }, weight: [.6, .3] },
+  { id: 'centerSmall', fg: { x: .5, y: .5, size: [.22, .3] }, zone: { x: .08, y: .68, w: .84, h: .28 }, weight: [.4, .5] },
 ];
 J.COMPOSITION_BY_ID = Object.fromEntries(J.COMPOSITIONS.map(c => [c.id, c]));
-// Lyric-only scenes: calm, aligned zones rather than arbitrary corners.
+// Lyric-only scenes: aligned zones; size gives the chance of small / medium / large lyric areas there.
 J.SOLO_ZONES = [
-  { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3 },
-  { id: 'lower', zone: { x: .08, y: .56, w: .84, h: .38 }, weight: 1.4 },
-  { id: 'upper', zone: { x: .08, y: .06, w: .84, h: .38 }, weight: .9 },
-  { id: 'left', zone: { x: .05, y: .14, w: .56, h: .72 }, weight: 1 },
-  { id: 'right', zone: { x: .39, y: .14, w: .56, h: .72 }, weight: 1 },
+  { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3, size: [.2, .45, .35] },
+  { id: 'lower', zone: { x: .08, y: .56, w: .84, h: .38 }, weight: 1.4, size: [.35, .5, .15] },
+  { id: 'upper', zone: { x: .08, y: .06, w: .84, h: .38 }, weight: .9, size: [.35, .5, .15] },
+  { id: 'left', zone: { x: .05, y: .14, w: .56, h: .72 }, weight: 1, size: [.3, .5, .2] },
+  { id: 'right', zone: { x: .39, y: .14, w: .56, h: .72 }, weight: 1, size: [.3, .5, .2] },
+  { id: 'lowerLeft', zone: { x: .05, y: .5, w: .5, h: .44 }, weight: .7, size: [.6, .4, 0] },
+  { id: 'upperRight', zone: { x: .45, y: .06, w: .5, h: .44 }, weight: .7, size: [.6, .4, 0] },
+  { id: 'band', zone: { x: .04, y: .36, w: .92, h: .28 }, weight: .8, size: [.2, .5, .3] },
+  { id: 'column', zone: { x: .34, y: .06, w: .32, h: .88 }, weight: .6, size: [.3, .5, .2] },
+  { id: 'full', zone: { x: .04, y: .06, w: .92, h: .88 }, weight: .8, size: [0, .3, .7] },
 ];
-// A per-cut placement seed (set by 再配置) re-rolls placement only; techniques keep using cut.seed.
+// Lyric size classes (multipliers of the base lyric area) replace the old manual size range.
+J.pickSoloZone = cut => J.rng(J.h(J.placementSeed(cut), 893)).wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
+J.LYRIC_SIZE_CLASSES = { small: [.58, .76], medium: [.86, 1.04], large: [1.14, 1.36] };
+J.lyricSizeScale = (cut, rng, weights = [.3, .45, .25]) => {
+  const w = cut.emphasis ? [0, .25, .75] : cut.suppressed ? [.8, .2, 0] : weights;
+  const kind = rng.wpick([['small', w[0]], ['medium', w[1]], ['large', w[2]]].filter(e => e[1] > 0));
+  return rng.range(...J.LYRIC_SIZE_CLASSES[kind]);
+};
+// Background framing patterns. zoom is relative to filling the stage (0 = the whole source, letterboxed);
+// ax / ay anchor the crop (0 = left/top edge, .5 = centre, 1 = right/bottom edge; null = random).
+J.BACKGROUND_PATTERNS = [
+  { id: 'whole', zoom: [0, 0], ax: .5, ay: .5, weight: .9 },
+  { id: 'fill', zoom: [1, 1.06], ax: .5, ay: .5, weight: 1.2 },
+  { id: 'zoomCenter', zoom: [1.18, 1.38], ax: .5, ay: .5, weight: 1 },
+  { id: 'focusLeft', zoom: [1.22, 1.5], ax: 0, ay: .5, weight: .8 },
+  { id: 'focusRight', zoom: [1.22, 1.5], ax: 1, ay: .5, weight: .8 },
+  { id: 'focusTop', zoom: [1.22, 1.5], ax: .5, ay: 0, weight: .7 },
+  { id: 'focusBottom', zoom: [1.22, 1.5], ax: .5, ay: 1, weight: .7 },
+  { id: 'cornerTL', zoom: [1.3, 1.6], ax: 0, ay: 0, weight: .5 },
+  { id: 'cornerBR', zoom: [1.3, 1.6], ax: 1, ay: 1, weight: .5 },
+  { id: 'detail', zoom: [1.7, 2.1], ax: null, ay: null, weight: .45 },
+  { id: 'thirds', zoom: [1.12, 1.3], ax: null, ay: .5, weight: .7 },
+];
+// fit: the source fitted to the stage (stage fractions). Never smaller than the whole source, never an
+// exposed edge on an enlarged axis, never cropped on a smaller one.
+J.backgroundPlacement = (cut, plan, fit) => {
+  const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
+  const last = memo.background?.index === cut.index - 1 ? memo.background : null;
+  const pick = (seed, avoid) => J.rng(J.h(seed, 877)).wpick(J.BACKGROUND_PATTERNS.filter(p => p.id !== avoid).map(p => [p, p.weight]));
+  const base = pick(cut.seed, last?.baseId), pattern = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  memo.background = { index: cut.index, id: pattern.id, baseId: base.id };
+  const rng = J.rng(J.h(J.placementSeed(cut), 879)), fill = Math.max(1 / fit.w, 1 / fit.h);
+  // mediaPlacementRect caps a side at 4x the stage, so stay under it or the rect shrinks and exposes an edge.
+  const scale = pattern.zoom[1] <= 0 ? 1 : Math.max(1, Math.min(fill * rng.range(...pattern.zoom), 4 / Math.max(fit.w, fit.h)));
+  const w = fit.w * scale, h = fit.h * scale;
+  const anchor = a => a == null ? rng.pick([.2, .35, .5, .65, .8]) : a;
+  const at = (a, extent) => extent >= 1 ? .5 + (a - .5) * (extent - 1) : .5;
+  cut.composition = pattern.id;
+  return { cx: at(anchor(pattern.ax), w), cy: at(anchor(pattern.ay), h), w, h, lockAspect: true, angle: 0 };
+};// A per-cut placement seed (set by 再配置) re-rolls placement only; techniques keep using cut.seed.
 J.placementSeed = cut => Number.isFinite(cut?.placementSeed) ? J.h(cut.seed, cut.placementSeed | 0, 887) : cut.seed;
 const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
@@ -4356,9 +4391,9 @@ J.pickComposition = (cut, plan, layer = 'foreground') => {
   return comp;
 };
 // Placement for a foreground source of fitted size fit (stage fractions) in a composition's slot.
-J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
+J.compositionPlacement = (comp, cut, fit, dynamic) => {
   const rng = J.rng(J.h(J.placementSeed(cut), 883));
-  let extent = comp.fg.size * sizeScale * (dynamic ? .85 : 1) * rng.range(.94, 1.06);
+  let extent = rng.range(...comp.fg.size) * (dynamic ? .85 : 1);
   let s = extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
   // Keep the base frame inside the safe area (motion may still move it).
   const k = Math.min(1, .95 / w, .95 / h); w *= k; h *= k;
@@ -4382,7 +4417,16 @@ J.LYRIC_ARRANGEMENTS = {
   scatter: { slot: (i, n) => [.25 + .5 * ((.5 + i * .618034) % 1), .1 + span * (i + .5) / n, 1 - .2 * ((i * .381966) % 1)], cell: n => [.46, Math.min(.5, 1.5 * span / n)] },
   wave: { slot: (i, n, t) => [.08 + .84 * (i + .5) / n, .5 + .22 * Math.sin(t * Math.PI * 1.6 - .8), i % 2 ? .88 : 1], cell: n => [.84 / n, .42] },
   stack: { slot: (i, n) => [.5, .1 + span * (i + .5) / n, i % 2 ? .84 : 1], cell: n => [.72, span / n] },
+  cascadeRight: { slot: (i, n, t) => [.64 - .28 * t, .1 + span * (i + .5) / n, 1 - .1 * t], cell: n => [.6, span / n] },
+  pyramid: { slot: (i, n) => { const p = pyramidRows(n); let row = 0, idx = i; while (idx >= p.sizes[row]) idx -= p.sizes[row++]; const c = p.sizes[row]; return [.5 + (idx - (c - 1) / 2) * (.84 / p.widest), .1 + span * (row + .5) / p.sizes.length, row ? .9 : 1.05]; },
+    cell: n => { const p = pyramidRows(n); return [.84 / p.widest * .96, span / p.sizes.length]; } },
+  splitHero: { slot: (i, n) => i === 0 ? [.29, .5, 1] : [.76, .1 + span * (i - .5) / (n - 1), 1], cell: n => [.5, .72], small: n => [.4, span / Math.max(1, n - 1)] },
+  radial: { slot: (i, n) => { const a = -Math.PI / 2 + i * Math.PI * 2 / n; return [.5 + .3 * Math.cos(a), .5 + .31 * Math.sin(a), i === 0 ? 1.1 : 1]; }, cell: n => [Math.min(.42, 1.6 / n), Math.min(.3, 1.1 / n)] },
+  bigSmall: { slot: (i, n, t) => [.3 + .4 * t, .1 + span * (i + .5) / n, i % 2 ? .62 : 1.12], cell: n => [.5, Math.min(.44, 1.25 * span / n)] },
+  frame: { slot: i => [[.26, .22], [.74, .22], [.74, .78], [.26, .78], [.5, .5], [.5, .16], [.5, .84], [.14, .5], [.86, .5]][i % 9].concat(i === 4 ? 1.1 : 1), cell: n => n <= 4 ? [.44, .36] : [.3, .24] },
 };
+// Rows of 1, 2, 3… for the pyramid; the last row takes what is left.
+function pyramidRows(n) { const sizes = []; let left = n; for (let k = 1; left > 0; k++) { sizes.push(Math.min(k, left)); left -= k; } return { sizes, widest: Math.max(...sizes) }; }
 // Returns target areas, or null when the chosen arrangement cannot fit.
 // maxOverlap: allowed share of the smaller area (0 = none, with a small gap).
 J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
@@ -4411,7 +4455,7 @@ const overlap = (a, b) =>Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a
 // then falls back to searching free regions).
 J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false }) => {
   const rng = J.rng(J.h(J.placementSeed(cut), 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
-  if (!zone && !obstacles.length) zone = rng.wpick(J.SOLO_ZONES.map(z => [z.zone, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
+  if (!zone && !obstacles.length) zone = J.pickSoloZone(cut).zone;
   let best = null;
   for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4]) {
     const cw = Math.max(.04, w * k), ch = Math.max(.04, h * k);
@@ -4492,7 +4536,7 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   const dynamic = group === 'dynamic' || group === 'graphic';
   const background = layer === 'media';
   const settings = cut.effectSettings || J.mediaEffectSettings(project, layer);
-  const sizeScale = rng.range(settings.sizeMin ?? 75, settings.sizeMax ?? 125) / 100;
+  const sizeScale = rng.range(.75, 1.25);// legacy framing only; patterns below size the placement
   const baseScale = background ? rng.range(1, 1.35) : J.clamp(size * .9 * rng.range(.92, 1.08), .36, dynamic ? .72 : .94);
   const scale = background ? Math.max(1, baseScale * sizeScale) : J.clamp(baseScale * sizeScale, .005, 4);
   const w = fit.w * scale, h = fit.h * scale, margin = dynamic ? .07 : .03;
@@ -4507,8 +4551,10 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   if (!background && J.pickComposition) {
     const comp = J.pickComposition(cut, plan, layer);
     cut.composition = comp.id;
-    placement = J.compositionPlacement(comp, cut, fit, sizeScale, dynamic);
+    placement = J.compositionPlacement(comp, cut, fit, dynamic);
   }
+  // Backgrounds use framing patterns (whole, fill, zooms anchored to sides or corners, detail crops).
+  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit);
   const edges = item.croppedEdges || {}, crop = .2;
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges
@@ -5062,12 +5108,15 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
   let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
   if (portrait && !cut.emphasis) { w = Math.min(.9, w * 1.2); h *= .8; }
-  const minSize = Math.min(settings.sizeMin, settings.sizeMax), maxSize = Math.max(settings.sizeMin, settings.sizeMax);
-  const scale = rng.range(minSize, maxSize) / 100;
-  const fitScale = Math.min(scale, 1 / w, 1 / h);
+  // Size contrast comes from the placement pattern: a lyric-only zone, or the composition zone's size.
+  const solo = !obstacles.length && !context.zone && J.pickSoloZone ? J.pickSoloZone(cut) : null;
+  const zone = context.zone || solo?.zone, room = zone ? zone.w * zone.h : 1;
+  const weights = solo?.size || (room < .12 ? [.7, .3, 0] : room < .3 ? [.35, .5, .15] : undefined);
+  const scale = J.lyricSizeScale ? J.lyricSizeScale(cut, rng, weights) : 1;
+  const fitScale = Math.min(scale, .94 / w, .94 / h);// large classes still keep the 3% margins
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
   // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
-  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone: context.zone, fgCenter: context.fgCenter });
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter });
   if (composed) return composed;
   const regions = emptyRegions(obstacles);
   if (regions.length) {
@@ -40559,13 +40608,6 @@ function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.reg
 function renderTech() {
   const lyricEffects = J.lyricEffectSettings(S.project);
   $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
-  $('lyricAutoSizeRange').hidden = !lyricEffects.autoPlacement;
-  $('lyricAutoSizeMin').value = lyricEffects.sizeMin;
-  $('lyricAutoSizeMax').value = lyricEffects.sizeMax;
-  $('lyricAutoSizeMinValue').textContent = `${lyricEffects.sizeMin}%`;
-  $('lyricAutoSizeMaxValue').textContent = `${lyricEffects.sizeMax}%`;
-  $('lyricAutoSizeSlider').style.setProperty('--range-min', `${lyricEffects.sizeMin / 5}%`);
-  $('lyricAutoSizeSlider').style.setProperty('--range-max', `${lyricEffects.sizeMax / 5}%`);
   $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
   $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
   $('lyricGroupAvoidanceStrengthValue').textContent = lyricEffects.lyricAvoidanceStrength.toFixed(2);
@@ -40816,7 +40858,7 @@ function renderMediaEffects(layer) {
   const shuffleLabel = layer === 'foreground' ? L('Foregroundをシャッフル', 'Shuffle foreground') : L('Backgroundをシャッフル', 'Shuffle background');
   const setting = key => box.querySelector(`[data-media-setting="${key}"]`);
   const action = key => box.querySelector(`[data-media-action="${key}"]`);
-  box.innerHTML = `<p class="note">${layerNote} ${L('チェックした手法を「Auto」とシャッフルで使用します。手動指定した手法とロック済みcutsは維持されます。', 'Checked techniques are used by Auto and Shuffle. Explicit selections and locked cuts are preserved.')}</p><label class="check"><input data-media-setting="autoPlacement" type="checkbox" ${settings.autoPlacement !== false ? 'checked' : ''}><span>${L('配置 · サイズにもAutoで変化を付ける', 'Vary position and size automatically')}<small>${L('手動配置とロックは維持します。Effects無しは中央に全体表示します。', 'Manual placement and locks are preserved. No effects keeps the centered full view.')}</small></span></label><div class="media-auto-size-range" data-media-size-range ${settings.autoPlacement !== false ? '' : 'hidden'}><div class="range-title">${L('最小 · 最大サイズ倍率（％）', 'Minimum / maximum area scale (%)')}</div><div class="range-pair" data-media-size-slider><input type="range" min="0" max="500" step="5" value="${settings.sizeMin}" data-media-size="min" aria-label="${L('Autoサイズの最小倍率', 'Minimum automatic size scale')}"><input type="range" min="0" max="500" step="5" value="${settings.sizeMax}" data-media-size="max" aria-label="${L('Autoサイズの最大倍率', 'Maximum automatic size scale')}"></div><div class="range-pair-values"><span>${L('最小 ', 'Min ')}<output data-media-size-value="min">${settings.sizeMin}%</output></span><span>${L('最大 ', 'Max ')}<output data-media-size-value="max">${settings.sizeMax}%</output></span></div></div><div class="media-effect-sliders"></div><div class="row"><button type="button" data-media-action="shuffle">${shuffleLabel}</button><button type="button" data-media-action="enable">${L('全て有効', 'Enable all')}</button><button type="button" data-media-action="disable">${L('全て無効', 'Disable all')}</button></div>`;
+  box.innerHTML = `<p class="note">${layerNote} ${L('チェックした手法を「Auto」とシャッフルで使用します。手動指定した手法とロック済みcutsは維持されます。', 'Checked techniques are used by Auto and Shuffle. Explicit selections and locked cuts are preserved.')}</p><label class="check"><input data-media-setting="autoPlacement" type="checkbox" ${settings.autoPlacement !== false ? 'checked' : ''}><span>${L('配置 · サイズにもAutoで変化を付ける', 'Vary position and size automatically')}<small>${L('手動配置とロックは維持します。Effects無しは中央に全体表示します。', 'Manual placement and locks are preserved. No effects keeps the centered full view.')}</small></span></label><div class="media-effect-sliders"></div><div class="row"><button type="button" data-media-action="shuffle">${shuffleLabel}</button><button type="button" data-media-action="enable">${L('全て有効', 'Enable all')}</button><button type="button" data-media-action="disable">${L('全て無効', 'Disable all')}</button></div>`;
   const randomNote = document.createElement('p'); randomNote.className = 'note';
   randomNote.textContent = L('「おまかせ」ではForeground · Backgroundそれぞれの手法チェックをRandomに設定します。', 'Randomize selects a random set of checked techniques independently for foreground and background.');
   box.appendChild(randomNote);
@@ -40892,23 +40934,6 @@ function renderMediaEffects(layer) {
     row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.applyLyricBackground = e.target.checked; S.project[layer].effects = next; replan(); };
     box.prepend(row);
   }
-  const sizeRange = box.querySelector('[data-media-size-range]');
-  const sizeSlider = sizeRange.querySelector('[data-media-size-slider]');
-  const syncSizeSlider = (min, max) => {
-    sizeSlider.style.setProperty('--range-min', `${min / 5}%`); sizeSlider.style.setProperty('--range-max', `${max / 5}%`);
-    sizeRange.querySelector('[data-media-size-value="min"]').textContent = `${min}%`;
-    sizeRange.querySelector('[data-media-size-value="max"]').textContent = `${max}%`;
-  };
-  sizeSlider.querySelectorAll('[data-media-size]').forEach(input => input.addEventListener('input', () => {
-    const changed = input.dataset.mediaSize;
-    let min = +sizeSlider.querySelector('[data-media-size="min"]').value, max = +sizeSlider.querySelector('[data-media-size="max"]').value;
-    if (changed === 'min' && min > max) max = min;
-    if (changed === 'max' && max < min) min = max;
-    const next = J.mediaEffectSettings(S.project, layer); next.sizeMin = min; next.sizeMax = max; S.project[layer].effects = next;
-    sizeSlider.querySelector('[data-media-size="min"]').value = min; sizeSlider.querySelector('[data-media-size="max"]').value = max;
-    syncSizeSlider(min, max); markUndoGroup(`mediaEffects:${layer}:size`); replanSoon(100);
-  }));
-  syncSizeSlider(settings.sizeMin, settings.sizeMax);
   action('shuffle').onclick = () => { shuffleMediaEffects([layer]); S.project[layer].seed++; replan(); };
   const all = value => { const next = J.mediaEffectSettings(S.project, layer); next.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(key => [key, value])); S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   action('enable').onclick = () => all(true); action('disable').onclick = () => all(false);
@@ -41017,20 +41042,6 @@ function bind() {
   for (const [id, key] of [['lyricAutoPlacement', 'autoPlacement'], ['lyricAvoidForeground', 'avoidForeground'], ['lyricRandomBlend', 'randomBlend'], ['lyricRandomOpacity', 'randomOpacity']]) {
     $(id).addEventListener('change', e => { S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), [key]: e.target.checked }; renderTech(); replan(); });
   }
-  const updateAutoLyricSize = changed => {
-    let min = +$('lyricAutoSizeMin').value, max = +$('lyricAutoSizeMax').value;
-    if (changed === 'min' && min > max) max = min;
-    if (changed === 'max' && max < min) min = max;
-    const settings = { ...J.lyricEffectSettings(S.project), sizeMin: min, sizeMax: max };
-    S.project.lyricEffects = settings;
-    $('lyricAutoSizeMin').value = min; $('lyricAutoSizeMax').value = max;
-    $('lyricAutoSizeMinValue').textContent = `${min}%`; $('lyricAutoSizeMaxValue').textContent = `${max}%`;
-    $('lyricAutoSizeSlider').style.setProperty('--range-min', `${min / 5}%`);
-    $('lyricAutoSizeSlider').style.setProperty('--range-max', `${max / 5}%`);
-    markUndoGroup('lyricAutoSize'); replanSoon(100);
-  };
-  $('lyricAutoSizeMin').addEventListener('input', () => updateAutoLyricSize('min'));
-  $('lyricAutoSizeMax').addEventListener('input', () => updateAutoLyricSize('max'));
   for (const [id, key] of [['lyricOpacityMin', 'opacityMin'], ['lyricOpacityMax', 'opacityMax']]) {
     $(id).addEventListener('change', e => {
       const settings = J.lyricEffectSettings(S.project);
