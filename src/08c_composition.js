@@ -95,7 +95,7 @@ const EMPHASIS_ZONES = { center: 6, full: 3, band: 1.5 }, SUPPRESSED_ZONES = { l
 J.pickSoloZone = cut => J.rng(J.h(J.placementSeed(cut), 893)).wpick(J.SOLO_ZONES.map(z => [z, cut.emphasis ? EMPHASIS_ZONES[z.id] || 0 : cut.suppressed ? SUPPRESSED_ZONES[z.id] || 0 : z.weight]));
 J.LYRIC_SIZE_CLASSES = { small: [.58, .76], medium: [.86, 1.04], large: [1.14, 1.36] };
 J.lyricSizeScale = (cut, rng, weights = [.3, .45, .25]) => {
-  const w = cut.emphasis ? [0, .25, .75] : cut.suppressed ? [.8, .2, 0] : weights;
+  const w = cut.emphasis ? [0, .25, .75] : cut.suppressed ? [.5, .5, 0] : weights;
   const kind = rng.wpick([['small', w[0]], ['medium', w[1]], ['large', w[2]]].filter(e => e[1] > 0));
   return rng.range(...J.LYRIC_SIZE_CLASSES[kind]);
 };
@@ -195,7 +195,7 @@ J.arrangeLyricGroup = (cuts, boxes, { seed, maxOverlap = 0 } = {}) => {
   const heroIndex = A.hero ? A.hero(n) : 0;
   const layout = s => cuts.map((_, i) => {
     const [cx, cy, k] = A.slot(i, n, n > 1 ? i / (n - 1) : .5), [bw, bh] = A.small && i !== heroIndex ? A.small(n) : A.cell(n);
-    const strength = cuts[i].emphasis ? 1.45 : cuts[i].suppressed ? .6 : 1;
+    const strength = cuts[i].emphasis ? 1.45 : cuts[i].suppressed ? .75 : 1;
     const w = Math.min(bw * k * s * strength, 1 - 2 * margin), h = Math.min(bh * k * s * strength, 1 - 2 * margin);
     const x = J.clamp(cx - w / 2, margin, 1 - margin - w), y = J.clamp(cy - h / 2, margin, 1 - margin - h);
     return { x, y, w, h };
@@ -214,11 +214,12 @@ const overlap = (a, b) =>Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a
 // Aligned lyric position for a w × h area: thirds, centre and margin-flush anchors, scored.
 // Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
 // then falls back to searching free regions).
-J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false }) => {
+J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false, minSize = null }) => {
   const rng = J.rng(J.h(J.placementSeed(cut), 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
   if (!zone && !obstacles.length) zone = J.pickSoloZone(cut).zone;
   let best = null;
-  for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4]) {
+  // minSize: the smallest area this lyric may shrink to (keeps suppressed lyrics readable).
+  for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4].filter(k => k === 1 || !minSize || w * k >= minSize.w && h * k >= minSize.h)) {
     const cw = Math.max(.04, w * k), ch = Math.max(.04, h * k);
     const xs = new Set([...anchors, cw / 2 + margin, 1 - cw / 2 - margin, ...(zone ? [zone.x + cw / 2, zone.x + zone.w / 2, zone.x + zone.w - cw / 2] : [])]);
     const ys = new Set([...anchors, .72, .28, ch / 2 + margin, 1 - ch / 2 - margin, ...(zone ? [zone.y + ch / 2, zone.y + zone.h / 2, zone.y + zone.h - ch / 2] : [])]);

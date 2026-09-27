@@ -112,6 +112,9 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
 };
 // Emphasised lyrics (*…*) on the full stage are drawn larger; automatic areas express the size instead.
 J.EMPHASIS_TEXT_SCALE = 1.15;
+// Suppressed lyrics (~…~) are smaller but never below a readable area.
+J.SUPPRESSED_TEXT_SCALE = .7;
+J.SUPPRESSED_MIN_AREA = { w: .3, h: .17 };
 // Emphasis over a foreground: a large lyric laid over the foreground (drawn in front of it), or a large
 // lyric balancing it from the opposite side. Neither is shrunk into the composition's lyric zone.
 const emphasisOverForeground = (cut, plan, context, rng) => {
@@ -150,8 +153,8 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   }
   const portrait = plan.W < plan.H;
   if (cut.emphasis && context.fgCenter) return emphasisOverForeground(cut, plan, context, rng);
-  let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.28, .4) : rng.range(.48, .72);
-  let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.2, .3) : rng.range(.4, .62);
+  let w = cut.emphasis ? rng.range(.82, .95) : cut.suppressed ? rng.range(.34, .46) : rng.range(.48, .72);
+  let h = cut.emphasis ? rng.range(.7, .92) : cut.suppressed ? rng.range(.24, .34) : rng.range(.4, .62);
   if (portrait && !cut.emphasis) { w = Math.min(.9, w * 1.2); h *= .8; }
   // Size contrast comes from the placement pattern: a lyric-only zone, or the composition zone's size.
   const solo = !obstacles.length && !context.zone && J.pickSoloZone ? J.pickSoloZone(cut) : null;
@@ -160,11 +163,16 @@ J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({
   const scale = J.lyricSizeScale ? J.lyricSizeScale(cut, rng, weights) : 1;
   const fitScale = Math.min(scale, .94 / w, .94 / h);// large classes still keep the 3% margins
   w = Math.max(.04, w * fitScale); h = Math.max(.04, h * fitScale);
+  const minSize = cut.suppressed ? J.SUPPRESSED_MIN_AREA : null;
+  if (minSize) { w = Math.max(w, minSize.w); h = Math.max(h, minSize.h); }
   // Designed placement: aligned anchors scored for the scene's composition zone, the foreground and balance.
   // Emphasis keeps its size rather than shrinking into the zone.
-  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter, fixedSize: !!cut.emphasis && !obstacles.length });
+  const composed = J.composeLyricArea?.(cut, { w, h, obstacles, zone, fgCenter: context.fgCenter, fixedSize: !!cut.emphasis && !obstacles.length, minSize });
   if (composed) return composed;
-  const regions = emptyRegions(obstacles);
+  let regions = emptyRegions(obstacles);
+  // A suppressed lyric keeps its minimum size: with no free region that large it takes the least covered
+  // position below instead of shrinking into a narrow strip.
+  if (minSize) regions = regions.filter(r => Math.min(w, r.w) >= minSize.w && Math.min(h, r.h) >= minSize.h);
   if (regions.length) {
     const candidates = regions.map(r => ({ r, w: Math.min(w, r.w), h: Math.min(h, r.h) }));
     const best = Math.max(...candidates.map(c => c.w * c.h));
@@ -233,7 +241,8 @@ J.finishLyricPlan = (project, plan, audio) => {
       cut.area = J.autoLyricArea(cut, plan, obstacles, settings, scene);
       cut.areaMode = 'auto';
     }
-    if (cut.area && cut.emphasis && cut.contentScale === J.EMPHASIS_TEXT_SCALE) cut.contentScale = 1;
+    // An automatic area already carries the strength; the text scale is for the full-stage default.
+    if (cut.area && (cut.emphasis && cut.contentScale === J.EMPHASIS_TEXT_SCALE || cut.suppressed && cut.contentScale === J.SUPPRESSED_TEXT_SCALE)) cut.contentScale = 1;
     // Some layouts choose columns or orientation during planning. Give those
     // choices the resolved area dimensions as well as using them at render time.
     if (cut.area && J.LAYOUTS[cut.layout]?.plan) {
@@ -266,7 +275,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   };
   const assign=(cut,area,mode)=>{
     cut.area=area;cut.areaMode=mode;
-    if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE)cut.contentScale=1;
+    if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE||cut.suppressed&&cut.contentScale===J.SUPPRESSED_TEXT_SCALE)cut.contentScale=1;
     const layout=J.LAYOUTS[cut.layout];
     if(layout?.plan)cut.params=layout.plan(J.rng(J.h(cut.seed,318)),{
       text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
