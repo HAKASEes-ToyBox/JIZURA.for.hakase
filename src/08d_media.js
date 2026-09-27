@@ -290,19 +290,28 @@ J.attachMedia = (item, file, assets = J.mediaAssets) => new Promise((resolve, re
   const url = URL.createObjectURL(file);
   const el = document.createElement(item.type === 'video' ? 'video' : 'img');
   if (item.type === 'video') { el.muted = true; el.playsInline = true; el.preload = 'auto'; }
+  let settled=false;
+  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;URL.revokeObjectURL(url);reject(new Error(J.mediaLabel('素材を読み込めませんでした：','Could not load asset: ')+item.name));};
+  const timer=setTimeout(fail,30000);
+  const updatePoster=()=>{
+    const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
+    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;}catch(e){}
+  };
   const ready = () => {
+    if(settled)return;settled=true;clearTimeout(timer);
     item.width = el.videoWidth || el.naturalWidth;
     item.height = el.videoHeight || el.naturalHeight;
-    let poster = url;
-    if (item.type === 'video') {
-      try { const c = document.createElement('canvas'); c.width = 96; c.height = 54; c.getContext('2d').drawImage(el, 0, 0, 96, 54); poster = c.toDataURL('image/png'); } catch (e) {}
-    }
+    let poster = item.type==='video'?'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="54"%3E%3Crect width="96" height="54" fill="%23222222"/%3E%3C/svg%3E':url;
     const posterElement = item.type === 'video' ? new Image() : null;
     if (posterElement) posterElement.src = poster;
-    assets.set(item.id, { url, element: el, type: item.type, poster, posterElement, file }); resolve(el);
+    assets.set(item.id, { url, element: el, type: item.type, poster, posterElement, file });
+    if(item.type==='video'){updatePoster();el.addEventListener('seeked',updatePoster,{once:true});}
+    resolve(el);
   };
-  el.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像・動画を読み込めませんでした')); };
-  if (item.type === 'video') el.onloadeddata = ready; else el.onload = ready;
+  el.onerror = fail;
+  // iOS may defer decoded frames until playback. Metadata is enough to restore
+  // the project; obtain the thumbnail later without blocking the whole import.
+  if (item.type === 'video') {el.onloadedmetadata=ready;el.onloadeddata=updatePoster;} else el.onload = ready;
   el.src = url;
 });
 const seekMediaVideo = async (v, target, signal) => {

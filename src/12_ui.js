@@ -3401,8 +3401,12 @@ function bind() {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     if (S.exporting || S.projectBusy) { e.target.value = ''; return; }
     S.projectBusy = true;
-    try { await openProjectFile(f); }
-    catch (err) { toast(J.mediaLabel('プロジェクトを読み込めませんでした：', 'Could not open project: ') + err.message); }
+    const dialog=document.createElement('dialog');dialog.className='insert-cut-dialog';dialog.id='projectLoadingDialog';
+    const title=document.createElement('h2'),status=document.createElement('p');title.textContent=J.mediaLabel('プロジェクトを読み込み中','Opening project');status.setAttribute('role','status');status.textContent=f.name;dialog.append(title,status);
+    dialog.addEventListener('cancel',event=>{if(S.projectBusy)event.preventDefault();});
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+    try { await openProjectFile(f,message=>{status.textContent=message;});dialog.close(); }
+    catch (err) {title.textContent=J.mediaLabel('プロジェクトを読み込めませんでした','Could not open project');status.textContent=err.message;const close=document.createElement('button');close.textContent=J.mediaLabel('閉じる','Close');close.onclick=()=>dialog.close();dialog.append(close);}
     finally { S.projectBusy = false; }
     e.target.value = '';
   });
@@ -3514,26 +3518,31 @@ async function restoreAudioAsset() {
     S.audio = audio; S.audioFile = file; refreshAudioName(); syncUI(); replan();
   } catch (err) { toast(J.mediaLabel('曲を復元できませんでした：','Could not restore audio: ') + err.message); }
 }
-async function openProjectFile(file) {
-  const loaded = await J.unpackProject(file), project = loaded.project, assets = new Map();
+async function openProjectFile(file,report=()=>{}) {
+  const L=J.mediaLabel;
+  const step=async(message,work)=>{
+    report(message);let timer;
+    try{return await Promise.race([work(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message+' — '+L('読み込みがタイムアウトしました。ファイルを端末にダウンロードしてから再度お試しください。','Loading timed out. Download the file to this device and try again.'))),60000);})]);}
+    finally{clearTimeout(timer);}
+  };
+  const loaded = await step(L('ファイルを確認しています','Reading project file'),()=>J.unpackProject(file)), project = loaded.project, assets = new Map();
   let audio = null, audioFile = null;
   try {
     const files = new Map(loaded.files.map(entry=>[entry.kind+':'+entry.id,entry.file]));
     for (const item of [...(project.media?.items || []),...(project.foreground?.items || [])]) {
       if (assets.has(item.id)) continue;
       const blob = files.get('media:'+item.id) || await J.loadMedia(item.id);
-      if (blob) await J.attachMedia(item,blob,assets);
+      if (blob) await step(L('素材を復元しています：','Restoring asset: ')+item.name,()=>J.attachMedia(item,blob,assets));
     }
     if (project.audioAsset) {
       audioFile = files.get('audio:'+project.audioAsset.id) || await J.loadMedia(project.audioAsset.id);
-      if (audioFile) audio = await J.analyzeAudio(audioFile);
+      if (audioFile) audio = await step(L('音声を解析しています','Analyzing audio'),()=>J.analyzeAudio(audioFile));
     }
     // Decode everything first: malformed projects leave the current edit intact.
     for (const entry of loaded.files) {
-      if (entry.kind === 'font') await J.saveFontFile(entry.id,entry.file);
-      else await J.storeMedia(entry.id,entry.file);
+      await step(L('素材を保存しています：','Saving asset: ')+entry.name,()=>entry.kind==='font'?J.saveFontFile(entry.id,entry.file):J.storeMedia(entry.id,entry.file));
     }
-    await J.restoreFontFiles(project.userFonts);
+    await step(L('フォントを復元しています','Restoring fonts'),()=>J.restoreFontFiles(project.userFonts));
     replaceProject(project,audio,audioFile,assets);
   } catch (err) { releaseProjectAssets(assets); throw err; }
 }
