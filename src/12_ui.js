@@ -3193,6 +3193,7 @@ function bind() {
   $('btnCreateProject').addEventListener('click', () => {
     const project = J.defaultProject(); project.lyrics = ''; project.aspect = $('newProjectAspect').value;
     replaceProject(project, null, null, new Map()); $('newProjectDlg').close();
+    $('btnThemes').click();
   });
   $('btnSave').addEventListener('click', async () => {
     if (S.projectBusy) return;
