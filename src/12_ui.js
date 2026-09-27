@@ -169,6 +169,17 @@ function composePlan(project) {
   plan.media = J.planMedia(project, plan, S.audio && S.audio.duration);
   plan.foreground = J.planMedia(project, plan, S.audio && S.audio.duration, 'foreground');
   plan.duration = Math.max(plan.media.duration, plan.foreground.duration);
+  // An explicit output length also caps existing cuts extending past the song.
+  if(Number.isFinite(+project.durationOverride)&&+project.durationOverride>0){
+    plan.duration=+project.durationOverride;
+    plan.cuts=plan.cuts.filter(c=>c.start<plan.duration);
+    for(const cut of plan.cuts){cut.end=Math.min(cut.end,plan.duration);cut.dur=cut.end-cut.start;}
+    plan.events=plan.events.filter(event=>event.t<plan.duration);
+    for(const layer of ['media','foreground']){
+      plan[layer].cuts=plan[layer].cuts.filter(c=>c.start<plan.duration);
+      for(const cut of plan[layer].cuts)cut.end=Math.min(cut.end,plan.duration);
+    }
+  }
   for (const layer of ['media', 'foreground']) {
     plan[layer].duration = plan.duration;
     const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
@@ -180,7 +191,9 @@ function replan() {
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
   if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
-  const temporarilyHidden = ref => S.project.durationOverride != null && /^l:\d+:\d+$/.test(ref) && +ref.split(':')[1] < S.plan.lines.length;
+  const temporarilyHidden = ref => S.project.durationOverride != null && (
+    /^l:\d+:\d+$/.test(ref) && +ref.split(':')[1] < S.plan.lines.length ||
+    /^[fm]:\d+$/.test(ref) && +ref.slice(2) < S.project[ref[0]==='f'?'foreground':'media'].cutCount);
   S.project.timelineLinks = S.project.timelineLinks.filter(link => link && link.a !== link.b && (boundaryCut(link.a) || temporarilyHidden(link.a)) && (boundaryCut(link.b) || temporarilyHidden(link.b)));
   lastCutIdx = null;
   renderLines(); renderMediaList(); renderMediaLines(); sizeViewport(); drawTimeline(); drawTimelineLinks(); updateTimeUI();
@@ -3052,7 +3065,7 @@ function bind() {
   $('lineScale').addEventListener('change', e => { S.project.timing.lineScale = J.clamp(parseFloat(e.target.value) || 1, 0.3, 4); replan(); });
   $('snap').addEventListener('change', e => { S.project.timing.snap = e.target.checked; replan(); });
   $('btnResetTimes').addEventListener('click', () => { const layer = activeMediaLayer(), timing = layer ? S.project[layer].timing : S.project.timing; timing.lineTimes = {}; if (!layer) timing.cutTimes = {}; replan(); });
-  $('audioFile').addEventListener('change', e => { const f = e.target.files?.[0]; if (f) loadAudioFile(f); });
+  $('audioFile').addEventListener('change', e => { const f = e.target.files?.[0];e.target.value='';if (f) openAudioImport(f); });
   $('btnRemoveAudio').addEventListener('click', removeAudio);
   $('btnTap').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
@@ -3410,17 +3423,44 @@ function bind() {
 }
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
-async function loadAudioFile(f) {
+function openAudioImport(file) {
+  pause();
+  const L=J.mediaLabel,video=J.isVideoFile(file),dialog=document.createElement('dialog');
+  dialog.id='audioImportDialog';dialog.className='insert-cut-dialog';
+  dialog.innerHTML=`<form><h2>${L('曲を読み込む','Import audio')}</h2><p class="audio-import-name"></p><label class="row"><input name="matchDuration" type="checkbox" checked>${L('作成する動画の長さを合わせる','Match output duration to this file')}</label>${video?`<label class="row"><input name="background" type="checkbox" checked>${L('背景としても取り込む','Also import as background')}</label><p class="hint">${L('背景動画は先頭に挿入します。既存の背景カットは後ろへ移動します。','The video is inserted at the beginning. Existing background cuts move after it.')}</p>`:''}<div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('読み込む','Import')}</button></div></form>`;
+  dialog.querySelector('.audio-import-name').textContent=file.name;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{e.preventDefault();const options={matchDuration:dialog.querySelector('[name=matchDuration]').checked,background:!!dialog.querySelector('[name=background]')?.checked};dialog.close();loadAudioFile(file,options);};
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+}
+async function loadAudioFile(f,options={matchDuration:true,background:false}) {
   const project = S.project, request = S.audioLoad = (S.audioLoad || 0) + 1;
+  const previousDuration=S.plan.duration,video=J.isVideoFile(f),assets=new Map();
   $('audioName').textContent = '解析中…';
   try {
     pause();
     const audio = await J.analyzeAudio(f);
+    const duration=video?await J.videoFileDuration(f):audio.duration;
     if (S.project !== project || S.audioLoad !== request) return false;
-    S.audio = audio; S.audioFile = f;
-    S.project.audioAsset = {id:'audio_' + crypto.randomUUID(),name:f.name,type:f.type};
-    await J.storeMedia(S.project.audioAsset.id, f).catch(() => {});
+    const audioFile=video?J.audioWaveFile(audio.buffer,f.name):f;
+    let item=null;
+    if(video&&options.background){
+      if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
+      item={id:crypto.randomUUID(),name:f.name,size:f.size,type:'video',duration};
+      await J.attachMedia(item,f,assets);await J.storeMedia(item.id,f);
+    }
+    const audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
+    await J.storeMedia(audioAsset.id,audioFile);
     if (S.project !== project || S.audioLoad !== request) return false;
+    if(item){
+      const m=project.media,cuts=S.plan.media.cuts,overrides={0:{itemId:item.id,technique:'none',entrance:'none',departure:'none',videoStart:0,videoDuration:duration,videoLoop:false}},times={0:0};
+      cuts.forEach((cut,i)=>{overrides[i+1]={...m.cutOverrides[i],itemId:cut.itemId};times[i+1]=cut.start+duration;});
+      m.items.push(item);m.manualCuts=true;m.randomOrder=false;m.cutCount=cuts.length+1;m.cutOverrides=overrides;m.timing.lineTimes=times;
+      for(const link of project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith('m:'))link[side]='m:'+(+link[side].slice(2)+1);
+      for(const [id,asset] of assets){J.mediaAssets.set(id,asset);asset.element.addEventListener('seeked',()=>{S.need=true;});}assets.clear();
+    }
+    S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;
+    project.durationOverride=options.matchDuration?duration:previousDuration;
     refreshAudioName();
     S.project.timing.snap = true;
     syncUI(); replan();
@@ -3428,7 +3468,7 @@ async function loadAudioFile(f) {
   } catch (err) {
     if (S.project === project && S.audioLoad === request) { refreshAudioName(); toast(J.mediaLabel('曲を読み込めませんでした：','Could not import audio: ') + err.message); }
     return false;
-  }
+  } finally {releaseProjectAssets(assets);}
 }
 
 function releaseProjectAssets(assets) {

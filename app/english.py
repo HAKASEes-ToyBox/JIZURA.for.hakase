@@ -54,7 +54,7 @@ BODY = {
     '動画を見ながらタップで挿入': 'Tap while watching the video to insert',
     '動画を見ながら各カットのタイミングでタップ': 'Tap when each cut should start while watching the video',
     '曲なし（読み込むと拍を検出してカットを合わせます）': 'No audio. Import a song to detect beats and align cuts.',
-    'mp3 / wav / m4a など': 'MP3, WAV, M4A and more',
+    'mp3 / wav / m4a / mp4 / webm など': 'MP3, WAV, M4A, MP4, WebM and more',
     '曲を読み込む': 'Import audio', '曲を再生しながら各行の頭でタップ': 'Tap at the start of each line while the song plays',
     'タップで同期': 'Tap to sync', '開始(秒)': 'Start (s)', '行の長さ': 'Line duration',
     '拍にスナップ': 'Snap to beat', '手動タイミングを消す': 'Clear manual timing',
