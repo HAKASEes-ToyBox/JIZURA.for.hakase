@@ -276,6 +276,7 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  document.querySelectorAll('#layerVisibilityControls button').forEach(button=>button.disabled=!!S.exporting);
   $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
   $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('一時停止','Pause'):J.mediaLabel('再生','Play'));
   $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
@@ -761,6 +762,7 @@ function drawItemFrames() {
   Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
   const items=[];
   for(const layer of ['foreground','lyrics','media']) {
+    if(S.plan.layerVisibility?.[layer]===false)continue;
     if(layer==='lyrics') {
       for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
     } else {
@@ -876,6 +878,16 @@ function performTimelineAction(control) {
 function drawTimelineLinks() {
   const svg = $('timelineLinks'), stack = $('timelineStack');
   if (!svg || !S.plan) return;
+  for(const [layer,id] of [['foreground','foregroundTimeline'],['lyrics','timeline'],['media','mediaTimeline']]){
+    const canvas=$(id),button=$('layerVisibilityControls').querySelector(`[data-layer="${layer}"]`);
+    if(!button)continue;
+    const visible=S.project.layerVisibility?.[layer]!==false;
+    button.style.top=(canvas.offsetTop+(canvas.clientHeight-30)/2)+'px';
+    button.setAttribute('aria-pressed',String(visible));
+    button.querySelector('.eye-slash').style.display=visible?'none':'';
+    button.title=J.mediaLabel({foreground:'前景',lyrics:'歌詞',media:'背景'}[layer],{foreground:'Foreground',lyrics:'Lyrics',media:'Background'}[layer])+': '+J.mediaLabel(visible?'非表示にする':'表示する',visible?'Hide':'Show');
+    button.setAttribute('aria-label',button.title);
+  }
   const width = stack.clientWidth, height = stack.clientHeight;
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   const markers = timelineMarkers();
@@ -2107,9 +2119,13 @@ function requestFilename(kind) {
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
   return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
 }
+function confirmHiddenLayers() {
+  return !['foreground','lyrics','media'].some(layer=>S.project.layerVisibility?.[layer]===false) || window.confirm(J.mediaLabel('非表示のレイヤーは書き出しに含まれません。よろしいですか？','Hidden layers will not be included in the export. Continue?'));
+}
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
+  if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
   pause();
@@ -2397,6 +2413,12 @@ function bind() {
   }
   $('insertEmptyLyricAtPlayhead').addEventListener('click',insertEmptyLyricAtPlayhead);
   $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
+  for(const layer of ['foreground','lyrics','media']){
+    const button=document.createElement('button');button.type='button';button.dataset.layer=layer;
+    button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg>';
+    button.addEventListener('click',()=>{if(S.exporting)return;S.project.layerVisibility ||= {};S.project.layerVisibility[layer]=S.project.layerVisibility[layer]===false;replan();});
+    $('layerVisibilityControls').append(button);
+  }
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
@@ -2852,6 +2874,7 @@ function bind() {
   });
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
+    if(!confirmHiddenLayers())return;
     const filename = await requestFilename('ae'); if (!filename) return;
     try { await J.saveFile(filename, JSON.stringify(J.planForAE(S.plan, S.project), null, 1)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：','Could not save: ') + err.message); }

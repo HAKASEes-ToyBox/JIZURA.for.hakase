@@ -524,3 +524,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .viewport:fullscreen .fullscreen-transport { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(15,15,18,.85); }
 .fullscreen-transport input[type=range] { flex: 1; min-width: 0; accent-color: var(--amber); }
 .fullscreen-transport .tc { font: 12px var(--mono); white-space: nowrap; }
+
+.timeline-with-visibility { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 6px; min-width: 0; }
+.layer-visibility-controls { position: relative; }
+.layer-visibility-controls button { position: absolute; left: 0; width: 30px; height: 30px; padding: 5px; color: var(--cyan); }
+.layer-visibility-controls button[aria-pressed=false] { color: var(--muted); }
+.layer-visibility-controls svg { display: block; width: 18px; height: 18px; }
