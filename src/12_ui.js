@@ -610,6 +610,7 @@ function openCutDetails(layer,index,part=0) {
   let draft = clone(original), current = clone(cut), start = cut.start;
   let locked = !!(lyric ? S.project.overrides[index]?.lock : original.lock);
   const initialLock = locked;
+  const disabledChoices=[];
   let removedDetail = null;
   const openDetails = new Map();
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
@@ -630,7 +631,7 @@ function openCutDetails(layer,index,part=0) {
   const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
   let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
   const findCut=plan=>blank ? plan.cuts.find(c=>c.blankId===cut.blankId)||plan.cuts[index] : lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
-  const draftProject=()=>{const project=clone(S.project);if(!blank){if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
+  const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);if(!blank){if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
   function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
@@ -747,7 +748,7 @@ function openCutDetails(layer,index,part=0) {
       shapeBox.replaceChildren();const s=mask.shapes[maskSelected];tools.remove.disabled=!s;if(!s)return;
       const kind=document.createElement('label');kind.className='cut-detail-field';kind.innerHTML=`<span>${L('形','Shape')}</span><select data-mask-shape="type"></select>`;
       const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
-      kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);
+      kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);attachDetailRandom(kindSelect,'mask.shape.type');
       for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
         const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="any" min="${min}" max="${max}" data-mask-shape="${key}">`;
         const input=row.querySelector('input');input.value=+s[key].toFixed(4);
@@ -888,6 +889,56 @@ function openCutDetails(layer,index,part=0) {
     const reg={layout:J.LAYOUTS,enter:J.ENTER,hold:J.HOLD,exit:J.EXIT,treat:J.TREAT,bg:J.BG,cam:J.CAMERA,trans:J.TRANS,font:J.FONTS,id:J.DECOR}[field];
     return reg ? [...(field==='trans'?[['none',L('なし','None')]]:[]),...Object.entries(reg).map(([id,d])=>[id,d.name||id])] : null;
   }
+  function choicePool(path){
+    if(/^decor\.\d+\.id$/.test(path))return {kind:lyric?'lyric':'decor',group:'decor'};
+    if(lyric && ['layout','enter','hold','exit','treat','bg','cam','trans'].includes(path))return {kind:'lyric',group:path};
+    if((!lyric && ['technique','entrance','departure'].includes(path)) || path.startsWith('mask.motion.'))return {kind:'media',group:layer==='lyrics'?'media':layer};
+    return {kind:'local',group:layer+':'+path};
+  }
+  function applyDisabledChoices(project){
+    for(const {pool,value} of disabledChoices){
+      if(pool.kind==='lyric')((project.enabled ||= {})[pool.group] ||= {})[value]=false;
+      else if(pool.kind==='media'||pool.kind==='decor'){
+        const target=pool.kind==='decor'?layer:pool.group,settings=J.mediaEffectSettings(project,target);
+        (settings[pool.kind==='decor'?'decorEnabled':'enabled'] ||= {})[value]=false;project[target].effects=settings;
+      }else ((project.detailRandomExclusions ||= {})[pool.group] ||= {})[value]=true;
+    }
+  }
+  function attachDetailRandom(select,path){
+    if(select.dataset.randomAttached)return;select.dataset.randomAttached='true';
+    const row=select.closest('label');if(!row)return;
+    const title=row.querySelector('span');if(!title)return;
+    const pool=choicePool(path),project=draftProject();
+    const allowed=value=>{
+      if(disabledChoices.some(entry=>entry.pool.kind===pool.kind&&entry.pool.group===pool.group&&entry.value===value))return false;
+      if(pool.kind==='lyric')return project.enabled?.[pool.group]?.[value]!==false;
+      if(pool.kind==='media')return J.mediaEffectSettings(project,pool.group).enabled?.[value]!==false;
+      if(pool.kind==='decor')return J.mediaDecorOn(J.mediaEffectSettings(project,layer),value);
+      return !project.detailRandomExclusions?.[pool.group]?.[value];
+    };
+    const candidates=()=>[...select.options].filter(option=>!option.disabled && option.value!==select.value && option.value!=='' && option.value!=='legacy' && allowed(option.value));
+    const controls=document.createElement('span');controls.className='detail-random-actions';
+    for(const off of [false,true]){
+      const button=document.createElement('button');button.type='button';button.className='icon ghost';button.dataset.detailRandom=path;button.dataset.disableCurrent=String(off);
+      button.title=off?L('この演出をOFFにして再抽選','Disable current effects and randomize'):L('この項目だけ再抽選','Randomize this setting only');button.setAttribute('aria-label',button.title);
+      button.innerHTML=off?ICON.disableReroll:ICON.dice;
+      button.disabled=select.disabled || !candidates().length;
+      button.onclick=e=>{
+        e.preventDefault();e.stopPropagation();const options=candidates();if(!options.length)return;
+        // Preserve all other resolved effect values while changing this field.
+        const snapshot=J.cutEffectsPayload(current,layer,previewPlan);
+        draft.details={...snapshot.details,...draft.details};
+        if(!lyric){for(const [key,value] of Object.entries(snapshot.native))if(!Object.hasOwn(draft,key))draft[key]=clone(value);if(!Object.hasOwn(draft,'placement'))draft.placement=clone(current.placement);}
+        if(off)disabledChoices.push({pool,value:select.value});
+        select.value=options[Math.floor(Math.random()*options.length)].value;
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+        // Nested controls update values without rebuilding the generic form.
+        if(select.isConnected)preview();
+      };
+      controls.append(button);
+    }
+    title.classList.add('detail-field-title');title.append(controls);
+  }
   function fieldEditor(parent,field,value,onChange,path=field) {
     if(value && typeof value==='object') {
       const section=document.createElement('details'); section.dataset.detailSection=path;
@@ -932,6 +983,7 @@ function openCutDetails(layer,index,part=0) {
       }
     });
     row.append(input);parent.append(row);
+    if(choices)attachDetailRandom(input,path);
   }
   function render() {
     openDetails.clear();
@@ -973,12 +1025,17 @@ function openCutDetails(layer,index,part=0) {
       if(value===undefined)continue;
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
+    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape],select[data-mask-field]')){
+      const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
+      attachDetailRandom(select,path);
+    }
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
     const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
     formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
+      applyDisabledChoices(S.project);
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
       if(!blank && (locked !== initialLock || !lyric)) {
         if(lyric) setOv(index,locked ? {lock:true,lockedSeed:S.plan.lines[index].seed,
@@ -988,7 +1045,7 @@ function openCutDetails(layer,index,part=0) {
         else mediaOv(index,locked ? {lock:true,lockedSeed:current.seed,lockedTechnique:current.technique,lockedEntrance:current.entrance,lockedDeparture:current.departure,lockedPlacement:draft.placement||current.placement,lockedPlacementMode:current.placementMode,lockedItemId:current.itemId} : {lock:false},layer);
       }
       if(group&&start!==cut.start) for(const member of group.members)setTimelineBoundaryTime(member,J.clamp(start,group.min,group.max));
-      replan();dialog.close();
+      replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
     };
   }
   dialog.addEventListener('close',()=>{
