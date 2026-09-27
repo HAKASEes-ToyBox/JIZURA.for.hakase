@@ -31,7 +31,9 @@ J.COMPOSITIONS = [
   { id: 'thirdRight', fg: { x: .64, y: .54, size: [.5, .64] }, zone: { x: .03, y: .18, w: .28, h: .62 }, weight: [.6, .3] },
   { id: 'centerSmall', fg: { x: .5, y: .5, size: [.22, .3] }, zone: { x: .08, y: .68, w: .84, h: .28 }, weight: [.4, .5] },
 ];
-J.COMPOSITION_BY_ID = Object.fromEntries(J.COMPOSITIONS.map(c => [c.id, c]));
+// Only for scenes with an emphasised lyric (*…*): a large foreground with a large lyric laid over it.
+J.EMPHASIS_COMPOSITION = { id: 'bothLarge', fg: { x: .5, y: .5, size: [.72, .88] }, zone: { x: .04, y: .1, w: .92, h: .8 }, weight: [0, 0] };
+J.COMPOSITION_BY_ID = Object.fromEntries([...J.COMPOSITIONS, J.EMPHASIS_COMPOSITION].map(c => [c.id, c]));
 // Lyric-only scenes: aligned zones; size gives the chance of small / medium / large lyric areas there.
 J.SOLO_ZONES = [
   { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3, size: [.2, .45, .35] },
@@ -98,7 +100,10 @@ J.pickComposition = (cut, plan, layer = 'foreground') => {
   const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
   const pick = (seed, avoid) => J.rng(J.h(seed, 881)).wpick(J.COMPOSITIONS.filter(c => c.id !== avoid).map(c => [c, c.weight[portrait ? 1 : 0]]));
   const base = pick(cut.seed, last?.baseId);
-  const comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  let comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  // A foreground shown with an emphasised lyric sometimes goes large together with it.
+  const emphasised = layer === 'foreground' && plan?.cuts?.some(c => c.emphasis && c.line >= 0 && c.start < cut.end && c.end > cut.start);
+  if (emphasised && last?.id !== J.EMPHASIS_COMPOSITION.id && J.rng(J.h(J.placementSeed(cut), 885))() < .4) comp = J.EMPHASIS_COMPOSITION;
   memo[layer] = { index: cut.index, id: comp.id, baseId: base.id };
   return comp;
 };

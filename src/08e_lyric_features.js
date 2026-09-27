@@ -98,7 +98,7 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   const main = shared.reduce((a, b) => b.time > a.time ? b : a), comp = J.COMPOSITION_BY_ID?.[main.cut.composition];
   const weight = shared.reduce((sum, e) => sum + e.time, 0) || 1;
   const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
-  return { zone: comp?.zone || null, fgCenter };
+  return { zone: comp?.zone || null, fgCenter, composition: comp?.id || null };
 };
 // Emphasised lyrics (*…*) on the full stage are drawn larger; automatic areas express the size instead.
 J.EMPHASIS_TEXT_SCALE = 1.15;
@@ -106,6 +106,12 @@ J.EMPHASIS_TEXT_SCALE = 1.15;
 // lyric balancing it from the opposite side. Neither is shrunk into the composition's lyric zone.
 const emphasisOverForeground = (cut, plan, context, rng) => {
   const portrait = plan.W < plan.H, margin = .03, f = context.fgCenter;
+  if (context.composition === J.EMPHASIS_COMPOSITION?.id) {
+    // Both large: the lyric spans the stage over the large foreground.
+    const w = rng.range(.86, .94), h = portrait ? rng.range(.46, .62) : rng.range(.66, .86);
+    cut.lyricPattern = 'bothLarge';
+    return { x: (1 - w) / 2 + rng.range(-1, 1) * Math.min(.02, (1 - w) / 2 - margin), y: J.clamp(f.y - h / 2, margin, 1 - margin - h), w, h, angle: 0, lockAspect: true };
+  }
   if (rng() < .6) {
     const w = portrait ? rng.range(.86, .94) : rng.range(.78, .94), h = portrait ? rng.range(.42, .6) : rng.range(.56, .8), pull = rng.range(.55, 1);
     const cx = .5 + (f.x - .5) * pull, cy = .5 + (f.y - .5) * pull;

@@ -4321,7 +4321,9 @@ J.COMPOSITIONS = [
   { id: 'thirdRight', fg: { x: .64, y: .54, size: [.5, .64] }, zone: { x: .03, y: .18, w: .28, h: .62 }, weight: [.6, .3] },
   { id: 'centerSmall', fg: { x: .5, y: .5, size: [.22, .3] }, zone: { x: .08, y: .68, w: .84, h: .28 }, weight: [.4, .5] },
 ];
-J.COMPOSITION_BY_ID = Object.fromEntries(J.COMPOSITIONS.map(c => [c.id, c]));
+// Only for scenes with an emphasised lyric (*…*): a large foreground with a large lyric laid over it.
+J.EMPHASIS_COMPOSITION = { id: 'bothLarge', fg: { x: .5, y: .5, size: [.72, .88] }, zone: { x: .04, y: .1, w: .92, h: .8 }, weight: [0, 0] };
+J.COMPOSITION_BY_ID = Object.fromEntries([...J.COMPOSITIONS, J.EMPHASIS_COMPOSITION].map(c => [c.id, c]));
 // Lyric-only scenes: aligned zones; size gives the chance of small / medium / large lyric areas there.
 J.SOLO_ZONES = [
   { id: 'center', zone: { x: .1, y: .2, w: .8, h: .6 }, weight: 3, size: [.2, .45, .35] },
@@ -4388,7 +4390,10 @@ J.pickComposition = (cut, plan, layer = 'foreground') => {
   const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
   const pick = (seed, avoid) => J.rng(J.h(seed, 881)).wpick(J.COMPOSITIONS.filter(c => c.id !== avoid).map(c => [c, c.weight[portrait ? 1 : 0]]));
   const base = pick(cut.seed, last?.baseId);
-  const comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  let comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  // A foreground shown with an emphasised lyric sometimes goes large together with it.
+  const emphasised = layer === 'foreground' && plan?.cuts?.some(c => c.emphasis && c.line >= 0 && c.start < cut.end && c.end > cut.start);
+  if (emphasised && last?.id !== J.EMPHASIS_COMPOSITION.id && J.rng(J.h(J.placementSeed(cut), 885))() < .4) comp = J.EMPHASIS_COMPOSITION;
   memo[layer] = { index: cut.index, id: comp.id, baseId: base.id };
   return comp;
 };
@@ -5090,7 +5095,7 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   const main = shared.reduce((a, b) => b.time > a.time ? b : a), comp = J.COMPOSITION_BY_ID?.[main.cut.composition];
   const weight = shared.reduce((sum, e) => sum + e.time, 0) || 1;
   const fgCenter = { x: shared.reduce((s, e) => s + (e.box.x + e.box.w / 2) * e.time, 0) / weight, y: shared.reduce((s, e) => s + (e.box.y + e.box.h / 2) * e.time, 0) / weight };
-  return { zone: comp?.zone || null, fgCenter };
+  return { zone: comp?.zone || null, fgCenter, composition: comp?.id || null };
 };
 // Emphasised lyrics (*…*) on the full stage are drawn larger; automatic areas express the size instead.
 J.EMPHASIS_TEXT_SCALE = 1.15;
@@ -5098,6 +5103,12 @@ J.EMPHASIS_TEXT_SCALE = 1.15;
 // lyric balancing it from the opposite side. Neither is shrunk into the composition's lyric zone.
 const emphasisOverForeground = (cut, plan, context, rng) => {
   const portrait = plan.W < plan.H, margin = .03, f = context.fgCenter;
+  if (context.composition === J.EMPHASIS_COMPOSITION?.id) {
+    // Both large: the lyric spans the stage over the large foreground.
+    const w = rng.range(.86, .94), h = portrait ? rng.range(.46, .62) : rng.range(.66, .86);
+    cut.lyricPattern = 'bothLarge';
+    return { x: (1 - w) / 2 + rng.range(-1, 1) * Math.min(.02, (1 - w) / 2 - margin), y: J.clamp(f.y - h / 2, margin, 1 - margin - h), w, h, angle: 0, lockAspect: true };
+  }
   if (rng() < .6) {
     const w = portrait ? rng.range(.86, .94) : rng.range(.78, .94), h = portrait ? rng.range(.42, .6) : rng.range(.56, .8), pull = rng.range(.55, 1);
     const cx = .5 + (f.x - .5) * pull, cy = .5 + (f.y - .5) * pull;

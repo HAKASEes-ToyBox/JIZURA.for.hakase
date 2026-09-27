@@ -20,6 +20,13 @@ for(const fg of [false,true]){const a={e:[],n:[],s:[]},patterns=new Set();let ov
  const e=avg(a.e),n=avg(a.n),s=avg(a.s);stats[fg?'fg':'solo']={e:+e.toFixed(3),n:+n.toFixed(3),s:+s.toFixed(3),minEmph:+minEmph.toFixed(3)};
  check(e>=2*n,'emphasis larger '+fg);check(s<=.5*n,'suppressed smaller '+fg);check(minEmph>=.3,'every emphasis large '+fg+' '+minEmph.toFixed(3));
  if(fg){check(patterns.has('overlay')&&patterns.has('counter'),'fg emphasis patterns '+[...patterns]);check(overlayCover>=.5,'overlay covers the foreground '+overlayCover.toFixed(2));}}
+// Foreground + emphasis: sometimes both go large (large foreground, large lyric over it); never without emphasis.
+{let both=0,plain=0;for(let seed=1;seed<=60;seed++){const p=make(seed,true,true),pl=J.plan(p),f=J.planMedia(p,pl,null,'foreground').cuts[0],box=J.foregroundBounds(p,pl,f),e=pl.cuts.find(c=>c.emphasis);
+  if(f.composition!=='bothLarge'){check(e.lyricPattern!=='bothLarge','both-large lyric needs the composition '+seed);continue;}both++;
+  check(Math.max(box.w,box.h)>=.6,'large foreground '+seed+' '+Math.max(box.w,box.h).toFixed(2));check(e.lyricPattern==='bothLarge'&&e.area.w*e.area.h>=.4,'large lyric '+seed);
+  check(ov(e.area,box)>=.5*box.w*box.h,'lyric over the foreground '+seed);check(e.frontmost,'lyric in front '+seed);}
+ for(let seed=1;seed<=60;seed++){const p=make(seed,true,true,'夜明けの色を覚えてる\nほどけた声が'),pl=J.plan(p);if(J.planMedia(p,pl,null,'foreground').cuts[0].composition==='bothLarge')plain++;}
+ check(both>=10&&both<=40,'both-large share '+both);check(plain===0,'both-large only with emphasis');stats.bothLarge=both;}
 // Designed arrangements give the emphasised lyric a larger cell and the suppressed one a smaller cell.
 {let bigger=0,smaller=0,count=0;for(let seed=1;seed<=30;seed++){const cuts=J.plan(make(seed,true,false,'{-夜明けの色を/*覚えてる*/ほどけた声が/~遠くで鳴った~-}')).cuts.filter(c=>c.group===0&&Number.isInteger(c.part));
   if(!cuts[0].arrangement)continue;count++;const size=c=>c.area.w*c.area.h,e=cuts.find(c=>c.emphasis),s=cuts.find(c=>c.suppressed),n=cuts.filter(c=>!c.emphasis&&!c.suppressed);
