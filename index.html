@@ -37312,6 +37312,19 @@ J.makeEffectPreviewPlan=(group,key,layer='lyrics',id,settings)=>{
   else {plan.media=J.planMedia(project,plan,null,'media');plan.foreground=J.planMedia(project,plan,null,'foreground');}
   return plan;
 };
+// The looped part of a preview plan: entrances replay about 1 s after finishing,
+// exits start 0.5 s before leaving, everything else plays the whole plan.
+J.effectPreviewWindow=(plan,group,layer,def)=>{
+  const stage=layer==='lyrics'?group:def?.stage,cut=layer==='lyrics'?plan.cuts[0]:plan[layer].cuts[0];
+  const phase=which=>layer==='lyrics'?cut[which==='enter'?'inDur':'outDur']||0:Math.min(cut.effectSettings?.duration || .45,(cut.end-cut.start)*.3);
+  if(stage==='enter'){
+    // Lyrics: the last glyph starts stagger × (glyphs − 1) later.
+    const length=phase('enter')+(layer==='lyrics'?(cut.stagger||0)*Math.max(0,[...(cut.text||'')].length-1):0);
+    return {offset:cut.start,cycle:Math.min(cut.end-cut.start,length+1)};
+  }
+  if(stage==='exit'){const offset=Math.max(cut.start,cut.end-phase('exit')-.5);return {offset,cycle:cut.end-offset};}
+  return {offset:0,cycle:layer==='lyrics'?6:plan[layer].cuts[plan[layer].cuts.length-1].end};
+};
 const showError=err=>{const error=dialog.querySelector('.effect-preview-error');error.textContent=J.mediaLabel('プレビューを再生できませんでした：','Could not play preview: ')+err.message;error.hidden=false;};
 // (Re)start the loop for the current preview; slider changes restart it from the beginning.
 function run(){
@@ -37321,13 +37334,7 @@ function run(){
   try{
     const plan=J.makeEffectPreviewPlan(group,key,layer,assetId,settings);
     const renderer=new J.Renderer(),start=performance.now();
-    let offset=0,cycle=layer==='lyrics'?6:plan[layer].cuts[plan[layer].cuts.length-1].end;
-    if(layer==='lyrics'?group==='exit':def.stage==='exit'){
-      const cut=layer==='lyrics'?plan.cuts[0]:plan[layer].cuts[0];
-      const exitDuration=layer==='lyrics'?cut.outDur:Math.min(cut.effectSettings?.duration || .45,(cut.end-cut.start)*.3);
-      offset=Math.max(cut.start,cut.end-exitDuration-.5);
-      cycle=cut.end-offset;
-    }
+    const {offset,cycle}=J.effectPreviewWindow(plan,group,layer,def);
     const draw=now=>{if(token!==generation||!dialog.open)return;const t=offset+((now-start)/1000)%cycle;renderer.frame(canvas.getContext('2d'),plan,t,{scale:canvas.width/plan.W,noHud:true});frame=requestAnimationFrame(draw);};
     frame=requestAnimationFrame(draw);
   }catch(err){showError(err);}

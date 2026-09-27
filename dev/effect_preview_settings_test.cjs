@@ -31,5 +31,18 @@ const report=await page.evaluate(()=>{const failures=[],check=(ok,m)=>{if(!ok)fa
   check(frame('vignette',layer,{motion:1,treatment:0,duration:.45},1.5)!==frame('vignette',layer,{motion:1,treatment:1,duration:.45},1.5),layer+' treatment');
   check(frame('enter_fade',layer,{motion:1,treatment:1,duration:.1},.3)!==frame('enter_fade',layer,{motion:1,treatment:1,duration:1.5},.3),layer+' duration');
  }
+ // Loop window: entrances replay ~1 s after finishing; exits and other previews keep their windows.
+ const win=(g,k,l='lyrics',s)=>{const def=l==='lyrics'?J.registry(g)[k]:J.MEDIA_TECH[k];return J.effectPreviewWindow(J.makeEffectPreviewPlan(g,k,l,'__pv__',s),g,l,def);};
+ for(const layer of ['foreground','media']){
+  const e=win('media','enter_fade',layer);check(e.offset===0&&Math.abs(e.cycle-1.45)<1e-9,layer+' enter window '+JSON.stringify(e));
+  const long=win('media','enter_fade',layer,{motion:1,treatment:1,duration:1.5});check(Math.abs(long.cycle-2.5)<1e-9,layer+' long enter window '+JSON.stringify(long));
+  const x=win('media','exit_fade',layer);check(Math.abs(x.offset-2.05)<1e-9&&Math.abs(x.cycle-.95)<1e-9,layer+' exit window '+JSON.stringify(x));
+  check(win('media','kenBurns',layer).cycle===6,layer+' main window');
+ }
+ check(win('hold',J.order('hold')[1]).cycle===6,'lyric hold window');
+ // Every lyric entrance has finished when the one-second wait starts (compared with an instant entrance).
+ const f=(k,t)=>{const plan=J.makeEffectPreviewPlan('enter',k);ctx.clearRect(0,0,320,180);new J.Renderer().frame(ctx,plan,t,{scale:320/plan.W,noHud:true});return ctx.getImageData(0,0,320,180).data;};
+ for(const k of J.order('enter')){if(['blank','interlude','title','cut'].includes(k))continue;const w=win('enter',k);check(w.cycle<=2.5,'lyric enter window '+k+' '+w.cycle);
+  const a=f(k,w.cycle-1),b=f('cut',w.cycle-1);let n=0;for(let i=0;i<a.length;i+=12)if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>40)n++;check(n<=25,'lyric enter unfinished '+k+' '+n);}
  J.mediaAssets.delete('__pv__');return failures;});
 assert.deepEqual(report,[]);assert.deepEqual(errors,[]);console.log(locale||'ja','ok');await page.close();}}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});
