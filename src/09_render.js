@@ -219,7 +219,7 @@ class Renderer {
           X.translate(-areaX - contentW / 2, -areaY - contentH / 2);
           X.beginPath(); X.rect(areaX, areaY, contentW, contentH); X.clip();
         }
-        const cs = J.lerp(1, cam.s ?? 1, motion) * (cut.contentScale ?? 1);
+        const cs = J.lerp(1, cam.s ?? 1, motion) * (cut.contentScale ?? 1) * (cut.lyricSize == null ? 1 : cut.lyricSize / 100);
         X.translate(areaX + contentW / 2 + (shx + P.off[0] + (cam.x || 0)) * motion, areaY + contentH / 2 + (shy + P.off[1] + (cam.y || 0)) * motion);
         if (cam.rot) X.rotate(cam.rot * J.DEG * motion);
         if (cam.skx) X.transform(1, 0, Math.tan(cam.skx * J.DEG * motion), 1, 0, 0);

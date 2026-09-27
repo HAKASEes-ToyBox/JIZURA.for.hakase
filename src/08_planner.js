@@ -44,10 +44,10 @@ J.komaOf = fx => (fx.koma != null ? +fx.koma : (fx.onTwos === false ? 0 : 12));
 J.stepDur = (fx, fps) => { const k = J.komaOf(fx); return k > 0 ? 1 / k : 1 / (fps || 24); };
 
 /* ---------------- lyric parsing ---------------- */
-const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B' };
+const lyricEscapes = { '\\': '\uE000', '#': '\uE001', '[': '\uE002', ']': '\uE003', '|': '\uE004', '!': '\uE005', '！': '\uE006', '*': '\uE007', '/': '\uE008', '{': '\uE009', '}': '\uE00A', '~': '\uE00B', ':': '\uE00C' };
 const lyricUnescapes = Object.fromEntries(Object.entries(lyricEscapes).map(([literal, token]) => [token, literal]));
-const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
-const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00B]/g, token => lyricUnescapes[token]);
+const protectLyricEscapes = s => s.replace(/\\([\\#\[\]|!！*\/{}~:n])/g, (_, literal) => literal === 'n' ? '\n' : lyricEscapes[literal]);
+const restoreLyricEscapes = s => String(s).replace(/[\uE000-\uE00C]/g, token => lyricUnescapes[token]);
 J.parseLyrics = (raw) => {
   const lines = []; const meta = {};
   let pendingGap = false, group = null, nextGroup = 0, avoidOverlap = false;
@@ -62,12 +62,19 @@ J.parseLyrics = (raw) => {
     if (s0.startsWith('#')) continue;
     const mm = s0.match(/^\[(ti|ar|al|by|offset):(.*)\]$/i);
     if (mm) { meta[mm[1].toLowerCase()] = restoreLyricEscapes(mm[2].trim()); continue; }
-    s0 = openGroup(s0);
+    let lyricSize = null;
+    const readSize = text => {
+      const match=text.match(/^(\d+(?:\.\d+)?):\s*/);
+      if(!match || lyricSize!==null || !Number.isFinite(+match[1]))return text;
+      lyricSize=J.clamp(+match[1],0,1000);
+      return text.slice(match[0].length);
+    };
+    s0 = openGroup(readSize(s0));
     let s = s0; const times = [];
     let m;
     while ((m = s.match(/^\[(\d+):(\d+(?:[.:]\d+)?)\]/))) { times.push(+m[1] * 60 + parseFloat(m[2].replace(':', '.'))); s = s.slice(m[0].length); }
     s = s.trim();
-    s = openGroup(s);
+    s = readSize(openGroup(readSize(s)));
     const closeGroup = s.endsWith(avoidOverlap ? '-}' : '}');
     if (closeGroup) s = s.slice(0, avoidOverlap ? -2 : -1).trim();
     let note = null;
@@ -99,7 +106,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group, lineAvoidOverlap = avoidOverlap;
     if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -368,7 +375,7 @@ J.plan = (project, audio) => {
         if (layout==='lowerThird') params.label='copy';
         if (layout==='arcTop') params.under='copy';
       }
-      const cut = makeCut({ text: txt, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
+      const cut = makeCut({ text: txt, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? 0.7 : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
