@@ -1,5 +1,7 @@
 # 字面一 JIZURA ONE STOP EDITION
 
+**AIエージェントから制作する：** [ローカルMCPの設定・操作ガイド](mcp/README.md)
+
 **English edition:** [Open the fork app](https://hirazisora.github.io/JIZURA/en/) · [English guide](README.en.md)
 
 **▶ ブラウザで使う：<https://hirazisora.github.io/JIZURA/>**　／　AE パネル：[JIZURA_AE.jsx をダウンロード](https://hirazisora.github.io/JIZURA/JIZURA_AE.jsx)（リンク先を右クリック →「名前を付けてリンク先を保存」）
