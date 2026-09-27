@@ -195,7 +195,7 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 /* ---------- stage ---------- */
 .col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
-.viewport canvas { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
+.viewport canvas { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
 .area-edit-overlay { position: absolute; z-index: 4; cursor: crosshair; touch-action: none; background: rgba(0,0,0,0.32); }
 .area-edit-rect { position: absolute; box-sizing: border-box; border: 2px solid var(--amber); background: rgba(245,165,12,0.12); box-shadow: 0 0 0 1px #000; pointer-events: none; }
 :root { --rotate-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23101620' stroke-width='2'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23101620' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair; }
@@ -224,8 +224,8 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .overlay-msg { position: absolute; left: 12px; bottom: 12px; background: rgba(12,12,14,0.85); border: 1px solid var(--line2); padding: 6px 10px; border-radius: var(--r); font-size: 12px; }
 .transport { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .transport .tc { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
-.duration-value { border: 0; background: transparent; padding: 2px 3px; color: var(--muted); cursor: text; white-space: nowrap; }
-.duration-value:hover, .duration-value:focus-visible { color: var(--amber); text-decoration: underline; }
+.duration-value { border: 1px solid var(--line2); border-radius: var(--r); background: var(--ink); padding: 5px 8px; color: var(--text); box-shadow: inset 0 1px 3px #0006; cursor: text; white-space: nowrap; }
+.duration-value:hover, .duration-value:focus-visible { color: var(--amber); border-color: var(--amber); }
 .duration-value.manual { color: var(--amber); }
 .duration-input { width: 88px; min-width: 88px; padding: 2px 4px; }
 .duration-input[hidden], .duration-value[hidden] { display: none; }
@@ -520,6 +520,23 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .timeline-toolbar .timeline-zoom { flex-shrink: 0; }
 .timeline-split { display: flex; flex-wrap: wrap; gap: 8px; }
 
+.col-stage { align-self: start; gap: 6px; }
+.preview-options { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preview-options .item-frame-toggle { margin: 0; }
+.viewport:fullscreen { width: 100vw; height: 100dvh; border: 0; }
+.fullscreen-exit { display: none; position: absolute; top: 16px; right: 16px; z-index: 10; }
+.viewport:fullscreen .fullscreen-exit { display: block; }
+.viewport:fullscreen .item-frames, .viewport:fullscreen .area-edit-overlay { display: none; }
+@media (max-height: 800px), (max-width: 760px) {
+  .col-stage { padding: 8px; gap: 4px; }
+  .col-stage .transport { gap: 5px; }
+  .col-stage .timeline-split button { padding: 4px 6px; font-size: 11px; }
+  .col-stage .timeline-position-label { margin: 2px 0; }
+  .col-stage #foregroundTimeline, .col-stage #mediaTimeline { height: 44px; }
+  .col-stage #timeline { height: 58px; }
+  .col-stage .timeline-legend { gap: 3px 8px; font-size: 10px; }
+}
+
 </style>
 </head>
 <body>
@@ -641,8 +658,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="プレビュー">
-      <div class="viewport" id="viewport"><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">ドラッグして歌詞の表示範囲を指定</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">全画面を終了</button><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">ドラッグして歌詞の表示範囲を指定</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>アスペクト比を固定</label><label>幅（画面比％）<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>高さ（画面比％）<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">角度（°）<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">全域へリセット</button><button id="areaResetAuto" class="ghost" type="button">自動配置に戻す</button><button id="areaApplyOne" class="primary" disabled>この行だけに適用</button><button id="areaApplyFollowing" disabled>これ以降全てに適用</button><button id="areaCancel" class="ghost">キャンセル</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="再生">▶</button>
@@ -37185,7 +37202,11 @@ function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
   let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  const maxH = Math.max(220, window.innerHeight * 0.68);
+  const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
+  const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const full=document.fullscreenElement===vp;
+  const maxH=full ? window.innerHeight : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -39482,6 +39503,12 @@ function bind() {
   $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
+  $('previewFullscreen').addEventListener('click',async()=>{
+    try { await $('viewport').requestFullscreen(); }
+    catch { toast(J.mediaLabel('この環境では全画面表示を開始できません','Fullscreen is unavailable in this environment')); }
+  });
+  $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
+  document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnUndo').addEventListener('click', () => undoMove(-1));
   $('btnRedo').addEventListener('click', () => undoMove(1));
@@ -39816,6 +39843,7 @@ function bind() {
   });
   window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); drawTimelineLinks(); });
   if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); drawTimelineLinks(); }).observe($('viewport'));
+  if(window.ResizeObserver){const observer=new ResizeObserver(sizeViewport);for(const el of document.querySelector('.col-stage').children)if(el.id!=='viewport')observer.observe(el);}
   if (window.ResizeObserver) new ResizeObserver(drawTimelineLinks).observe($('timelineStack'));
 }
 

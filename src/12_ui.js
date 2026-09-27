@@ -230,7 +230,11 @@ function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
   let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  const maxH = Math.max(220, window.innerHeight * 0.68);
+  const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
+  const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const full=document.fullscreenElement===vp;
+  const maxH=full ? window.innerHeight : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -2527,6 +2531,12 @@ function bind() {
   $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
+  $('previewFullscreen').addEventListener('click',async()=>{
+    try { await $('viewport').requestFullscreen(); }
+    catch { toast(J.mediaLabel('この環境では全画面表示を開始できません','Fullscreen is unavailable in this environment')); }
+  });
+  $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
+  document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnUndo').addEventListener('click', () => undoMove(-1));
   $('btnRedo').addEventListener('click', () => undoMove(1));
@@ -2861,6 +2871,7 @@ function bind() {
   });
   window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); drawTimelineLinks(); });
   if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); drawTimelineLinks(); }).observe($('viewport'));
+  if(window.ResizeObserver){const observer=new ResizeObserver(sizeViewport);for(const el of document.querySelector('.col-stage').children)if(el.id!=='viewport')observer.observe(el);}
   if (window.ResizeObserver) new ResizeObserver(drawTimelineLinks).observe($('timelineStack'));
 }
 

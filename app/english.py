@@ -357,6 +357,8 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    "全画面でプレビュー": "Fullscreen preview",
+    "全画面を終了": "Exit fullscreen",
     "再生位置で：": "At playhead:",
     "空の歌詞を挿入": "Insert empty lyric",
     "歌詞無表示カットを挿入": "Insert blank lyric cut",
