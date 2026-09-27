@@ -537,6 +537,12 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
   .col-stage .timeline-legend { gap: 3px 8px; font-size: 10px; }
 }
 
+.timeline-toolbar .timeline-position-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
+.fullscreen-transport { display: none; }
+.viewport:fullscreen .fullscreen-transport { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(15,15,18,.85); }
+.fullscreen-transport input[type=range] { flex: 1; min-width: 0; accent-color: var(--amber); }
+.fullscreen-transport .tc { font: 12px var(--mono); white-space: nowrap; }
+
 </style>
 </head>
 <body>
@@ -658,7 +664,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="Preview">
-      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">Drag to select the lyrics display area</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">Drag to select the lyrics display area</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
       <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="previewFullscreen" type="button" class="ghost small">Fullscreen preview</button></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">Reset to full area</button><button id="areaResetAuto" class="ghost" type="button">Reset automatic placement</button><button id="areaApplyOne" class="primary" disabled>Apply to this line</button><button id="areaApplyFollowing" disabled>Apply from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div>
       <div class="transport">
@@ -674,8 +680,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnShuffle" class="accent" title="Shuffle the arrangement, keeping locked lines">Shuffle</button>
         <button id="btnOmakase" class="primary" title="Randomize style, mood, effects and colors (R)">Randomize</button>
       </div>
-      <div class="timeline-position-label">At playhead:</div>
       <div class="timeline-toolbar">
+      <div class="timeline-position-label">At playhead:</div>
       <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>Insert empty lyric</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
       </div>
@@ -37491,6 +37497,10 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
+  $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('Pause','Pause'):J.mediaLabel('Play','Play'));
+  $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
+  if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
@@ -39752,6 +39762,11 @@ function bind() {
   });
   $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
   document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
+  $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
+  const fullscreenScrub=$('fullscreenScrub');
+  fullscreenScrub.addEventListener('input',()=>{S.scrubbing=true;seek(fullscreenScrub.value/10000*S.plan.duration);updateTimeUI();});
+  fullscreenScrub.addEventListener('change',()=>{S.scrubbing=false;updateTimeUI();});
+  document.addEventListener('fullscreenchange',()=>{S.scrubbing=false;updateTimeUI();});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnUndo').addEventListener('click', () => undoMove(-1));
   $('btnRedo').addEventListener('click', () => undoMove(1));

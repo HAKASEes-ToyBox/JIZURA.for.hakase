@@ -276,6 +276,10 @@ function tick(now) {
   if (S.need) { S.need = false; draw(); }
 }
 function updateTimeUI() {
+  $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
+  $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('一時停止','Pause'):J.mediaLabel('再生','Play'));
+  $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
+  if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
@@ -2537,6 +2541,11 @@ function bind() {
   });
   $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
   document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
+  $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
+  const fullscreenScrub=$('fullscreenScrub');
+  fullscreenScrub.addEventListener('input',()=>{S.scrubbing=true;seek(fullscreenScrub.value/10000*S.plan.duration);updateTimeUI();});
+  fullscreenScrub.addEventListener('change',()=>{S.scrubbing=false;updateTimeUI();});
+  document.addEventListener('fullscreenchange',()=>{S.scrubbing=false;updateTimeUI();});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   $('btnUndo').addEventListener('click', () => undoMove(-1));
   $('btnRedo').addEventListener('click', () => undoMove(1));
