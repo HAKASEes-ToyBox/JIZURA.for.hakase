@@ -8,6 +8,8 @@
 
 登場55種類・退場55種類と、保持中の手法146種類（つなぎ・歌詞カメラを含む）を選べます。詳細のカテゴリは「登場」「退場」「カメラ」「ダイナミックモーション」「BPM同期」「色・質感」「分割・残像・グリッチ」「カット間のつなぎ」です。旧マスク・出現カテゴリと登場向けの演出は登場・退場へ整理しました。各「自動」は対応するカテゴリの有効な候補だけから選び、候補がない場合は即時表示になります。詳細タブでは、動きの強さ、加工の強さ、登場・退場の秒数と、自動選定に含める手法を設定できます。詳細の「前景」「背景」タブでそれぞれ個別に設定できます。自動配置のオン・オフも別々に指定できます。以前の共通設定は両レイヤーへ引き継ぎます。
 
+各手法の▶で開く演出プレビューには、動きの強さ・加工の強さ・登場・退場時間のスライダーがあります。初期値は詳細の現在値で、変更はプレビューだけに反映されます（プロジェクトは変わりません）。
+
 詳細の各カテゴリは見出しをクリックして折り畳み・展開できます。見出しには有効な手法数／総数を表示し、カテゴリごとに「すべてON」「すべてOFF」「反転」でまとめて変更できます。
 
 「おまかせ」は前景・背景それぞれの手法チェックを独立にランダム設定します。動き・加工の強さ、登場・退場時間、自動配置の設定は保持します。変更したチェックは「元に戻す／やり直す」「前の案／次の案」やプロジェクト保存に対応します。
@@ -60,6 +62,8 @@
 ## English
 
 Choose a main technique, **Entrance**, and **Exit** independently on each foreground/background cut. Entrance and Exit default to **Auto**. **No effects** disables the main motion/treatment; choose **Instant (none)** for both phases too to display the file instantly. Videos continue playing normally. Each automatic phase uses only its enabled category; an empty pool means Instant. Explicit selections and locked phases survive shuffle.
+
+The effect preview (▶) has Motion intensity, Treatment intensity and Entrance / exit sliders. They start from the current Details values and change the preview only, not the project.
 
 Click a category heading in Details to expand or collapse it. Headings show the enabled/total technique count. Each category has **Enable all**, **Disable all**, and **Invert** controls.
 
