@@ -4,6 +4,16 @@ const page=await browser.newPage({viewport:{width:1400,height:1000}}),errors=[];
 const en=!!locale,sliders=page.locator('#effectPreviewDialog [data-preview-setting]'),settings=page.locator('#effectPreviewDialog .effect-preview-settings');
 // Lyric previews have no media sliders.
 await page.evaluate(()=>J.openEffectPreview('layout','center'));await page.waitForTimeout(300);assert.equal(await settings.isHidden(),true);
+// Display-only seek bar: follows the looped window, offers no position control.
+const seek=page.locator('#effectPreviewDialog .effect-preview-seek');
+for(const [group,key,layer,dur] of [['layout','center','lyrics','00:06.00'],['media','enter_fade','media','00:01.45'],['media','exit_fade','foreground','00:00.95']]){
+ await page.evaluate(([g,k,l])=>J.openEffectPreview(g,k,l),[group,key,layer]);await page.waitForTimeout(700);
+ assert.equal(await seek.locator('.effect-preview-dur').textContent(),dur,key+' duration');
+ assert.notEqual(await seek.locator('.effect-preview-now').textContent(),'00:00.00',key+' position');
+ const pct=parseFloat(await seek.locator('.progress i').evaluate(e=>e.style.width));assert.ok(pct>0&&pct<=100,key+' bar '+pct);
+ assert.equal(await seek.locator('input,button,[tabindex]').count(),0);assert.equal(await seek.locator('.progress').getAttribute('aria-label'),en?'Playback position':'再生位置');
+}
+await page.locator('.effect-preview-close').click();
 for(const layer of ['foreground','media']){
  // Sliders start from the layer's Details values; the project is never touched.
  await page.evaluate(layer=>{J.ui.project[layer].effects={...J.mediaEffectSettings(J.ui.project,layer),motion:.6,treatment:.35,duration:.8};},layer);

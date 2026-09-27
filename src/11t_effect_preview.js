@@ -11,9 +11,10 @@ function stop(){generation++;cancelAnimationFrame(frame);frame=0;if(assetId)J.me
 function ensureDialog(){
   if(dialog)return;
   dialog=document.createElement('dialog');dialog.id='effectPreviewDialog';
-  dialog.innerHTML='<form method="dialog"><button class="effect-preview-close" value="close">×</button></form><h2 id="effectPreviewName"></h2><canvas width="640" height="360"></canvas><div class="effect-preview-settings" hidden></div><p class="effect-preview-error" hidden></p>';
+  dialog.innerHTML='<form method="dialog"><button class="effect-preview-close" value="close">×</button></form><h2 id="effectPreviewName"></h2><canvas width="640" height="360"></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><div class="effect-preview-settings" hidden></div><p class="effect-preview-error" hidden></p>';
   dialog.setAttribute('aria-labelledby','effectPreviewName');
   dialog.querySelector('button').setAttribute('aria-label',J.mediaLabel('閉じる','Close'));
+  dialog.querySelector('.effect-preview-seek .progress').setAttribute('aria-label',J.mediaLabel('再生位置','Playback position'));
   document.body.append(dialog);canvas=dialog.querySelector('canvas');heading=dialog.querySelector('h2');
   dialog.addEventListener('close',stop);
   const outside = event => {
@@ -79,7 +80,11 @@ function run(){
     const plan=J.makeEffectPreviewPlan(group,key,layer,assetId,settings);
     const renderer=new J.Renderer(),start=performance.now();
     const {offset,cycle}=J.effectPreviewWindow(plan,group,layer,def);
-    const draw=now=>{if(token!==generation||!dialog.open)return;const t=offset+((now-start)/1000)%cycle;renderer.frame(canvas.getContext('2d'),plan,t,{scale:canvas.width/plan.W,noHud:true});frame=requestAnimationFrame(draw);};
+    // Display-only seek bar: position within the looped window.
+    const seek=dialog.querySelector('.effect-preview-seek'),bar=seek.querySelector('.progress'),fill=bar.querySelector('i'),now=seek.querySelector('.effect-preview-now');
+    seek.querySelector('.effect-preview-dur').textContent=J.fmtTime(cycle+1e-6);// fmtTime floors: 1.45 must not read 1.44
+    const draw=time=>{if(token!==generation||!dialog.open)return;const elapsed=((time-start)/1000)%cycle,t=offset+elapsed;renderer.frame(canvas.getContext('2d'),plan,t,{scale:canvas.width/plan.W,noHud:true});
+      const pct=Math.round(elapsed/cycle*1000)/10;fill.style.width=pct+'%';bar.setAttribute('aria-valuenow',String(Math.round(pct)));now.textContent=J.fmtTime(elapsed);frame=requestAnimationFrame(draw);};
     frame=requestAnimationFrame(draw);
   }catch(err){showError(err);}
 }
@@ -107,6 +112,7 @@ J.openEffectPreview=async(group,key,layer='lyrics')=>{
   heading.textContent=def.name;canvas.setAttribute('aria-label',def.name);
   dialog.querySelector('.effect-preview-error').hidden=true;renderSettings();
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+  dialog.querySelector('.effect-preview-seek .progress i').style.width='0%';dialog.querySelector('.effect-preview-now').textContent=J.fmtTime(0);
   if(!dialog.open)dialog.showModal();
   try{
     if(layer!=='lyrics'){await image.decode();if(token!==generation||!dialog.open)return;assetId='__jizura_effect_preview__';J.mediaAssets.set(assetId,{element:image,type:'image'});}
