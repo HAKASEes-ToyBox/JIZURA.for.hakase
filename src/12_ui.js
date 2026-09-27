@@ -701,7 +701,7 @@ function openCutDetails(layer,index,part=0) {
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
     const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
     section.open=openDetails.get('mask') ?? mask.enabled;
-    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><button type="button" data-mask-add="ellipse"></button><button type="button" data-mask-add="rect"></button><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div>`;
+    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div>`;
     section.querySelector('summary').textContent=L('マスク','Mask');
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
@@ -713,8 +713,12 @@ function openCutDetails(layer,index,part=0) {
       ?(lyric?L('素材：表示範囲を基準に文字をマスクします。マスク後の文字にカメラなどの演出がかかります。','Source: masks the lyric within its display area; camera and other effects apply to the masked lyric.')
              :L('素材：素材画像を基準にマスクします。マスク後の素材に演出・エフェクトがかかります。','Source: masks the source image itself; techniques and effects apply to the masked source.'))
       :L('カット：画面全体を基準に、演出・エフェクト適用後のカットをマスクします。','Cut: masks the finished cut, after its effects, relative to the whole stage.');};
-    const tools={add:section.querySelectorAll('[data-mask-add]'),remove:section.querySelector('[data-mask-remove]')};
-    tools.add[0].textContent=L('○を追加','Add circle');tools.add[1].textContent=L('□を追加','Add rectangle');tools.remove.textContent=L('選択中の図形を削除','Remove selected shape');
+    const tools={add:section.querySelector('[data-mask-add]'),remove:section.querySelector('[data-mask-remove]')};
+    const shapeNames={ellipse:['円','Circle'],rect:['四角','Rectangle'],roundRect:['角丸四角','Rounded rectangle'],triangle:['三角','Triangle'],diamond:['ひし形','Diamond'],pentagon:['五角形','Pentagon'],hexagon:['六角形','Hexagon'],star:['星','Star'],heart:['ハート','Heart']};
+    // "Add shape…" menu: picking a type adds that shape; the selected shape's type is edited below.
+    tools.add.add(new Option(L('図形を追加…','Add shape…'),''));
+    for(const type of J.MASK_SHAPES)tools.add.add(new Option(L(...shapeNames[type]),type));
+    tools.add.setAttribute('aria-label',L('図形を追加','Add shape'));tools.remove.textContent=L('選択中の図形を削除','Remove selected shape');
     const canvas=section.querySelector('canvas'),shapeBox=section.querySelector('.cut-mask-shape');
     const save=()=>{write('mask',clone(mask),false);draw();};
     function draw(){
@@ -735,35 +739,67 @@ function openCutDetails(layer,index,part=0) {
     }
     const handle=(s,w,h)=>{const a=s.angle*J.DEG,rx=s.w*w/2,ry=s.h*h/2;return [s.cx*w+rx*Math.cos(a)-ry*Math.sin(a),s.cy*h+rx*Math.sin(a)+ry*Math.cos(a)];};
     const local=(s,px,py,w,h)=>{const a=-s.angle*J.DEG,dx=px-s.cx*w,dy=py-s.cy*h;return [dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)];};
-    const inside=(s,px,py,w,h)=>{const [lx,ly]=local(s,px,py,w,h),rx=s.w*w/2,ry=s.h*h/2;return s.type==='ellipse'?(lx*lx)/(rx*rx)+(ly*ly)/(ry*ry)<=1:Math.abs(lx)<=rx&&Math.abs(ly)<=ry;};
+    const inside=(s,px,py,w,h)=>{const p=new Path2D();J.maskShapePath(p,[s],w,h);return canvas.getContext('2d').isPointInPath(p,px,py);};
+    // New shapes are square on screen (a circle stays round on a wide frame).
+    const newShape=(type,size)=>{const aspect=canvas.width/Math.max(1,canvas.height);let w=size,h=size*aspect;if(h>.9){w*=.9/h;h=.9;}return {type,cx:.5,cy:.5,w,h,angle:0,lockAspect:true};};
     function fields(){
       shapeBox.replaceChildren();const s=mask.shapes[maskSelected];tools.remove.disabled=!s;if(!s)return;
+      const kind=document.createElement('label');kind.className='cut-detail-field';kind.innerHTML=`<span>${L('形','Shape')}</span><select data-mask-shape="type"></select>`;
+      const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
+      kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);
       for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
         const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="${key==='angle'?1:.01}" min="${min}" max="${max}" data-mask-shape="${key}">`;
         const input=row.querySelector('input');input.value=+s[key].toFixed(4);
-        input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;s[key]=J.clamp(v,min,max);save();});shapeBox.append(row);
+        input.addEventListener('change',()=>{
+          const v=Number(input.value);if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
+          // Locked aspect: width and height scale together.
+          if(s.lockAspect&&(key==='w'||key==='h')&&s[key]>0){const other=key==='w'?'h':'w';s[other]=J.clamp(s[other]*next/s[key],.01,4);}
+          s[key]=next;fields();save();
+        });shapeBox.append(row);
       }
+      const lock=document.createElement('label');lock.className='cut-detail-field';lock.innerHTML=`<span>${L('アスペクト比を固定','Lock aspect ratio')}</span><input type="checkbox" data-mask-shape="lockAspect">`;
+      lock.querySelector('input').checked=s.lockAspect!==false;lock.querySelector('input').addEventListener('change',e=>{s.lockAspect=e.target.checked;save();});shapeBox.append(lock);
     }
     section.querySelector('[data-mask-field="enabled"]').addEventListener('change',e=>{
       mask.enabled=e.target.checked;
-      if(mask.enabled&&!mask.shapes.length){mask.shapes.push({type:'ellipse',cx:.5,cy:.5,w:.6,h:.6,angle:0});maskSelected=0;fields();}
+      if(mask.enabled&&!mask.shapes.length){mask.shapes.push(newShape('ellipse',.6));maskSelected=0;fields();}
       save();
     });
     target.addEventListener('change',()=>{mask.target=target.value;setHint();save();});
     section.querySelector('[data-mask-field="invert"]').addEventListener('change',e=>{mask.invert=e.target.checked;save();});
-    tools.add.forEach(button=>button.addEventListener('click',()=>{mask.shapes.push({type:button.dataset.maskAdd,cx:.5,cy:.5,w:.4,h:.4,angle:0});maskSelected=mask.shapes.length-1;fields();save();}));
+    tools.add.addEventListener('change',()=>{const type=tools.add.value;tools.add.value='';if(!type)return;mask.shapes.push(newShape(type,.4));maskSelected=mask.shapes.length-1;fields();save();});
     tools.remove.addEventListener('click',()=>{if(!mask.shapes[maskSelected])return;mask.shapes.splice(maskSelected,1);maskSelected=Math.max(0,maskSelected-1);fields();save();});
+    // Corner handle: resize. Inside a shape: move. Around the selected shape: rotate.
+    const ROTATE_BAND=26;
+    const point=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];};
+    function hit(px,py){
+      const w=canvas.width,h=canvas.height,sel=mask.shapes[maskSelected];
+      if(sel){const hp=handle(sel,w,h);if(Math.hypot(px-hp[0],py-hp[1])<=10)return {mode:'size',index:maskSelected};}
+      for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h))return {mode:'move',index:i};
+      if(sel){const [lx,ly]=local(sel,px,py,w,h);if(Math.abs(lx)<=sel.w*w/2+ROTATE_BAND&&Math.abs(ly)<=sel.h*h/2+ROTATE_BAND)return {mode:'rotate',index:maskSelected};}
+      return null;
+    }
     let drag=null;
     canvas.addEventListener('pointerdown',e=>{
-      const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*canvas.width/r.width,py=(e.clientY-r.top)*canvas.height/r.height,w=canvas.width,h=canvas.height;
-      const sel=mask.shapes[maskSelected];
-      if(sel){const hp=handle(sel,w,h);if(Math.hypot(px-hp[0],py-hp[1])<=10){drag={mode:'size',shape:sel};canvas.setPointerCapture(e.pointerId);return;}}
-      for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h)){maskSelected=i;drag={mode:'move',shape:mask.shapes[i],px,py,cx:mask.shapes[i].cx,cy:mask.shapes[i].cy};canvas.setPointerCapture(e.pointerId);fields();draw();return;}
+      const [px,py]=point(e),w=canvas.width,h=canvas.height,found=hit(px,py);if(!found)return;
+      maskSelected=found.index;const s=mask.shapes[found.index];
+      drag={mode:found.mode,shape:s,px,py,cx:s.cx,cy:s.cy,w:s.w,h:s.h,angle:s.angle,start:Math.atan2(py-s.cy*h,px-s.cx*w)};
+      canvas.setPointerCapture(e.pointerId);fields();draw();
     });
     canvas.addEventListener('pointermove',e=>{
-      if(!drag)return;const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*canvas.width/r.width,py=(e.clientY-r.top)*canvas.height/r.height,w=canvas.width,h=canvas.height,s=drag.shape;
+      const [px,py]=point(e),w=canvas.width,h=canvas.height;
+      if(!drag){const found=hit(px,py);canvas.style.cursor=!found?'default':found.mode==='size'?'nwse-resize':found.mode==='rotate'?'var(--rotate-cursor)':'move';return;}
+      const s=drag.shape;
       if(drag.mode==='move'){s.cx=J.clamp(drag.cx+(px-drag.px)/w,-1,2);s.cy=J.clamp(drag.cy+(py-drag.py)/h,-1,2);}
-      else{const [lx,ly]=local(s,px,py,w,h);s.w=J.clamp(Math.abs(lx)*2/w,.01,4);s.h=J.clamp(Math.abs(ly)*2/h,.01,4);}
+      else if(drag.mode==='rotate'){
+        let a=drag.angle+(Math.atan2(py-s.cy*h,px-s.cx*w)-drag.start)*180/Math.PI;
+        if(e.shiftKey)a=Math.round(a/15)*15;
+        s.angle=Math.round(((a+540)%360-180)*10)/10;
+      }else{
+        const [lx,ly]=local(s,px,py,w,h);
+        if(s.lockAspect!==false){const k=Math.max(Math.abs(lx)/(drag.w*w/2),Math.abs(ly)/(drag.h*h/2));s.w=J.clamp(drag.w*k,.01,4);s.h=J.clamp(drag.h*k,.01,4);}
+        else{s.w=J.clamp(Math.abs(lx)*2/w,.01,4);s.h=J.clamp(Math.abs(ly)*2/h,.01,4);}
+      }
       draw();
     });
     const end=()=>{if(!drag)return;drag=null;fields();save();};

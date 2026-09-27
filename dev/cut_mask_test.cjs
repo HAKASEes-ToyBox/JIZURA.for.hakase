@@ -48,6 +48,9 @@ for(const target of ['cut','source']){
 // A source mask sits in the display area: moving the area moves the visible part.
 d=frame(project({lyrics,lyric:{area:{x:.5,y:0,w:.5,h:1,angle:0,lockAspect:false},...mask('source',leftHalf)}}));
 check(bright(d,0,.45)===0&&bright(d,.5,.74)>0&&bright(d,.78,1)===0,'lyric source mask follows the display area');
+// Every shape type masks its centre in and the stage corners out.
+for(const type of J.MASK_SHAPES){d=frame(project({media:{details:mask('cut',[{type,cx:.5,cy:.5,w:.5,h:.6,angle:15}])}}));check(blue(at(d,.5,.5))&&!blue(at(d,.03,.05))&&!blue(at(d,.97,.95)),'shape '+type);}
+check(J.normalizeMask({shapes:[{type:'star',cx:.5,cy:.5,w:.2,h:.2}]}).shapes[0].lockAspect===true&&J.normalizeMask({shapes:[{type:'bogus',w:.2,h:.2}]}).shapes.length===0,'normalize shapes');
 // Effect paste keeps the target's own mask.
 {const p=project({media:{details:mask('cut',[ellipse(.5,.5,.2,.2)])}}),plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');
  const payload=J.readCutEffects(JSON.stringify(J.cutEffectsPayload({...plan.media.cuts[0],mask:undefined,technique:'kenBurns'},'media',plan)));
@@ -64,17 +67,46 @@ const modal=page.locator('#cutDetailsDialog'),section=modal.locator('[data-detai
 assert.equal((await section.locator('summary').textContent()),lang?'Mask':'マスク');assert.equal(await section.evaluate(el=>el.open),false);
 await section.locator('summary').click();
 assert.equal(await section.locator('[data-mask-field="target"] option').allTextContents().then(x=>x.join('/')),lang?'Source/Cut':'素材/カット');
-await section.locator('[data-mask-field="enabled"]').check();assert.equal(await section.locator('[data-mask-shape="w"]').inputValue(),'0.6');
-await section.locator('[data-mask-add="rect"]').click();
+await section.locator('[data-mask-field="enabled"]').check();
+// The first circle is round on screen: width × frame aspect = height.
+const first=await page.evaluate(()=>{const c=document.querySelector('#cutDetailsDialog .cut-mask-canvas');return {w:+document.querySelector('[data-mask-shape="w"]').value,h:+document.querySelector('[data-mask-shape="h"]').value,aspect:c.width/c.height};});
+assert.ok(Math.abs(first.w*first.aspect-first.h)<.01,'round circle '+JSON.stringify(first));
+// "Add shape…" adds without touching the selected shape; the Shape field changes the selected one.
+const names=lang?'Circle/Rectangle/Rounded rectangle/Triangle/Diamond/Pentagon/Hexagon/Star/Heart':'円/四角/角丸四角/三角/ひし形/五角形/六角形/星/ハート';
+assert.equal((await section.locator('[data-mask-add] option').allTextContents()).slice(1).join('/'),names);
+assert.equal((await section.locator('[data-mask-shape="type"] option').allTextContents()).join('/'),names);
+await section.locator('[data-mask-add]').selectOption('star');assert.equal(await section.locator('[data-mask-add]').inputValue(),'');
+assert.equal(await section.locator('[data-mask-shape="type"]').inputValue(),'star');
+await section.locator('[data-mask-shape="type"]').selectOption('rect');
 const box=await section.locator('canvas').boundingBox();
 const before=+await section.locator('[data-mask-shape="cx"]').inputValue();
 await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+box.width*.2,box.y+box.height/2,{steps:4});await page.mouse.up();
 const after=+await section.locator('[data-mask-shape="cx"]').inputValue();assert.ok(Math.abs(after-before-.2)<.03,'drag moved '+before+' -> '+after);
+// Lock aspect (default on): width edits scale height; off: independent.
+assert.equal(await section.locator('[data-mask-shape="lockAspect"]').isChecked(),true);
+let ratio=+await section.locator('[data-mask-shape="h"]').inputValue()/ +await section.locator('[data-mask-shape="w"]').inputValue();
+await section.locator('[data-mask-shape="w"]').fill('0.2');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+assert.ok(Math.abs(+await section.locator('[data-mask-shape="h"]').inputValue()-.2*ratio)<.002,'locked width edit');
+// Resizing by the corner handle keeps the ratio too.
+const shape=async()=>page.evaluate(()=>{const g=k=>+document.querySelector(`[data-mask-shape="${k}"]`).value;return {cx:g('cx'),cy:g('cy'),w:g('w'),h:g('h'),angle:g('angle')};});
+let s=await shape();const cb=await section.locator('canvas').boundingBox(),toPage=(u,v)=>[cb.x+u*cb.width,cb.y+v*cb.height];
+const rad=s.angle*Math.PI/180,hx=s.cx+(s.w/2*Math.cos(rad)*cb.width-s.h/2*Math.sin(rad)*cb.height)/cb.width,hy=s.cy+(s.w/2*Math.sin(rad)*cb.width+s.h/2*Math.cos(rad)*cb.height)/cb.height;
+await page.mouse.move(...toPage(hx,hy));await page.mouse.down();await page.mouse.move(...toPage(hx+.08,hy+.02),{steps:4});await page.mouse.up();
+let t=await shape();assert.ok(t.w>s.w*1.2&&Math.abs(t.h/t.w-s.h/s.w)<.01,'locked handle resize '+JSON.stringify([s,t]));
+// Dragging around the shape rotates it (rotation cursor on hover); Shift snaps to 15°.
+s=t;const ring=[s.cx+(s.w/2*cb.width+14)/cb.width,s.cy];await page.mouse.move(...toPage(...ring));
+assert.equal(await section.locator('canvas').evaluate(c=>c.style.cursor),'var(--rotate-cursor)');
+await page.mouse.down();await page.mouse.move(...toPage(s.cx,s.cy+(s.w/2*cb.width+14)/cb.height),{steps:8});await page.mouse.up();
+t=await shape();assert.ok(Math.abs(t.angle-s.angle-90)<3,'rotated '+s.angle+' -> '+t.angle);assert.deepEqual([t.cx,t.cy,t.w,t.h],[s.cx,s.cy,s.w,s.h]);
+await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=+await section.locator('[data-mask-shape="h"]').inputValue();
+await section.locator('[data-mask-shape="w"]').fill('0.3');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+assert.equal(+await section.locator('[data-mask-shape="h"]').inputValue(),hBefore);
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
 assert.ok((await section.locator('.hint').textContent()).startsWith(lang?'Cut:':'カット：'));
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].details.mask;return {enabled:m.enabled,target:m.target,invert:m.invert,types:m.shapes.map(s=>s.type),plan:!!J.ui.plan.media.cuts[0].mask};});
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
+assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
 // Lyric cut details show the mask section with the display-area hint.
 await page.locator('#lineList .cut-details-open').first().click();await section.locator('summary').click();
 assert.ok((await section.locator('.hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
