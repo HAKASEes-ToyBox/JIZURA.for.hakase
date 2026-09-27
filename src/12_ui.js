@@ -677,6 +677,99 @@ function openCutDetails(layer,index,part=0) {
     return size>=1?null:{x:clampTo(r.x+r.w/2),y:clampTo(r.y+r.h/2),size};
   }
   const zoomCanvas=document.createElement('canvas');
+  // ---- Mask editor: circles / rectangles placed on a reference image of the mask's frame ----
+  const maskRef=document.createElement('canvas'),maskRefRenderer=new J.Renderer();
+  let maskRefKey=null,maskRefInfo=null,maskSelected=0;
+  function maskReference(target){
+    const plan=previewPlan,c=previewCut;
+    if(maskRefKey&&maskRefKey.plan===plan&&maskRefKey.target===target)return maskRefInfo;
+    maskRefKey={plan,target};
+    const element=!lyric&&target==='source'&&J.mediaAssets.get(c.itemId)?.element;
+    const sw=element&&(element.videoWidth||element.naturalWidth||element.width),sh=element&&(element.videoHeight||element.naturalHeight||element.height);
+    if(sw&&sh)return maskRefInfo={image:element,sx:0,sy:0,sw,sh,aspect:sw/sh};
+    // Otherwise the cut alone at mid-cut, drawn without masks.
+    const rw=480,rh=Math.round(rw*plan.H/plan.W);maskRef.width=rw;maskRef.height=rh;
+    const rx=maskRef.getContext('2d');rx.setTransform(1,0,0,1,0,0);rx.clearRect(0,0,rw,rh);
+    J.masksSuspended=true;
+    try{maskRefRenderer.frame(rx,soloPlan(plan,c),(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
+    finally{J.masksSuspended=false;}
+    if(lyric&&target==='source'){const a=c.area||{x:0,y:0,w:1,h:1};return maskRefInfo={image:maskRef,sx:a.x*rw,sy:a.y*rh,sw:a.w*rw,sh:a.h*rh,aspect:a.w*plan.W/(a.h*plan.H)};}
+    return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
+  }
+  function maskEditor(parent){
+    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || {enabled:false,target:'source',invert:false,shapes:[]};
+    maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
+    const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
+    section.open=openDetails.get('mask') ?? mask.enabled;
+    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><button type="button" data-mask-add="ellipse"></button><button type="button" data-mask-add="rect"></button><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div>`;
+    section.querySelector('summary').textContent=L('マスク','Mask');
+    const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
+    useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
+    const target=section.querySelector('[data-mask-field="target"]');
+    target.add(new Option(L('素材','Source'),'source'));target.add(new Option(L('カット','Cut'),'cut'));
+    section.querySelector('[data-mask-field="enabled"]').checked=mask.enabled;target.value=mask.target;section.querySelector('[data-mask-field="invert"]').checked=mask.invert;
+    const hint=section.querySelector('.hint');
+    const setHint=()=>{hint.textContent=mask.target==='source'
+      ?(lyric?L('素材：表示範囲を基準に文字をマスクします。マスク後の文字にカメラなどの演出がかかります。','Source: masks the lyric within its display area; camera and other effects apply to the masked lyric.')
+             :L('素材：素材画像を基準にマスクします。マスク後の素材に演出・エフェクトがかかります。','Source: masks the source image itself; techniques and effects apply to the masked source.'))
+      :L('カット：画面全体を基準に、演出・エフェクト適用後のカットをマスクします。','Cut: masks the finished cut, after its effects, relative to the whole stage.');};
+    const tools={add:section.querySelectorAll('[data-mask-add]'),remove:section.querySelector('[data-mask-remove]')};
+    tools.add[0].textContent=L('○を追加','Add circle');tools.add[1].textContent=L('□を追加','Add rectangle');tools.remove.textContent=L('選択中の図形を削除','Remove selected shape');
+    const canvas=section.querySelector('canvas'),shapeBox=section.querySelector('.cut-mask-shape');
+    const save=()=>{write('mask',clone(mask),false);draw();};
+    function draw(){
+      const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
+      if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
+      const x=canvas.getContext('2d');x.setTransform(1,0,0,1,0,0);x.globalCompositeOperation='source-over';x.fillStyle='#000';x.fillRect(0,0,w,ch);
+      try{x.drawImage(ref.image,ref.sx,ref.sy,ref.sw,ref.sh,0,0,w,ch);}catch(e){}
+      // Darken what the mask hides.
+      const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
+      sx.fillStyle='rgba(0,0,0,.62)';
+      if(mask.invert){for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
+      else{sx.fillRect(0,0,w,ch);sx.globalCompositeOperation='destination-out';for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
+      if(mask.enabled)x.drawImage(shade,0,0);
+      mask.shapes.forEach((s,i)=>{
+        x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
+        if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}
+      });
+    }
+    const handle=(s,w,h)=>{const a=s.angle*J.DEG,rx=s.w*w/2,ry=s.h*h/2;return [s.cx*w+rx*Math.cos(a)-ry*Math.sin(a),s.cy*h+rx*Math.sin(a)+ry*Math.cos(a)];};
+    const local=(s,px,py,w,h)=>{const a=-s.angle*J.DEG,dx=px-s.cx*w,dy=py-s.cy*h;return [dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)];};
+    const inside=(s,px,py,w,h)=>{const [lx,ly]=local(s,px,py,w,h),rx=s.w*w/2,ry=s.h*h/2;return s.type==='ellipse'?(lx*lx)/(rx*rx)+(ly*ly)/(ry*ry)<=1:Math.abs(lx)<=rx&&Math.abs(ly)<=ry;};
+    function fields(){
+      shapeBox.replaceChildren();const s=mask.shapes[maskSelected];tools.remove.disabled=!s;if(!s)return;
+      for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
+        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="${key==='angle'?1:.01}" min="${min}" max="${max}" data-mask-shape="${key}">`;
+        const input=row.querySelector('input');input.value=+s[key].toFixed(4);
+        input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;s[key]=J.clamp(v,min,max);save();});shapeBox.append(row);
+      }
+    }
+    section.querySelector('[data-mask-field="enabled"]').addEventListener('change',e=>{
+      mask.enabled=e.target.checked;
+      if(mask.enabled&&!mask.shapes.length){mask.shapes.push({type:'ellipse',cx:.5,cy:.5,w:.6,h:.6,angle:0});maskSelected=0;fields();}
+      save();
+    });
+    target.addEventListener('change',()=>{mask.target=target.value;setHint();save();});
+    section.querySelector('[data-mask-field="invert"]').addEventListener('change',e=>{mask.invert=e.target.checked;save();});
+    tools.add.forEach(button=>button.addEventListener('click',()=>{mask.shapes.push({type:button.dataset.maskAdd,cx:.5,cy:.5,w:.4,h:.4,angle:0});maskSelected=mask.shapes.length-1;fields();save();}));
+    tools.remove.addEventListener('click',()=>{if(!mask.shapes[maskSelected])return;mask.shapes.splice(maskSelected,1);maskSelected=Math.max(0,maskSelected-1);fields();save();});
+    let drag=null;
+    canvas.addEventListener('pointerdown',e=>{
+      const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*canvas.width/r.width,py=(e.clientY-r.top)*canvas.height/r.height,w=canvas.width,h=canvas.height;
+      const sel=mask.shapes[maskSelected];
+      if(sel){const hp=handle(sel,w,h);if(Math.hypot(px-hp[0],py-hp[1])<=10){drag={mode:'size',shape:sel};canvas.setPointerCapture(e.pointerId);return;}}
+      for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h)){maskSelected=i;drag={mode:'move',shape:mask.shapes[i],px,py,cx:mask.shapes[i].cx,cy:mask.shapes[i].cy};canvas.setPointerCapture(e.pointerId);fields();draw();return;}
+    });
+    canvas.addEventListener('pointermove',e=>{
+      if(!drag)return;const r=canvas.getBoundingClientRect(),px=(e.clientX-r.left)*canvas.width/r.width,py=(e.clientY-r.top)*canvas.height/r.height,w=canvas.width,h=canvas.height,s=drag.shape;
+      if(drag.mode==='move'){s.cx=J.clamp(drag.cx+(px-drag.px)/w,-1,2);s.cy=J.clamp(drag.cy+(py-drag.py)/h,-1,2);}
+      else{const [lx,ly]=local(s,px,py,w,h);s.w=J.clamp(Math.abs(lx)*2/w,.01,4);s.h=J.clamp(Math.abs(ly)*2/h,.01,4);}
+      draw();
+    });
+    const end=()=>{if(!drag)return;drag=null;fields();save();};
+    canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+    setHint();fields();parent.append(section);draw();
+  }
   function drawPreview(now){
     previewFrame=requestAnimationFrame(drawPreview);
     const plan=previewPlan,c=previewCut;if(!plan||!c)return;
@@ -816,7 +909,9 @@ function openCutDetails(layer,index,part=0) {
       if(field==='videoDuration')value=Number(value)||current.end-current.start;
       fieldEditor(grid,field,clone(value??(field==='opacity'?100:'')),v=>write(field,['itemId','technique','entrance','departure'].includes(field)&&v===''?null:v,true));
     }
+    if(!blank) maskEditor(grid);
     for(const field of blank ? [] : J.cutDetailKeys[lyric?'lyrics':'media']) {
+      if(field==='mask') continue;// edited by maskEditor
       let value=current[field];
       if(field==='area')value ||= {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
       if(field==='trans')value ||= 'none';

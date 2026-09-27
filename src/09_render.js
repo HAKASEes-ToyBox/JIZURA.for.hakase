@@ -112,6 +112,7 @@ class Renderer {
       const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
       const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
       J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
+      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut);
       ctx.globalAlpha=mediaCut.opacity/100;
       ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
       ctx.drawImage(mediaLayer,0,0);ctx.restore();
@@ -185,7 +186,8 @@ class Renderer {
       // Flatten glyphs, decorations and ghost passes once before applying the
       // cut's opacity. Reuse the buffer even for long groups of retained lyrics.
       let target = ctx;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost) {
+      const mask = J.activeMask ? J.activeMask(cut) : null;
+      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -206,7 +208,9 @@ class Renderer {
         // Reuse one canvas for a cut's focus blur. A later cut's camera must not
         // blur earlier retained lyrics, and each glyph should only draw once.
         const blur = allowFilter ? (cam.blur || 0) * motion : 0;
-        if (blur > .4) {
+        // A source mask needs this pass on its own canvas, like the focus blur.
+        const sourceMask = mask && mask.target === 'source';
+        if (blur > .4 || sourceMask) {
           const layer = this.ensure(this.camLayer || (this.camLayer = mk(2, 2)), cw, ch);
           X = layer.getContext('2d'); X.setTransform(1, 0, 0, 1, 0, 0); X.globalAlpha = 1; X.globalCompositeOperation = 'source-over'; X.filter = 'none';
           X.clearRect(0, 0, cw, ch); X.setTransform(scale, 0, 0, scale, 0, 0);
@@ -228,11 +232,14 @@ class Renderer {
         if (cam.skx) X.transform(1, 0, Math.tan(cam.skx * J.DEG * motion), 1, 0, 0);
         X.scale(cs * J.lerp(1, cam.sx ?? 1, motion), cs * J.lerp(1, cam.sy ?? 1, motion)); X.translate(-contentW / 2, -contentH / 2);
         if (X === target) X.globalCompositeOperation = blend;
+        // Content units: the display area, moved by the camera; the source mask follows them.
+        const contentMatrix = sourceMask ? X.getTransform() : null;
         this.drawCut(env);
         X.restore();
+        if (sourceMask) J.applyMaskToCanvas(X.canvas, mask, contentMatrix, contentW, contentH);
         if (X !== target) {
           target.save(); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = blend;
-          target.filter = `blur(${(blur * scale).toFixed(1)}px)`; target.drawImage(X.canvas, 0, 0); target.restore();
+          target.filter = blur > .4 ? `blur(${(blur * scale).toFixed(1)}px)` : 'none'; target.drawImage(X.canvas, 0, 0); target.restore();
         }
       }
       if (target !== ctx) {
@@ -242,6 +249,8 @@ class Renderer {
           this.post(target, plan, t, tq, step, cutScheme, scale, layerOptions, allowFilter);
           if (key) this.keyFinish(target, key, layerOptions);
         }
+        // The cut mask applies to the finished cut, after its effects, in stage units.
+        if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H);
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }

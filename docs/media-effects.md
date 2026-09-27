@@ -64,6 +64,14 @@
 詳細 → 前景／背景の「装飾を有効にする」（初期値：OFF）をONにすると、手法が「自動」の画像・動画カットに、詳細 → 手法の「装飾」を付けます。候補は詳細 → 前景／背景の「装飾」欄で前景・背景ごとにチェックでき（初期値は素材の手前に描く装飾がON、背面の装飾がOFF）、ランダムの規則（追加分・和風・パーツセット）にも従います。カットごとに1〜2個を選びます。「おまかせ」では装飾のチェックもランダムに設定し、曲テーマではテーマの装飾候補を反映します。シャッフルで変わり、ロックしたカットでは維持されます。手動で選んだ手法・演出無し・従来の設定のカットには付けません。
 
 装飾は素材の枠を歌詞の表示範囲とみなして描き、素材と同じ動き・マスク・加工がかかります。カットの詳細編集の「装飾」から、どのカットにも手動で追加・削除できます（背面の装飾は素材の下に描くため、透過素材で使えます）。演出コピペの対象にも含まれます。
+## カットのマスク
+
+カットの詳細編集の「マスク」（初期値：オフ）で、前景・背景・歌詞のカットをマスクできます。基準の画像の上に○や□を配置し（ドラッグで移動、角のハンドルで拡大縮小、数値で位置・サイズ・角度）、図形の重なりは和として表示範囲になります。「マスク反転」で図形の外側を表示します。
+
+- **マスク対象：素材** 前景・背景は素材画像を基準に素材そのものをマスクし、マスク後の素材に演出・エフェクトがかかります。歌詞は表示範囲を基準にマスクし、カメラなどの演出と一緒に動きます。
+- **マスク対象：カット** 画面全体を基準に、演出・エフェクト適用後のカットをマスクします。前景をマスクした部分には下のレイヤーが見えます。
+
+マスクは表示範囲と同様に形の設定なので、演出コピペの対象外で、貼り付け先のマスクを維持します。
 ## English
 
 Choose a main technique, **Entrance**, and **Exit** independently on each foreground/background cut. Entrance and Exit default to **Auto**. **No effects** disables the main motion/treatment; choose **Instant (none)** for both phases too to display the file instantly. Videos continue playing normally. Each automatic phase uses only its enabled category; an empty pool means Instant. Explicit selections and locked phases survive shuffle.
@@ -85,6 +93,8 @@ The second pack adds 33 techniques: 8 camera/motion variations, 10 masks/reveals
 The third pack adds, for both foreground and background: 14 entrances and 14 matching exits (drop and bounce, elastic zoom, swirl, fold up, flicker, shake, rubber snap, clock reveal, star iris, heart iris, random bars, brush strokes, polka-dot reveal, diagonal split); 4 camera moves (Ken Burns, Dutch angle, crane up, handheld); 4 dynamic motions (roll across, slam zoom, slow full turn, three-step zoom); 7 BPM motions (jelly, kick zoom out, tilt, side slide, four-beat flip, wall bounce, eight-beat build-up); 8 textures (light leak, film grain, vignette, hue cycle, CRT scanlines, thermal, soft bloom, cyanotype); 6 panel effects (zoom tunnel, tile scroll, column wave, strobe echoes, band shift, glass shards); and 5 transitions (blinds, slice shift, pixelate, rule wipe, grid cells). All of them are included in the curated themes. Transparent and chroma-keyed areas stay transparent. The new transitions are used only when selected as a technique; random transitions for legacy cuts are unchanged.
 
 The 36 lyric cameras (Details → Techniques → Camera) are also available as **Camera: …** techniques under Camera for the foreground and background. They move with the media frame, follow the same beats as the lyrics, and scale with Motion intensity. By default, Auto uses the cameras that lyric random picks may use (Extra parts, Japanese motifs and part sets such as Horror); the others start unchecked but can always be chosen by hand. Themes share their lyric camera pool with both media layers.
+
+**Cut masks** (Mask in the cut details, off by default) work on foreground, background and lyric cuts. Place circles and rectangles on a reference image (drag to move, drag the corner handle to resize, or type position, size and angle); overlapping shapes add up to the visible area, and **Invert mask** shows the outside instead. With **Source** as the mask target, media masks the source image itself, so techniques and effects apply to the masked source, while lyrics are masked within their display area and move with the camera. With **Cut**, the finished cut is masked after its effects, relative to the whole stage; masked parts of the foreground reveal the layers below. Like the display area, masks are shape settings: effect copy/paste leaves the target's mask as it is.
 
 **Enable decorations** in Details → Foreground / Background (off by default) adds lyric decorations from Details → Techniques to Auto image and video cuts. One or two decorations are chosen per cut from the layer's own Decoration group in Details → Foreground / Background (front decorations on and back ones off by default) and the random rules (Extra parts, Japanese motifs, part sets); they change with Shuffle and stay on locked cuts. Randomize also randomizes the decoration checks, and themes apply their decoration pool. Explicit techniques, No effects and Legacy settings stay plain. Decorations use the media frame as their display area and follow its motion, masks and treatments. Add or remove them on any cut under Decoration in the cut details (back decorations sit under the source, so they suit transparent assets); effect copy/paste includes them.
 

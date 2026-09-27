@@ -64,7 +64,7 @@ J.clearPastedLyricEffects = (project, line = null) => {
     const details=options.details;
     // Recognize projects saved before the explicit pasted-effects marker existed.
     if (!options.pastedEffects && !details?.effectStyle && !details?.effectEvents && !(details?.fonts && details?.palette)) continue;
-    options.details=pick(details || {},['text','area']);
+    options.details=pick(details || {},['text','area','mask']);
     delete options.pastedEffects;
     if (!Object.keys(options.details).length) delete options.details;
   }
@@ -74,10 +74,11 @@ J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
     // Keep target text and display area while retaining the exact visual parameters.
-    const preserved=pick(old.details||{},['text','area']);
+    const preserved=pick(old.details||{},['text','area','mask']);
     project.lyricCutOptions[key]={...old,...clone(payload.native),pastedEffects:true,details:{...clone(payload.details),...preserved}};
   }else{
-    const old={...project[layer].overrides?.[cut.itemId],...project[layer].cutOverrides[cut.index]},details={...clone(payload.details)};
+    // Masks are shape settings like the placement: the target keeps its own.
+    const old={...project[layer].overrides?.[cut.itemId],...project[layer].cutOverrides[cut.index]},details={...clone(payload.details),...pick(old.details||{},['mask'])};
     details.effectSettings={...cut.effectSettings,...details.effectSettings};
     let placement=cut.placement;
     if(!placement){const dim=J.mediaSourceDimensions(plan,cut,cut.start)||{width:plan.W,height:plan.H};
