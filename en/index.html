@@ -591,6 +591,13 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .detail-field-title { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .detail-random-actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
 .detail-random-actions button { width: 24px; height: 24px; padding: 3px; }
+.detail-search-popup { position: fixed; inset: auto; margin: 0; padding: 8px; box-sizing: border-box; border: 1px solid #666; border-radius: 6px; background: #22242a; color: #eee; box-shadow: 0 8px 24px #0008; overflow: hidden; }
+.detail-search-popup:popover-open { display: flex; flex-direction: column; gap: 6px; }
+.detail-search-popup > input { width: 100%; min-width: 0; flex-shrink: 0; }
+.detail-search-options { overflow-y: auto; min-height: 0; }
+.detail-search-option { padding: 7px 9px; cursor: pointer; overflow-wrap: anywhere; }
+.detail-search-option:hover, .detail-search-option.active { background: #49412c; color: #ffd479; }
+.detail-search-group, .detail-search-empty { padding: 7px 9px; color: #aaa; font-size: 12px; }
 
 </style>
 </head>
@@ -38958,7 +38965,75 @@ function openCutDetails(layer,index,part=0) {
       }else ((project.detailRandomExclusions ||= {})[pool.group] ||= {})[value]=true;
     }
   }
+  let detailSearchPopup=null;
+  function closeDetailSearch(){detailSearchPopup?.remove();detailSearchPopup=null;}
+  function attachDetailSearch(select){
+    if(select.dataset.searchAttached)return;select.dataset.searchAttached='true';
+    const normalize=value=>String(value).normalize('NFKC').toLowerCase().replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+    // Match words independently and allow skipped characters (also normalize kana / width).
+    const matches=(value,query)=>query.trim().split(/\s+/).every(word=>{
+      let pos=0;for(const char of word){pos=value.indexOf(char,pos);if(pos<0)return false;pos++;}return true;
+    });
+    const open=(initial='')=>{
+      if(select.disabled)return;
+      closeDetailSearch();
+      const popup=document.createElement('div');popup.className='detail-search-popup';popup.setAttribute('popover','auto');
+      const search=document.createElement('input');search.type='search';search.placeholder=L('あいまい検索','Fuzzy search');search.setAttribute('aria-label',search.placeholder);search.autocomplete='off';search.value=initial;
+      const list=document.createElement('div');list.className='detail-search-options';list.setAttribute('role','listbox');
+      list.setAttribute('aria-label',select.closest('label')?.querySelector('span')?.textContent||search.placeholder);
+      popup.append(search,list);dialog.append(popup);detailSearchPopup=popup;
+      let items=[],active=-1;
+      const highlight=index=>{
+        active=index;items.forEach((item,i)=>{item.classList.toggle('active',i===active);item.setAttribute('aria-selected',String(i===active));});
+        if(items[active]){search.setAttribute('aria-activedescendant',items[active].id);items[active].scrollIntoView({block:'nearest'});}
+        else search.removeAttribute('aria-activedescendant');
+      };
+      search.setAttribute('role','combobox');search.setAttribute('aria-expanded','true');search.setAttribute('aria-autocomplete','list');
+      list.id='cutDetailSearchOptions';search.setAttribute('aria-controls',list.id);
+      const choose=option=>{
+        closeDetailSearch();select.focus();select.value=option.value;
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      };
+      const filter=()=>{
+        list.replaceChildren();items=[];const query=normalize(search.value);let group=null;
+        for(const option of select.options){
+          const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
+          if(option.disabled||parent.disabled||!matches(normalize(option.textContent+' '+option.value+' '+groupName),query))continue;
+          if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
+          const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
+          item.className='detail-search-option';item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
+        }
+        if(!items.length){const empty=document.createElement('div');empty.className='detail-search-empty';empty.textContent=L('該当する項目がありません','No matching options');empty.setAttribute('role','status');list.append(empty);}
+        highlight(Math.max(0,items.findIndex(item=>item.dataset.value===select.value)));
+      };
+      search.addEventListener('input',filter);
+      search.addEventListener('keydown',e=>{
+        if(e.isComposing)return;
+        if(['ArrowDown','ArrowUp','Enter','Escape','Tab'].includes(e.key)){
+          if(e.key!=='Tab')e.preventDefault();e.stopPropagation();
+          if(e.key==='Escape'||e.key==='Tab'){closeDetailSearch();select.focus();}
+          else if(e.key==='Enter')items[active]?.click();
+          else if(items.length)highlight((active+(e.key==='ArrowDown'?1:-1)+items.length)%items.length);
+        }
+      });
+      popup.addEventListener('click',e=>e.stopPropagation());
+      popup.addEventListener('toggle',e=>{if(e.newState==='closed'){popup.remove();if(detailSearchPopup===popup)detailSearchPopup=null;}});
+      const rect=select.getBoundingClientRect(),width=Math.min(Math.max(rect.width,240),innerWidth-16);
+      popup.style.width=width+'px';popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-width-8))+'px';
+      const below=innerHeight-rect.bottom-8,above=rect.top-8,down=below>=Math.min(280,above),room=Math.max(100,down?below:above);
+      popup.style.maxHeight=Math.min(340,room)+'px';
+      if(down)popup.style.top=rect.bottom+'px';else popup.style.bottom=(innerHeight-rect.top)+'px';
+      popup.showPopover();filter();search.focus();
+    };
+    select.addEventListener('pointerdown',e=>{if(e.button===0)e.preventDefault();});
+    select.addEventListener('click',e=>{e.preventDefault();open();});
+    select.addEventListener('keydown',e=>{
+      if(['Enter',' ','ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();open();}
+      else if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();open(e.key);}
+    });
+  }
   function attachDetailRandom(select,path){
+    attachDetailSearch(select);
     if(select.dataset.randomAttached)return;select.dataset.randomAttached='true';
     const row=select.closest('label');if(!row)return;
     const title=row.querySelector('span');if(!title)return;
@@ -39040,6 +39115,7 @@ function openCutDetails(layer,index,part=0) {
     if(choices)attachDetailRandom(input,path);
   }
   function render() {
+    closeDetailSearch();
     openDetails.clear();
     for(const section of dialog.querySelectorAll('details[data-detail-section]')){
       let path=section.dataset.detailSection;
@@ -39083,6 +39159,7 @@ function openCutDetails(layer,index,part=0) {
       const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
       attachDetailRandom(select,path);
     }
+    for(const select of form.querySelectorAll('select'))attachDetailSearch(select);
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();

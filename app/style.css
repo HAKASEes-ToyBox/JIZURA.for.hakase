@@ -573,3 +573,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .detail-field-title { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .detail-random-actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
 .detail-random-actions button { width: 24px; height: 24px; padding: 3px; }
+.detail-search-popup { position: fixed; inset: auto; margin: 0; padding: 8px; box-sizing: border-box; border: 1px solid #666; border-radius: 6px; background: #22242a; color: #eee; box-shadow: 0 8px 24px #0008; overflow: hidden; }
+.detail-search-popup:popover-open { display: flex; flex-direction: column; gap: 6px; }
+.detail-search-popup > input { width: 100%; min-width: 0; flex-shrink: 0; }
+.detail-search-options { overflow-y: auto; min-height: 0; }
+.detail-search-option { padding: 7px 9px; cursor: pointer; overflow-wrap: anywhere; }
+.detail-search-option:hover, .detail-search-option.active { background: #49412c; color: #ffd479; }
+.detail-search-group, .detail-search-empty { padding: 7px 9px; color: #aaa; font-size: 12px; }
