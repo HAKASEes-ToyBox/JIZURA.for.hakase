@@ -43,7 +43,7 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   const sw = source && (source.videoWidth || source.naturalWidth || source.width) || item.width || W;
   const sh = source && (source.videoHeight || source.naturalHeight || source.height) || item.height || H;
   const fit = J.mediaPlacementRect(null, sw, sh, W, H);
-  const rng = J.rng(J.h(cut.seed, J.sid(layer), 733));
+  const rng = J.rng(J.h(J.placementSeed ? J.placementSeed(cut) : cut.seed, J.sid(layer), 733));
   // Automatic framing preserves the fitted source aspect ratio.
   const [px, py, size] = rng.pick([
     [.5, .5, .92], [.5, .5, .7], [.27, .5, .64], [.73, .5, .64],
@@ -205,7 +205,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,
       chromaColor: /^#[0-9a-fA-F]{6}$/.test(ov.chromaColor || '') ? ov.chromaColor : '#00ff00',
-      placement: J.normalizeMediaPlacement(ov.placement), seed };
+      placement: J.normalizeMediaPlacement(ov.placement), seed, placementSeed: Number.isFinite(ov.placementSeed) ? ov.placementSeed : undefined };
   });
   if (J.mediaTechnique) for (const cut of cuts) {
     const ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[cut.index] || {});

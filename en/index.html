@@ -727,7 +727,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
       </div>
       <div class="timeline-toolbar">
       <div class="timeline-position-label">At playhead:</div>
-      <div class="timeline-split"><div class="timeline-action-group" role="group" aria-label="Foreground"><button id="insertForegroundAtPlayhead" type="button" disabled>Insert foreground</button><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button></div><div class="timeline-action-group" role="group" aria-label="Lyrics"><button id="insertLyricAtPlayhead" type="button" disabled>Insert lyrics</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button></div><div class="timeline-action-group" role="group" aria-label="Background"><button id="insertBackgroundAtPlayhead" type="button" disabled>Insert background</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button></div></div>
+      <div class="timeline-split"><div class="timeline-action-group" role="group" aria-label="Foreground"><button id="insertForegroundAtPlayhead" type="button" disabled>Insert foreground</button><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button></div><div class="timeline-action-group" role="group" aria-label="Lyrics"><button id="insertLyricAtPlayhead" type="button" disabled>Insert lyrics</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button></div><div class="timeline-action-group" role="group" aria-label="Background"><button id="insertBackgroundAtPlayhead" type="button" disabled>Insert background</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button></div><div class="timeline-action-group" role="group" aria-label="Layout actions"><button id="relayoutAtPlayhead" type="button" title="Automatically re-lay out the cuts at the playhead" disabled>Re-layout</button></div></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
       </div>
       <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
@@ -4339,20 +4339,25 @@ J.SOLO_ZONES = [
   { id: 'left', zone: { x: .05, y: .14, w: .56, h: .72 }, weight: 1 },
   { id: 'right', zone: { x: .39, y: .14, w: .56, h: .72 }, weight: 1 },
 ];
+// A per-cut placement seed (set by 再配置) re-rolls placement only; techniques keep using cut.seed.
+J.placementSeed = cut => Number.isFinite(cut?.placementSeed) ? J.h(cut.seed, cut.placementSeed | 0, 887) : cut.seed;
 const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
+// The chain runs on each cut's own seed ("base"), so re-laying out one cut (placement seed) never
+// changes its neighbours; that cut alone re-picks, avoiding the previous cut's actual composition.
 J.pickComposition = (cut, plan, layer = 'foreground') => {
-  const portrait = (plan?.W || 1920) < (plan?.H || 1080), rng = J.rng(J.h(cut.seed, 881));
+  const portrait = (plan?.W || 1920) < (plan?.H || 1080);
   const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
-  const prev = memo[layer]?.index === cut.index - 1 ? memo[layer].id : null;
-  const pool = J.COMPOSITIONS.filter(c => c.id !== prev).map(c => [c, c.weight[portrait ? 1 : 0]]);
-  const comp = rng.wpick(pool);
-  memo[layer] = { index: cut.index, id: comp.id };
+  const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
+  const pick = (seed, avoid) => J.rng(J.h(seed, 881)).wpick(J.COMPOSITIONS.filter(c => c.id !== avoid).map(c => [c, c.weight[portrait ? 1 : 0]]));
+  const base = pick(cut.seed, last?.baseId);
+  const comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  memo[layer] = { index: cut.index, id: comp.id, baseId: base.id };
   return comp;
 };
 // Placement for a foreground source of fitted size fit (stage fractions) in a composition's slot.
 J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
-  const rng = J.rng(J.h(cut.seed, 883));
+  const rng = J.rng(J.h(J.placementSeed(cut), 883));
   let extent = comp.fg.size * sizeScale * (dynamic ? .85 : 1) * rng.range(.94, 1.06);
   let s = extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
   // Keep the base frame inside the safe area (motion may still move it).
@@ -4366,7 +4371,7 @@ const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(
 // Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
 // then falls back to searching free regions).
 J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false }) => {
-  const rng = J.rng(J.h(cut.seed, 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
+  const rng = J.rng(J.h(J.placementSeed(cut), 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
   if (!zone && !obstacles.length) zone = rng.wpick(J.SOLO_ZONES.map(z => [z.zone, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
   let best = null;
   for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4]) {
@@ -4437,7 +4442,7 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   const sw = source && (source.videoWidth || source.naturalWidth || source.width) || item.width || W;
   const sh = source && (source.videoHeight || source.naturalHeight || source.height) || item.height || H;
   const fit = J.mediaPlacementRect(null, sw, sh, W, H);
-  const rng = J.rng(J.h(cut.seed, J.sid(layer), 733));
+  const rng = J.rng(J.h(J.placementSeed ? J.placementSeed(cut) : cut.seed, J.sid(layer), 733));
   // Automatic framing preserves the fitted source aspect ratio.
   const [px, py, size] = rng.pick([
     [.5, .5, .92], [.5, .5, .7], [.27, .5, .64], [.73, .5, .64],
@@ -4599,7 +4604,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       videoLoop: !!item && item.type === 'video' && ov.videoLoop !== false,
       chromaKey: !!item && item.type === 'video' && ov.chromaKey === true,
       chromaColor: /^#[0-9a-fA-F]{6}$/.test(ov.chromaColor || '') ? ov.chromaColor : '#00ff00',
-      placement: J.normalizeMediaPlacement(ov.placement), seed };
+      placement: J.normalizeMediaPlacement(ov.placement), seed, placementSeed: Number.isFinite(ov.placementSeed) ? ov.placementSeed : undefined };
   });
   if (J.mediaTechnique) for (const cut of cuts) {
     const ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[cut.index] || {});
@@ -5000,7 +5005,7 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   return { zone: comp?.zone || null, fgCenter };
 };
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({}), context = {}) => {
-  const rng = J.rng(J.h(cut.seed, 947));
+  const rng = J.rng(J.h(J.placementSeed ? J.placementSeed(cut) : cut.seed, 947));
   if(cut.lyricSize != null){
     const size=Math.max(.04,cut.lyricSize/100),candidates=[];
     // The notation fixes the size; only the position is composed.
@@ -5070,6 +5075,8 @@ J.finishLyricPlan = (project, plan, audio) => {
   for (const cut of plan.cuts) {
     if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
     Object.assign(cut, J.lyricComposite(project, cut, settings));
+    const placementSeed = project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.placementSeed;
+    if (Number.isFinite(placementSeed)) cut.placementSeed = placementSeed;
     cut.areaMode = cut.area ? 'manual' : 'default';
     if (cut.area || !settings.autoPlacement) continue;
     const locked = project.overrides?.[cut.line];
@@ -38456,6 +38463,7 @@ function updateTimeUI() {
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   for(const id of ['insertLyricAtPlayhead','insertForegroundAtPlayhead','insertBackgroundAtPlayhead'])$(id).disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
+  $('relayoutAtPlayhead').disabled=!!(S.exporting || S.tap) || !relayoutTargets().length;
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
   $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
@@ -39988,6 +39996,37 @@ function mediaSplitTarget(layer) {
   const cut=J.mediaAt(S.plan,S.t,layer);
   return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
 }
+// 再配置: the unlocked lyric / foreground / background cuts at the playhead get automatic placement again,
+// with a fresh placement seed (techniques and other settings keep theirs).
+function relayoutTargets() {
+  if (!S.plan) return [];
+  const targets = [];
+  for (const cut of J.lyricCutsAt(S.plan, S.t)) if (cut.line >= 0 && Number.isInteger(cut.part) && !S.project.overrides?.[cut.line]?.lock) targets.push({ layer: 'lyrics', cut });
+  for (const layer of ['foreground', 'media']) {
+    if (S.project.layerVisibility?.[layer] === false) continue;
+    const cut = J.mediaAt(S.plan, S.t, layer);
+    if (cut && cut.itemId && !mediaCutOptions(layer, cut.index).lock) targets.push({ layer, cut });
+  }
+  return targets;
+}
+function relayoutAtPlayhead() {
+  const targets = relayoutTargets(); if (!targets.length) return;
+  pause();
+  const L = J.mediaLabel, fresh = () => 1 + Math.floor(Math.random() * 1e9);
+  const lyricAuto = J.lyricEffectSettings(S.project).autoPlacement;
+  for (const { layer, cut } of targets) {
+    if (layer === 'lyrics') {
+      // Manual areas give way to automatic placement for this cut (and its line's shared area).
+      const options = S.project.lyricCutOptions[`${cut.line}:${cut.part}`] ||= {};
+      if (options.details) { delete options.details.area; if (!Object.keys(options.details).length) delete options.details; }
+      if (S.project.overrides?.[cut.line]?.area) delete S.project.overrides[cut.line].area;
+      options.placementSeed = fresh();
+    } else mediaOv(cut.index, { placement: undefined, placementSeed: fresh() }, layer);
+  }
+  replan();
+  const note = !lyricAuto && targets.some(t => t.layer === 'lyrics') ? L('（歌詞のAuto配置がOFFのため、歌詞は全域のままです）', ' (automatic lyric placement is off, so lyrics keep the full stage)') : '';
+  toast(L(`Play位置の${targets.length}件のcutsを再配置しました`, `Re-laid out ${targets.length} cut(s) at the playhead`) + note);
+}
 function splitMediaCut(layer) {
   const cut=mediaSplitTarget(layer);if(!cut)return;
   pause();
@@ -40945,6 +40984,7 @@ function bind() {
   }
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
+  $('relayoutAtPlayhead').addEventListener('click',relayoutAtPlayhead);
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;

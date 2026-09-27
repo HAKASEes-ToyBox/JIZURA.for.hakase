@@ -290,6 +290,7 @@ function updateTimeUI() {
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
   for(const id of ['insertLyricAtPlayhead','insertForegroundAtPlayhead','insertBackgroundAtPlayhead'])$(id).disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
+  $('relayoutAtPlayhead').disabled=!!(S.exporting || S.tap) || !relayoutTargets().length;
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
   $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
@@ -1822,6 +1823,37 @@ function mediaSplitTarget(layer) {
   const cut=J.mediaAt(S.plan,S.t,layer);
   return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
 }
+// 再配置: the unlocked lyric / foreground / background cuts at the playhead get automatic placement again,
+// with a fresh placement seed (techniques and other settings keep theirs).
+function relayoutTargets() {
+  if (!S.plan) return [];
+  const targets = [];
+  for (const cut of J.lyricCutsAt(S.plan, S.t)) if (cut.line >= 0 && Number.isInteger(cut.part) && !S.project.overrides?.[cut.line]?.lock) targets.push({ layer: 'lyrics', cut });
+  for (const layer of ['foreground', 'media']) {
+    if (S.project.layerVisibility?.[layer] === false) continue;
+    const cut = J.mediaAt(S.plan, S.t, layer);
+    if (cut && cut.itemId && !mediaCutOptions(layer, cut.index).lock) targets.push({ layer, cut });
+  }
+  return targets;
+}
+function relayoutAtPlayhead() {
+  const targets = relayoutTargets(); if (!targets.length) return;
+  pause();
+  const L = J.mediaLabel, fresh = () => 1 + Math.floor(Math.random() * 1e9);
+  const lyricAuto = J.lyricEffectSettings(S.project).autoPlacement;
+  for (const { layer, cut } of targets) {
+    if (layer === 'lyrics') {
+      // Manual areas give way to automatic placement for this cut (and its line's shared area).
+      const options = S.project.lyricCutOptions[`${cut.line}:${cut.part}`] ||= {};
+      if (options.details) { delete options.details.area; if (!Object.keys(options.details).length) delete options.details; }
+      if (S.project.overrides?.[cut.line]?.area) delete S.project.overrides[cut.line].area;
+      options.placementSeed = fresh();
+    } else mediaOv(cut.index, { placement: undefined, placementSeed: fresh() }, layer);
+  }
+  replan();
+  const note = !lyricAuto && targets.some(t => t.layer === 'lyrics') ? L('（歌詞の自動配置がOFFのため、歌詞は全域のままです）', ' (automatic lyric placement is off, so lyrics keep the full stage)') : '';
+  toast(L(`再生位置の${targets.length}件のカットを再配置しました`, `Re-laid out ${targets.length} cut(s) at the playhead`) + note);
+}
 function splitMediaCut(layer) {
   const cut=mediaSplitTarget(layer);if(!cut)return;
   pause();
@@ -2779,6 +2811,7 @@ function bind() {
   }
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));
+  $('relayoutAtPlayhead').addEventListener('click',relayoutAtPlayhead);
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;

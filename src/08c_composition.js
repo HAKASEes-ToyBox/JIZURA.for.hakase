@@ -29,20 +29,25 @@ J.SOLO_ZONES = [
   { id: 'left', zone: { x: .05, y: .14, w: .56, h: .72 }, weight: 1 },
   { id: 'right', zone: { x: .39, y: .14, w: .56, h: .72 }, weight: 1 },
 ];
+// A per-cut placement seed (set by 再配置) re-rolls placement only; techniques keep using cut.seed.
+J.placementSeed = cut => Number.isFinite(cut?.placementSeed) ? J.h(cut.seed, cut.placementSeed | 0, 887) : cut.seed;
 const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
+// The chain runs on each cut's own seed ("base"), so re-laying out one cut (placement seed) never
+// changes its neighbours; that cut alone re-picks, avoiding the previous cut's actual composition.
 J.pickComposition = (cut, plan, layer = 'foreground') => {
-  const portrait = (plan?.W || 1920) < (plan?.H || 1080), rng = J.rng(J.h(cut.seed, 881));
+  const portrait = (plan?.W || 1920) < (plan?.H || 1080);
   const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
-  const prev = memo[layer]?.index === cut.index - 1 ? memo[layer].id : null;
-  const pool = J.COMPOSITIONS.filter(c => c.id !== prev).map(c => [c, c.weight[portrait ? 1 : 0]]);
-  const comp = rng.wpick(pool);
-  memo[layer] = { index: cut.index, id: comp.id };
+  const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
+  const pick = (seed, avoid) => J.rng(J.h(seed, 881)).wpick(J.COMPOSITIONS.filter(c => c.id !== avoid).map(c => [c, c.weight[portrait ? 1 : 0]]));
+  const base = pick(cut.seed, last?.baseId);
+  const comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  memo[layer] = { index: cut.index, id: comp.id, baseId: base.id };
   return comp;
 };
 // Placement for a foreground source of fitted size fit (stage fractions) in a composition's slot.
 J.compositionPlacement = (comp, cut, fit, sizeScale, dynamic) => {
-  const rng = J.rng(J.h(cut.seed, 883));
+  const rng = J.rng(J.h(J.placementSeed(cut), 883));
   let extent = comp.fg.size * sizeScale * (dynamic ? .85 : 1) * rng.range(.94, 1.06);
   let s = extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
   // Keep the base frame inside the safe area (motion may still move it).
@@ -56,7 +61,7 @@ const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(
 // Overlapping an obstacle is avoided whenever any candidate can; returns null when none can (the caller
 // then falls back to searching free regions).
 J.composeLyricArea = (cut, { w, h, obstacles = [], zone = null, fgCenter = null, fixedSize = false }) => {
-  const rng = J.rng(J.h(cut.seed, 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
+  const rng = J.rng(J.h(J.placementSeed(cut), 889)), margin = .03, anchors = [1 / 3, .5, 2 / 3];
   if (!zone && !obstacles.length) zone = rng.wpick(J.SOLO_ZONES.map(z => [z.zone, cut.emphasis && z.id === 'center' ? 6 : z.weight]));
   let best = null;
   for (const k of fixedSize ? [1] : [1, .86, .72, .6, .5, .4]) {

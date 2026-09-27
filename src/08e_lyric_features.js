@@ -101,7 +101,7 @@ J.lyricScene = (cut, bounds, end = cut.end) => {
   return { zone: comp?.zone || null, fgCenter };
 };
 J.autoLyricArea = (cut, plan, obstacles = [], settings = J.lyricEffectSettings({}), context = {}) => {
-  const rng = J.rng(J.h(cut.seed, 947));
+  const rng = J.rng(J.h(J.placementSeed ? J.placementSeed(cut) : cut.seed, 947));
   if(cut.lyricSize != null){
     const size=Math.max(.04,cut.lyricSize/100),candidates=[];
     // The notation fixes the size; only the position is composed.
@@ -171,6 +171,8 @@ J.finishLyricPlan = (project, plan, audio) => {
   for (const cut of plan.cuts) {
     if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
     Object.assign(cut, J.lyricComposite(project, cut, settings));
+    const placementSeed = project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.placementSeed;
+    if (Number.isFinite(placementSeed)) cut.placementSeed = placementSeed;
     cut.areaMode = cut.area ? 'manual' : 'default';
     if (cut.area || !settings.autoPlacement) continue;
     const locked = project.overrides?.[cut.line];
