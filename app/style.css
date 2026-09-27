@@ -570,6 +570,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .timeline-action-group { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 2px 10px 2px 0; border-right: 1px solid var(--line2); }
 .timeline-action-group:last-child { border-right: 0; padding-right: 0; }
 
-.detail-field-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.detail-field-title { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
 .detail-random-actions { display: inline-flex; gap: 4px; flex-shrink: 0; }
 .detail-random-actions button { width: 24px; height: 24px; padding: 3px; }

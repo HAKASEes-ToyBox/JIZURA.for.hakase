@@ -918,7 +918,7 @@ function openCutDetails(layer,index,part=0) {
     };
     const candidates=()=>[...select.options].filter(option=>!option.disabled && option.value!==select.value && option.value!=='' && option.value!=='legacy' && allowed(option.value));
     const controls=document.createElement('span');controls.className='detail-random-actions';
-    for(const off of [false,true]){
+    for(const off of pool.kind==='local'?[false]:[false,true]){
       const button=document.createElement('button');button.type='button';button.className='icon ghost';button.dataset.detailRandom=path;button.dataset.disableCurrent=String(off);
       button.title=off?L('この演出をOFFにして再抽選','Disable current effects and randomize'):L('この項目だけ再抽選','Randomize this setting only');button.setAttribute('aria-label',button.title);
       button.innerHTML=off?ICON.disableReroll:ICON.dice;
