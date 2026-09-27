@@ -908,11 +908,6 @@ function openCutDetails(layer,index,part=0) {
   function closeDetailSearch(){detailSearchPopup?.remove();detailSearchPopup=null;}
   function attachDetailSearch(select){
     if(select.dataset.searchAttached)return;select.dataset.searchAttached='true';
-    const normalize=value=>String(value).normalize('NFKC').toLowerCase().replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
-    // Match words independently and allow skipped characters (also normalize kana / width).
-    const matches=(value,query)=>query.trim().split(/\s+/).every(word=>{
-      let pos=0;for(const char of word){pos=value.indexOf(char,pos);if(pos<0)return false;pos++;}return true;
-    });
     const open=(initial='')=>{
       if(select.disabled)return;
       closeDetailSearch();
@@ -934,10 +929,10 @@ function openCutDetails(layer,index,part=0) {
         select.dispatchEvent(new Event('change',{bubbles:true}));
       };
       const filter=()=>{
-        list.replaceChildren();items=[];const query=normalize(search.value);let group=null;
+        list.replaceChildren();items=[];const matches=J.detailSearchQuery(search.value);let group=null;
         for(const option of select.options){
           const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
-          if(option.disabled||parent.disabled||!matches(normalize(option.textContent+' '+option.value+' '+groupName),query))continue;
+          if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName))continue;
           if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
           const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
           item.className='detail-search-option';item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
