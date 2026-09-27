@@ -514,6 +514,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
 #tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
 
+.timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
+.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+
 </style>
 </head>
 <body>
@@ -652,7 +655,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnOmakase" class="primary" title="Randomize style, mood, effects and colors (R)">Randomize</button>
       </div>
       <div id="timelineLegend" class="timeline-legend" aria-label="Timeline icon legend"></div>
-      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button></div>
+      <div class="timeline-position-label">At playhead:</div>
+      <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>Insert empty lyric</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
       <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
@@ -3546,7 +3550,7 @@ J.parseLyrics = (raw) => {
     group = nextGroup++; avoidOverlap = text.startsWith('{-');
     return text.slice(avoidOverlap ? 2 : 1).trim();
   };
-  for (let src of String(raw || '').replace(/\r/g, '').split('\n')) {
+  for (const [sourceLine,src] of String(raw || '').replace(/\r/g, '').split('\n').entries()) {
     let s0 = protectLyricEscapes(src.trim());
     if (!s0) { if (lines.length) pendingGap = true; continue; }
     if (s0.startsWith('#')) continue;
@@ -3596,7 +3600,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group, lineAvoidOverlap = avoidOverlap;
     if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), sourceLine, lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
@@ -37464,6 +37468,7 @@ function tick(now) {
 }
 function updateTimeUI() {
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
+  $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -38241,6 +38246,25 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
+function insertEmptyLyricAtPlayhead() {
+  if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous);
+  const next=S.plan.lines.find(line=>line.start>=start-1e-6);
+  const rows=previous.replace(/\r/g,'').split('\n');
+  const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
+  const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
+  const timestamp=allTimed ? `[${Math.floor(start/60)}:${(start%60).toFixed(3)}]` : '';
+  rows.splice(sourceLine,0,timestamp+'｜　　　　｜');
+  const lyrics=rows.join('\n');
+  // Keep existing line starts stable while adding a new line at the playhead.
+  for(const line of S.plan.lines)S.project.timing.lineTimes[line.index]=line.start;
+  reconcileLyricLines(previous,lyrics);
+  const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
+  S.project.timing.lineTimes[index]=start;
+  S.project.lyrics=lyrics;$('lyrics').value=lyrics;
+  replan();seek(start);
+}
 function canInsertBlankAtPlayhead() {
   if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
   if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
@@ -39570,6 +39594,7 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('insertEmptyLyricAtPlayhead').addEventListener('click',insertEmptyLyricAtPlayhead);
   $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));

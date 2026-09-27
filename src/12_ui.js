@@ -273,6 +273,7 @@ function tick(now) {
 }
 function updateTimeUI() {
   $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
+  $('insertEmptyLyricAtPlayhead').disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
   for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
@@ -1050,6 +1051,25 @@ function updateCutInfo() {
 }
 
 /* ---------------- line list ---------------- */
+function insertEmptyLyricAtPlayhead() {
+  if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous);
+  const next=S.plan.lines.find(line=>line.start>=start-1e-6);
+  const rows=previous.replace(/\r/g,'').split('\n');
+  const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
+  const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
+  const timestamp=allTimed ? `[${Math.floor(start/60)}:${(start%60).toFixed(3)}]` : '';
+  rows.splice(sourceLine,0,timestamp+'｜　　　　｜');
+  const lyrics=rows.join('\n');
+  // Keep existing line starts stable while adding a new line at the playhead.
+  for(const line of S.plan.lines)S.project.timing.lineTimes[line.index]=line.start;
+  reconcileLyricLines(previous,lyrics);
+  const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
+  S.project.timing.lineTimes[index]=start;
+  S.project.lyrics=lyrics;$('lyrics').value=lyrics;
+  replan();seek(start);
+}
 function canInsertBlankAtPlayhead() {
   if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
   if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
@@ -2379,6 +2399,7 @@ function bind() {
       S.project.lyricEffects = settings; renderTech(); replan();
     });
   }
+  $('insertEmptyLyricAtPlayhead').addEventListener('click',insertEmptyLyricAtPlayhead);
   $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   $('splitForegroundCut').addEventListener('click',()=>splitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>splitMediaCut('media'));

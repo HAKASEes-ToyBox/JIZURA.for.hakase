@@ -56,7 +56,7 @@ J.parseLyrics = (raw) => {
     group = nextGroup++; avoidOverlap = text.startsWith('{-');
     return text.slice(avoidOverlap ? 2 : 1).trim();
   };
-  for (let src of String(raw || '').replace(/\r/g, '').split('\n')) {
+  for (const [sourceLine,src] of String(raw || '').replace(/\r/g, '').split('\n').entries()) {
     let s0 = protectLyricEscapes(src.trim());
     if (!s0) { if (lines.length) pendingGap = true; continue; }
     if (s0.startsWith('#')) continue;
@@ -106,7 +106,7 @@ J.parseLyrics = (raw) => {
     const lineGroup = group, lineAvoidOverlap = avoidOverlap;
     if (closeGroup) { group = null; avoidOverlap = false; }
     if (!s) continue;
-    const base = { text: restoreLyricEscapes(s), lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
+    const base = { text: restoreLyricEscapes(s), sourceLine, lyricSize, effectsOnly, note, impact, emph, soft, strengthSpans, manual, group: lineGroup, avoidOverlap: lineAvoidOverlap, gapBefore: pendingGap };
     pendingGap = false;
     if (times.length) times.forEach(t => lines.push(Object.assign({}, base, { lrc: t })));
     else lines.push(Object.assign({}, base, { lrc: null }));
