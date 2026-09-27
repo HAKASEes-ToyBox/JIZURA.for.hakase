@@ -544,10 +544,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .col-stage { align-self: start; gap: 6px; }
 .preview-options { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .preview-options .item-frame-toggle { margin: 0; }
-.viewport:fullscreen { width: 100vw; height: 100dvh; border: 0; }
+.viewport:is(:fullscreen, .preview-fullscreen) { width: 100vw; height: 100dvh; border: 0; }
 .fullscreen-exit { display: none; position: absolute; top: 16px; right: 16px; z-index: 10; }
-.viewport:fullscreen .fullscreen-exit { display: block; }
-.viewport:fullscreen .item-frames, .viewport:fullscreen .area-edit-overlay { display: none; }
+.viewport:is(:fullscreen, .preview-fullscreen) .fullscreen-exit { display: block; }
+.viewport:is(:fullscreen, .preview-fullscreen) .item-frames, .viewport:is(:fullscreen, .preview-fullscreen) .area-edit-overlay { display: none; }
 @media (max-height: 800px), (max-width: 760px) {
   .col-stage { padding: 8px; gap: 4px; }
   .col-stage .transport { gap: 5px; }
@@ -560,7 +560,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 
 .timeline-toolbar .timeline-position-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
 .fullscreen-transport { display: none; }
-.viewport:fullscreen .fullscreen-transport { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(15,15,18,.85); }
+.viewport:is(:fullscreen, .preview-fullscreen) .fullscreen-transport { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: rgba(15,15,18,.85); }
 .fullscreen-transport input[type=range] { flex: 1; min-width: 0; accent-color: var(--amber); }
 .fullscreen-transport .tc { font: 12px var(--mono); white-space: nowrap; }
 
@@ -590,6 +590,80 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .detail-search-option { padding: 7px 9px; cursor: pointer; overflow-wrap: anywhere; }
 .detail-search-option:hover, .detail-search-option.active { background: #49412c; color: #ffd479; }
 .detail-search-group, .detail-search-empty { padding: 7px 9px; color: #aaa; font-size: 12px; }
+
+/* Mobile editor: retain every tool and scroll the workspace vertically. */
+body.preview-fullscreen-open { overflow: hidden; }
+.timeline-touch-scroll { display: none; }
+.viewport.preview-fullscreen { position: fixed; inset: 0; z-index: 1000; }
+@media (max-width: 1180px) {
+  .timeline-toolbar { flex-wrap: wrap; }
+  .timeline-toolbar .timeline-split { flex-basis: 100%; }
+  .timeline-toolbar .timeline-zoom { margin-left: auto; }
+}
+@media (max-width: 760px) {
+  .bar { padding: 10px; }
+  .brand { flex-wrap: wrap; row-gap: 6px; }
+  .brand .word { letter-spacing: .15em; }
+  .brand .tag { margin-left: 0; }
+  .col-left, .col-right { overflow: visible; }
+  .sec, .easy { padding: 12px; }
+  .transport .hist-btns { display: inline-flex; flex-wrap: wrap; }
+  .transport input[type=range] { flex-basis: 100%; width: 100%; }
+  .timeline-toolbar { flex-wrap: wrap; gap: 8px; }
+  .timeline-toolbar .timeline-position-label { flex-basis: 100%; }
+  .timeline-toolbar .timeline-split { flex: 1 1 100%; }
+  .timeline-toolbar .timeline-zoom { margin-left: auto; }
+  .timeline-action-group { flex-wrap: wrap; gap: 6px; padding-right: 6px; }
+  .col-stage .timeline-split button { font-size: 12px; padding: 7px 8px; }
+  .preview-options { flex-wrap: wrap; }
+  .header-menu-items { position: fixed; left: 10px; right: 10px; top: auto; margin-top: 6px; min-width: 0; max-height: 65dvh; overflow-y: auto; }
+  dialog { max-width: calc(100vw - 16px); max-height: calc(100dvh - 24px); overflow: auto; overflow-wrap: anywhere; }
+  dialog.terms { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); padding: 16px; }
+  #themeChoices { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  #themeChoices fieldset { min-width: 0; }
+  .theme-color-row { flex-wrap: wrap; }
+  .theme-color-row select { min-width: 0; max-width: 100%; }
+  .cut-details-dialog { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
+  .cut-details-dialog[open] { grid-template-rows: minmax(0, auto) minmax(120px, 1fr); }
+  .cut-details-preview { max-height: 32dvh; overflow-y: auto; padding: 10px 12px; }
+  .cut-details-preview canvas { max-height: 18dvh; }
+  .cut-details-form { padding: 12px; }
+  .cut-details-grid { grid-template-columns: minmax(0,1fr); }
+  .cut-details-actions { bottom: -12px; gap: 6px; flex-wrap: wrap; }
+  .detail-field-title { flex-wrap: wrap; }
+  .cut-detail-field, .cut-details-grid > details { min-width: 0; }
+  .cut-mask-canvas { width: 100%; height: auto; }
+  .split-effect-options { align-items: stretch; }
+  .split-effect-options label { flex: 1 1 100%; }
+  .split-effect-options label + label { border-left: 0; padding-left: 0; }
+  .media-effects-panel { max-height: none; overflow: visible; padding-right: 0; }
+  .easy .fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  input[type=text], input[type=number], input[type=search], input:not([type]), select, textarea, #lyrics { font-size: 16px; }
+  .timeline-asset-select { font-size: 12px; }
+  .viewport:is(:fullscreen, .preview-fullscreen) .fullscreen-transport { flex-wrap: wrap; bottom: max(8px,env(safe-area-inset-bottom)); left: 8px; right: 8px; gap: 8px; }
+  .fullscreen-transport .tc { font-size: 11px; }
+}
+@media (pointer: coarse) {
+  .timeline-touch-scroll { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
+  .timeline-touch-scroll input { flex: 1 1 160px; min-width: 0; height: 40px; accent-color: var(--amber); }
+  button, label.file, .header-menu summary { min-height: 40px; }
+  input[type=checkbox] { width: 20px; height: 20px; flex-shrink: 0; }
+  .detail-random-actions button { width: 36px; height: 36px; min-height: 36px; }
+  .detail-search-option { min-height: 44px; padding: 10px; }
+  .timeline-links .link-handle, .timeline-links .link-remove { touch-action: none; }
+  .area-edit-handle { width: 24px; height: 24px; }
+  .item-frame-action { min-height: 25px; }
+  .timeline-duration-handle { min-height: 0; }
+}
+@media (max-height: 520px) {
+  .cut-details-actions { position: static; }
+}
+@media (min-width: 600px) and (max-width: 1180px) and (max-height: 520px) {
+  .cut-details-dialog[open] { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); grid-template-columns: minmax(0,38%) minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+  .cut-details-preview { min-height: 0; max-height: none; overflow-y: auto; }
+  .cut-details-preview canvas { max-height: 40dvh; }
+  .cut-details-grid { grid-template-columns: minmax(0,1fr); }
+}
 
 </style>
 </head>
@@ -38506,8 +38580,11 @@ function sizeViewport() {
   const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
   const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
   const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
-  const full=document.fullscreenElement===vp;
-  const maxH=full ? window.innerHeight : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
+  const full=document.fullscreenElement===vp||vp.classList.contains('preview-fullscreen');
+  // Phones need a readable preview; let the page scroll instead of squeezing
+  // the canvas into the space left by wrapped controls and the keyboard.
+  const compact=matchMedia('(max-width: 1180px)').matches;
+  const maxH=full ? window.innerHeight : compact ? Math.max(180,window.innerHeight*.5) : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -38621,6 +38698,12 @@ function sizeTimelineStack() {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
   const width = Math.max(10, Math.round(scroll.clientWidth * S.timelineZoom));
   if (stack.style.width !== `${width}px`) stack.style.width = `${width}px`;
+  syncTimelinePan();
+}
+function syncTimelinePan(){
+  const input=$('timelinePan');if(!input)return;
+  const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
+  input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
 function setTimelineZoom(zoom) {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
@@ -41184,6 +41267,13 @@ function bind() {
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
+  // A dedicated touch scrollbar leaves boundary dragging and seeking intact.
+  const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
+  panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
+  const pan=document.createElement('input');pan.type='range';pan.id='timelinePan';pan.min='0';pan.max='0';pan.value='0';pan.disabled=true;pan.setAttribute('aria-label',panLabel.textContent);panLabel.append(pan);
+  $('timelineLegend').before(panLabel);
+  pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
+  $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
   $('sourceLyrics').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'lyrics'; syncSourceTab(); });
   $('sourceMedia').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'media'; renderMediaList(); renderMediaLines(); });
   $('sourceForeground').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'foreground'; renderMediaList(); renderMediaLines(); });
@@ -41319,9 +41409,14 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('previewFullscreen').addEventListener('click',async()=>{
     try { await $('viewport').requestFullscreen(); }
-    catch { toast(J.mediaLabel('この環境では全画面表示を開始できません','Fullscreen is unavailable in this environment')); }
+    catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }
   });
-  $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
+  const exitPreviewFullscreen=()=>{
+    if(document.fullscreenElement)document.exitFullscreen();
+    $('viewport').classList.remove('preview-fullscreen');document.body.classList.remove('preview-fullscreen-open');sizeViewport();
+  };
+  $('exitPreviewFullscreen').addEventListener('click',exitPreviewFullscreen);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('viewport').classList.contains('preview-fullscreen'))exitPreviewFullscreen();});
   document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
   $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
   const fullscreenScrub=$('fullscreenScrub');

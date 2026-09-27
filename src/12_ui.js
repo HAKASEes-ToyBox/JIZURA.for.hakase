@@ -252,8 +252,11 @@ function sizeViewport() {
   const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
   const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
   const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
-  const full=document.fullscreenElement===vp;
-  const maxH=full ? window.innerHeight : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
+  const full=document.fullscreenElement===vp||vp.classList.contains('preview-fullscreen');
+  // Phones need a readable preview; let the page scroll instead of squeezing
+  // the canvas into the space left by wrapped controls and the keyboard.
+  const compact=matchMedia('(max-width: 1180px)').matches;
+  const maxH=full ? window.innerHeight : compact ? Math.max(180,window.innerHeight*.5) : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -367,6 +370,12 @@ function sizeTimelineStack() {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
   const width = Math.max(10, Math.round(scroll.clientWidth * S.timelineZoom));
   if (stack.style.width !== `${width}px`) stack.style.width = `${width}px`;
+  syncTimelinePan();
+}
+function syncTimelinePan(){
+  const input=$('timelinePan');if(!input)return;
+  const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
+  input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
 function setTimelineZoom(zoom) {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
@@ -2930,6 +2939,13 @@ function bind() {
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
+  // A dedicated touch scrollbar leaves boundary dragging and seeking intact.
+  const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
+  panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
+  const pan=document.createElement('input');pan.type='range';pan.id='timelinePan';pan.min='0';pan.max='0';pan.value='0';pan.disabled=true;pan.setAttribute('aria-label',panLabel.textContent);panLabel.append(pan);
+  $('timelineLegend').before(panLabel);
+  pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
+  $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
   $('sourceLyrics').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'lyrics'; syncSourceTab(); });
   $('sourceMedia').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'media'; renderMediaList(); renderMediaLines(); });
   $('sourceForeground').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'foreground'; renderMediaList(); renderMediaLines(); });
@@ -3065,9 +3081,14 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('previewFullscreen').addEventListener('click',async()=>{
     try { await $('viewport').requestFullscreen(); }
-    catch { toast(J.mediaLabel('この環境では全画面表示を開始できません','Fullscreen is unavailable in this environment')); }
+    catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }
   });
-  $('exitPreviewFullscreen').addEventListener('click',()=>document.exitFullscreen());
+  const exitPreviewFullscreen=()=>{
+    if(document.fullscreenElement)document.exitFullscreen();
+    $('viewport').classList.remove('preview-fullscreen');document.body.classList.remove('preview-fullscreen-open');sizeViewport();
+  };
+  $('exitPreviewFullscreen').addEventListener('click',exitPreviewFullscreen);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('viewport').classList.contains('preview-fullscreen'))exitPreviewFullscreen();});
   document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
   $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
   const fullscreenScrub=$('fullscreenScrub');
