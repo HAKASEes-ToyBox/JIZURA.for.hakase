@@ -3,7 +3,7 @@
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
 const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
-const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases'];
+const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
   const result = [];
@@ -47,13 +47,13 @@ J.readCutEffects=text=>{
     if(d.fontParams!==undefined && (!Array.isArray(d.fontParams) || d.fontParams.some(entry=>!entry || !Array.isArray(entry.path) || entry.path.some(key=>typeof key!=='string'||['__proto__','constructor','prototype'].includes(key)) || typeof entry.font!=='string')))throw Error('invalid');
 
     for(const key of ['layout','enter','hold','exit','treat','bg','cam','trans'])if(d[key]!=null&&!(key==='trans'&&d[key]==='none')&&!Object.hasOwn(J.registry(key),d[key]))throw Error('invalid');
-    if(d.decor && (!Array.isArray(d.decor)||d.decor.some(x=>!x||!Object.hasOwn(J.DECOR,x.id))))throw Error('invalid');
     if(n.blend!==undefined&&!J.LYRIC_BLENDS.includes(n.blend))throw Error('invalid');
     if(n.opacity!==undefined&&(!Number.isFinite(n.opacity)||n.opacity<0||n.opacity>100))throw Error('invalid');
   }else{
     if(n.technique!==undefined&&!['none','legacy'].includes(n.technique)&&!Object.hasOwn(J.MEDIA_TECH,n.technique))throw Error('invalid');
     for(const key of ['entrance','departure'])if(n[key]!=null&&typeof n[key]!=='string')throw Error('invalid');
   }
+  if(d.decor && (!Array.isArray(d.decor)||d.decor.some(x=>!x||!Object.hasOwn(J.DECOR,x.id))))throw Error('invalid');
   for(const key of ['inDur','outDur','stagger','scheme','transDur','motionScale','contentScale','bpm','beatOffset','seed'])if(d[key]!==undefined&&!Number.isFinite(d[key]))throw Error('invalid');
   return payload;
 };

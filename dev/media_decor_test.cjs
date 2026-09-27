@@ -30,6 +30,11 @@ for(const layer of ['foreground','media']){
  check(J.mediaDecorCandidates(p,'foreground').join()==='brackets'&&J.mediaDecorCandidates(p,'media').length>10,'independent layers');
  for(let seed=1;seed<=20;seed++){const s=J.randomMediaEffectSettings(p,'media',J.rng(seed));const on=Object.keys(s.decorEnabled).filter(k=>s.decorEnabled[k]);check(on.length>0&&on.every(k=>J.DECOR[k].layer==='front'),'randomize decor '+seed);}
  for(const id of Object.keys(J.THEMES)){const q=J.defaultProject();q.themes=[id];const look=J.omakase(q,J.rng(4));for(const layer of ['foreground','media']){const e=look[layer].effects.decorEnabled;check(Object.keys(e).every(k=>!e[k]||(look.enabled.decor[k]&&J.DECOR[k].layer==='front')),id+' theme decor '+layer);}}}
+// Effect copy/paste carries media decorations and rejects unknown ones.
+{const p=setup('media',[{technique:null},{technique:'kenBurns'}],true),plan=J.plan(p);plan.media=J.planMedia(p,plan,null,'media');const from=plan.media.cuts[0];
+ const payload=J.readCutEffects(JSON.stringify(J.cutEffectsPayload(from,'media',plan)));check(JSON.stringify(payload.details.decor)===JSON.stringify(from.decor)&&from.decor.length>0,'payload decor');
+ J.pasteCutEffects(p,plan,'media',plan.media.cuts[1],payload);const again=J.plan(p);check(JSON.stringify(J.planMedia(p,again,null,'media').cuts[1].decor)===JSON.stringify(from.decor),'pasted decor');
+ let rejected=false;try{J.readCutEffects(JSON.stringify({format:'jizura-cut-effects',version:1,kind:'media',details:{decor:[{id:'noSuchDecor'}]},native:{}}));}catch(e){rejected=true;}check(rejected,'unknown decor rejected');}
 // Rendering: every decoration draws without errors; back ones sit under an opaque source, front ones over it.
 const src=document.createElement('canvas');src.width=160;src.height=90;src.getContext('2d').fillStyle='#e33';src.getContext('2d').fillRect(0,0,160,90);
 const out=document.createElement('canvas');out.width=640;out.height=360;const ctx=out.getContext('2d');
