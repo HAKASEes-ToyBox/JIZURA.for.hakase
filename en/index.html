@@ -38676,6 +38676,7 @@ function syncSourceTab() {
     }
   }
   $('btnMediaFromLyrics').disabled = !targets.length;
+  $('btnTapMedia').disabled = !S.tap && (!media || !J.mediaInsertChoices(S.project,layer).length);
   $('mediaLyricInsertHint').textContent = !media || !J.mediaInsertChoices(S.project,layer).length
     ? J.mediaLabel('挿入する項目を選択してください。画像 · 動画の場合は素材をNewしてください。', 'Select items to insert. Add assets to insert images or videos.')
     : !targets.length
@@ -39403,11 +39404,11 @@ async function runExport(kind) {
 /* ---------------- tap sync ---------------- */
 function startTap() {
   const layer = activeMediaLayer();
-  if (!(layer ? S.plan[layer].cuts.length || S.project[layer].loop : S.plan.lines.length)) return;
+  if (!(layer ? J.mediaInsertChoices(S.project,layer).length : S.plan.lines.length)) return;
   pause();
-  S.tap = { i: 0, layer, append: !!layer && S.project[layer].loop, countingDown: true };
+  S.tap = { i: 0, layer, append: !!layer, fileIndex: 0, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-  $('tapHint').textContent = S.tap.append ? 'Each tap adds a cut, cycling through the files. Continue until you stop.' : 'Press Space or the button when each lyric line or media cut starts.';
+  $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにcutsをNewします。','Each tap inserts a cut from the selected items.') : 'Press Space or the button when each lyric line or media cut starts.';
   $('tapPanel').hidden = false; syncTapButtons();
   if (S.tap.append && !S.audio) extendTapPreview(0);
   seek(0); updateTap();
@@ -39431,9 +39432,16 @@ function tapNow() {
   if (S.tap.append) {
     const i = S.tap.i;
     const m = S.project[S.tap.layer];
-    if (i === 0) { m.timing.lineTimes = {}; m.cutOverrides = {}; m.manualCuts = true; }
+    if(!S.tap.nextItem)return;
+    if (i === 0) {
+      m.timing.lineTimes = {}; m.cutOverrides = {}; m.manualCuts = true;
+      const prefix=S.tap.layer==='foreground'?'f:':'m:';
+      S.project.timelineLinks=S.project.timelineLinks.filter(link=>!link.a.startsWith(prefix)&&!link.b.startsWith(prefix));
+    }
     m.cutCount = i + 1;
-    m.cutOverrides[i] = { itemId: m.items.length ? m.items[i % m.items.length].id : null, technique: null };
+    m.cutOverrides[i] = { itemId: S.tap.nextItem.id, technique: null };
+    if(S.tap.nextItem.file)S.tap.fileIndex++;
+    delete S.tap.nextItem;
     m.timing.lineTimes[i] = +S.t.toFixed(3);
     S.tap.i++;
     replan();
@@ -39455,8 +39463,16 @@ function syncTapButtons() {
 }
 function updateTap() {
   if (S.tap.append) {
-    const order = J.mediaOrder(S.project, S.tap.layer);
-    $('tapLine').textContent = `${S.tap.i + 1}. ${order.length ? order[S.tap.i % order.length].name : 'No image'}`; return;
+    const m=S.project[S.tap.layer],order=J.mediaOrder(S.project,S.tap.layer);
+    if(!S.tap.nextItem){
+      const choices=J.mediaInsertChoices(S.project,S.tap.layer).filter(id=>id!=='files'||m.loop||S.tap.fileIndex<m.items.length);
+      if(!choices.length){pause();stopTap();return;}
+      const choice=choices[Math.floor(Math.random()*choices.length)];
+      S.tap.nextItem=choice==='files'
+        ? {id:m.items[S.tap.fileIndex % m.items.length].id,name:order[S.tap.fileIndex % order.length].name,file:true}
+        : J.mediaCopyItems(S.tap.layer).find(item=>item.id===choice);
+    }
+    $('tapLine').textContent = `${S.tap.i + 1}. ${S.tap.nextItem.name}`; return;
   }
   const ln = S.tap.layer ? S.plan[S.tap.layer].cuts[S.tap.i] : S.plan.lines[S.tap.i];
   $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${S.tap.layer ? ln.name : ln.text}` : '—';
