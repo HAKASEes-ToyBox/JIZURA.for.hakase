@@ -7,7 +7,7 @@ const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不�
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','style','mood','extra','wa','horror','typo','kinetic','keyBg',
   'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
-  'lyricEffects','colors','fonts','userFonts','compositeFonts'];
+  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
   const result = {};

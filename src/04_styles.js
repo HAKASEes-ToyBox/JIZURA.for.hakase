@@ -157,12 +157,17 @@ J.resolveStyle = (project) => {
   const st = JSON.parse(JSON.stringify(base));
   const ov = project.colors || {};
   // base colours (background / text) replace the main scheme only
-  if (ov.enabled) st.schemes[0] = Object.assign({}, st.schemes[0], pickDefined(ov, ['bg', 'fg', 'sub']));
+  // (colour-theme palettes set allSchemes so the whole style follows the chosen genre)
+  if (ov.enabled) {
+    const base = s => Object.assign({}, s, pickDefined(ov, ['bg', 'fg', 'sub', 'dim']));
+    st.schemes = ov.allSchemes ? st.schemes.map(base) : [base(st.schemes[0]), ...st.schemes.slice(1)];
+  }
   // accent + chromatic ghost colours apply to every scheme; accent is re-lit per background for contrast
   if (ov.accentOn) {
     st.schemes = st.schemes.map(s => {
       const o = Object.assign({}, s);
       if (ov.accent) { o.accent = J.fitContrast(ov.accent, s.bg, 2.4); if (s.ink === s.accent) o.ink = o.accent; }
+      if (ov.accent2) o.accent2 = J.fitContrast(ov.accent2, s.bg, 2.4);
       // ghosts only need to stay visible against this scheme's background
       if (ov.ghostA) o.ghostA = J.fitContrast(ov.ghostA, s.bg, 1.35);
       if (ov.ghostB) o.ghostB = J.fitContrast(ov.ghostB, s.bg, 1.35);

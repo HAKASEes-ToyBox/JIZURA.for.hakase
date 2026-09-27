@@ -455,6 +455,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #themeChoices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
 #themeChoices fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 #themeChoices legend { font-weight: bold; }
+#themeChoices .theme-colors { grid-column: 1 / -1; display: grid; gap: 8px; }
+#themeChoices .theme-colors .note { margin: 0; }
+.theme-color-row { display: flex; align-items: center; gap: 10px; }
+.theme-color-row select { min-width: 12em; }
+.theme-color-label i { display: inline-block; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%; vertical-align: middle; box-shadow: 0 0 0 1px #0006; }
 
 .header-menu { position: relative; }
 .header-menu summary { cursor: pointer; padding: 8px 12px; border: 1px solid var(--line2); border-radius: var(--r); font-size: 12px; }
@@ -2099,12 +2104,17 @@ J.resolveStyle = (project) => {
   const st = JSON.parse(JSON.stringify(base));
   const ov = project.colors || {};
   // base colours (background / text) replace the main scheme only
-  if (ov.enabled) st.schemes[0] = Object.assign({}, st.schemes[0], pickDefined(ov, ['bg', 'fg', 'sub']));
+  // (colour-theme palettes set allSchemes so the whole style follows the chosen genre)
+  if (ov.enabled) {
+    const base = s => Object.assign({}, s, pickDefined(ov, ['bg', 'fg', 'sub', 'dim']));
+    st.schemes = ov.allSchemes ? st.schemes.map(base) : [base(st.schemes[0]), ...st.schemes.slice(1)];
+  }
   // accent + chromatic ghost colours apply to every scheme; accent is re-lit per background for contrast
   if (ov.accentOn) {
     st.schemes = st.schemes.map(s => {
       const o = Object.assign({}, s);
       if (ov.accent) { o.accent = J.fitContrast(ov.accent, s.bg, 2.4); if (s.ink === s.accent) o.ink = o.accent; }
+      if (ov.accent2) o.accent2 = J.fitContrast(ov.accent2, s.bg, 2.4);
       // ghosts only need to stay visible against this scheme's background
       if (ov.ghostA) o.ghostA = J.fitContrast(ov.ghostA, s.bg, 1.35);
       if (ov.ghostB) o.ghostB = J.fitContrast(ov.ghostB, s.bg, 1.35);
@@ -3587,6 +3597,7 @@ J.defaultProject = () => ({
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   foreground: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
   colors: { enabled: false },
+  colorTheme: { genre: 'auto', color: null },
   fonts: {},
 });
 
@@ -7055,7 +7066,7 @@ const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不�
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','style','mood','extra','wa','horror','typo','kinetic','keyBg',
   'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
-  'lyricEffects','colors','fonts','userFonts','compositeFonts'];
+  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
   const result = {};
@@ -37514,6 +37525,80 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
 };
 })();
 
+/* Colour themes (テーマ設定 → カラー): a colour genre and one theme colour steer every random palette.
+   They take priority over the colours implied by music-genre / taste themes. */
+(() => {
+'use strict';
+const L = J.mediaLabel, wrap = h => ((h % 360) + 360) % 360;
+const range = (rnd, [a, b]) => a + (b - a) * rnd();
+const pickOf = (rnd, list) => list[Math.floor(rnd() * list.length)];
+// bg(h, rnd): background (null keeps the style's own); acc / ghost: [sat range, dark-bg lightness, light-bg lightness];
+// hues: preferred hue ranges when no theme colour is given.
+J.COLOR_GENRES = {
+  auto: { name: L('指定なし', 'Not specified'), description: L('スタイルの背景のまま、アクセントとズレ色を選びます', "Keeps the style's background; picks accent and offset colours"),
+    bg: null, acc: [[.82, 1], [.52, .62], [.44, .52]], ghost: [[.82, 1], [.52, .62], [.44, .52]] },
+  vivid: { name: L('ビビッド', 'Vivid'), description: L('鮮やかな原色系', 'Saturated, bold colours'),
+    bg: (h, r) => r() < .65 ? J.hsl(h, .3, .07) : J.hsl(h, .12, .97), acc: [[.9, 1], [.5, .58], [.45, .52]], ghost: [[.9, 1], [.5, .6], [.46, .54]] },
+  pastel: { name: L('パステル', 'Pastel'), description: L('淡く明るい背景とやわらかい色', 'Light, soft colours'),
+    bg: (h, r) => J.hsl(h + range(r, [-25, 25]), .55, .93), acc: [[.5, .7], [.72, .8], [.62, .7]], ghost: [[.45, .65], [.75, .82], [.62, .7]] },
+  neon: { name: L('ネオン', 'Neon'), description: L('暗い背景に発光するような蛍光色', 'Glowing colours on black'),
+    bg: (h, r) => J.hsl(h + 180, .4, .04), acc: [[1, 1], [.55, .62], [.5, .56]], ghost: [[1, 1], [.55, .62], [.5, .56]] },
+  dark: { name: L('ダーク', 'Dark'), description: L('深い背景と落ち着いた色', 'Deep backgrounds, muted colours'),
+    bg: (h, r) => J.hsl(h, .22, .08), acc: [[.4, .6], [.52, .62], [.4, .5]], ghost: [[.35, .5], [.4, .52], [.4, .5]] },
+  mono: { name: L('モノトーン', 'Monotone'), description: L('白黒とグレー（テーマカラーのみ色付き）', 'Black, white and grey (only the theme colour is coloured)'),
+    bg: (h, r) => r() < .5 ? '#0E0E0E' : '#F2F2F2', acc: [[0, 0], [.78, .86], [.24, .32]], ghost: [[0, 0], [.5, .6], [.5, .6]] },
+  earth: { name: L('アース', 'Earth'), description: L('土や草木のような落ち着いた暖色', 'Earthy browns, ochres and greens'),
+    bg: (h, r) => r() < .6 ? J.hsl(38, .3, .88) : J.hsl(25, .25, .1), acc: [[.35, .55], [.55, .64], [.38, .5]], ghost: [[.3, .5], [.5, .6], [.45, .55]], hues: [[18, 48], [80, 130]] },
+  retro: { name: L('レトロ', 'Retro'), description: L('クリーム地にくすんだ赤・青緑・からし色', 'Cream with faded red, teal and mustard'),
+    bg: (h, r) => r() < .75 ? J.hsl(42, .5, .87) : J.hsl(200, .3, .12), acc: [[.5, .65], [.55, .63], [.44, .54]], ghost: [[.45, .6], [.55, .63], [.5, .58]], hues: [[2, 12], [38, 48], [170, 190], [345, 355]] },
+  cool: { name: L('クール', 'Cool'), description: L('青・水色・紫系の寒色', 'Blues, cyans and violets'),
+    bg: (h, r) => r() < .7 ? J.hsl(220, .45, .09) : J.hsl(205, .35, .95), acc: [[.6, .85], [.52, .62], [.44, .52]], ghost: [[.55, .8], [.5, .6], [.46, .54]], hues: [[170, 265]] },
+};
+J.COLOR_GENRE_ORDER = Object.keys(J.COLOR_GENRES);
+J.normalizeColorTheme = t => ({
+  genre: J.COLOR_GENRES[t?.genre] ? t.genre : 'auto',
+  color: /^#[0-9a-f]{6}$/i.test(t?.color || '') ? t.color.toUpperCase() : null,
+});
+J.colorThemeActive = project => { const t = J.normalizeColorTheme(project?.colorTheme); return t.genre !== 'auto' || !!t.color; };
+// Harmonies around the key hue: complementary, split complementary, triadic, analogous.
+const HARMONIES = [[180, 150], [150, 210], [120, 240], [30, -30], [200, 160]];
+// current: the colours being replaced (their base colours stay when the genre keeps the style background).
+J.themedPalette = (project, styleKey, rnd = Math.random, current = project.colors) => {
+  const theme = J.normalizeColorTheme(project.colorTheme), G = J.COLOR_GENRES[theme.genre];
+  const key = theme.color ? J.toHsl(theme.color) : null;
+  const hueOf = () => G.hues ? wrap(range(rnd, pickOf(rnd, G.hues))) : rnd() * 360;
+  const h0 = key ? key[0] : hueOf();
+  const styleBg = current?.enabled && current.bg ? current.bg : (J.STYLES[styleKey] || J.STYLES.noir).schemes[0].bg;
+  const bg = G.bg ? G.bg(h0, rnd).toUpperCase() : styleBg, dark = J.lum(bg) < .5;
+  const tone = ([s, ld, ll], h) => J.hsl(wrap(h), range(rnd, s), range(rnd, dark ? ld : ll));
+  // With a genre hue set, the second colours stay in it; otherwise they follow the harmony.
+  const [o1, o2] = pickOf(rnd, HARMONIES), second = o => G.hues && !key ? hueOf() : h0 + o;
+  const accent = J.fitContrast(key ? theme.color : tone(G.acc, h0), bg, 2.4);
+  const ghostA = J.fitContrast(tone(G.ghost, second(o1)), bg, 1.35), ghostB = J.fitContrast(tone(G.ghost, second(o2)), bg, 1.35);
+  const accent2 = J.fitContrast(tone(G.acc, second(o1)), bg, 2.4);
+  const colors = { accentOn: true, accent, accent2, ghostA, ghostB };
+  if (G.bg) {
+    // Text colours lean slightly towards the key hue; contrast keeps them readable.
+    const fg = J.fitContrast(J.hsl(h0, dark ? .12 : .25, dark ? .95 : .12), bg, 7);
+    Object.assign(colors, { enabled: true, allSchemes: true, bg, fg, sub: J.fitContrast(J.mix(fg, bg, .4), bg, 3.5), dim: J.mix(bg, fg, .14) });
+  }
+  return colors;
+};
+// Colours with the theme palette applied to `current`: accent colours always, base colours when the genre
+// sets a background (otherwise the current base colours, manual or not, are kept).
+J.themedColors = (project, styleKey, rnd, current = project.colors) => {
+  const palette = J.themedPalette(project, styleKey, rnd, current), colors = { ...(current || {}) };
+  for (const key of ['accent', 'accent2', 'ghostA', 'ghostB', ...(palette.enabled ? ['bg', 'fg', 'sub', 'dim', 'allSchemes'] : [])]) delete colors[key];
+  return Object.assign(colors, palette);
+};
+const omakase = J.omakase;
+J.omakase = (project, rnd = Math.random, choices = {}) => {
+  const look = omakase(project, rnd, choices);
+  if (J.colorThemeActive(project)) look.colors = J.themedColors(project, look.style, rnd, look.colors);
+  return look;
+};
+})();
+
 /* Independent upstream part sets, available in both editing modes. */
 (() => {
   for (const anchor of (document.querySelectorAll?.('.extra-toggle') || [])) {
@@ -37741,6 +37826,7 @@ function mergeProject(p) {
   for (const layer of ['media', 'foreground']) o[layer].effects = J.mediaEffectSettings(o, layer);
   delete o.mediaEffects;
   o.colors = Object.assign({ enabled: false }, (p && p.colors) || {});
+  o.colorTheme = J.normalizeColorTheme(p && p.colorTheme);
   o.fonts = (p && p.fonts) || {};
   o.userFonts = (p && p.userFonts) || [];
   for (const uf of o.userFonts) if (!J.FONTS[uf.key]) J.addUserFont(uf.key, uf.label, uf.family, uf.weight || 400);
@@ -39739,6 +39825,14 @@ function randomPalette() {
   const c = S.project.colors;
   const sc0 = J.STYLES[S.project.style].schemes[0];
   const bg = c.enabled && c.bg ? c.bg : sc0.bg;
+  // A colour theme (genre / theme colour) decides the palette, base colours included when its genre sets them.
+  if (J.colorThemeActive(S.project)) {
+    S.project.colors = J.themedColors(S.project, S.project.style, Math.random, c);
+    const n = S.project.colors;
+    renderColors(); replan(); commit();
+    toast(J.mediaLabel('配色：テーマのカラーに合わせて変更', 'Colours: changed to match the colour theme'), [n.accent, n.ghostA, n.ghostB]);
+    return;
+  }
   let p, guard = 0;
   do { p = J.randomPalette(bg); } while (guard++ < 6 && p.ghostA === c.ghostA && p.ghostB === c.ghostB);
   Object.assign(c, { accent: p.accent, ghostA: p.ghostA, ghostB: p.ghostB, accentOn: true });
@@ -40234,8 +40328,14 @@ function renderMediaEffects(layer) {
 
 /* ---------------- sync all inputs from project ---------------- */
 function renderThemes() {
-  const ids = J.themeIds(S.project);
+  const ids = J.themeIds(S.project), ct = J.normalizeColorTheme(S.project.colorTheme);
   $('themeLabels').innerHTML = ids.length ? ids.map(id=>`<span class="theme-label">${J.THEMES[id].name}</span>`).join('') : `<span class="muted">${J.mediaLabel('未選択：すべてのテーマ','Not selected: unrestricted')}</span>`;
+  if (J.colorThemeActive(S.project)) {
+    const chip = document.createElement('span'); chip.className = 'theme-label theme-color-label';
+    chip.textContent = J.mediaLabel('カラー：','Colour: ') + (ct.genre !== 'auto' ? J.COLOR_GENRES[ct.genre].name : '');
+    if (ct.color) { const dot = document.createElement('i'); dot.style.background = ct.color; dot.title = ct.color; chip.append(dot); }
+    $('themeLabels').append(chip);
+  }
 }
 function syncUI() {
   renderThemes();
@@ -40290,13 +40390,31 @@ function bind() {
   $('btnThemes').addEventListener('click', () => {
     const selected = new Set(J.themeIds(S.project));
     $('themeChoices').innerHTML = ['genre','taste'].map(category => `<fieldset><legend>${J.mediaLabel(category === 'genre' ? '曲ジャンル' : 'テイスト',category === 'genre' ? 'Music genre' : 'Taste')}</legend>${Object.entries(J.THEMES).filter(([,t])=>t.category===category).map(([id,t])=>`<label class="check"><input type="checkbox" data-theme="${id}" ${selected.has(id)?'checked':''}><span>${t.name}<small>${t.description}</small></span></label>`).join('')}</fieldset>`).join('');
+    // Colour: a genre and one theme colour for random palettes, taking priority over the themes above.
+    const ct = J.normalizeColorTheme(S.project.colorTheme), L = J.mediaLabel, colors = document.createElement('fieldset'); colors.className = 'theme-colors';
+    colors.innerHTML = `<legend>${L('カラー','Colour')}</legend><p class="note">${L('ランダム配色（おまかせ・「配色」ボタン）に使います。曲ジャンル・テイストによる配色より優先されます。','Used by random palettes (Randomize and the Colours button), taking priority over music-genre and taste themes.')}</p><label class="theme-color-row"><span>${L('配色ジャンル','Colour genre')}</span><select id="colorGenre"></select></label><small id="colorGenreNote" class="muted"></small><label class="check"><input type="checkbox" id="colorThemeOn"><span>${L('テーマカラーを使う','Use a theme colour')}<small>${L('この色をアクセントにして、他の色を合わせます。','Uses this colour as the accent and matches the other colours to it.')}</small></span></label><label class="theme-color-row"><span>${L('テーマカラー','Theme colour')}</span><input type="color" id="colorThemeColor"></label>`;
+    const genre = colors.querySelector('#colorGenre');
+    for (const id of J.COLOR_GENRE_ORDER) genre.add(new Option(J.COLOR_GENRES[id].name, id));
+    genre.value = ct.genre;
+    const genreNote = () => { colors.querySelector('#colorGenreNote').textContent = J.COLOR_GENRES[genre.value].description; };
+    genre.addEventListener('change', genreNote); genreNote();
+    colors.querySelector('#colorThemeOn').checked = !!ct.color;
+    colors.querySelector('#colorThemeColor').value = (ct.color || '#FF4F8B').toLowerCase();
+    colors.querySelector('#colorThemeColor').addEventListener('input', () => { colors.querySelector('#colorThemeOn').checked = true; });
+    $('themeChoices').append(colors);
     $('themesDlg').showModal();
   });
   $('btnApplyThemes').addEventListener('click', () => {
-    S.project.themes = [...$('themeChoices').querySelectorAll('input:checked')].map(el=>el.dataset.theme);
+    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme));
+    S.project.themes = [...$('themeChoices').querySelectorAll('input[data-theme]:checked')].map(el=>el.dataset.theme);
+    S.project.colorTheme = J.normalizeColorTheme({ genre: $('colorGenre').value, color: $('colorThemeOn').checked ? $('colorThemeColor').value : null });
+    // A changed colour theme is applied right away, so the choice shows immediately.
+    if (JSON.stringify(S.project.colorTheme) !== before && J.colorThemeActive(S.project)) {
+      remember(); S.project.colors = J.themedColors(S.project, S.project.style, Math.random); renderColors(); replan(); commit();
+    }
     renderThemes(); autosave(); $('themesDlg').close();
   });
-  $('btnClearThemes').addEventListener('click', () => $('themeChoices').querySelectorAll('input').forEach(el=>el.checked=false));
+  $('btnClearThemes').addEventListener('click', () => { $('themeChoices').querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false); $('colorGenre').value = 'auto'; $('colorGenre').dispatchEvent(new Event('change')); });
 
   $('lyricGroupAvoidanceStrength').addEventListener('input', e => {
     S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), lyricAvoidanceStrength: +e.target.value };

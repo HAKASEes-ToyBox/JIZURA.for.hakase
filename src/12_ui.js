@@ -73,6 +73,7 @@ function mergeProject(p) {
   for (const layer of ['media', 'foreground']) o[layer].effects = J.mediaEffectSettings(o, layer);
   delete o.mediaEffects;
   o.colors = Object.assign({ enabled: false }, (p && p.colors) || {});
+  o.colorTheme = J.normalizeColorTheme(p && p.colorTheme);
   o.fonts = (p && p.fonts) || {};
   o.userFonts = (p && p.userFonts) || [];
   for (const uf of o.userFonts) if (!J.FONTS[uf.key]) J.addUserFont(uf.key, uf.label, uf.family, uf.weight || 400);
@@ -2071,6 +2072,14 @@ function randomPalette() {
   const c = S.project.colors;
   const sc0 = J.STYLES[S.project.style].schemes[0];
   const bg = c.enabled && c.bg ? c.bg : sc0.bg;
+  // A colour theme (genre / theme colour) decides the palette, base colours included when its genre sets them.
+  if (J.colorThemeActive(S.project)) {
+    S.project.colors = J.themedColors(S.project, S.project.style, Math.random, c);
+    const n = S.project.colors;
+    renderColors(); replan(); commit();
+    toast(J.mediaLabel('配色：テーマのカラーに合わせて変更', 'Colours: changed to match the colour theme'), [n.accent, n.ghostA, n.ghostB]);
+    return;
+  }
   let p, guard = 0;
   do { p = J.randomPalette(bg); } while (guard++ < 6 && p.ghostA === c.ghostA && p.ghostB === c.ghostB);
   Object.assign(c, { accent: p.accent, ghostA: p.ghostA, ghostB: p.ghostB, accentOn: true });
@@ -2566,8 +2575,14 @@ function renderMediaEffects(layer) {
 
 /* ---------------- sync all inputs from project ---------------- */
 function renderThemes() {
-  const ids = J.themeIds(S.project);
+  const ids = J.themeIds(S.project), ct = J.normalizeColorTheme(S.project.colorTheme);
   $('themeLabels').innerHTML = ids.length ? ids.map(id=>`<span class="theme-label">${J.THEMES[id].name}</span>`).join('') : `<span class="muted">${J.mediaLabel('未選択：すべてのテーマ','Not selected: unrestricted')}</span>`;
+  if (J.colorThemeActive(S.project)) {
+    const chip = document.createElement('span'); chip.className = 'theme-label theme-color-label';
+    chip.textContent = J.mediaLabel('カラー：','Colour: ') + (ct.genre !== 'auto' ? J.COLOR_GENRES[ct.genre].name : '');
+    if (ct.color) { const dot = document.createElement('i'); dot.style.background = ct.color; dot.title = ct.color; chip.append(dot); }
+    $('themeLabels').append(chip);
+  }
 }
 function syncUI() {
   renderThemes();
@@ -2622,13 +2637,31 @@ function bind() {
   $('btnThemes').addEventListener('click', () => {
     const selected = new Set(J.themeIds(S.project));
     $('themeChoices').innerHTML = ['genre','taste'].map(category => `<fieldset><legend>${J.mediaLabel(category === 'genre' ? '曲ジャンル' : 'テイスト',category === 'genre' ? 'Music genre' : 'Taste')}</legend>${Object.entries(J.THEMES).filter(([,t])=>t.category===category).map(([id,t])=>`<label class="check"><input type="checkbox" data-theme="${id}" ${selected.has(id)?'checked':''}><span>${t.name}<small>${t.description}</small></span></label>`).join('')}</fieldset>`).join('');
+    // Colour: a genre and one theme colour for random palettes, taking priority over the themes above.
+    const ct = J.normalizeColorTheme(S.project.colorTheme), L = J.mediaLabel, colors = document.createElement('fieldset'); colors.className = 'theme-colors';
+    colors.innerHTML = `<legend>${L('カラー','Colour')}</legend><p class="note">${L('ランダム配色（おまかせ・「配色」ボタン）に使います。曲ジャンル・テイストによる配色より優先されます。','Used by random palettes (Randomize and the Colours button), taking priority over music-genre and taste themes.')}</p><label class="theme-color-row"><span>${L('配色ジャンル','Colour genre')}</span><select id="colorGenre"></select></label><small id="colorGenreNote" class="muted"></small><label class="check"><input type="checkbox" id="colorThemeOn"><span>${L('テーマカラーを使う','Use a theme colour')}<small>${L('この色をアクセントにして、他の色を合わせます。','Uses this colour as the accent and matches the other colours to it.')}</small></span></label><label class="theme-color-row"><span>${L('テーマカラー','Theme colour')}</span><input type="color" id="colorThemeColor"></label>`;
+    const genre = colors.querySelector('#colorGenre');
+    for (const id of J.COLOR_GENRE_ORDER) genre.add(new Option(J.COLOR_GENRES[id].name, id));
+    genre.value = ct.genre;
+    const genreNote = () => { colors.querySelector('#colorGenreNote').textContent = J.COLOR_GENRES[genre.value].description; };
+    genre.addEventListener('change', genreNote); genreNote();
+    colors.querySelector('#colorThemeOn').checked = !!ct.color;
+    colors.querySelector('#colorThemeColor').value = (ct.color || '#FF4F8B').toLowerCase();
+    colors.querySelector('#colorThemeColor').addEventListener('input', () => { colors.querySelector('#colorThemeOn').checked = true; });
+    $('themeChoices').append(colors);
     $('themesDlg').showModal();
   });
   $('btnApplyThemes').addEventListener('click', () => {
-    S.project.themes = [...$('themeChoices').querySelectorAll('input:checked')].map(el=>el.dataset.theme);
+    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme));
+    S.project.themes = [...$('themeChoices').querySelectorAll('input[data-theme]:checked')].map(el=>el.dataset.theme);
+    S.project.colorTheme = J.normalizeColorTheme({ genre: $('colorGenre').value, color: $('colorThemeOn').checked ? $('colorThemeColor').value : null });
+    // A changed colour theme is applied right away, so the choice shows immediately.
+    if (JSON.stringify(S.project.colorTheme) !== before && J.colorThemeActive(S.project)) {
+      remember(); S.project.colors = J.themedColors(S.project, S.project.style, Math.random); renderColors(); replan(); commit();
+    }
     renderThemes(); autosave(); $('themesDlg').close();
   });
-  $('btnClearThemes').addEventListener('click', () => $('themeChoices').querySelectorAll('input').forEach(el=>el.checked=false));
+  $('btnClearThemes').addEventListener('click', () => { $('themeChoices').querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false); $('colorGenre').value = 'auto'; $('colorGenre').dispatchEvent(new Event('change')); });
 
   $('lyricGroupAvoidanceStrength').addEventListener('input', e => {
     S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), lyricAvoidanceStrength: +e.target.value };

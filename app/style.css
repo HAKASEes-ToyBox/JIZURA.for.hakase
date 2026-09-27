@@ -437,6 +437,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #themeChoices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
 #themeChoices fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 #themeChoices legend { font-weight: bold; }
+#themeChoices .theme-colors { grid-column: 1 / -1; display: grid; gap: 8px; }
+#themeChoices .theme-colors .note { margin: 0; }
+.theme-color-row { display: flex; align-items: center; gap: 10px; }
+.theme-color-row select { min-width: 12em; }
+.theme-color-label i { display: inline-block; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%; vertical-align: middle; box-shadow: 0 0 0 1px #0006; }
 
 .header-menu { position: relative; }
 .header-menu summary { cursor: pointer; padding: 8px 12px; border: 1px solid var(--line2); border-radius: var(--r); font-size: 12px; }
