@@ -316,13 +316,22 @@ J.attachMedia = (item, file, assets = J.mediaAssets) => new Promise((resolve, re
 });
 const seekMediaVideo = async (v, target, signal) => {
   v.pause(); target = Math.max(0, Math.min(target, (v.duration || 1) - 0.001));
-  if (Math.abs(v.currentTime - target) < 0.002 && v.readyState >= 2) return;
+  if (signal?.aborted)throw new Error('Cancelled');
+  if (Math.abs(v.currentTime - target) < 0.002 && v.readyState >= 2 && !v.seeking) return;
   await new Promise((resolve, reject) => {
-    const finish = () => { v.removeEventListener('seeked', ok); v.removeEventListener('error', fail); if (signal) signal.removeEventListener('abort', abort); };
-    const ok = () => { finish(); resolve(); }, fail = () => { finish(); reject(new Error('動画を読み込めませんでした')); }, abort = () => { finish(); reject(new Error('キャンセルしました')); };
-    v.addEventListener('seeked', ok, { once: true }); v.addEventListener('error', fail, { once: true });
+    let done=false;
+    const finish = () => {done=true;clearTimeout(timer);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
+    const ok = () => {if(done||v.readyState<2||v.seeking)return;if(Math.abs(v.currentTime-target)>.02){v.pause();v.currentTime=target;return;}finish();resolve();};
+    const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position')));};
+    const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
+    const timer=setTimeout(fail,15000);
+    v.addEventListener('seeked',ok);v.addEventListener('loadeddata',ok);v.addEventListener('canplay',ok);v.addEventListener('error',fail,{once:true});
     if (signal) signal.addEventListener('abort', abort, { once: true });
     v.currentTime = target;
+    // Some mobile decoders need playback to produce the first frame. Rewind
+    // to the requested frame before resolving; the project clock stays paused.
+    if(v.readyState<2)v.play().then(()=>{if(done)v.pause();else ok();}).catch(fail);
+    ok();
   });
 };
 const transitionFrame = layer => layer === 'media' ? J.mediaTransitionFrame : J.foregroundTransitionFrame;
@@ -363,10 +372,14 @@ J.syncMediaPreview = (plan, t, playing) => {
   for (const [id, asset] of J.mediaAssets) {
     if (asset.type !== 'video') continue;
     const v = asset.element, cut = active.get(id);
-    if (!cut) { v.pause(); v.loop = false; continue; }
+    if (!cut) { v.pause(); v.loop = false;asset.previewCut=null;continue; }
     v.loop = !!cut.videoLoop;
     const target = J.mediaVideoTime(cut, t, v.duration);
-    if (Math.abs(v.currentTime - target) > (playing ? 0.18 : 0.02)) v.currentTime = target;
+    const changed=asset.previewCut!==cut||t<(asset.previewTime??t)-.05;
+    asset.previewCut=cut;asset.previewTime=t;
+    if(v.seeking){v.pause();continue;}
+    const now=performance.now();
+    if (Math.abs(v.currentTime - target) > (playing ? 0.18 : 0.02) && (!playing||changed||now-(asset.previewSeekAt??-Infinity)>700)) {v.pause();asset.previewSeekAt=now;v.currentTime = target;continue;}
     if (playing && v.paused) v.play().catch(() => {});
     if (!playing) v.pause();
   }

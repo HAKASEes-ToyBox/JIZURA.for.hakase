@@ -267,7 +267,7 @@ function sizeViewport() {
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
-  J.syncMediaPreview(S.plan, S.t, S.playing);
+  if(!S.playPreparing)J.syncMediaPreview(S.plan, S.t, S.playing);
   const t0 = performance.now();
   const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
   const previousAreas = previewCuts.map(cut => cut.area);
@@ -345,18 +345,32 @@ function setProjectDuration(seconds) {
   replan();
   return true;
 }
-function play() {
+async function play() {
   if(S.tap?.countingDown)return;
+  if(S.playPreparing){pause();return;}
+  const videos=['media','foreground'].some(layer=>S.plan.layerVisibility?.[layer]!==false&&J.mediaAt(S.plan,S.t,layer)?.type==='video');
+  if(videos){
+    const controller=new AbortController();S.playPreparing=controller;
+    $('btnPlay').textContent='…';$('btnPlay').setAttribute('aria-label',J.mediaLabel('動画を準備中（押すと中止）','Preparing video (press to cancel)'));
+    // Unlock audio during the original tap before awaiting the video decoder.
+    if(S.audio){if(!AP.ctx)AP.ctx=new (window.AudioContext||window.webkitAudioContext)();if(AP.ctx.state==='suspended')AP.ctx.resume();}
+    try{await J.prepareMediaFrame(S.plan,S.t,controller.signal);}
+    catch(error){if(!controller.signal.aborted)toast(error.message);if(S.playPreparing===controller)pause();return;}
+    if(S.playPreparing!==controller||controller.signal.aborted)return;
+    S.playPreparing=null;
+  }
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
 }
 function pause() {
+  S.playPreparing?.abort();S.playPreparing=null;
   S.playing = false; AP.stop();
   J.syncMediaPreview(S.plan, S.t, false);
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
+  if(S.playPreparing)pause();
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
