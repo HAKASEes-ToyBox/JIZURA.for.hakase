@@ -4,6 +4,26 @@
 (() => {
 'use strict';
 
+J.isVideoFile = file => file.type.startsWith('video/') || /\.(mp4|m4v|mov|webm|ogv|mkv)$/i.test(file.name);
+J.videoFileDuration = file => new Promise((resolve,reject) => {
+  const video=document.createElement('video'),url=URL.createObjectURL(file);
+  const finish=(error)=>{clearTimeout(timer);video.onloadedmetadata=video.ondurationchange=video.onerror=null;const duration=video.duration;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);error?reject(error):resolve(duration);};
+  const timer=setTimeout(()=>finish(new Error(J.mediaLabel('動画の読み込みがタイムアウトしました','Video loading timed out'))),30000);
+  video.onloadedmetadata=()=>{video.onloadedmetadata=video.onerror=null;finish(Number.isFinite(video.duration)&&video.duration>0?null:new Error(J.mediaLabel('動画の長さを取得できませんでした','Could not read video duration')));};
+  video.onerror=()=>{video.onloadedmetadata=video.onerror=null;finish(new Error(J.mediaLabel('この動画形式を読み込めません','Unsupported video format')));};
+  video.preload='metadata';video.src=url;
+});
+// Save extracted sound as PCM WAV so project restore / export only needs audio.
+J.audioWaveFile = (buffer,name) => {
+  const channels=buffer.numberOfChannels,length=buffer.length,size=length*channels*2;
+  if(size>0xffffffff-36)throw new Error('Audio is too large for WAV');
+  const bytes=new ArrayBuffer(44+size),view=new DataView(bytes);
+  const text=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i));};
+  text(0,'RIFF');view.setUint32(4,36+size,true);text(8,'WAVE');text(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,channels,true);view.setUint32(24,buffer.sampleRate,true);view.setUint32(28,buffer.sampleRate*channels*2,true);view.setUint16(32,channels*2,true);view.setUint16(34,16,true);text(36,'data');view.setUint32(40,size,true);
+  const data=Array.from({length:channels},(_,i)=>buffer.getChannelData(i));
+  for(let i=0,at=44;i<length;i++)for(let ch=0;ch<channels;ch++,at+=2){const sample=Math.max(-1,Math.min(1,data[ch][i]));view.setInt16(at,Math.round(sample*(sample<0?32768:32767)),true);}
+  return new File([bytes],name.replace(/\.[^.]+$/,'')+'.wav',{type:'audio/wav'});
+};
 J.analyzeAudio = async (file) => {
   const buf = await file.arrayBuffer();
   const AC = window.AudioContext || window.webkitAudioContext;

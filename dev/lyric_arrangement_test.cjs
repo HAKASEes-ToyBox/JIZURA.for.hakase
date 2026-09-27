@@ -20,7 +20,7 @@ check(names.size>=8,'arrangement variety '+names.size);check(minSide>=.08,'reada
  const full=group(plan(lyrics.avoid,7).plan)[0].area,half=group(plan(lyrics.avoid,7,{lyricEffects:{lyricAvoidanceStrength:.5}}).plan)[0].area;check(half.w>full.w&&half.w<1,'intermediate strength');}
 // 1シーン: arranged only with automatic lyric placement; overlap limited to a third of the smaller area.
 for(let seed=1;seed<=20;seed++){
- const off=group(plan(lyrics.shared,seed).plan);check(off.every(c=>!c.arrangement),'1シーン untouched without auto placement '+seed);
+ const off=group(plan(lyrics.shared,seed,{lyricEffects:{autoPlacement:false}}).plan);check(off.every(c=>!c.arrangement),'1シーン untouched without auto placement '+seed);
  const cuts=group(plan(lyrics.shared,seed,{lyricEffects:{autoPlacement:true}}).plan);check(cuts.every(c=>c.arrangement&&c.areaMode==='auto'),'1シーン arranged '+seed);
  for(let i=0;i<cuts.length;i++)for(let j=i+1;j<cuts.length;j++){const a=cuts[i].area,b=cuts[j].area;check(ov(a,b)<=.33*Math.min(a.w*a.h,b.w*b.h)+1e-9,'shared overlap '+seed);}}
 // Manual areas and scenes with a foreground keep their previous handling.

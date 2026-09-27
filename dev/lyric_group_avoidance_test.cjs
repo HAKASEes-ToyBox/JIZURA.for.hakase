@@ -8,8 +8,8 @@ const inline=J.parseLyrics('[00:00]{-Inline/test-}').lines[0];check(inline.avoid
 const escaped=J.parseLyrics(String.raw`\{-literal-\}`).lines[0];check(escaped.group===null&&escaped.text==='{-literal-}','escaped delimiters');check(J.parseLyrics('{-\nopen').lines[0].avoidOverlap,'unfinished group');
 const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x))*Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));
 const bounds=(a,plan)=>{const angle=(a.angle||0)*Math.PI/180,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle)),w=a.w*c+a.h*plan.H/plan.W*s,h=a.h*c+a.w*plan.W/plan.H*s;return{x:a.x+a.w/2-w/2,y:a.y+a.h/2-h/2,w,h}};
-const p=J.defaultProject();p.lyrics=`{-\n${words}\n-}\n[00:06]Outside`;p.durationOverride=8;
-const baseline=J.plan({...p,lyrics:`{\n${words}\n}\n[00:06]Outside`}),zero=J.plan({...p,lyricEffects:{lyricAvoidanceStrength:0}}),full=J.plan(p),group=full.cuts.filter(c=>c.group===0);
+const p=J.defaultProject();p.lyrics=`{-\n${words}\n-}\n[00:06]Outside`;p.durationOverride=8;p.lyricEffects={autoPlacement:false};// placement without automatic areas
+const baseline=J.plan({...p,lyrics:`{\n${words}\n}\n[00:06]Outside`}),zero=J.plan({...p,lyricEffects:{autoPlacement:false,lyricAvoidanceStrength:0}}),full=J.plan(p),group=full.cuts.filter(c=>c.group===0);
 check(JSON.stringify(zero.cuts.map(c=>[c.text,c.start,c.end,c.displayEnd,c.area]))===JSON.stringify(baseline.cuts.map(c=>[c.text,c.start,c.end,c.displayEnd,c.area])),'zero matches braces');check(group.length===4&&J.lyricCutsAt(full,4.5).length===4,'retained parts');
 const nonoverlap=plan=>{const cs=plan.cuts.filter(c=>c.group===0);for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)check(overlap(bounds(cs[i].area,plan),bounds(cs[j].area,plan))<1e-9,'overlap at strength one');};nonoverlap(full);
 for(const aspect of ['16:9','9:16','1:1']){const q={...p,aspect,overrides:{0:{area:{x:.1,y:.1,w:.8,h:.6,angle:35}},1:{area:{x:.1,y:.1,w:.8,h:.6,angle:-25}},2:{area:{x:.1,y:.1,w:.8,h:.6,angle:75}}}};const plan=J.plan(q);nonoverlap(plan);for(const c of plan.cuts.filter(c=>c.group===0))check(Math.abs(c.area.w/c.area.h-.8/.6)<1e-8,'aspect changed');}
