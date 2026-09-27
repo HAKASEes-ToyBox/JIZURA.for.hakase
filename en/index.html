@@ -768,8 +768,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
             <button id="btnNext2" class="ghost">Next ▶</button>
           </div>
           <div class="pick-sets">
-            <label class="check"><input id="eExtra" class="extra-toggle" type="checkbox"><span>Include new effects<small>Include about 350 more effects, 12 styles and 6 fonts in random picks. Off uses the original set.</small></span></label>
-            <label class="check"><input id="eWa" class="wa-toggle" type="checkbox" checked><span>Include Japanese motifs<small>Include Japanese motifs such as lanterns, postcards, shoji, fans, family crests, waves and cherry blossoms in random picks.</small></span></label>
           </div>
         </div>
         <div class="easy-sec">
@@ -873,8 +871,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
           </div>
         </div>
         <div class="pick-sets">
-          <label class="check"><input id="tExtra" class="extra-toggle" type="checkbox"><span>Include new effects<small>Include techniques, styles and fonts marked New in automatic picks.</small></span></label>
-          <label class="check"><input id="tWa" class="wa-toggle" type="checkbox" checked><span>Include Japanese motifs<small>Include techniques and styles marked JP in automatic picks. Manual selections remain available.</small></span></label>
         </div>
         <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="Filter techniques by name" style="flex:1" aria-label="Filter techniques by name"><span id="techTotal" class="muted mono"></span></div>
         <div id="techLists"></div>
@@ -37527,23 +37523,7 @@ J.mediaVariationState = (cut, p, fade, out, w, h) => {
 };
 })();
 
-/* ============================================================
-   JIZURA — which entries random picks may use
-   1) 追加分 (extra): everything added after the first public
-      version (356 parts, 12 styles). Random picks (planner /
-      おまかせ / シャッフル) use the first version's set unless
-      project.extra === true.
-   2) 和風 (wa): entries built around a traditional Japanese object,
-      pattern or motif. Applied after (1): with project.wa === false
-      they are never picked at random.
-   A line can still be set to any entry by hand (per-line override).
-   3) Part sets with their own switch (not 追加分): ホラー (horror,
-      off by default), 文字PV系 (typo) and キネティック (kinetic),
-      both on by default. Entries carry `set: '<name>'` (or come
-      from a pack of that name).
-   Pack authors: packs not listed in J.BASE_PACKS count as 追加分;
-   add Japanese-motif keys to J.WA (or set `wa: true` on the def).
-   ============================================================ */
+/* Registry metadata for theme pools and effect badges. Legacy pack flags no longer gate random choices. */
 (() => {
 'use strict';
 J.BASE_PACKS = ['core', undefined, 'layoutsA', 'layoutsB', 'enter', 'exitHold', 'decor', 'looks'];
@@ -37560,8 +37540,8 @@ J.WA = {
 };
 J.SETS = { horror: { on: false }, typo: { on: true }, kinetic: { on: true } };   // on = default (UI labels live in 12_ui.js)
 J.SET_ORDER = Object.keys(J.SETS);
-/* is this part set switched on in the project? (old projects without the flag get the default) */
-J.setOn = (project, set) => { const v = project && project[set]; return typeof v === 'boolean' ? v : !!(J.SETS[set] && J.SETS[set].on); };
+/* Compatibility helper: selection is now controlled by themes, not saved switches. */
+J.setOn = (project, set) => Object.hasOwn(J.SETS, set);
 const def = (g, k) => g === 'style' ? J.STYLES[k] : g === 'font' ? J.FONTS[k] : (J.registry(g) || {})[k];
 // mark the part sets, then 追加分 (set entries are not 追加分: they have their own switch)
 for (const g of J.GROUP_KEYS) for (const k of J.order(g)) { const d = def(g, k); if (d && !d.set && J.SETS[d.pack]) d.set = d.pack; }
@@ -37577,9 +37557,8 @@ J.setOf = (g, k) => { const d = def(g, k); return (d && d.set) || null; };
 /* may random picks use this entry? (g: a group key, 'style' or 'font') — 追加分 first, then 和風 */
 J.randomOk = (project, g, k) => {
   const d = def(g, k); if (!d) return false;
-  if (d.extra && !(project && project.extra === true)) return false;
-  if (d.wa && project && project.wa === false) return false;
-  if (d.set && !J.setOn(project, d.set)) return false;
+  // Theme pools and individual enabled checkboxes now control candidates.
+  // Legacy extra/wa/part-set flags must not remain invisible restrictions.
   return true;
 };
 })();
@@ -37589,6 +37568,9 @@ J.randomOk = (project, g, k) => {
 'use strict';
 const L = J.mediaLabel;
 const presets = {
+  typo: { category:'taste', name:L('文字PV','Typography'), set:'typo', moods:['editorial','graphic'], styles:['mono','paper','specimen'], media:['panorama','pushIn','drift'], phases:['wipe','enter_slide','enter_fade'], motion:[.35,.8], duration:[.25,.65], flash:false },
+  kinetic: { category:'taste', name:L('キネティック','Kinetic'), set:'kinetic', moods:['pop','glitch'], styles:['magenta','caution','mono'], media:['tumble','pulse','beatBounce','beatTurn'], phases:['pop','enter_zoom','enter_slide'], motion:[.8,1.4], duration:[.15,.4], flash:true },
+  wa: { category:'taste', name:L('和風','Japanese'), wa:true, moods:['editorial','calm'], styles:['sakura','sumi'], media:['pushIn','drift','panorama'], phases:['enter_fade','curtain','enter_blur'], motion:[.2,.6], duration:[.5,1], flash:false },
   horror: { category:'taste', name:L('ホラー','Horror'), moods:['horror'], styles:['hrRuin','hrNightRec','hrCurse'], media:['glitch','rackFocus','drift'], phases:['enter_blur','enter_glitch'], motion:[.35,.65], duration:[.3,.8], flash:false },
   pop: { category:'genre', name:L('ポップ','Pop'), moods:['pop'], styles:['magenta','caution','transit','rouge'], media:['pulse','swing','orbit','beatBounce','beatPulse'], phases:['pop','iris','enter_slide','enter_zoom'], motion:[.7,1.2], duration:[.2,.45], flash:true },
   ballad: { category:'genre', name:L('バラード','Ballad'), moods:['calm','emotional'], styles:['paper','specimen','noir'], media:['pushIn','pullOut','drift','rackFocus','beatBreathe'], phases:['enter_fade','enter_blur','curtain'], motion:[.25,.55], duration:[.65,1.2], flash:false },
@@ -37637,6 +37619,9 @@ const scenesByTheme = {
 };
 for (const [key, [media, phases]] of Object.entries(scenesByTheme)) { presets[key].media.push(...media); presets[key].phases.push(...phases.map(id => 'enter_' + id)); }
 const descriptions = {
+  typo:L('文字を主役にした構成・文字PVの演出','Type-led layouts and typographic effects'),
+  kinetic:L('文字が跳ねる・動きの強い演出','Bouncy type and energetic motion'),
+  wa:L('和紙・筆・和柄を使った演出','Japanese paper, brushwork and traditional motifs'),
   horror:L('暗い配色・不穏な文字と映像','Dark colors and unsettling typography'),
   pop:L('明るい配色・弾む動き','Bright colors and bouncy motion'), ballad:L('落ち着いた配色・ゆっくりした余韻','Quiet colors and lingering motion'),
   rock:L('強いコントラスト・激しい動き','Strong contrast and energetic motion'), dance:L('鮮やかな配色・ビート同期','Vivid colors and beat-driven motion'),
@@ -37659,6 +37644,11 @@ J.themeCandidates = (project,key) => {
     for (const mood of theme.moods) {
       for (const id of J.taggedWith(group,mood)) wanted.add(id);
       if (Array.isArray(J.MOODS[mood][group])) for (const id of J.MOODS[mood][group]) wanted.add(id);
+    }
+    if(theme.set||theme.wa){
+      wanted.clear();
+      for(const id of neutral[group]||[])wanted.add(id);
+      for(const id of J.order(group))if(theme.set?J.setOf(group,id)===theme.set:J.isWa(group,id))wanted.add(id);
     }
     lyrics[group] = J.order(group).filter(id=>wanted.has(id) && !J.registry(group)[id]?.special && allowed(group,id));
   }
@@ -37780,19 +37770,6 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
   return look;
 };
 })();
-
-/* Independent upstream part sets, available in both editing modes. */
-(() => {
-  for (const anchor of (document.querySelectorAll?.('.extra-toggle') || [])) {
-    const labels = {typo:J.mediaLabel('文字PV系の演出','Typographic effects'),kinetic:J.mediaLabel('キネティックの演出','Kinetic effects'),horror:J.mediaLabel('ホラーの演出','Horror effects')};
-    for (const key of J.SET_ORDER) {
-      const label=document.createElement('label');label.className='check';
-      const input=document.createElement('input');input.type='checkbox';input.className=key+'-toggle';input.checked=J.SETS[key].on;
-      const span=document.createElement('span');span.textContent=labels[key];label.append(input,span);anchor.closest('label').before(label);
-    }
-  }
-})();
-
 
 /* Isolated technique previews: never replace or save the editor project. */
 (() => {
@@ -40995,9 +40972,6 @@ function syncUI() {
   $('offset').value = S.project.timing.offset ?? 0.4;
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
-  document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
-  document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  for (const key of J.SET_ORDER) document.querySelectorAll('.'+key+'-toggle').forEach(el=>{el.checked=J.setOn(S.project,key);});
   $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; langNote();
   renderFontRoles(); renderColors(); renderFx(); renderTech(); renderMediaEffects(); syncOut(); drawStyleGrid();
 }
@@ -41394,16 +41368,6 @@ function bind() {
   }));
   $('fxFlash').addEventListener('change', e => { S.project.fx.flash = e.target.checked; replan(); });
   $('techFilter').addEventListener('input', () => renderTech());
-  const setSwitch = (cls, key, on, msgOn, msgOff) => document.querySelectorAll('.' + cls).forEach(el => el.addEventListener('change', e => {
-    remember();
-    S.project[key] = e.target.checked;
-    document.querySelectorAll('.' + cls).forEach(x => { x.checked = e.target.checked; });
-    renderTech(); drawStyleGrid(); replan(); commit(); flushSave();
-    toast(e.target.checked ? msgOn : msgOff);
-  }));
-  for (const key of J.SET_ORDER) setSwitch(key+'-toggle',key,true,J.mediaLabel('Effectsセット：オン','Part set: on'),J.mediaLabel('Effectsセット：オフ','Part set: off'));
-  setSwitch('extra-toggle', 'extra', true, 'New effects: on', 'New effects: off (original set only)');
-  setSwitch('wa-toggle', 'wa', true, 'Japanese motifs: on', 'Japanese motifs: off for random picks');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { J.clearPastedLyricEffects(S.project); S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });

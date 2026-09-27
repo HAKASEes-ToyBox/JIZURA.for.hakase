@@ -3,6 +3,9 @@
 'use strict';
 const L = J.mediaLabel;
 const presets = {
+  typo: { category:'taste', name:L('文字PV','Typography'), set:'typo', moods:['editorial','graphic'], styles:['mono','paper','specimen'], media:['panorama','pushIn','drift'], phases:['wipe','enter_slide','enter_fade'], motion:[.35,.8], duration:[.25,.65], flash:false },
+  kinetic: { category:'taste', name:L('キネティック','Kinetic'), set:'kinetic', moods:['pop','glitch'], styles:['magenta','caution','mono'], media:['tumble','pulse','beatBounce','beatTurn'], phases:['pop','enter_zoom','enter_slide'], motion:[.8,1.4], duration:[.15,.4], flash:true },
+  wa: { category:'taste', name:L('和風','Japanese'), wa:true, moods:['editorial','calm'], styles:['sakura','sumi'], media:['pushIn','drift','panorama'], phases:['enter_fade','curtain','enter_blur'], motion:[.2,.6], duration:[.5,1], flash:false },
   horror: { category:'taste', name:L('ホラー','Horror'), moods:['horror'], styles:['hrRuin','hrNightRec','hrCurse'], media:['glitch','rackFocus','drift'], phases:['enter_blur','enter_glitch'], motion:[.35,.65], duration:[.3,.8], flash:false },
   pop: { category:'genre', name:L('ポップ','Pop'), moods:['pop'], styles:['magenta','caution','transit','rouge'], media:['pulse','swing','orbit','beatBounce','beatPulse'], phases:['pop','iris','enter_slide','enter_zoom'], motion:[.7,1.2], duration:[.2,.45], flash:true },
   ballad: { category:'genre', name:L('バラード','Ballad'), moods:['calm','emotional'], styles:['paper','specimen','noir'], media:['pushIn','pullOut','drift','rackFocus','beatBreathe'], phases:['enter_fade','enter_blur','curtain'], motion:[.25,.55], duration:[.65,1.2], flash:false },
@@ -51,6 +54,9 @@ const scenesByTheme = {
 };
 for (const [key, [media, phases]] of Object.entries(scenesByTheme)) { presets[key].media.push(...media); presets[key].phases.push(...phases.map(id => 'enter_' + id)); }
 const descriptions = {
+  typo:L('文字を主役にした構成・文字PVの演出','Type-led layouts and typographic effects'),
+  kinetic:L('文字が跳ねる・動きの強い演出','Bouncy type and energetic motion'),
+  wa:L('和紙・筆・和柄を使った演出','Japanese paper, brushwork and traditional motifs'),
   horror:L('暗い配色・不穏な文字と映像','Dark colors and unsettling typography'),
   pop:L('明るい配色・弾む動き','Bright colors and bouncy motion'), ballad:L('落ち着いた配色・ゆっくりした余韻','Quiet colors and lingering motion'),
   rock:L('強いコントラスト・激しい動き','Strong contrast and energetic motion'), dance:L('鮮やかな配色・ビート同期','Vivid colors and beat-driven motion'),
@@ -73,6 +79,11 @@ J.themeCandidates = (project,key) => {
     for (const mood of theme.moods) {
       for (const id of J.taggedWith(group,mood)) wanted.add(id);
       if (Array.isArray(J.MOODS[mood][group])) for (const id of J.MOODS[mood][group]) wanted.add(id);
+    }
+    if(theme.set||theme.wa){
+      wanted.clear();
+      for(const id of neutral[group]||[])wanted.add(id);
+      for(const id of J.order(group))if(theme.set?J.setOf(group,id)===theme.set:J.isWa(group,id))wanted.add(id);
     }
     lyrics[group] = J.order(group).filter(id=>wanted.has(id) && !J.registry(group)[id]?.special && allowed(group,id));
   }

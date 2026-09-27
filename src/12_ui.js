@@ -2817,9 +2817,6 @@ function syncUI() {
   $('offset').value = S.project.timing.offset ?? 0.4;
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
-  document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
-  document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  for (const key of J.SET_ORDER) document.querySelectorAll('.'+key+'-toggle').forEach(el=>{el.checked=J.setOn(S.project,key);});
   $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; langNote();
   renderFontRoles(); renderColors(); renderFx(); renderTech(); renderMediaEffects(); syncOut(); drawStyleGrid();
 }
@@ -3216,16 +3213,6 @@ function bind() {
   }));
   $('fxFlash').addEventListener('change', e => { S.project.fx.flash = e.target.checked; replan(); });
   $('techFilter').addEventListener('input', () => renderTech());
-  const setSwitch = (cls, key, on, msgOn, msgOff) => document.querySelectorAll('.' + cls).forEach(el => el.addEventListener('change', e => {
-    remember();
-    S.project[key] = e.target.checked;
-    document.querySelectorAll('.' + cls).forEach(x => { x.checked = e.target.checked; });
-    renderTech(); drawStyleGrid(); replan(); commit(); flushSave();
-    toast(e.target.checked ? msgOn : msgOff);
-  }));
-  for (const key of J.SET_ORDER) setSwitch(key+'-toggle',key,true,J.mediaLabel('演出セット：オン','Part set: on'),J.mediaLabel('演出セット：オフ','Part set: off'));
-  setSwitch('extra-toggle', 'extra', true, '追加分の演出：使う', '追加分の演出：使わない（最初の公開版の演出だけ）');
-  setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { J.clearPastedLyricEffects(S.project); S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });
