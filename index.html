@@ -3609,7 +3609,7 @@ J.defaultProject = () => ({
   timing: { bpm: 0, offset: 0.4, snap: true, tail: 0.9, lineTimes: {}, cutTimes: {}, lineScale: 1 },
   overrides: {},
   lyricCutOptions: {},
-  lyricEffects: { autoPlacement: false, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
+  lyricEffects: { autoPlacement: true, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   lyricBlankCuts: [],
   timelineLinks: [],
   layerVisibility: {foreground:true,lyrics:true,media:true},
@@ -4830,7 +4830,7 @@ J.lyricEffectSettings = project => {
   const sizeMin = settings.sizeMin != null && Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = settings.sizeMax != null && Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   return {
-    autoPlacement: settings.autoPlacement === true, avoidForeground: settings.avoidForeground !== false,
+    autoPlacement: settings.autoPlacement !== false, avoidForeground: settings.avoidForeground !== false,
     avoidanceStrength: settings.avoidanceStrength != null && Number.isFinite(+settings.avoidanceStrength) ? J.clamp(+settings.avoidanceStrength, 0, 1) : 1,
     lyricAvoidanceStrength: settings.lyricAvoidanceStrength != null && Number.isFinite(+settings.lyricAvoidanceStrength) ? J.clamp(+settings.lyricAvoidanceStrength,0,1) : 1,
     sizeMin: Math.min(sizeMin, sizeMax), sizeMax: Math.max(sizeMin, sizeMax),
@@ -5131,13 +5131,13 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: false, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: true, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   settings.sizeMin = Math.min(sizeMin, sizeMax); settings.sizeMax = Math.max(sizeMin, sizeMax);
   settings.enabled = settings.enabled && typeof settings.enabled === 'object' ? Object.assign({}, settings.enabled) : {};
-  settings.decor = settings.decor === true;
+  settings.decor = settings.decor !== false;
   settings.decorEnabled = settings.decorEnabled && typeof settings.decorEnabled === 'object' ? Object.assign({}, settings.decorEnabled) : {};
   return settings;
 };

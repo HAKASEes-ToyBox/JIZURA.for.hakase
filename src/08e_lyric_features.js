@@ -10,7 +10,7 @@ J.lyricEffectSettings = project => {
   const sizeMin = settings.sizeMin != null && Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = settings.sizeMax != null && Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   return {
-    autoPlacement: settings.autoPlacement === true, avoidForeground: settings.avoidForeground !== false,
+    autoPlacement: settings.autoPlacement !== false, avoidForeground: settings.avoidForeground !== false,
     avoidanceStrength: settings.avoidanceStrength != null && Number.isFinite(+settings.avoidanceStrength) ? J.clamp(+settings.avoidanceStrength, 0, 1) : 1,
     lyricAvoidanceStrength: settings.lyricAvoidanceStrength != null && Number.isFinite(+settings.lyricAvoidanceStrength) ? J.clamp(+settings.lyricAvoidanceStrength,0,1) : 1,
     sizeMin: Math.min(sizeMin, sizeMax), sizeMax: Math.max(sizeMin, sizeMax),
