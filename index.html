@@ -515,7 +515,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
 
 .timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
-.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.timeline-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.timeline-toolbar .timeline-split { flex: 1; min-width: 0; }
+.timeline-toolbar .timeline-zoom { flex-shrink: 0; }
+.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; }
 
 </style>
 </head>
@@ -654,10 +657,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
       <div class="timeline-position-label">再生位置で：</div>
+      <div class="timeline-toolbar">
       <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button><button id="insertBlankAtPlayhead" type="button" disabled>歌詞無表示カットを挿入</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>空の歌詞を挿入</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
+      </div>
       <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
         <canvas id="timeline" aria-label="歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
@@ -665,8 +669,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <svg id="timelineLinks" class="timeline-links" aria-label="タイムラインの境界リンク"></svg>
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="ドラッグして動画全体の長さを変更" aria-label="動画全体の長さをドラッグして変更"><span aria-hidden="true">◀▶</span></button>
       </div></div>
-      <p class="hint timeline-link-hint">末尾の◀▶をドラッグして全体の長さを変更。再生時間の分母をクリックして直接入力。鎖マークを別のタイムラインの鎖へドラッグしてリンク。×で解除。</p>
-      <div class="cutinfo" id="cutInfo"></div>
+      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
@@ -37987,19 +37990,7 @@ function updateCutInfo() {
   S.mediaLineEls.forEach((el, i) => el.classList.toggle('cur', !!active && i === active.index));
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
-  const el = $('cutInfo');
-  if (!cut && !mc && !fc) { el.innerHTML = '<span class="hint">この位置にカットはありません</span>'; return; }
-  const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
-  const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
-  el.innerHTML = (cut && cut.blank ? [chip('l', '歌詞', '無表示')] : cut ? [
-    `<span class="chip mono">#${String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
-    cut.bg && cut.bg !== 'none' ? chip('b', '背景', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'カメラ', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'つなぎ', n(J.TRANS, cut.trans)) : '',
-  ] : []).concat(...[mc, fc].map((mediaCut, i) => mediaCut ? [chip('b', i ? '前景' : '背景', escapeHtml(mediaCut.name)), chip('l', J.mediaLabel('手法', 'Technique'), J.mediaTechniqueName(mediaCut)), mediaCut.placement && mediaCut.placement.angle ? chip('c', '角度', `${mediaCut.placement.angle}°`) : '', mediaCut.chromaKey ? chip('c', 'クロマキー', mediaCut.chromaColor) : ''] : [])).join('');
+
 }
 
 /* ---------------- line list ---------------- */

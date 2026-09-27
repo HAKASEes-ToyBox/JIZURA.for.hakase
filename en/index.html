@@ -515,7 +515,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
 
 .timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
-.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.timeline-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.timeline-toolbar .timeline-split { flex: 1; min-width: 0; }
+.timeline-toolbar .timeline-zoom { flex-shrink: 0; }
+.timeline-split { display: flex; flex-wrap: wrap; gap: 8px; }
 
 </style>
 </head>
@@ -654,10 +657,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <button id="btnShuffle" class="accent" title="Shuffle the arrangement, keeping locked lines">Shuffle</button>
         <button id="btnOmakase" class="primary" title="Randomize style, mood, effects and colors (R)">Randomize</button>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="Timeline icon legend"></div>
       <div class="timeline-position-label">At playhead:</div>
+      <div class="timeline-toolbar">
       <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>Split foreground cut</button><button id="splitBackgroundCut" type="button" disabled>Split background cut</button><button id="insertBlankAtPlayhead" type="button" disabled>Insert blank lyric cut</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>Insert empty lyric</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="Zoom timeline out">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="Zoom timeline in">＋</button></div>
+      </div>
       <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
         <canvas id="timeline" aria-label="Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)"></canvas>
@@ -665,8 +669,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
         <svg id="timelineLinks" class="timeline-links" aria-label="Timeline boundary links"></svg>
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="Drag to change total video duration" aria-label="Drag to change total video duration"><span aria-hidden="true">◀▶</span></button>
       </div></div>
-      <p class="hint timeline-link-hint">Drag ◀▶ at the end to change the total duration, or click the duration beside playback time to enter it. Drag a chain icon to one on another timeline to link boundaries; use × to unlink.</p>
-      <div class="cutinfo" id="cutInfo"></div>
+      <div id="timelineLegend" class="timeline-legend" aria-label="Timeline icon legend"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
@@ -38230,19 +38233,7 @@ function updateCutInfo() {
   S.mediaLineEls.forEach((el, i) => el.classList.toggle('cur', !!active && i === active.index));
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
-  const el = $('cutInfo');
-  if (!cut && !mc && !fc) { el.innerHTML = '<span class="hint">No cut at this position</span>'; return; }
-  const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
-  const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
-  el.innerHTML = (cut && cut.blank ? [chip('l', 'Lyrics', 'Blank')] : cut ? [
-    `<span class="chip mono">#${String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'Layout', n(J.LAYOUTS, cut.layout)), chip('e', 'Entrance', n(J.ENTER, cut.enter)), chip('h', 'Hold', n(J.HOLD, cut.hold)), chip('x', 'Exit', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', 'Decoration', cut.decor.map(d => n(J.DECOR, d.id)).join(' · ')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', 'Treatment', n(J.TREAT, cut.treat)) : '',
-    cut.bg && cut.bg !== 'none' ? chip('b', 'Background', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'Camera', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'Transition', n(J.TRANS, cut.trans)) : '',
-  ] : []).concat(...[mc, fc].map((mediaCut, i) => mediaCut ? [chip('b', i ? 'Foreground' : 'Background', escapeHtml(mediaCut.name)), chip('l', J.mediaLabel('手法', 'Technique'), J.mediaTechniqueName(mediaCut)), mediaCut.placement && mediaCut.placement.angle ? chip('c', 'Rotation', `${mediaCut.placement.angle}°`) : '', mediaCut.chromaKey ? chip('c', 'Chroma key', mediaCut.chromaColor) : ''] : [])).join('');
+
 }
 
 /* ---------------- line list ---------------- */

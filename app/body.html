@@ -131,10 +131,11 @@
         <button id="btnShuffle" class="accent" title="設定はそのままで構成だけ再抽選（ロックした行は維持）">シャッフル</button>
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
       <div class="timeline-position-label">再生位置で：</div>
+      <div class="timeline-toolbar">
       <div class="timeline-split"><button id="splitForegroundCut" type="button" disabled>前景カットを分割</button><button id="splitBackgroundCut" type="button" disabled>背景カットを分割</button><button id="insertBlankAtPlayhead" type="button" disabled>歌詞無表示カットを挿入</button><button id="insertEmptyLyricAtPlayhead" type="button" disabled>空の歌詞を挿入</button></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
+      </div>
       <div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
         <canvas id="foregroundTimeline" aria-label="前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
         <canvas id="timeline" aria-label="歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）"></canvas>
@@ -142,8 +143,7 @@
         <svg id="timelineLinks" class="timeline-links" aria-label="タイムラインの境界リンク"></svg>
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="ドラッグして動画全体の長さを変更" aria-label="動画全体の長さをドラッグして変更"><span aria-hidden="true">◀▶</span></button>
       </div></div>
-      <p class="hint timeline-link-hint">末尾の◀▶をドラッグして全体の長さを変更。再生時間の分母をクリックして直接入力。鎖マークを別のタイムラインの鎖へドラッグしてリンク。×で解除。</p>
-      <div class="cutinfo" id="cutInfo"></div>
+      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
