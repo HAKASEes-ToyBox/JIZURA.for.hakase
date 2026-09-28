@@ -25,7 +25,9 @@ const assert=require('node:assert/strict');
         },layer);
         assert.ok(shuffled.sequence.every(Boolean));assert.equal(shuffled.ids[2],null);
         assert.deepEqual(shuffled.sources,baseline.ids);assert.deepEqual(shuffled.times,baseline.times);assert.deepEqual(shuffled.overrides,baseline.overrides);
-        assert.equal(await page.locator('.media-cut-file').first().isDisabled(),true);
+        // Assets stay selectable with random order on; changing one turns random order off (see the title).
+        assert.equal(await page.locator('.media-cut-file').first().isEnabled(),true);
+        assert.ok((await page.locator('.media-cut-file').first().getAttribute('title')).includes(locale?'turns off random order':'ランダム順をオフ'));
         await page.locator('#mediaRandom').uncheck();
         assert.deepEqual(await page.evaluate(layer=>J.ui.plan[layer].cuts.map(c=>c.itemId),layer),baseline.ids);
         assert.equal(await page.locator('.media-cut-file').first().isEnabled(),true);
@@ -48,6 +50,7 @@ const assert=require('node:assert/strict');
         assert.deepEqual(await page.evaluate(layer=>J.ui.plan[layer].cuts.map(c=>c.itemId),layer),beforeReload);
         // Loop tap-sync uses the same order, and can be toggled afterward.
         await page.locator('#btnTapMedia').click();
+        await page.waitForFunction(()=>J.ui.tap&&!J.ui.tap.countingDown,null,{timeout:10000});// taps count after the countdown
         for(let i=0;i<7;i++)await page.evaluate(t=>{J.ui.t=t;document.querySelector('#tapBtn').click()},.4+i);
         await page.locator('#tapStop').click();
         assert.equal(await page.locator('#mediaRandom').isEnabled(),true);

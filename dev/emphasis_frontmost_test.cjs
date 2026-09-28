@@ -19,6 +19,7 @@ const path = require('node:path');
         project.title = ''; project.durationOverride = 4;
         project.fx = { ...project.fx, koma: 0, chroma: 0, texture: 0, hud: 'off' };
         project.overrides = { 0: { single: true }, 1: { single: true } };
+        project.lyricEffects = { ...project.lyricEffects, autoPlacement: false }; // full-stage lyrics: the probe samples the centre
         const element = document.createElement('canvas'); element.width = 320; element.height = 180;
         const x = element.getContext('2d'); x.fillStyle = '#ff0000'; x.fillRect(0, 0, 320, 180);
         const item = { id: 'emphasis-foreground', name: 'red.png', type: 'image', width: 320, height: 180 };

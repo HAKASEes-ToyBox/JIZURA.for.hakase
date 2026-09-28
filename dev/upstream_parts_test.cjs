@@ -23,6 +23,7 @@ for(const g of J.GROUP_KEYS)for(const id of J.order(g)){
  for(const t of [.08,1.5,3.9,4.05])renderer.frame(cv.getContext('2d'),plan,t,{scale:320/plan.W,noHud:true});
  }catch(e){failures.push(g+':'+id+': '+e.message);}
 }
-const p=J.defaultProject();if(J.randomOk(p,'layout','hrFlashlight'))failures.push('horror default');p.typo=false;if(J.randomOk(p,'layout','tyRuby'))failures.push('typo disabled');
+// Legacy pack switches (horror off, typo) no longer hide parts: themes choose the candidates.
+const p=J.defaultProject();if(!J.randomOk(p,'layout','hrFlashlight'))failures.push('horror parts available');p.typo=false;if(!J.randomOk(p,'layout','tyRuby'))failures.push('legacy typo switch ignored');
 return {counts,failures};
 });assert.deepEqual(result.failures,[]);assert.equal(Object.values(result.counts).reduce((a,b)=>a+b,0),153);assert.deepEqual(errors,[]);console.log(locale||'ja',result);await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

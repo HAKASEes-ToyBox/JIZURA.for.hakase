@@ -52,7 +52,7 @@ const assert = require('node:assert/strict');
           for (const loop of [false,true]) for (const random of [false,true]) {
             await page.locator('#mediaLoop').setChecked(loop);
             await page.locator('#mediaRandom').setChecked(random);
-            await page.locator('#mediaLineList .media-technique').first().selectOption('iris');
+            await page.locator('#mediaLineList .media-technique').first().selectOption('pushIn');
             await page.locator('#mediaLineList .lock').first().click();
             const before = await project();
             const expectedTargets = await lyricTargets(mode);
@@ -142,7 +142,7 @@ const assert = require('node:assert/strict');
       assert.equal(await modeSelect.inputValue(), 'cut');
       await page.locator('#sourceMedia').click();
       assert.equal(await modeSelect.inputValue(), 'line');
-      await page.locator('#mediaLyricInsert').scrollIntoViewIfNeeded();
+      await page.locator('#btnMediaFromLyrics').scrollIntoViewIfNeeded();
       await page.screenshot({path:`../media-lyrics-insert-${locale ? 'en' : 'ja'}.png`,fullPage:true});
       await page.locator('#sourceLyrics').click();
       await page.locator('#lyrics').fill('');

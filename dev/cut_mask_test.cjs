@@ -5,7 +5,8 @@ const result=await page.evaluate(()=>{
 const failures=[],check=(ok,m)=>{if(!ok)failures.push(m)};
 for(const [id,color] of [['bl','#1030ff'],['gr','#10ff30']]){const c=document.createElement('canvas');c.width=160;c.height=90;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,160,90);J.mediaAssets.set(id,{element:c,type:'image'});}
 const out=document.createElement('canvas');out.width=320;out.height=180;const ctx=out.getContext('2d'),renderer=new J.Renderer();
-const project=(opts={})=>{const p=J.defaultProject();p.lyrics=opts.lyrics||'';p.title='';p.durationOverride=8;p.fx={...p.fx,hud:'off',texture:0,chroma:0,glitch:0,flash:false};
+const project=(opts={})=>{const p=J.defaultProject();p.lyrics=opts.lyrics||'';p.title='';p.durationOverride=8;p.lyricEffects={...p.lyricEffects,autoPlacement:false};p.overrides={0:{single:true,layout:'center'}};// one full-stage, centred cut
+p.fx={...p.fx,hud:'off',texture:0,chroma:0,glitch:0,flash:false};
  for(const [layer,id,ov] of [['media','bl',opts.media],['foreground','gr',opts.foreground]]){if(!ov)continue;p[layer]={...p[layer],items:[{id,name:id+'.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:id,technique:'none',entrance:'none',departure:'none',...ov}}};}
  // The line splits into several automatic cuts; give each the same details.
  if(opts.lyric)p.lyricCutOptions=Object.fromEntries(Array.from({length:8},(_,k)=>['0:'+k,{details:JSON.parse(JSON.stringify(opts.lyric))}]));return p;};
@@ -99,6 +100,7 @@ assert.equal((await section.locator('[data-mask-shape="type"] option').allTextCo
 await section.locator('[data-mask-add]').selectOption('star');assert.equal(await section.locator('[data-mask-add]').inputValue(),'');
 assert.equal(await section.locator('[data-mask-shape="type"]').inputValue(),'star');
 await section.locator('[data-mask-shape="type"]').selectOption('rect');
+await section.locator('canvas').evaluate(el=>el.scrollIntoView({block:'center'}));// clear of the sticky action bar
 const box=await section.locator('canvas').boundingBox();
 const before=+await section.locator('[data-mask-shape="cx"]').inputValue();
 await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+box.width*.2,box.y+box.height/2,{steps:4});await page.mouse.up();
@@ -123,7 +125,7 @@ await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=
 await section.locator('[data-mask-shape="w"]').fill('0.3');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
 assert.equal(+await section.locator('[data-mask-shape="h"]').inputValue(),hBefore);
 // Motion: all None at first; pick a technique, an entrance (a reveal shape) and an exit.
-assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Motion':'モーション');
+assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Mask motion':'マスクのモーション');
 assert.deepEqual(await section.locator('select[data-mask-motion]').evaluateAll(els=>els.map(e=>e.value)),['none','none','none']);
 await section.locator('[data-mask-motion="technique"]').selectOption('rollAcross');await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await section.locator('[data-mask-motion="departure"]').selectOption('exit_fade');
 await section.locator('[data-mask-motion="duration"]').fill('0.8');await section.locator('[data-mask-motion="duration"]').dispatchEvent('change');

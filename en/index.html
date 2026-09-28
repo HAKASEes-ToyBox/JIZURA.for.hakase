@@ -692,7 +692,7 @@ body.preview-fullscreen-open { overflow: hidden; }
       <details class="header-menu" id="projectMenu">
         <summary>Project</summary><div class="header-menu-items">
           <button id="btnNew">New</button>
-          <label class="file" tabindex="0" title="Source入りプロジェクト（.jizuraichi）をOpen">Open<input id="fileProject" type="file"></label>
+          <label class="file" tabindex="0" title="Open a portable project (.jizuraichi)">Open<input id="fileProject" type="file"></label>
           <button id="btnSave" title="Save project with images, videos and audio">Save</button>
           <button id="btnSaveSettings">Export settings only</button>
           <label class="file" tabindex="0">Import settings only<input id="fileSettings" type="file"></label>
@@ -889,7 +889,7 @@ body.preview-fullscreen-open { overflow: hidden; }
         <h3>Font roles</h3>
         <div id="fontRoles"></div>
         <div class="row" style="margin-top:8px">
-          <input id="localFont" type="text" placeholder="Installed fonts名（例: 游明朝）" style="flex:1">
+          <input id="localFont" type="text" placeholder="Installed font name (e.g. Arial)" style="flex:1">
           <button id="btnAddFont">Add</button>
         </div>
         <div class="row" style="margin-top:8px"><label class="file">Font file (.ttf/.otf)<input id="fontFile" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
@@ -927,7 +927,7 @@ body.preview-fullscreen-open { overflow: hidden; }
           <label class="check"><input id="lyricAvoidCenter" class="avoid-center-toggle" type="checkbox"><span>Avoid the centre of the stage<small>Automatic placement keeps lyrics out of the middle of the stage. *Emphasised* cuts are exempt.</small></span></label>
           <label class="check"><input id="lyricAvoidForeground" type="checkbox" checked><span>Avoid overlapping the foreground<small>Automatic areas avoid foreground placement. Cuts marked with *emphasis* are exempt.</small></span></label>
           <label class="slider"><span>Foreground avoidance strength</span><input id="lyricAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricAvoidanceStrengthValue">1.00</output></label>
-          <p class="note">1でForegroundの範囲を避け、下げると周辺の重なりを許容します。0では回避しません。空き領域がない場合は最も重なりの少ない配置を使います。</p>
+          <p class="note">At 1, avoid the foreground bounds. Lower values allow overlap around its edges; 0 disables avoidance. If no free region exists, use the least overlapping placement.</p>
           <label class="slider"><span>Lyric overlap avoidance strength</span><input id="lyricGroupAvoidanceStrength" type="range" min="0" max="1" step="0.05" value="1"><output id="lyricGroupAvoidanceStrengthValue">1.00</output></label>
           <p class="note">Applies to <code>{- … -}</code> groups. At 1, lyric areas are arranged without overlaps; at 0, use ordinary retained layering. Works even with automatic placement off.</p>
           <label class="check"><input id="lyricRandomBlend" type="checkbox"><span>Randomize lyric blend modes<small>Choose Normal, Multiply, Screen or Overlay for each cut.</small></span></label>
@@ -5530,7 +5530,8 @@ J.finishLyricPlan = (project, plan, audio) => {
   }
   for (const index of plan.retainedCutIndices) {
     const cut = plan.cuts[index];
-    if (cut.displayEnd > cut.end) { cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
+    // slotEnd keeps the cut's own slot (what placement used) once its end follows the group.
+    if (cut.displayEnd > cut.end) { cut.slotEnd = cut.end; cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
   }
 };
 

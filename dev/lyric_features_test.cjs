@@ -30,7 +30,7 @@ const assert = require('node:assert/strict');
         check(new Set(glyphs.map(g => g.y)).size === 2 && !glyphs.some(g => g.ch === '\n'), 'line breaks render as two rows');
         check(group.find(c => c.line === 1).frontmost, 'asterisk emphasis enables frontmost');
         check(group.find(c => c.line === 2).motionScale < 1, 'suppression reduces motion');
-        check(plan.cuts.every(c => !c.area), 'automatic areas default to off');
+        check(J.lyricEffectSettings({}).autoPlacement && plan.cuts.filter(c => c.line >= 0).every(c => c.area), 'automatic areas default to on');
 
         // Foreground bounds use source aspect and rotation during each cut's
         // own time slot, even when braces extend its rendered lifetime.
@@ -41,7 +41,7 @@ const assert = require('node:assert/strict');
         p.lyricEffects = {autoPlacement:true,avoidForeground:true};
         const auto = J.plan(p), fore = J.planMedia(p,auto,null,'foreground');
         for (const cut of auto.cuts.filter(c => c.line < 3 && !c.emphasis)) {
-          for (const f of fore.cuts.filter(f => f.start < cut.end && f.end + .6 > cut.start))
+          for (const f of fore.cuts.filter(f => f.start < (cut.slotEnd ?? cut.end) && f.end + .6 > cut.start))
             check(overlap(cut.area,J.foregroundBounds(p,auto,f)) < 1e-8, 'automatic area must avoid all overlapping foreground cuts');
         }
         // A right-side foreground followed by a top foreground used to squeeze

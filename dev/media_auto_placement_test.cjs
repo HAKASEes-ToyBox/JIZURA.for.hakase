@@ -41,14 +41,14 @@ const assert = require('node:assert/strict');
             if(!same(plan()[0].placement,locked.placement))failures.push('lock did not preserve framing');
             if(plan()[1].placement!==null)failures.push('disabled automatic placement still active');
             const manual={cx:.2,cy:.7,w:.34,h:.25,lockAspect:false,angle:27};
-            project[layer].cutOverrides[0]={technique:'iris',placement:manual};
+            project[layer].cutOverrides[0]={technique:'pushIn',placement:manual};
             if(!same(plan()[0].placement,manual))failures.push('manual placement changed');
             delete project.mediaEffects;
             project[layer].cutOverrides[0]={technique:'none'};
             if(plan()[0].placement!==null)failures.push('no-effects framing changed');
             project[layer].cutOverrides[0]={enter:'slide',layout:'cover'};
             if(plan()[0].placement!==null)failures.push('legacy framing changed');
-            project[layer].cutOverrides[0]={technique:'iris',lock:true,lockedSeed:2};
+            project[layer].cutOverrides[0]={technique:'pushIn',lock:true,lockedSeed:2};
             if(plan()[0].placement!==null)failures.push('old locked framing changed');
           }
         }
@@ -60,7 +60,7 @@ const assert = require('node:assert/strict');
         await page.locator('#mediaFiles').setInputFiles({name:layer+'.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="320"><circle cx="90" cy="160" r="80" fill="cyan"/></svg>')});
         await page.locator('.media-technique').waitFor();
         assert.deepEqual(await page.evaluate(layer=>[J.ui.project[layer].items[0].width,J.ui.project[layer].items[0].height],layer),[180,320]);
-        await page.locator('.media-technique').selectOption('iris');
+        await page.locator('.media-technique').selectOption('pushIn');
         const current=()=>page.evaluate(layer=>J.ui.plan[layer].cuts[0].placement,layer);
         const initial=await current();assert.ok(initial);
         await page.locator(`[data-tab="${layer}Fx"]`).click();

@@ -49,7 +49,7 @@ const assert = require('node:assert/strict');
       await page.locator('#sourceMedia').click();
       const img = name => ({ name, mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="red"/></svg>') });
       await page.locator('#mediaFiles').setInputFiles([img('one.svg'), img('two.svg'), img('three.svg')]);
-      await page.locator('#mediaRandom').check(); await page.locator('#mediaLoop').check(); await page.locator('#btnTap').click();
+      await page.locator('#mediaRandom').check(); await page.locator('#mediaLoop').check(); await page.locator('#btnTapMedia').click(); await page.waitForFunction(() => J.ui.tap && !J.ui.tap.countingDown, null, {timeout:10000});
       for (let i = 0; i < 5; i++) await page.evaluate(t => { J.ui.t = t; document.querySelector('#tapBtn').click(); }, i + 0.3);
       assert.deepEqual(await page.evaluate(() => {
         const order = J.mediaOrder(J.ui.project, 'media').map(item => item.id);
@@ -66,7 +66,7 @@ const assert = require('node:assert/strict');
       await page.locator('#areaCancel').click();
       await page.locator('#sourceForeground').click();
       await page.locator('#mediaFiles').setInputFiles([img('front-one.svg'), img('front-two.svg')]);
-      await page.locator('#mediaLoop').check(); await page.locator('#btnTap').click();
+      await page.locator('#mediaLoop').check(); await page.locator('#btnTapMedia').click(); await page.waitForFunction(() => J.ui.tap && !J.ui.tap.countingDown, null, {timeout:10000});
       for (let i = 0; i < 3; i++) await page.evaluate(t => { J.ui.t = t; document.querySelector('#tapBtn').click(); }, i + 0.4);
       assert.deepEqual(await page.evaluate(() => {
         const order = J.mediaOrder(J.ui.project, 'foreground').map(item => item.id);
