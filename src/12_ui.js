@@ -3768,7 +3768,7 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
     const audio = await J.analyzeAudio(f);
     const duration=video?await J.videoFileDuration(f):audio.duration;
     if (S.project !== project || S.audioLoad !== request) return false;
-    const audioFile=video?J.audioWaveFile(audio.buffer,f.name):f;
+    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):f);
     let item=null;
     if(video&&options.background){
       if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
@@ -3855,6 +3855,7 @@ async function openProjectFile(file,report=()=>{}) {
     }
     if (project.audioAsset) {
       audioFile = files.get('audio:'+project.audioAsset.id) || await J.loadMedia(project.audioAsset.id);
+      if (audioFile) audioFile = await J.snapshotMediaFile(audioFile);
       if (audioFile) audio = await step(L('音声を解析しています','Analyzing audio'),()=>J.analyzeAudio(audioFile));
     }
     // Decode everything first: malformed projects leave the current edit intact.

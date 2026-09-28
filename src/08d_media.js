@@ -289,10 +289,37 @@ const dbOp = async (mode, cb) => {
     tx.onerror = () => reject(tx.error || q.error); tx.onabort = () => reject(tx.error || new Error('Media storage transaction aborted'));
   }); } finally { db.close(); }
 };
-J.storeMedia = (id, file) => dbOp('readwrite', s => s.put(file, id));
+// File/Blob structured clones can retain a reference to the original disk file.
+// Read bytes before retaining an asset so saving over the source project cannot
+// invalidate video URLs, IndexedDB entries, or a later project download.
+const mediaSnapshots = new WeakMap();
+J.snapshotMediaFile = file => {
+  if (!(file instanceof Blob)) return Promise.reject(new Error('Missing media file'));
+  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file);
+  const task = (async () => {
+    const parts = [], chunk = 4 * 1024 * 1024;
+    for (let offset = 0; offset < file.size; offset += chunk) {
+      parts.push(new Blob([await file.slice(offset, offset + chunk).arrayBuffer()]));
+    }
+    const copy = typeof file.name === 'string'
+      ? new File(parts, file.name, { type: file.type, lastModified: file.lastModified })
+      : new Blob(parts, { type: file.type });
+    mediaSnapshots.set(copy, Promise.resolve(copy));
+    return copy;
+  })();
+  mediaSnapshots.set(file, task);
+  task.catch(() => mediaSnapshots.delete(file));
+  return task;
+};
+J.storeMedia = async (id, file) => {
+  const copy = await J.snapshotMediaFile(file);
+  return dbOp('readwrite', s => s.put(copy, id));
+};
 J.loadMedia = id => dbOp('readonly', s => s.get(id));
 J.removeMedia = id => dbOp('readwrite', s => s.delete(id));
-J.attachMedia = (item, file, assets = J.mediaAssets) => new Promise((resolve, reject) => {
+J.attachMedia = async (item, file, assets = J.mediaAssets) => {
+  file = await J.snapshotMediaFile(file);
+  return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) URL.revokeObjectURL(previous.url);
   const url = URL.createObjectURL(file);
   const el = document.createElement(item.type === 'video' ? 'video' : 'img');
@@ -320,8 +347,9 @@ J.attachMedia = (item, file, assets = J.mediaAssets) => new Promise((resolve, re
   // the project; obtain the thumbnail later without blocking the whole import.
   if (item.type === 'video') {el.onloadedmetadata=ready;el.onloadeddata=updatePoster;} else el.onload = ready;
   el.src = url;
-});
-const seekMediaVideo = async (v, target, signal) => {
+  });
+};
+const seekMediaVideo = async (v, target, signal, name = '') => {
   v.pause(); target = Math.max(0, Math.min(target, (v.duration || 1) - 0.001));
   if (signal?.aborted)throw new Error('Cancelled');
   if (Math.abs(v.currentTime - target) < 0.002 && v.readyState >= 2 && !v.seeking) return;
@@ -329,12 +357,13 @@ const seekMediaVideo = async (v, target, signal) => {
     let done=false;
     const finish = () => {done=true;clearTimeout(timer);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
     const ok = () => {if(done||v.readyState<2||v.seeking)return;if(Math.abs(v.currentTime-target)>.02){v.pause();v.currentTime=target;return;}finish();resolve();};
-    const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position')));};
+    const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position') + (name ? '：' + name : '') + ` (${target.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));};
     const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
     const timer=setTimeout(fail,15000);
     v.addEventListener('seeked',ok);v.addEventListener('loadeddata',ok);v.addEventListener('canplay',ok);v.addEventListener('error',fail,{once:true});
     if (signal) signal.addEventListener('abort', abort, { once: true });
-    v.currentTime = target;
+    if (v.error) { fail(); return; }
+    try { v.currentTime = target; } catch (error) { fail(); return; }
     // Some mobile decoders need playback to produce the first frame. Rewind
     // to the requested frame before resolving; the project clock stays paused.
     // An interrupted play() (e.g. the preview sync pausing the element) is not
@@ -361,10 +390,10 @@ J.prepareMediaFrame = async (plan, t, signal) => {
     const prev = cut.index > 0 && plan[layer].cuts[cut.index - 1], snapshot = transitionFrame(layer);
     if (prev && prev.type === 'video' && cut.trans && t - cut.start < cut.transDur && (!snapshot || snapshot.plan !== plan || snapshot.index !== prev.index)) {
       const prior = J.mediaAssets.get(prev.itemId);
-      if (prior) { await seekMediaVideo(prior.element, J.mediaVideoTime(prev, prev.end - 0.001, prior.element.duration), signal); captureMediaVideo(plan, prev, layer); }
+      if (prior) { await seekMediaVideo(prior.element, J.mediaVideoTime(prev, prev.end - 0.001, prior.element.duration), signal, prev.name); captureMediaVideo(plan, prev, layer); }
     }
     if (cut.type !== 'video') continue;
-    const asset = J.mediaAssets.get(cut.itemId); if (asset) await seekMediaVideo(asset.element, J.mediaVideoTime(cut, t, asset.element.duration), signal);
+    const asset = J.mediaAssets.get(cut.itemId); if (asset) await seekMediaVideo(asset.element, J.mediaVideoTime(cut, t, asset.element.duration), signal, cut.name);
   }
 };
 J.syncMediaPreview = (plan, t, playing) => {

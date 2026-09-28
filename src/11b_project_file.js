@@ -41,15 +41,19 @@ J.applyProjectSettings = (current, source) => {
 };
 J.packProject = async (project, audioFile) => {
   const entries = [], parts = []; let offset = 0;
-  const add = (kind, id, file, name) => {
+  const add = async (kind, id, file, name) => {
     if (!(file instanceof Blob)) throw new Error(J.mediaLabel('素材が見つかりません。再読み込みしてください：', 'Missing asset. Please import it again: ') + name);
+    try { file = await J.snapshotMediaFile(file); }
+    catch (error) {
+      throw new Error(J.mediaLabel('素材を読み取れません。元ファイルが変更・移動されている可能性があります。素材を再度取り込んでください：', 'Cannot read asset. Its source may have changed or moved. Please import it again: ') + name);
+    }
     entries.push({kind,id,name:name || file.name || id,type:file.type,offset,size:file.size});
     parts.push(file); offset += file.size;
   };
   const items = new Map([...project.media.items,...project.foreground.items].map(item=>[item.id,item]));
-  for (const [id,item] of items) add('media',id,J.mediaAssets.get(id)?.file || await J.loadMedia(id),item.name);
-  if (project.audioAsset) add('audio',project.audioAsset.id,audioFile || await J.loadMedia(project.audioAsset.id),project.audioAsset.name);
-  for (const font of project.userFonts || []) if (font.file) add('font',font.key,await J.readFontFile(font.key),font.label);
+  for (const [id,item] of items) await add('media',id,J.mediaAssets.get(id)?.file || await J.loadMedia(id),item.name);
+  if (project.audioAsset) await add('audio',project.audioAsset.id,audioFile || await J.loadMedia(project.audioAsset.id),project.audioAsset.name);
+  for (const font of project.userFonts || []) if (font.file) await add('font',font.key,await J.readFontFile(font.key),font.label);
   const manifest = text.encode(JSON.stringify({format:'jizura',version:1,project,entries}));
   if (manifest.length > 32 * 1024 * 1024) throw fail();
   const header = new Uint8Array(12); header.set(text.encode(magic)); new DataView(header.buffer).setUint32(8,manifest.length,true);
