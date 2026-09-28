@@ -755,3 +755,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-error:empty { display:none; }
 .favorite-error { color:var(--danger); }
 .preview-options #effectFavorites { margin-right:auto; }
+.favorite-help:empty { display:none; }
+.favorite-card { cursor:pointer; }
+#effectFavoritesDialog { overscroll-behavior:contain; }

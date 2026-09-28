@@ -706,17 +706,20 @@ function toggleMediaCutLock(layer, index) {
   mediaOv(index, options.lock ? MEDIA_UNLOCK : mediaLockPatch(layer, index), layer);
   replan();
 }
-function effectFavoriteAction(action,layer,index,part=0){
+async function effectFavoriteAction(action,layer,index,part=0){
   const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer]?.cuts[index];
   if(!cut)return;
   pause();
   if(action==='copy'){
     const list=S.project.effectFavorites ||= [];
     const number=(S.project.favoriteSequence||0)+1;
-    const name=prompt(J.mediaLabel('お気に入りの名前','Favorite name'),J.mediaLabel('お気に入り','Favorite ')+number);
+    const project=S.project;
+    const payload=J.cutEffectsPayload(cut,layer,S.plan);
+    const name=await J.requestFavoriteName(J.mediaLabel('お気に入り','Favorite ')+number);
+    if(project!==S.project)return;
     if(name===null)return;
     remember();S.project.favoriteSequence=number;
-    list.push({id:J.favoriteId(),name:name.trim()||J.mediaLabel('お気に入り','Favorite ')+number,payload:J.cutEffectsPayload(cut,layer,S.plan)});
+    list.push({id:J.favoriteId(),name:name.trim()||J.mediaLabel('お気に入り','Favorite ')+number,payload});
     autosave();toast(J.mediaLabel('演出をお気に入りに追加しました','Effects added to favorites'));
   }else openEffectFavorites({layer,index,part,cut});
 }
