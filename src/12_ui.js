@@ -2667,6 +2667,7 @@ function syncSourceDrawer() {
     $(id).setAttribute('aria-expanded',String(!compact||!!S.sourceOpen&&S.sourceTab===tab));
   }
   $('closeSourceDrawer').setAttribute('aria-label',J.mediaLabel('素材設定を閉じる','Close source settings'));
+  $('sourceDrawerTitle').textContent=J.mediaLabel(...({foreground:['前景','Foreground'],lyrics:['歌詞・曲','Lyrics / Audio'],media:['背景','Background']}[S.sourceTab]||['歌詞・曲','Lyrics / Audio']));
 }
 function selectSourceDrawer(tab) {
   if($('app').classList.contains('compact-ui')){

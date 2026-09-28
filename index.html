@@ -702,8 +702,13 @@ body.preview-fullscreen-open { overflow: hidden; }
 #app.compact-ui .source-tabs { position:fixed; left:0; top:var(--settings-top,60px); width:44px; display:flex; flex-direction:column; visibility:visible; pointer-events:auto; z-index:31; background:var(--panel); border:1px solid var(--line2); border-radius:0 5px 5px 0; }
 #app.compact-ui .source-tabs button { writing-mode:vertical-rl; width:42px; min-height:86px; padding:12px 10px; border:0; border-right:2px solid transparent; }
 #app.compact-ui .source-tabs button[aria-expanded="true"] { color:var(--amber); border-right-color:var(--amber); background:var(--raised2); }
-#app.compact-ui .source-drawer-heading { display:flex; justify-content:flex-end; padding:8px; }
-#app.compact-ui .source-drawer-heading button { font-size:20px; min-width:32px; }
+#app.compact-ui .source-drawer-heading { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); }
+#app.compact-ui .source-drawer-heading button { font-size:20px; line-height:1; min-width:32px; }
+#app.compact-ui .media-pane-heading { display:none; }
+.media-upload-row { display:flex; align-items:center; gap:10px; }
+.media-upload-row .hint { flex:1; min-width:0; margin:0; }
+.media-upload-row .file { flex-shrink:0; }
+#app.compact-ui #settingsDrawer { width:min(370px,calc(100vw - 88px)); }
 
 </style>
 </head>
@@ -743,7 +748,7 @@ body.preview-fullscreen-open { overflow: hidden; }
     <!-- ================= left: lyrics & timing ================= -->
     <section id="sourceDrawer" class="col col-left" aria-label="歌詞とタイミング">
       <nav class="source-tabs" role="tablist" aria-label="素材"><button id="sourceForeground" role="tab" aria-selected="false">前景</button><button id="sourceLyrics" role="tab" aria-selected="true">歌詞・曲</button><button id="sourceMedia" role="tab" aria-selected="false">背景</button></nav>
-      <div class="source-drawer-heading"><button id="closeSourceDrawer" type="button">×</button></div>
+      <div class="source-drawer-heading"><strong id="sourceDrawerTitle"></strong><button id="closeSourceDrawer" type="button">×</button></div>
       <div class="sec" id="lyricsPane">
         <div class="sec-h"><h2>歌詞</h2><button id="btnSyntax" class="ghost small" aria-expanded="false">記法</button></div>
         <textarea id="lyrics" rows="9" spellcheck="false" aria-label="歌詞（1行 = 1フレーズ）"></textarea>
@@ -772,8 +777,8 @@ body.preview-fullscreen-open { overflow: hidden; }
       </div>
 
       <div class="sec" id="mediaPane" hidden>
-        <div class="sec-h"><h2 id="mediaPaneTitle">背景</h2><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
-        <p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p>
+        <div class="sec-h media-pane-heading"><h2 id="mediaPaneTitle">背景</h2></div>
+        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <fieldset id="backgroundInsertSources" hidden><legend>一括挿入する項目</legend></fieldset>
@@ -41187,6 +41192,7 @@ function syncSourceDrawer() {
     $(id).setAttribute('aria-expanded',String(!compact||!!S.sourceOpen&&S.sourceTab===tab));
   }
   $('closeSourceDrawer').setAttribute('aria-label',J.mediaLabel('素材設定を閉じる','Close source settings'));
+  $('sourceDrawerTitle').textContent=J.mediaLabel(...({foreground:['前景','Foreground'],lyrics:['歌詞・曲','Lyrics / Audio'],media:['背景','Background']}[S.sourceTab]||['歌詞・曲','Lyrics / Audio']));
 }
 function selectSourceDrawer(tab) {
   if($('app').classList.contains('compact-ui')){

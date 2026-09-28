@@ -32,7 +32,7 @@
     <!-- ================= left: lyrics & timing ================= -->
     <section id="sourceDrawer" class="col col-left" aria-label="歌詞とタイミング">
       <nav class="source-tabs" role="tablist" aria-label="素材"><button id="sourceForeground" role="tab" aria-selected="false">前景</button><button id="sourceLyrics" role="tab" aria-selected="true">歌詞・曲</button><button id="sourceMedia" role="tab" aria-selected="false">背景</button></nav>
-      <div class="source-drawer-heading"><button id="closeSourceDrawer" type="button">×</button></div>
+      <div class="source-drawer-heading"><strong id="sourceDrawerTitle"></strong><button id="closeSourceDrawer" type="button">×</button></div>
       <div class="sec" id="lyricsPane">
         <div class="sec-h"><h2>歌詞</h2><button id="btnSyntax" class="ghost small" aria-expanded="false">記法</button></div>
         <textarea id="lyrics" rows="9" spellcheck="false" aria-label="歌詞（1行 = 1フレーズ）"></textarea>
@@ -61,8 +61,8 @@
       </div>
 
       <div class="sec" id="mediaPane" hidden>
-        <div class="sec-h"><h2 id="mediaPaneTitle">背景</h2><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
-        <p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p>
+        <div class="sec-h media-pane-heading"><h2 id="mediaPaneTitle">背景</h2></div>
+        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <fieldset id="backgroundInsertSources" hidden><legend>一括挿入する項目</legend></fieldset>
