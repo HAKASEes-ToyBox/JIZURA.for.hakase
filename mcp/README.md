@@ -120,8 +120,9 @@ MCPクライアントの設定例（パスは自身の環境の絶対パスへ�
 
 `export_start.kind`：
 
-- `project`: 元音源・素材・フォントを含む `.jizura`。通常画面でも開けます。
-- `settings`: 設定だけの `.jizura`。
+- `project`: 元音源・素材・フォントを含む `.jizuraichi`。通常画面でも開けます。
+- `settings`: 設定だけの `.jizuraichi`。
+- 保存名の拡張子は種類に合わせて自動で付けます（project/settings は `.jizuraichi`、mp4 は `.mp4`、PNG は `.zip`、ae は `.json`）。旧来の `.jizura` を指定した場合も `.jizuraichi` に置き換えます。
 - `mp4`: MP4（ブラウザのWebCodecs対応が必要）。
 - `png` / `png-transparent`: PNG連番ZIP。`every` で出力間隔を指定可能。
 - `ae`: After Effects連携用JSON。Web専用演出は既存AE連携と同じ代替表現になります。

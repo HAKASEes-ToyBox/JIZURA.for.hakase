@@ -193,7 +193,7 @@ try {
     const f = await runJob(
       session,
       kind,
-      `test-${kind}.${kind === "mp4" ? "mp4" : kind.startsWith("png") ? "zip" : kind === "ae" ? "json" : "jizura"}`,
+      `test-${kind}.${kind === "mp4" ? "mp4" : kind.startsWith("png") ? "zip" : kind === "ae" ? "json" : "jizuraichi"}`,
     );
     console.log(kind, (await stat(f)).size);
   }
@@ -214,14 +214,17 @@ try {
   assert.ok(stale.isError);
   const traversal = await client.callTool({
     name: "export_start",
-    arguments: { session, kind: "project", filename: "../escape.jizura" },
+    arguments: { session, kind: "project", filename: "../escape.jizuraichi" },
   });
   assert.ok(traversal.isError);
   const existing = await client.callTool({
     name: "export_start",
-    arguments: { session, kind: "project", filename: "test-project.jizura" },
+    arguments: { session, kind: "project", filename: "test-project.jizuraichi" },
   });
   assert.ok(existing.isError);
+  // A missing or legacy extension is replaced with the app's .jizuraichi.
+  const legacy = await runJob(session, "settings", "test-legacy.jizura");
+  assert.equal(path.basename(legacy), "test-legacy.jizuraichi");
   // Generic edits cannot evade the theme gate.
   const catalog = json(await call("catalog", { session }));
   const disallowed = Object.keys(catalog.registries.layout).find(
@@ -239,7 +242,7 @@ try {
   s = json(
     await call("asset_import", {
       session: reopened,
-      path: path.join(output, "test-project.jizura"),
+      path: path.join(output, "test-project.jizuraichi"),
       kind: "project",
     }),
   );
@@ -257,7 +260,7 @@ try {
   await call("asset_import", {
     session: reopened,
     kind: "settings",
-    path: path.join(output, "test-settings.jizura"),
+    path: path.join(output, "test-settings.jizuraichi"),
   });
   s = json(await call("project_get", { session: reopened }));
   assert.equal(s.project.foreground.items.length, 1);
