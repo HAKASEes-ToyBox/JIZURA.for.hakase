@@ -653,3 +653,12 @@ body.preview-fullscreen-open { overflow: hidden; }
 .playhead-primary button[aria-expanded="true"] { border-color: var(--amber); color: var(--amber); }
 .playhead-secondary { padding-left: 10px; border-left: 2px solid var(--amber); }
 .playhead-secondary button[hidden] { display: none; }
+
+/* Cut actions are kept outside the scrolling timeline so the menu is never clipped. */
+.timeline-cut-menu { position:fixed; z-index:10000; width:max-content; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); overflow:auto; padding:5px; background:#22242a; color:var(--text); border:1px solid var(--line2); border-radius:8px; box-shadow:0 8px 30px #0009; }
+.timeline-cut-menu button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; text-align:left; padding:8px 12px; border:0; border-radius:4px; background:transparent; color:inherit; }
+.timeline-cut-menu button:hover,.timeline-cut-menu button:focus-visible { background:#383a43; outline:1px solid var(--amber); }
+.timeline-cut-menu button>svg { width:16px; height:16px; flex-shrink:0; }
+.timeline-cut-menu button[data-action="remove"] { color:#ff8790; }
+.timeline-cut-menu .menu-check { margin-left:auto; color:var(--cyan); }
+@media (pointer:coarse) { .timeline-cut-menu button { min-height:44px; } }

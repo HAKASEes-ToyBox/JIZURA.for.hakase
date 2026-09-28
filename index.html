@@ -672,6 +672,15 @@ body.preview-fullscreen-open { overflow: hidden; }
 .playhead-secondary { padding-left: 10px; border-left: 2px solid var(--amber); }
 .playhead-secondary button[hidden] { display: none; }
 
+/* Cut actions are kept outside the scrolling timeline so the menu is never clipped. */
+.timeline-cut-menu { position:fixed; z-index:10000; width:max-content; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); overflow:auto; padding:5px; background:#22242a; color:var(--text); border:1px solid var(--line2); border-radius:8px; box-shadow:0 8px 30px #0009; }
+.timeline-cut-menu button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; text-align:left; padding:8px 12px; border:0; border-radius:4px; background:transparent; color:inherit; }
+.timeline-cut-menu button:hover,.timeline-cut-menu button:focus-visible { background:#383a43; outline:1px solid var(--amber); }
+.timeline-cut-menu button>svg { width:16px; height:16px; flex-shrink:0; }
+.timeline-cut-menu button[data-action="remove"] { color:#ff8790; }
+.timeline-cut-menu .menu-check { margin-left:auto; color:var(--cyan); }
+@media (pointer:coarse) { .timeline-cut-menu button { min-height:44px; } }
+
 </style>
 </head>
 <body>
@@ -38685,6 +38694,7 @@ function composePlan(project) {
   return plan;
 }
 function replan() {
+  closeTimelineCutMenu();
   S.plan = composePlan(S.project);
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
@@ -39810,7 +39820,7 @@ function drawTimelineAssetSelects() {
     const options=`<option value="">${J.mediaLabel('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
     for(const cut of S.plan[layer].cuts){
       const key=`${layer}-${cut.index}`,duration=Math.max(.001,S.plan.duration);
-      const width=(cut.end-cut.start)/duration*canvas.clientWidth-10;
+      const width=(cut.end-cut.start)/duration*canvas.clientWidth-38;
       if(width<=0)continue;
       retained.add(key);
       let select=overlay.querySelector(`[data-key="${key}"]`);
@@ -39830,7 +39840,7 @@ function drawTimelineAssetSelects() {
       select.disabled=!!(S.exporting || S.tap);
       select.title=m.randomOrder?J.mediaLabel('素材を変更すると現在の並びでランダム順をオフにします','Changing the asset turns off random order and keeps the current order'):cut.name;
       select.setAttribute('aria-label',`${J.mediaLabel(layer==='foreground'?'前景':'背景',layer==='foreground'?'Foreground':'Background')} ${cut.index+1}: ${J.mediaLabel('素材を変更','Change asset')}`);
-      select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5}px`;
+      select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+33}px`;
       // Each select sits on its cut's lane.
       const lane=laneBox(layer,lanes.lanes.get(cut),lanes.count,canvas);
       select.style.top=`${canvas.offsetTop+(lanes.count>1?lane.top+Math.max(0,(lane.height-20)/2):22)}px`;select.style.width=`${width}px`;
@@ -39838,7 +39848,48 @@ function drawTimelineAssetSelects() {
   }
   for(const select of Array.from(overlay.children))if(!retained.has(select.dataset.key))select.remove();
 }
+let timelineCutMenu = null;
+function closeTimelineCutMenu(restoreFocus=false) {
+  if(!timelineCutMenu)return;
+  const {menu,controller,trigger}=timelineCutMenu;
+  timelineCutMenu=null;controller.abort();menu.remove();trigger.setAttribute('aria-expanded','false');
+  if(restoreFocus && trigger.isConnected)trigger.focus();
+}
+function openTimelineCutMenu(trigger) {
+  if(S.exporting || S.tap)return;
+  if(timelineCutMenu?.trigger===trigger){closeTimelineCutMenu(true);return;}
+  closeTimelineCutMenu();pause();
+  const layer=trigger.dataset.layer,index=+trigger.dataset.index,part=+trigger.dataset.part||0;
+  const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer].cuts[index];
+  if(!cut)return;
+  const L=J.mediaLabel,locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
+  const labels={dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L(locked?'ロック解除':'ロック',locked?'Unlock':'Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),copy:L('演出をコピー','Copy effects'),paste:L('演出をペースト','Paste effects'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const actions=['dice','disableReroll','lock',...(layer==='lyrics'||J.mediaSourceAvailable(cut)?['area']:[]),'details','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'remove'];
+  const menu=document.createElement('div'),controller=new AbortController(),signal=controller.signal;
+  menu.id='timelineCutMenu';menu.className='timeline-cut-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',L('カットの操作','Cut actions'));
+  menu.innerHTML=actions.map(action=>{
+    const toggle=['lock','frontmost'].includes(action),active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
+    return `<button type="button" role="${toggle?'menuitemcheckbox':'menuitem'}" ${toggle?`aria-checked="${active}"`:''} data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${part}">${ICON[action]}<span>${labels[action]}</span>${active?'<span class="menu-check" aria-hidden="true">✓</span>':''}</button>`;
+  }).join('');
+  document.body.append(menu);timelineCutMenu={menu,controller,trigger};trigger.setAttribute('aria-expanded','true');
+  const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
+  menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
+  menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+  menu.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;e.stopPropagation();closeTimelineCutMenu();if(!S.exporting&&!S.tap)performTimelineAction(button);},{signal});
+  menu.addEventListener('keydown',e=>{
+    e.stopPropagation();
+    const buttons=[...menu.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);
+    if(e.key==='Escape'){e.preventDefault();closeTimelineCutMenu(true);}
+    else if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length].focus();}
+    else if(e.key==='Tab')closeTimelineCutMenu();
+  },{signal});
+  document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!trigger.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  window.addEventListener('resize',()=>closeTimelineCutMenu(),{signal});
+  document.addEventListener('scroll',e=>{if(!menu.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  menu.querySelector('button').focus();
+}
 function performTimelineAction(control) {
+  if(control.dataset.action==='menu'){openTimelineCutMenu(control);return;}
   if (control.classList.contains('item-frame-action') && S.playing) return;
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
@@ -39896,39 +39947,19 @@ function drawTimelineLinks() {
   }).join('');
   const preview = S.linkDrag ? `<line class="link-preview" x1="${S.linkDrag.sourceX}" y1="${S.linkDrag.sourceY}" x2="${S.linkDrag.x}" y2="${S.linkDrag.y}"/>` : '';
   const handles = markers.map(m => `<g class="link-handle ${linkedRefs(m.ref).length > 1 ? 'linked' : ''}" data-ref="${escapeHtml(m.ref)}" role="button" aria-label="境界をリンク"><circle cx="${m.x}" cy="${m.y}" r="9"/><text x="${m.x}" y="${m.y + 0.5}">🔗</text></g>`).join('');
-  const action = (layer, cut, index, locked) => {
-    const canvas = $(layer === 'lyrics' ? 'timeline' : layer === 'foreground' ? 'foregroundTimeline' : 'mediaTimeline');
-    const startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
-    const y = canvas.offsetTop + 11;
-    const actions = [['dice', false, layer === 'lyrics' ? 'この行を再抽選' : 'このカットを再抽選', ICON.dice], ['disableReroll',false,J.mediaLabel('この演出をOFFにして再抽選','Disable current effects and randomize'),ICON.disableReroll], ['lock', locked, layer === 'lyrics' ? 'この行の構成をロック' : 'このカットをロック', ICON.lock]];
-    if (layer === 'lyrics' || J.mediaSourceAvailable(cut)) actions.push(['area', false, layer === 'lyrics' ? 'この行の表示エリアを編集' : 'このカットの配置とサイズを編集', ICON.area]);
-    if (layer !== 'lyrics') actions.push(['details', false, J.mediaLabel('カットの詳細編集','Edit cut details'), ICON.details]);
-    if (layer !== 'lyrics') for(const name of ['copy','paste'])actions.push([name,false,name==='copy'?J.mediaLabel('演出をコピー','Copy effects'):J.mediaLabel('演出をペースト','Paste effects'),ICON[name]]);
-    if (layer !== 'lyrics') actions.push(['remove', false, 'このカットを削除', ICON.remove]);
-    const left = J.clamp(startX + 25, canvas.offsetLeft + 9, canvas.offsetLeft + canvas.clientWidth - (actions.length - 1) * 20 - 23);
-    return actions.map(([name, active, label, icon], n) => {
-      const x = left + n * 20, graphic = icon.replace('<svg ', '<svg x="-7" y="-7" width="14" height="14" ');
-      return `<g class="timeline-action ${active ? 'locked' : ''}" data-action="${name}" data-layer="${layer}" data-index="${index}" role="button" tabindex="0" aria-label="${label}" ${name === 'lock' ? `aria-pressed="${active}"` : ''} transform="translate(${x} ${y})"><title>${label}</title><rect x="-9" y="-9" width="18" height="18" rx="3"/>${graphic}</g>`;
+  const menus = ['foreground','lyrics','media'].map(layer => {
+    const canvas=timelineCanvas(layer), lanes=timelineLanes(layer);
+    const list=layer==='lyrics'?S.plan.cuts.filter(c=>c.line>=0&&Number.isInteger(c.part)):S.plan[layer].cuts;
+    return list.map(cut=>{
+      const index=layer==='lyrics'?cut.line:cut.index, lane=laneBox(layer,lanes.lanes.get(cut),lanes.count,canvas);
+      const x=J.clamp(canvas.offsetLeft+cut.start/Math.max(.001,S.plan.duration)*canvas.clientWidth+16,canvas.offsetLeft+12,canvas.offsetLeft+canvas.clientWidth-12);
+      const y=canvas.offsetTop+lane.top+lane.height/2;
+      const label=J.mediaLabel('カットのメニュー','Cut menu');
+      return `<g class="timeline-action" data-action="menu" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" role="button" tabindex="0" aria-label="${label}" aria-haspopup="menu" aria-expanded="false" transform="translate(${x} ${y})"><title>${label}</title><rect x="-12" y="-12" width="24" height="24" rx="4"/><path d="M-6 -4h12M-6 0h12M-6 4h12" fill="none" stroke="currentColor" stroke-width="1.5" pointer-events="none"/></g>`;
     }).join('');
-  };
-  const lyricActions = S.plan.lines.map(line => {
-    const cut = S.plan.cuts.find(c => c.line === line.index && c.part === 0);
-    return cut ? action('lyrics', cut, line.index, !!(S.project.overrides[line.index] || {}).lock) : '';
   }).join('');
-  const lyricLanes = timelineLanes('lyrics');
-  const frontmostActions = S.plan.cuts.filter(cut => cut.line >= 0 && Number.isInteger(cut.part)).map(cut => {
-    const canvas = $('timeline'), startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
-    const x = J.clamp(startX + 10, canvas.offsetLeft + 9, canvas.offsetLeft + canvas.clientWidth - 9);
-    // With stacked lanes each cut's buttons sit on its own lane.
-    const lane = laneBox('lyrics', lyricLanes.lanes.get(cut), lyricLanes.count, canvas);
-    const y = canvas.offsetTop + (lyricLanes.count > 1 ? lane.top + lane.height / 2 : 33), active = !!cut.frontmost;
-    const clipboard=['copy','paste'].map((action,i)=>`<g class="timeline-action" data-action="${action}" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${action==='copy'?J.mediaLabel('演出をコピー','Copy effects'):J.mediaLabel('演出をペースト','Paste effects')}" transform="translate(${Math.min(x+40+i*20,canvas.offsetLeft+canvas.clientWidth-9)} ${y})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON[action].replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`).join('');
-    const graphic = ICON.frontmost.replace('<svg ', '<svg x="-7" y="-7" width="14" height="14" ');
-    return `${clipboard}<g class="timeline-action ${active ? 'frontmost' : ''}" data-action="frontmost" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${cut.line + 1}行目${cut.part + 1}カット目を最前に表示" aria-pressed="${active}" transform="translate(${x} ${y})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${graphic}</g><g class="timeline-action" data-action="details" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${J.mediaLabel('カットの詳細編集','Edit cut details')}" transform="translate(${Math.min(x + 20,canvas.offsetLeft + canvas.clientWidth - 9)} ${y})"><title>${J.mediaLabel('カットの詳細編集','Edit cut details')}</title><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON.details.replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`;
-  }).join('');
-  const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => action(layer,cut,cut.index,!!mediaCutOptions(layer,cut.index).lock)).join('')).join('');
   drawTimelineAssetSelects();
-  svg.innerHTML = links + preview + handles + lyricActions + frontmostActions + mediaActions;
+  svg.innerHTML = links + preview + handles + menus;
 }
 function markerNear(clientX, clientY, sourceLayer) {
   const rect = $('timelineStack').getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
