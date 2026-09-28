@@ -761,7 +761,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #effectFavoritesDialog { width:min(980px,94vw); max-height:90dvh; padding:16px; overflow:auto; }
 #effectFavoritesDialog > header { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:8px; font-size:clamp(12px,1.6vw,16px); color:var(--muted); }
 #effectFavoritesDialog h2 { font-size:inherit; letter-spacing:.04em; }
-#effectFavoritesDialog .favorite-import, #effectFavoritesDialog .favorite-export { font-size:inherit; font-weight:600; color:inherit; background:transparent; border-color:var(--line); padding:4px 8px; }
+#effectFavoritesDialog .favorite-import, #effectFavoritesDialog .favorite-export, #effectFavoritesDialog .favorite-configure { font-size:inherit; font-weight:600; color:inherit; background:transparent; border-color:var(--line); padding:4px 8px; }
 #effectFavoritesDialog .favorite-import:hover, #effectFavoritesDialog .favorite-export:hover { color:var(--text); background:var(--raised); border-color:var(--line2); }
 #effectFavoritesDialog .favorite-close { margin-left:auto; }
 .favorite-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:12px; }
@@ -38640,9 +38640,39 @@ J.chooseFavoriteImport=count=>new Promise(resolve=>{
   for(const [value,ja,en] of [['cancel','キャンセル','Cancel'],['replace','上書き','Replace'],['append','追加','Append']])d.querySelector(`[value="${value}"]`).textContent=L(ja,en);
   d.addEventListener('close',()=>{const mode=d.returnValue;d.remove();resolve(['append','replace'].includes(mode)?mode:null);},{once:true});document.body.append(d);d.showModal();
 });
-J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
+J.settingsFromFavorites=project=>{
+  const pools=Object.fromEntries(J.GROUP_KEYS.map(g=>[g,new Set()])),media=new Set(),decor=new Set();
+  let custom=0;
+  for(const favorite of project.effectFavorites||[]){
+    const {kind,details:d,native:n}=J.readCutEffects(JSON.stringify(favorite.payload));
+    if(d.drawing)custom++;
+    if(kind==='lyrics'){
+      for(const g of J.GROUP_KEYS)if(typeof d[g]==='string'&&Object.hasOwn(J.registry(g),d[g]))pools[g].add(d[g]);
+      for(const item of d.decor||[])pools.decor.add(item.id);
+      for(const event of d.effectEvents||[])pools.fx.add(event.type);
+    }else{
+      for(const key of [n.technique,n.entrance,n.departure])if(J.MEDIA_TECH[key])media.add(key);
+      // Resolve legacy/detail-only media choices to corresponding registry recipes.
+      if(!J.MEDIA_TECH[n.technique]&&n.technique!=='none')for(const [key,def] of Object.entries(J.MEDIA_TECH)){
+        const fields=['hold','treat','trans'].filter(k=>d[k]&& !['none','still'].includes(d[k]));
+        if(!def.stage&&fields.length&&fields.every(k=>def[k]===d[k]))media.add(key);
+      }
+      for(const [field,stage] of [['enter','enter'],['exit','exit']])if(d[field]&&!['none','cut'].includes(d[field]))for(const [key,def] of Object.entries(J.MEDIA_TECH))if(def.stage===stage&&def.motion===d[field])media.add(key);
+      for(const item of d.decor||[])decor.add(item.id);
+    }
+  }
+  project.enabled=Object.fromEntries(J.GROUP_KEYS.map(g=>[g,Object.fromEntries(J.order(g).map(key=>[key,pools[g].has(key)]))]));
+  for(const layer of ['foreground','media']){
+    const settings=J.mediaEffectSettings(project,layer);
+    settings.enabled=Object.fromEntries(Object.keys(J.MEDIA_TECH).map(key=>[key,media.has(key)]));
+    settings.decorEnabled=Object.fromEntries(Object.keys(J.DECOR).map(key=>[key,decor.has(key)]));settings.decor=decor.size>0;
+    project[layer].effects=settings;
+  }
+  return {custom};
+};
+J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=>{
   const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='effectFavoritesDialog';
-  dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-import"></button><button type="button" class="favorite-export"></button><input type="file" class="favorite-file" hidden accept=".jizuraichifav,.jizuraichi,.json"><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
+  dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-import"></button><button type="button" class="favorite-export"></button><button type="button" class="favorite-configure"></button><input type="file" class="favorite-file" hidden accept=".jizuraichifav,.jizuraichi,.json"><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
   dialog.querySelector('h2').textContent=L('お気に入り演出','Favorite effects');
   dialog.setAttribute('aria-label',L('お気に入り演出','Favorite effects'));
   dialog.querySelector('.favorite-close').setAttribute('aria-label',L('閉じる','Close'));
@@ -38653,8 +38683,10 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
   let busy=false;
   const importButton=dialog.querySelector('.favorite-import'),exportButton=dialog.querySelector('.favorite-export'),fileInput=dialog.querySelector('.favorite-file');
   importButton.textContent=L('インポート','Import');exportButton.textContent=L('エクスポート','Export');
+  const configureButton=dialog.querySelector('.favorite-configure');configureButton.textContent=L('お気に入りを元に設定変更','Use favorites for settings');
+  configureButton.onclick=()=>{const result=J.settingsFromFavorites(project);configure?.();changed();status.textContent=L('お気に入りで使われている演出のみを抽選対象に設定しました。','Random choices now use only effects present in favorites.')+(result.custom?L(' 独自描画プログラムは抽選項目を持たないため、カットへの直接適用をご利用ください。',' Custom drawing programs have no random-pool entries; apply them directly to cuts.'):'');};
   const status=document.createElement('p');status.className='favorite-transfer-status';status.setAttribute('role','status');dialog.append(status);
-  function transferBusy(value){busy=value;importButton.disabled=exportButton.disabled=value;}
+  function transferBusy(value){busy=value;importButton.disabled=exportButton.disabled=value;configureButton.disabled=value||!list.length;}
   exportButton.onclick=async()=>{
     if(busy)return;transferBusy(true);status.textContent='';
     try{await J.saveFile('favorites.jizuraichifav',await J.exportEffectFavorites(project));}
@@ -38692,11 +38724,15 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
 
   const renderer=new J.Renderer(),queue=[];
   const observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){observer.unobserve(entry.target);queue.push(entry.target);}}, {root:dialog});
+  let armedDelete=null;
+  const disarm=()=>{if(armedDelete){armedDelete.textContent='×';armedDelete.setAttribute('aria-label',L('削除を確認','Confirm deletion'));armedDelete=null;}};
+  document.addEventListener('click',outsideDelete,true);
+  function outsideDelete(event){if(armedDelete&&!armedDelete.contains(event.target))disarm();}
   let pressedOutside=false;
   const outside=e=>{const r=dialog.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};
   dialog.addEventListener('pointerdown',e=>{pressedOutside=e.target===dialog&&outside(e);});
   dialog.addEventListener('click',e=>{if(pressedOutside&&e.target===dialog&&outside(e))dialog.close();pressedOutside=false;});
-  dialog.addEventListener('close',()=>{dead=true;token++;cancelAnimationFrame(frame);observer.disconnect();active=null;queue.length=0;if(sampleId)J.mediaAssets.delete(sampleId);dialog.remove();closed();});
+  dialog.addEventListener('close',()=>{document.removeEventListener('click',outsideDelete,true);dead=true;token++;cancelAnimationFrame(frame);observer.disconnect();active=null;queue.length=0;if(sampleId)J.mediaAssets.delete(sampleId);dialog.remove();closed();});
   Object.defineProperty(dialog,'favoritePreview',{get:()=>active&&({plan:active.plan,cut:active.cut})});
   function sample(kind){
     const p=J.defaultProject();p.title='';p.lyrics=kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.durationOverride=3;p.aspect='16:9';p.res=640;
@@ -38760,7 +38796,8 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
     }catch(e){error(card,e);}
   }
   function render(){
-    active=null;token++;observer.disconnect();queue.length=0;host.replaceChildren();
+    configureButton.disabled=busy||!list.length;
+    disarm();active=null;token++;observer.disconnect();queue.length=0;host.replaceChildren();
     const items=list.filter(f=>!target||f.payload.kind===(target.layer==='lyrics'?'lyrics':'media'));
     dialog.querySelector('.favorite-help').textContent=items.length
       ?''
@@ -38778,7 +38815,7 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
         card.addEventListener('click',event=>{if(!event.target.closest('button,input,label'))start(card,favorite);});
         const actions=card.querySelector('.favorite-actions');
         if(target){const button=document.createElement('button');button.type='button';button.className='favorite-apply primary';button.textContent=L('←☆ 適用','←☆ Apply');button.onclick=()=>{if(apply(favorite.payload))dialog.close();};actions.append(button);}
-        const remove=document.createElement('button');remove.type='button';remove.className='favorite-delete';remove.textContent=L('削除','Delete');remove.onclick=()=>{list.splice(list.indexOf(favorite),1);changed();render();};actions.append(remove);
+        const remove=document.createElement('button');remove.type='button';remove.className='favorite-delete';remove.textContent='×';remove.setAttribute('aria-label',L('削除を確認','Confirm deletion'));remove.onclick=()=>{if(armedDelete!==remove){disarm();armedDelete=remove;remove.textContent=L('削除','Delete');remove.setAttribute('aria-label',L('削除','Delete'));return;}list.splice(list.indexOf(favorite),1);changed();render();};actions.append(remove);
         card.favorite=favorite;grid.append(card);observer.observe(card);
       }
     }
@@ -39696,6 +39733,7 @@ function openEffectFavorites(target=null){
   pause();const project=S.project;
   J.openEffectFavorites({project,target,compose:composePlan,
     changed:()=>{autosave();},
+    configure:()=>{syncUI();renderTech();renderMediaEffects('foreground');renderMediaEffects('media');replan();},
     apply:payload=>{
       if(project!==S.project)return false;
       const cut=target.layer==='lyrics'?S.plan.cuts.find(c=>c.line===target.index&&c.part===target.part):S.plan[target.layer]?.cuts[target.index];

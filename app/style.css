@@ -743,7 +743,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #effectFavoritesDialog { width:min(980px,94vw); max-height:90dvh; padding:16px; overflow:auto; }
 #effectFavoritesDialog > header { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:8px; font-size:clamp(12px,1.6vw,16px); color:var(--muted); }
 #effectFavoritesDialog h2 { font-size:inherit; letter-spacing:.04em; }
-#effectFavoritesDialog .favorite-import, #effectFavoritesDialog .favorite-export { font-size:inherit; font-weight:600; color:inherit; background:transparent; border-color:var(--line); padding:4px 8px; }
+#effectFavoritesDialog .favorite-import, #effectFavoritesDialog .favorite-export, #effectFavoritesDialog .favorite-configure { font-size:inherit; font-weight:600; color:inherit; background:transparent; border-color:var(--line); padding:4px 8px; }
 #effectFavoritesDialog .favorite-import:hover, #effectFavoritesDialog .favorite-export:hover { color:var(--text); background:var(--raised); border-color:var(--line2); }
 #effectFavoritesDialog .favorite-close { margin-left:auto; }
 .favorite-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:12px; }

@@ -727,6 +727,7 @@ function openEffectFavorites(target=null){
   pause();const project=S.project;
   J.openEffectFavorites({project,target,compose:composePlan,
     changed:()=>{autosave();},
+    configure:()=>{syncUI();renderTech();renderMediaEffects('foreground');renderMediaEffects('media');replan();},
     apply:payload=>{
       if(project!==S.project)return false;
       const cut=target.layer==='lyrics'?S.plan.cuts.find(c=>c.line===target.index&&c.part===target.part):S.plan[target.layer]?.cuts[target.index];
