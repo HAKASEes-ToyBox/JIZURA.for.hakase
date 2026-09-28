@@ -38830,8 +38830,8 @@ new MutationObserver(sync).observe(document.body,{subtree:true,childList:true,at
 (() => {
 'use strict';
 const colors=['fg','bg','accent','accent2','sub','ink','dim'];
-const types=['rect','ellipse','line','text','source'];
-const numeric=['x','y','w','h','rotation','scale','opacity','lineWidth','size'];
+const types=['rect','ellipse','line','text','arcText','source'];
+const numeric=['x','y','w','h','rotation','scale','opacity','lineWidth','size','arc','contrast','bounce'];
 const allowed=new Set(['type',...numeric,'fill','stroke','text','font']);
 J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
 J.validateDrawing=program=>{
@@ -38871,7 +38871,20 @@ J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null}
       const x=value(node.x,.5)*W,y=value(node.y,.5)*H,w=value(node.w,.5)*W,h=value(node.h,.5)*H;
       ctx.translate(x,y);ctx.rotate(value(node.rotation,0)*Math.PI/180);const scale=value(node.scale,1);ctx.scale(scale,scale);ctx.globalAlpha*=J.clamp(value(node.opacity,1));
       ctx.fillStyle=color(node.fill);ctx.strokeStyle=color(node.stroke);ctx.lineWidth=Math.max(.01,value(node.lineWidth,.005)*u);
-      if(node.type==='text'){
+      if(node.type==='arcText'){
+        const str=node.text==='$note'?note:node.text==='$text'||node.text===undefined?text:node.text;
+        const chars=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(str)].map(s=>s.segment):[...str];
+        const arc=J.clamp(value(node.arc,140),1,300)*Math.PI/180,rx=Math.abs(w)/2,ry=Math.abs(h)/2;
+        const step=arc/Math.max(1,chars.length),base=Math.min(Math.abs(value(node.size,.15)*u),Math.min(rx,ry)*step*.82),contrast=J.clamp(value(node.contrast,.3),0,.6);
+        const f=J.FONTS[node.font||font];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+        chars.forEach((ch,i)=>{const angle=-Math.PI/2+(i-(chars.length-1)/2)*step;
+          const pulse=Math.sin(p*Math.PI*6-i*.7)*value(node.bounce,.035)*u;
+          const size=Math.max(1,base*(i%2===0?1+contrast:1-contrast));
+          ctx.save();ctx.translate(Math.cos(angle)*(rx+pulse),Math.sin(angle)*(ry+pulse));ctx.rotate(angle+Math.PI/2);
+          ctx.font=`${f?.weight||900} ${size}px ${f?.family||'sans-serif'}`;
+          if(node.stroke)ctx.strokeText(ch,0,0);ctx.fillText(ch,0,0);ctx.restore();
+        });
+      }else if(node.type==='text'){
         const str=node.text==='$note'?note:node.text==='$text'||node.text===undefined?text:node.text;
         const size=Math.max(1,Math.abs(value(node.size,.12)*u)),f=J.FONTS[node.font||font];
         ctx.font=`${f?.weight||600} ${size}px ${f?.family||'sans-serif'}`;ctx.textAlign='center';ctx.textBaseline='middle';
