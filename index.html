@@ -674,6 +674,7 @@ body.preview-fullscreen-open { overflow: hidden; }
     <div class="proj">
       <input id="songTitle" type="text" placeholder="曲名（タイトルカード・HUDに表示）" aria-label="曲名">
       <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
+      <input id="projectName" type="text" placeholder="プロジェクト名" aria-label="プロジェクト名" title="プロジェクト保存時のファイル名。保存すると更新されます">
     </div>
     <div class="modes" role="group" aria-label="表示モード">
       <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
@@ -1018,6 +1019,7 @@ body.preview-fullscreen-open { overflow: hidden; }
  <form method="dialog">
   <h2 id="filenameDlgTitle">ファイル名</h2>
   <label class="field filename-field">ファイル名<input id="saveFilename" type="text" maxlength="180" autocomplete="off"></label>
+  <label class="check"><input id="saveFilenameDate" type="checkbox"><span>ファイル名に日時を追加<small id="saveFilenamePreview"></small></span></label>
   <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
   <div class="terms-foot"><button value="cancel">キャンセル</button><button value="save" class="primary">保存</button></div>
  </form>
@@ -3673,6 +3675,7 @@ J.SAMPLE_LYRICS = `夜明けの色を/覚えてる
 J.defaultProject = () => ({
   version: 1,
   title: '', artist: '',
+  projectName: '',                // set when the project is saved; the next save's default file name
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
   themes: [],
@@ -41145,13 +41148,31 @@ function baseName() {
   const k = J.keyMode(S.project);
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
+// 「ファイル名に日時を追加」: _yyyyMMddHHmm (local time) before the extension; the choice is remembered here.
+const fileStamp = (d = new Date()) => '_' + [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()].map((v, i) => String(v).padStart(i ? 2 : 4, '0')).join('');
+function withFileStamp(filename) { const dot = filename.lastIndexOf('.'); return filename.slice(0, dot) + fileStamp() + filename.slice(dot); }
+function syncFilenamePreview() {
+  const ext = $('filenameDlg').dataset.ext || '.jizuraichi', name = J.exportFilename($('saveFilename').value, ext, baseName());
+  $('saveFilenamePreview').textContent = $('saveFilenameDate').checked ? J.mediaLabel('保存名：', 'Saved as: ') + withFileStamp(name) : '';
+}
+// Resolves { filename, name }: the file name to write, and its name without extension or added date.
 function requestFilename(kind) {
-  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings';
+  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings', ext = project ? '.jizuraichi' : '.json';
   $('filenameDlgTitle').textContent = J.mediaLabel(project ? 'プロジェクトを保存' : 'AE用に書き出し', project ? 'Save project' : 'Export for AE');
   if (kind === 'settings') $('filenameDlgTitle').textContent = J.mediaLabel('設定のみ書き出し', 'Export settings only');
-  $('saveFilename').value = baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '.jizuraichi' : '_ae.json');
+  // A saved project's name is the next project save's default.
+  const saved = kind === 'project' && S.project.projectName ? S.project.projectName : '';
+  $('saveFilename').value = (saved || baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '' : '_ae')) + ext;
+  dlg.dataset.ext = ext;
+  try { $('saveFilenameDate').checked = localStorage.getItem('jizura.filenameDate') === 'true'; } catch (e) {}
+  syncFilenamePreview();
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
-  return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
+  return new Promise(resolve=>dlg.addEventListener('close',()=>{
+    if (dlg.returnValue !== 'save') { resolve(null); return; }
+    const plain = J.exportFilename($('saveFilename').value, ext, baseName());
+    try { localStorage.setItem('jizura.filenameDate', String($('saveFilenameDate').checked)); } catch (e) {}
+    resolve({ filename: $('saveFilenameDate').checked ? withFileStamp(plain) : plain, name: plain.slice(0, -ext.length) });
+  },{once:true}));
 }
 function confirmHiddenLayers() {
   return !['foreground','lyrics','media'].some(layer=>S.project.layerVisibility?.[layer]===false) || window.confirm(J.mediaLabel('非表示のレイヤーは書き出しに含まれません。よろしいですか？','Hidden layers will not be included in the export. Continue?'));
@@ -41383,7 +41404,7 @@ function renderThemes() {
 }
 function syncUI() {
   renderThemes();
-  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
+  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || ''; $('projectName').value = S.project.projectName || '';
   $('lyrics').value = S.project.lyrics;
   $('bpm').value = S.project.timing.bpm > 0 ? S.project.timing.bpm : '';
   $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : 'なし';
@@ -41630,6 +41651,9 @@ function bind() {
   });
   $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; markUndoGroup('title'); replanSoon(300); });
   $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; markUndoGroup('artist'); replanSoon(300); });
+  $('projectName').addEventListener('input', e => { S.project.projectName = e.target.value; markUndoGroup('projectName'); replanSoon(300); });
+  $('saveFilename').addEventListener('input', syncFilenamePreview);
+  $('saveFilenameDate').addEventListener('change', syncFilenamePreview);
   $('btnSyntax').addEventListener('click', e => { const s = $('syntax'); s.hidden = !s.hidden; e.target.setAttribute('aria-expanded', String(!s.hidden)); });
   $('bpm').addEventListener('change', e => { S.project.timing.bpm = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
   $('offset').addEventListener('change', e => { S.project.timing.offset = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
@@ -41919,16 +41943,19 @@ function bind() {
   });
   $('btnSave').addEventListener('click', async () => {
     if (S.projectBusy) return;
-    const filename = await requestFilename('project'); if (!filename) return;
+    const request = await requestFilename('project'); if (!request) return;
     S.projectBusy = true; $('btnSave').disabled = true;
+    // The saved name (without an added date) becomes the project name, stored in the file too.
+    const previousName = S.project.projectName;
+    S.project.projectName = request.name; $('projectName').value = request.name;
     const project = JSON.parse(JSON.stringify(S.project)), audio = S.audioFile;
-    try { await J.saveFile(filename, await J.packProject(project, audio)); }
-    catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    try { await J.saveFile(request.filename, await J.packProject(project, audio)); autosave(); }
+    catch (err) { S.project.projectName = previousName; $('projectName').value = previousName || ''; toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
     finally { S.projectBusy = false; $('btnSave').disabled = false; }
   });
   $('btnSaveSettings').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
-    const filename = await requestFilename('settings'); if (!filename) return;
+    const filename = (await requestFilename('settings'))?.filename; if (!filename) return;
     S.projectBusy = true; $('btnSaveSettings').disabled = true;
     try { await J.saveFile(filename, await J.packProject(J.settingsProject(S.project), null)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
@@ -41956,7 +41983,7 @@ function bind() {
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
     if(!confirmHiddenLayers())return;
-    const filename = await requestFilename('ae'); if (!filename) return;
+    const filename = (await requestFilename('ae'))?.filename; if (!filename) return;
     try { await J.saveFile(filename, JSON.stringify(J.planForAE(S.plan, S.project), null, 1)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：','Could not save: ') + err.message); }
   });

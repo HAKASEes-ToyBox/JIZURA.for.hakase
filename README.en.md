@@ -29,6 +29,8 @@ Lyric syntax: `I remember/the dawn` makes a manual cut; `*word*` emphasizes a wo
 
 Use **Save** and **Open** for portable `.jizuraichi` projects containing settings, lyrics, imported images, videos, audio and font files. They restore assets in another browser or computer. Installed PC fonts selected by name still need to be installed separately. The Open dialog selects `.jizuraichi` files. Saving reports missing assets instead of producing an incomplete portable project. Browser autosave also restores the song. **New** lets you select an aspect ratio and start with empty lyrics, assets, audio and titles, default settings, and cleared undo/variation history. Save your current work before creating a new project. **Export for AE** creates arrangement data to import into the After Effects panel. Generated videos and images belong to their creators; rights to music and lyrics remain with their respective rights holders. Project files, lyrics and audio are handled in the browser. Google Fonts are loaded as needed. The tool is MIT licensed; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+The **Project name** next to the song title and artist is set to the saved file name (without its extension or an added date) when you save a project, and becomes the default name for the next save; you can also edit it directly. **Add date and time to the file name** in the save dialog appends `_yyyyMMddHHmm` (the time of saving), e.g. `my-project_202609281150.jizuraichi`; the choice is remembered in this browser.
+
 ## Stacking lyrics, line breaks and automatic areas
 
 Wrap multiple input lines in `{` and `}` to stack their cuts until the last lyric cut in the group disappears. Timeline boundaries and links retain their original timing.

@@ -4,6 +4,7 @@
     <div class="proj">
       <input id="songTitle" type="text" placeholder="曲名（タイトルカード・HUDに表示）" aria-label="曲名">
       <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
+      <input id="projectName" type="text" placeholder="プロジェクト名" aria-label="プロジェクト名" title="プロジェクト保存時のファイル名。保存すると更新されます">
     </div>
     <div class="modes" role="group" aria-label="表示モード">
       <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
@@ -347,6 +348,7 @@
  <form method="dialog">
   <h2 id="filenameDlgTitle">ファイル名</h2>
   <label class="field filename-field">ファイル名<input id="saveFilename" type="text" maxlength="180" autocomplete="off"></label>
+  <label class="check"><input id="saveFilenameDate" type="checkbox"><span>ファイル名に日時を追加<small id="saveFilenamePreview"></small></span></label>
   <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
   <div class="terms-foot"><button value="cancel">キャンセル</button><button value="save" class="primary">保存</button></div>
  </form>
