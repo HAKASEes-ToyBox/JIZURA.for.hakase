@@ -81,6 +81,7 @@
             typeof d === "string" ? d : d.id,
             `${layer}/${i}/decor`,
           );
+        if(cut.drawing)warnings.push(`${layer}/${i}: custom drawing requires visual theme review`);
         const motion = cut.mask?.motion;
         if (motion)
           for (const g of ["technique", "entrance", "departure"])
@@ -202,6 +203,26 @@
       .then((b) => new File([b], input.name, { type: input.type || b.type }));
   }
   window.JizuraMCP = {
+    favoriteSpec(){return J.favoriteAPI.spec();},
+    favoriteList(){return clone(S.project.effectFavorites||[]);},
+    favoriteValidate({payload}){return J.favoriteAPI.validate(payload);},
+    favoriteSave({name,payload,id,layer,index}){
+      if(!payload){const cut=cuts(layer)[index];if(!cut)throw Error('Cut not found');payload=J.cutEffectsPayload(cut,layer,S.plan);}
+      let result;mutate(()=>{result=J.favoriteAPI.save(S.project,{name,payload,id});});return {revision,favorite:result};
+    },
+    favoriteApply({id,layer,index}){
+      const favorite=S.project.effectFavorites?.find(f=>f.id===id),cut=cuts(layer)[index];
+      if(!favorite||!cut)throw Error('Favorite or cut not found');
+      return mutate(()=>J.pasteCutEffects(S.project,S.plan,layer,cut,J.favoriteAPI.validate(favorite.payload)));
+    },
+    favoriteDelete({id}){return mutate(()=>{const i=S.project.effectFavorites?.findIndex(f=>f.id===id);if(i==null||i<0)throw Error('Favorite not found');S.project.effectFavorites.splice(i,1);});},
+    async favoritePreview({id,payload,layer,index,time,width}){
+      if(!payload)payload=S.project.effectFavorites?.find(f=>f.id===id)?.payload;
+      if(!payload)throw Error('Favorite not found');A.pause();
+      try{return await J.favoriteAPI.preview({payload,project:S.project,target:layer?{layer,index}:null,time,width});}
+      finally{J.syncMediaPreview(S.plan,S.t,false);S.need=true;}
+    },
+
     state,
     candidates,
     audit,
@@ -499,6 +520,7 @@
         settings: J.projectSettings(S.project),
         themes: J.THEMES,
         defaults: J.defaultProject(),
+        favoriteSpec: J.favoriteAPI.spec(),
         detailKeys: J.cutDetailKeys,
         masks: J.MASK_SHAPES,
         copySources: J.mediaCopyItems("media"),
@@ -609,7 +631,8 @@
     },
     async import(input) {
       const f = await file(input);
-      if (input.kind === "project") await A.openProjectFile(f);
+      if(input.kind === "favorites") await J.favoriteAPI.import(S.project,f,input.mode||"append");
+      else if (input.kind === "project") await A.openProjectFile(f);
       else if (input.kind === "audio") {
         if (
           !(await A.loadAudioFile(f, {
@@ -698,7 +721,7 @@
       return audit();
     },
     async output({ kind, every = 1 }) {
-      if (!["project", "settings"].includes(kind) && !audit().ready)
+      if (!["project", "settings", "favorites"].includes(kind) && !audit().ready)
         throw Error(
           "Run audit, inspect preview images, and approve this revision before export",
         );
@@ -718,7 +741,8 @@
           onProgress: (value, message) =>
             window.mcpProgress?.({ value, message }),
         };
-        if (kind === "project")
+        if (kind === "favorites") blob = await J.exportEffectFavorites(S.project);
+        else if (kind === "project")
           blob = await J.packProject(S.project, S.audioFile);
         else if (kind === "settings")
           blob = await J.packProject(J.settingsProject(S.project), null);

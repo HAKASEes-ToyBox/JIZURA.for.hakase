@@ -142,3 +142,9 @@ npm test
 テストは公式MCPクライアント→stdio→ブラウザ→既存エンジンを通し、テーマ選択、素材・カット編集、プレビュー、各出力とプロジェクト再読み込みを確認します。生成物はOSの一時フォルダに保存します。
 
 任意の `JIZURA_TEST_VIDEO` / `JIZURA_TEST_FONT` にローカルファイルの絶対パスを設定すると、動画分割・シーク／フォント保存復元も検証します。依存関係を固定して再現する場合は `pnpm install --frozen-lockfile` を使用できます。
+
+## エージェント独自のお気に入り演出
+
+`favorite_spec` → `favorite_validate` → `favorite_save` → `favorite_preview` → `export_start(kind="favorites")` で独自演出を作成・確認し、`.jizuraichifav` として配布できます。プレビューはMCPの画像応答として返ります。既存演出の調整と、JSON描画プログラムによる新しい文字・図形・素材アニメーションに対応します。
+
+仕様・実例・ブラウザAPIは [エージェント向けお気に入り仕様](../docs/AGENT_FAVORITES.md) を参照してください。読み込みは `asset_import(kind="favorites", mode="append"|"replace")`。`favorite_list` / `favorite_apply` / `favorite_delete` で管理できます。

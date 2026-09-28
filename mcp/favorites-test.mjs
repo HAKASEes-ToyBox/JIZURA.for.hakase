@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
+import path from 'node:path';import os from 'node:os';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+const output=await mkdtemp(path.join(os.tmpdir(),'jizura-favorites-'));
+const transport=new StdioClientTransport({command:process.execPath,args:[path.resolve('mcp/server.mjs')],env:{...process.env,JIZURA_OUTPUT_DIR:output},stderr:'pipe'});transport.stderr?.on('data',b=>process.stderr.write(b));
+const client=new Client({name:'favorite-test',version:'1'});
+const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args},undefined,{timeout:120000});assert.ok(!r.isError,JSON.stringify(r));return r;};const json=r=>JSON.parse(r.content[0].text);
+try{
+ await client.connect(transport);const {session}=json(await call('session_create'));
+ const spec=json(await call('favorite_spec',{session}));assert.equal(spec.drawing.version,1);
+ const payload={format:'jizura-cut-effects',version:1,kind:'lyrics',native:{},details:{drawing:spec.drawing.example}};
+ await call('favorite_validate',{session,payload});
+ const bad=structuredClone(payload);bad.details.drawing.nodes[0].x='fetch("https://example.com")';assert.equal((await client.callTool({name:'favorite_validate',arguments:{session,payload:bad}})).isError,true);
+ const saved=json(await call('favorite_save',{session,name:'Agent pulse',payload})).favorite;
+ const before=json(await call('project_get',{session}));
+ const a=await call('favorite_preview',{session,id:saved.id,time:.5,width:640}),b=await call('favorite_preview',{session,id:saved.id,time:1.5,width:640});
+ assert.equal(a.content[1].type,'image');assert.notEqual(a.content[1].data,b.content[1].data);await writeFile(path.join(output,'preview.png'),Buffer.from(a.content[1].data,'base64'));
+ assert.deepEqual(json(await call('project_get',{session})),before);
+ await call('project_edit',{session,changes:[{path:['lyrics'],value:'Target|ruby'},{path:['durationOverride'],value:3}]});
+ await call('favorite_apply',{session,id:saved.id,layer:'lyrics',index:0});assert.ok(json(await call('project_get',{session})).cuts.lyrics[0].drawing);
+ const targetPreview=await call('favorite_preview',{session,id:saved.id,layer:'lyrics',index:0,time:.4});assert.equal(targetPreview.content[1].type,'image');
+ const media={format:'jizura-cut-effects',version:1,kind:'media',native:{technique:'none'},details:{drawing:{version:1,mode:'replace',nodes:[{type:'source',x:.5,y:.5,w:.9,h:.9,rotation:{from:-15,to:15}}]}}};
+ await call('favorite_save',{session,name:'Media spin',payload:media});const m=await call('favorite_preview',{session,payload:media,time:1});assert.equal(m.content[1].type,'image');
+ const {id:job}=json(await call('export_start',{session,kind:'favorites',filename:'agent.jizuraichifav'}));let result;
+ for(let n=0;n<100;n++){result=json(await call('job_status',{job}));if(result.status!=='running')break;await new Promise(r=>setTimeout(r,100));}assert.equal(result.status,'completed',JSON.stringify(result));
+ const fresh=json(await call('session_create')).session;
+ await call('asset_import',{session:fresh,kind:'favorites',path:result.path,mode:'replace'});const list=json(await call('favorite_list',{session:fresh}));assert.equal(list.length,2);assert.deepEqual(list[0].payload.details.drawing,payload.details.drawing);
+ const imported=await call('favorite_preview',{session:fresh,id:list[0].id,time:.5,width:640});assert.equal(imported.content[1].data,a.content[1].data);
+ await call('asset_import',{session:fresh,kind:'favorites',path:result.path,mode:'append'});assert.equal(json(await call('favorite_list',{session:fresh})).length,4);
+ await call('session_close',{session});await call('session_close',{session:fresh});console.log('Custom favorites MCP round trip passed:',output);
+}finally{await client.close();await transport.close();}

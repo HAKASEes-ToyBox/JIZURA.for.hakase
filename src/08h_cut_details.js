@@ -3,13 +3,14 @@
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
-  media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
+  lyrics: ['drawing','text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
+  media: ['drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
 // The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
 J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
+  if(details.drawing){J.validateDrawing(details.drawing);if(layer!=='lyrics'&&cut.technique==='legacy')cut.technique='none';}
   const copy = value => JSON.parse(JSON.stringify(value));
   if (layer === 'lyrics' && Number.isFinite(details.seed)) cut.seed=details.seed;
   if (details.trans && details.trans !== 'none' && details.trans !== cut.trans) {

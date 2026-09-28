@@ -20,7 +20,7 @@ function tool(name, description, inputSchema, fn) {
     }
   });
 }
-const workflow = `Create a session. Read catalog and project state. Set themes first; candidate IDs come from catalog/candidates, never invent them. Import audio, fonts and images/videos by absolute local paths. Set lyrics and project settings with project_edit (JSON path arrays). Inspect the generated cuts. Set cut start FRAMES using cut_timing after listening/using beats; beats alone do not identify lyric onsets. Arrange media cuts with manualCuts, cutCount, cutOverrides and timing.lineTimes (seconds) via project_edit. Use cut_update for placement, masks, chroma, blend, opacity and per-cut details. Generate with a seed, then inspect snapshots at entrances, holds, exits and boundaries. Evaluate readability, timing, composition, consistency and audio synchronization. Refine using theme candidates, inspect again, audit, then quality_approve with current revision and honest visual/audio review notes. Start export and poll job_status until completed. Project/settings saves do not require approval. Do not claim aesthetic quality from audit alone. Edits invalidate approval. No transcription service is included. State/cut properties and catalog defaults are the current engine schema. All local files remain on this machine; public Pages has no MCP endpoint.`;
+const workflow = `Create a session. Read catalog and project state. Set themes first; candidate IDs come from catalog/candidates, never invent them. Import audio, fonts and images/videos by absolute local paths. Set lyrics and project settings with project_edit (JSON path arrays). Inspect the generated cuts. Set cut start FRAMES using cut_timing after listening/using beats; beats alone do not identify lyric onsets. Arrange media cuts with manualCuts, cutCount, cutOverrides and timing.lineTimes (seconds) via project_edit. Use cut_update for placement, masks, chroma, blend, opacity and per-cut details. Generate with a seed, then inspect snapshots at entrances, holds, exits and boundaries. Evaluate readability, timing, composition, consistency and audio synchronization. Refine using theme candidates, inspect again, audit, then quality_approve with current revision and honest visual/audio review notes. Start export and poll job_status until completed. Project/settings saves do not require approval. Do not claim aesthetic quality from audit alone. Edits invalidate approval. No transcription service is included. State/cut properties and catalog defaults are the current engine schema. For custom favorites, read favorite_spec, author a JSON drawing program or capture a cut with favorite_save, validate, inspect favorite_preview images at several times, revise, and export_start kind favorites with a .jizuraichifav filename. Drawing programs are not JavaScript; theme audit cannot judge their aesthetic fit. All local files remain on this machine; public Pages has no MCP endpoint.`;
 tool("session_create", "Create isolated JIZURA browser project.", {}, () =>
   runtime.create(),
 );
@@ -98,11 +98,12 @@ tool(
 );
 tool(
   "asset_import",
-  "Import project/settings/audio/media/font from an absolute LOCAL path. Audio accepts video and extracts audio. For media, layer defaults to background.",
+  "Import project/settings/audio/media/font/favorites from an absolute LOCAL path. Favorites accept .jizuraichifav or project files; mode chooses append/replace. Audio accepts video and extracts audio. For media, layer defaults to background.",
   {
     session,
     path: z.string(),
-    kind: z.enum(["project", "settings", "audio", "media", "font"]),
+    mode: z.enum(["append","replace"]).default("append"),
+    kind: z.enum(["project", "settings", "audio", "media", "font", "favorites"]),
     layer: z.enum(["foreground", "media"]).default("media"),
     type: z.string().optional(),
     matchDuration: z.boolean().default(true),
@@ -274,6 +275,19 @@ server.registerTool(
     }
   },
 );
+
+for(const [name,method,description] of [
+  ['favorite_spec','favoriteSpec','Get the portable favorite format and drawing-program authoring specification.'],
+  ['favorite_list','favoriteList','List saved favorites including payloads.']
+])tool(name,description,{session},a=>runtime.call(a.session,method,a));
+tool('favorite_validate','Validate an authored favorite payload without saving.',{session,payload:z.record(z.unknown())},a=>runtime.call(a.session,'favoriteValidate',a));
+tool('favorite_save','Create/update a named favorite from a payload or capture a cut. Read favorite_spec first.',{session,name:z.string().max(200),id:z.string().optional(),payload:z.record(z.unknown()).optional(),layer:layer.optional(),index:z.number().int().nonnegative().optional()},a=>runtime.call(a.session,'favoriteSave',a));
+tool('favorite_apply','Apply a favorite to a compatible cut, keeping its text/material, timing and placement.',{session,id:z.string(),layer,index:z.number().int().nonnegative()},a=>runtime.call(a.session,'favoriteApply',a));
+tool('favorite_delete','Delete a saved favorite.',{session,id:z.string()},a=>runtime.call(a.session,'favoriteDelete',a));
+server.registerTool('favorite_preview',{description:'Render a favorite or draft payload as a PNG image without changing the project. time is seconds within the cut; omit target for sample lyrics/image. Inspect multiple times before export.',inputSchema:{session,id:z.string().optional(),payload:z.record(z.unknown()).optional(),layer:layer.optional(),index:z.number().int().nonnegative().optional(),time:z.number().nonnegative().default(1),width:z.number().int().min(160).max(1920).default(640)}},async a=>{
+  try{const {data,...info}=await runtime.call(a.session,'favoritePreview',a);return {content:[{type:'text',text:JSON.stringify(info)},{type:'image',mimeType:'image/png',data}]};}
+  catch(e){return {isError:true,content:[{type:'text',text:e.message}]};}
+});
 tool(
   "quality_approve",
   "Record AGENT visual/audio review after inspecting previews and passing audit. Never approve without actually reviewing. Any edit invalidates this approval.",
@@ -282,12 +296,13 @@ tool(
 );
 tool(
   "export_start",
-  "Save project/settings or export MP4, PNG ZIP, transparent PNG ZIP, AE plan JSON. Returns async job; poll status. Final renders require quality approval. Existing files never overwritten.",
+  "Save project/settings/favorites (.jizuraichifav) or export MP4, PNG ZIP, transparent PNG ZIP, AE plan JSON. Returns async job; poll status. Final renders require quality approval. Existing files never overwritten.",
   {
     session,
     kind: z.enum([
       "project",
       "settings",
+      "favorites",
       "mp4",
       "png",
       "png-transparent",

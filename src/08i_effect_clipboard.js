@@ -2,8 +2,8 @@
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
-const mediaKeys=['layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
+const lyricKeys=['drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
+const mediaKeys=['drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
   const result = [];
@@ -38,6 +38,7 @@ J.readCutEffects=text=>{
   if(data?.format!=='jizura-cut-effects'||data.version!==1||!['lyrics','media'].includes(data.kind)||!data.details||typeof data.details!=='object'||Array.isArray(data.details))throw Error('invalid');
   const payload=J.cutEffectsPayload({...data.details,...data.native},data.kind);
   const d=payload.details,n=payload.native;
+  if(d.drawing) d.drawing=J.validateDrawing(d.drawing);
   if(!Object.keys(d).length)throw Error('invalid');
   if(data.kind==='lyrics'){
     for(const key of ['params','effectStyle','effectFx'])if(d[key]!==undefined&&(!d[key]||typeof d[key]!=='object'||Array.isArray(d[key])))throw Error('invalid');
