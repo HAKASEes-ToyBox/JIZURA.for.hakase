@@ -62,7 +62,7 @@ MCPクライアントの設定例（パスは自身の環境の絶対パスへ�
 | プロジェクト・設定・音源・動画・画像・フォント読み込み | asset_import |
 | 全設定編集 | project_edit |
 | おまかせ作成 | generate |
-| 歌詞・無表示・前景・背景の挿入 | cut_insert |
+| 歌詞・前景・背景の挿入、歌詞をその位置で終える（blank） | cut_insert |
 | 開始フレーム・リンク | cut_timing / boundary_link |
 | 分割・削除 | cut_split / cut_delete |
 | カット設定・マスク・合成 | cut_update |

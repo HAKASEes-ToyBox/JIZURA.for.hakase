@@ -28,7 +28,7 @@ try{for(const lang of ['','en/']){
   check(!errors.length,`${name}: page errors ${errors}`);await page.close();};
  const typeAt=async(p,{line,where='end',text,enterFirst=true})=>{await p.evaluate(({line,where})=>{const el=document.getElementById('lyrics'),rows=el.value.split('\n');let pos=0;for(let i=0;i<line;i++)pos+=rows[i].length+1;if(where==='end')pos+=rows[line].length;el.focus();el.setSelectionRange(pos,pos);},{line,where});
   if(enterFirst){await p.keyboard.press('Enter');await p.keyboard.type(text,{delay:10});}else{await p.keyboard.type(text,{delay:10});await p.keyboard.press('Enter');}};
- const insertAt=async(p,t,text)=>{await p.evaluate(t=>{J.uiApi.pause();J.uiApi.seek(t);},t);await p.waitForTimeout(100);await p.locator('#insertLyricAtPlayhead').click();await p.locator('#insertCutDialog textarea').fill(text);await p.locator('#insertCutDialog button[type=submit]').click();await p.waitForTimeout(300);};
+ const insertAt=async(p,t,text)=>{await p.evaluate(t=>{J.uiApi.pause();J.uiApi.seek(t);},t);await p.waitForTimeout(100);await p.locator('[data-playhead-menu="insert"]').click();await p.locator('#insertLyricAtPlayhead').click();await p.locator('#insertCutDialog textarea').fill(text);await p.locator('#insertCutDialog button[type=submit]').click();await p.waitForTimeout(300);};
  const startOf=(r,text)=>r.lines.find(l=>l.text===text)?.start;
  const span=(r,text)=>{const c=r.cuts[text]||[];return c.length?[Math.min(...c.map(x=>x.start)),Math.max(...c.map(x=>x.end))]:[NaN,NaN];};
  // Typing
@@ -36,8 +36,6 @@ try{for(const lang of ['','en/']){
  await scenario('type new line (tapped)',{tapped:true},p=>typeAt(p,{line:1,text:'新しい行'}),(r,ok)=>{ok(startOf(r,'新しい行')===7,'midway');ok(startOf(r,LINES[2])===9,'following line kept');});
  await scenario('type then Enter before a line',{tapped:true},p=>typeAt(p,{line:2,where:'start',text:'新しい行',enterFirst:false}));
  await scenario('split a line',{tapped:true},async p=>{await p.evaluate(()=>{const el=document.getElementById('lyrics'),i=el.value.indexOf('遠くで');el.focus();el.setSelectionRange(i,i);});await p.keyboard.press('Enter');});
- await scenario('type next to an empty cut',{tapped:true},async p=>{await p.evaluate(()=>{J.uiApi.pause();J.uiApi.seek(7.2);});await p.locator('#insertBlankAtPlayhead').click();await p.waitForTimeout(200);await typeAt(p,{line:1,text:'新しい行'});},
-  (r,ok)=>{const [s,e]=span(r,'新しい行');ok(s<7.2&&e<=7.2+1e-6&&e-s>=.5,'stays before the empty cut '+s+'-'+e);});
  // Insert at playhead
  await scenario('insert mid line',{tapped:true},p=>insertAt(p,6.3,'挿入した歌詞'),(r,ok)=>{
   const [s,e]=span(r,'挿入した歌詞');ok(Math.abs(s-6.3)<1e-6&&Math.abs(e-9)<1e-6,`runs to the next line ${s}-${e}`);

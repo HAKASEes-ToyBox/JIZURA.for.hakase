@@ -200,7 +200,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     const rng = J.rng(seed), reroll = ov.seed != null;
     const videoDuration = videoDurationAt(i);
     const nextStart = i + 1 < count ? starts[i + 1] : duration;
-    return { index: i, itemId: item ? item.id : null, sourceItemId: baseItems[i]?.id || null, name: item ? item.name : '画像無し', type: item ? item.type : null, start: starts[i], end: videoDuration != null ? Math.min(nextStart, starts[i] + videoDuration) : nextStart, videoDuration,
+    return { index: i, itemId: item ? item.id : null, sourceItemId: baseItems[i]?.id || null, name: item ? item.name : '画像無し', type: item ? item.type : null, start: starts[i], end: J.cutEndTime(ov) != null ? Math.max(starts[i] + .04, Math.min(J.cutEndTime(ov), duration)) : videoDuration != null ? Math.min(nextStart, starts[i] + videoDuration) : nextStart, manualEnd: J.cutEndTime(ov) != null, videoDuration,
       layout: ov.layout === 'stretch' ? 'cover' : J.MEDIA_LAYOUT[ov.layout] ? ov.layout : reroll ? rng.pick(Object.keys(J.MEDIA_LAYOUT)) : 'contain', enter: ov.enter || (reroll ? rng.pick(Object.keys(J.MEDIA_ENTER)) : 'cut'),
       hold: ov.hold || (reroll ? rng.pick(Object.keys(J.MEDIA_HOLD)) : 'still'), exit: ov.exit || (reroll ? rng.pick(Object.keys(J.MEDIA_EXIT)) : 'cut'),
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
@@ -260,7 +260,14 @@ J.mediaInsertChoices = (project,layer) => {
   const selected=m.insertSources || {files:true};
   return [...(selected.files && m.items.length?['files']:[]),...J.mediaCopyItems(layer).filter(item=>selected[item.id]).map(item=>item.id)];
 };
-J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
+// The topmost (latest-starting) cut showing at t; cuts with their own end time may overlap.
+J.mediaAt = (plan, t, layer = 'media') => {
+  const cuts = plan[layer]?.cuts || [];
+  for (let i = cuts.length - 1; i >= 0; i--) if (t >= cuts[i].start && t < cuts[i].end) return cuts[i];
+  return null;
+};
+// All cuts showing at t, bottom first.
+J.mediaCutsAt = (plan, t, layer = 'media') => (plan[layer]?.cuts || []).filter(c => t >= c.start && t < c.end);
 J.mediaVideoTime = (cut, t, duration) => {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   const offset = Number.isFinite(+cut.videoStart) ? J.clamp(+cut.videoStart,0,Math.max(0,duration-0.001)) : 0;
@@ -477,8 +484,8 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
-J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
-  const cut = J.mediaAt(plan, t, layer); if (!J.mediaSourceAvailable(cut)) return false;
+J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = J.mediaAt(plan, t, layer)) => {
+  if (!J.mediaSourceAvailable(cut)) return false;
   owner ||= {};
   const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
@@ -515,10 +522,10 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
   return true;
 };
 // Use the same keyed transition masking for the displayed and copied foreground.
-J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
-  const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
+J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false, foregroundCut=J.mediaAt(plan,t,'foreground')) => {
+  if(!foregroundCut)return false;
   const cw=lx.canvas.width,ch=lx.canvas.height;
-  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
+  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit, foregroundCut);
   if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut, t, plan);
   const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
   if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {

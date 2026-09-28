@@ -20,7 +20,7 @@ const assert = require('node:assert/strict');
         const plan = J.plan(p), group = plan.cuts.filter(c => c.group != null);
         check(group.length === 4, 'separate phrase cuts must remain in the timeline');
         check(group.every(c => c.displayEnd === 6), 'a group lasts through its last lyric cut');
-        check(group[0].end < group[0].displayEnd, 'retention must not change timeline boundaries');
+        check(group.every(c => c.end === c.displayEnd), '1シーン: every cut of the group ends with its last lyric cut');
         check(J.lyricCutsAt(plan,4.5).length === 4 && J.lyricCutsAt(plan,.1).length === 1, 'seek backward and forward must reconstruct the stack');
         check(J.lyricCutsAt(plan,6).every(c => c.group == null), 'group disappears at its end');
         const multiline = plan.cuts.filter(c => c.line === 3);

@@ -215,13 +215,14 @@ J.finishLyricPlan = (project, plan, audio) => {
     if (!groups.has(cut.group)) groups.set(cut.group, []);
     groups.get(cut.group).push(cut);
   }
+  // 1シーン: every cut of the group ends with its last cut (unless given its own end time). Placement below
+  // still uses each cut's own slot; the ends are extended at the end.
   plan.retainedCutIndices = [];
   for (const cuts of groups.values()) {
     const last = cuts[cuts.length - 1];
     for (const cut of cuts) {
-      cut.displayEnd = last.end;
-      cut.groupExit = last.exit;
-      cut.groupOutDur = last.outDur;
+      cut.displayEnd = cut.manualEnd ? cut.end : last.end;
+      if (!cut.manualEnd) { cut.groupExit = last.exit; cut.groupOutDur = last.outDur; }
       plan.retainedCutIndices.push(cut.index);
     }
   }
@@ -268,6 +269,10 @@ J.finishLyricPlan = (project, plan, audio) => {
       }, plan.style);
       if (cut.text.includes('\n')) cut.params.sx = 1;
     }
+  }
+  for (const index of plan.retainedCutIndices) {
+    const cut = plan.cuts[index];
+    if (cut.displayEnd > cut.end) { cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
   }
 };
 
@@ -361,21 +366,14 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 };
 
 // Timing/linking uses the original start/end; rendering alone extends a group's
-// lifetime. Store indices rather than references to avoid duplicating cut graphs.
+// Every lyric cut shown at t: overlapping cuts (1シーン groups, own end times) are all included.
 J.lyricCutsAt = (plan, t) => {
-  const current = J.cutAt(plan, t), cuts = [];
   const inserted=plan.cuts.find(c=>c.insertedAtPlayhead && t>=c.start && t<c.end);
   if(inserted)return [inserted];
-  if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
-  for (const index of plan.retainedCutIndices || []) {
-    const cut = plan.cuts[index];
-    if (cut && cut.start <= t && t < cut.displayEnd) cuts.push(cut);
-  }
-  if (current && !current.blank && !cuts.includes(current)) cuts.push(current);
-  return cuts.sort((a, b) => a.index - b.index);
+  return plan.cuts.filter(c => !c.blank && c.start <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
 };
 J.lyricRenderCut = cut => cut.displayEnd != null ? Object.assign({}, cut, {
   end: cut.displayEnd, dur: cut.displayEnd - cut.start,
-  exit: cut.groupExit, outDur: cut.groupOutDur,
+  exit: cut.groupExit ?? cut.exit, outDur: cut.groupOutDur ?? cut.outDur,
 }) : cut;
 })();

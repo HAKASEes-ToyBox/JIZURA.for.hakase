@@ -186,7 +186,7 @@ server.registerTool(
 );
 tool(
   "cut_insert",
-  "Insert lyric/blank/media cut at a frame until next cut. Media asset IDs come from project_get or catalog copySources.",
+  "Insert a lyric or media cut at a frame until the next cut; blank=true ends the lyric showing at the frame (its end time) instead. Media asset IDs come from project_get or catalog copySources.",
   {
     session,
     layer,

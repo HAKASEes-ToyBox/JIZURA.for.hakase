@@ -7,12 +7,12 @@ const E = J.E;
 
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
+// The latest-starting cut still showing at t (cuts may overlap).
 J.cutAt = (plan, t) => {
   const cs = plan.cuts; let lo = 0, hi = cs.length - 1, ans = -1;
   while (lo <= hi) { const m = (lo + hi) >> 1; if (cs[m].start <= t) { ans = m; lo = m + 1; } else hi = m - 1; }
-  if (ans < 0) return null;
-  const c = cs[ans];
-  return t < c.end ? c : null;
+  for (let i = ans; i >= 0; i--) if (t < cs[i].end) return cs[i];
+  return null;
 };
 
 class Renderer {
@@ -61,16 +61,20 @@ class Renderer {
     const W = plan.W, H = plan.H, scale = opt.scale || 1;
     const cw = ctx.canvas.width, ch = ctx.canvas.height;
     const foregroundCut = plan.foreground && J.mediaAt(plan, t, 'foreground');
-    if (!opt.noForeground && foregroundCut && J.mediaAssets.has(foregroundCut.itemId)) {
+    if (!opt.noForeground && foregroundCut && J.mediaCutsAt(plan, t, 'foreground').some(c => J.mediaAssets.has(c.itemId))) {
       const step = J.stepDur(plan.fx, plan.fps);
       const frontmost = !opt.noLyrics && J.lyricCutsAt(plan, Math.floor(t / step + 1e-6) * step).some(c => c.frontmost);
       this.frame(ctx, plan, t, Object.assign({}, opt, { noForeground: true, lyricLayer: 'below' }));
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
-      const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
-      J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = foregroundCut.opacity / 100;
-      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[foregroundCut.blend] || 'source-over';
-      ctx.drawImage(layer, 0, 0); ctx.restore();
+      const lx = layer.getContext('2d');
+      // Overlapping foreground cuts (own end times) composite bottom first, each with its own opacity and blend.
+      for (const cut of J.mediaCutsAt(plan, t, 'foreground').filter(c => J.mediaAssets.has(c.itemId))) {
+        lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
+        J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit, cut);
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = cut.opacity / 100;
+        ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
+        ctx.drawImage(layer, 0, 0); ctx.restore();
+      }
       if (frontmost) {
         // Blend frontmost cuts against the finished foreground, not against a
         // transparent intermediate layer where Multiply/Overlay lose meaning.
@@ -79,7 +83,7 @@ class Renderer {
       return;
     }
     const mediaCut = !opt.noMedia && !opt.transparent && plan.media && J.mediaAt(plan, t);
-    const backgroundMedia = J.mediaSourceAvailable(mediaCut);
+    const backgroundMedia = !!mediaCut && J.mediaCutsAt(plan, t, 'media').some(J.mediaSourceAvailable);
     const effectCut = J.cutAt(plan,t);
     const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style, fps = plan.fps;
     // motion is quantised to 'koma' drawings per second (24fps timebase); random flicker runs on a <=24Hz clock
@@ -110,12 +114,17 @@ class Renderer {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
       const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
-      const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
-      J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
-      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut, t, plan);
-      ctx.globalAlpha=mediaCut.opacity/100;
-      ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
-      ctx.drawImage(mediaLayer,0,0);ctx.restore();
+      const mx=mediaLayer.getContext('2d');
+      // Overlapping background cuts composite bottom first, each with its own mask, opacity and blend.
+      for (const cut of J.mediaCutsAt(plan, t, 'media').filter(J.mediaSourceAvailable)) {
+        mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
+        J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit, cut);
+        if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, cut, t, plan);
+        ctx.globalAlpha=cut.opacity/100;
+        ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[cut.blend] || 'source-over';
+        ctx.drawImage(mediaLayer,0,0);
+      }
+      ctx.restore();
     }
     else if (hidden.media===false && !opt.transparent) { ctx.fillStyle='#000';ctx.fillRect(0,0,W,H); }
     else if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
@@ -133,11 +142,6 @@ class Renderer {
         ctx.drawImage(this.paper(W, H), 0, 0, W, H);
         ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
-    }
-    if (mainCut && mainCut.blank && !activeCuts(tq).length) {
-      ctx.restore();
-      if (key && !opt.noPost && !backgroundMedia) this.keyFinish(ctx, key, opt);
-      return;
     }
     // ---------- camera & chroma amounts ----------
     const u = H / 1080;
