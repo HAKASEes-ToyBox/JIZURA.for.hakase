@@ -39,5 +39,6 @@ assert.deepEqual(result.failures,[]);
 await page.locator('#modePro').click();await page.locator('[data-tab="mediaFx"]').click();
 const cinema=page.locator('#mediaEffectsPanel [data-media-group="cinema"]');assert.equal((await cinema.locator('.tg-name').textContent()).trim(),lang?'Camera':'カメラ');await cinema.locator('summary').click();
 const row=cinema.locator('[data-media-tech="cam_orbitDrift"] + span');assert.ok((await row.textContent()).startsWith(lang?'Camera: ':'カメラ：'));
-assert.equal(await cinema.locator('[data-media-tech="cam_hrNervous"]').isChecked(),false);
+// Themes now decide the candidates; the default check follows the random rule (no hidden pack switches).
+assert.equal(await cinema.locator('[data-media-tech="cam_hrNervous"]').isChecked(),await page.evaluate(()=>J.randomOk(J.defaultProject(),'cam','hrNervous')));
 assert.deepEqual(errors,[]);console.log(lang||'ja',JSON.stringify({count:result.count,optional:result.optional,cinema:await cinema.locator('.tg-cnt').textContent()}));await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

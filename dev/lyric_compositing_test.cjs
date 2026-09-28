@@ -13,7 +13,7 @@ const assert = require('node:assert/strict');
         const check=(ok,message)=>{if(!ok)throw new Error(message);};
         const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
         const p=J.defaultProject();p.lyrics='[00:00]Same words';p.videoSize={w:320,h:180};
-        p.fx={...p.fx,koma:0,chroma:0,texture:0,hud:'off',density:1};p.overrides={0:{single:true}};
+        p.fx={...p.fx,koma:0,chroma:0,texture:0,hud:'off',density:1};p.overrides={0:{single:true}};p.lyricEffects={autoPlacement:false};// full-stage lyrics: the probe samples the centre
         const defaults=J.plan(p).cuts[0];
         check(defaults.blend==='normal'&&defaults.opacity===100,'new cuts default to Normal and 100%');
         const values=plan=>plan.cuts.filter(c=>Number.isInteger(c.part)).map(c=>({blend:c.blend,opacity:c.opacity}));

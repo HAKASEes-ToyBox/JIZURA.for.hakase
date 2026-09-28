@@ -272,7 +272,8 @@ J.finishLyricPlan = (project, plan, audio) => {
   }
   for (const index of plan.retainedCutIndices) {
     const cut = plan.cuts[index];
-    if (cut.displayEnd > cut.end) { cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
+    // slotEnd keeps the cut's own slot (what placement used) once its end follows the group.
+    if (cut.displayEnd > cut.end) { cut.slotEnd = cut.end; cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
   }
 };
 

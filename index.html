@@ -5162,7 +5162,9 @@ const seekMediaVideo = async (v, target, signal) => {
     v.currentTime = target;
     // Some mobile decoders need playback to produce the first frame. Rewind
     // to the requested frame before resolving; the project clock stays paused.
-    if(v.readyState<2)v.play().then(()=>{if(done)v.pause();else ok();}).catch(fail);
+    // An interrupted play() (e.g. the preview sync pausing the element) is not
+    // fatal: the seeked/canplay events or the timeout still settle the seek.
+    if(v.readyState<2)v.play().then(()=>{if(done)v.pause();else ok();}).catch(()=>{if(!done)ok();});
     ok();
   });
 };
@@ -5637,7 +5639,8 @@ J.finishLyricPlan = (project, plan, audio) => {
   }
   for (const index of plan.retainedCutIndices) {
     const cut = plan.cuts[index];
-    if (cut.displayEnd > cut.end) { cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
+    // slotEnd keeps the cut's own slot (what placement used) once its end follows the group.
+    if (cut.displayEnd > cut.end) { cut.slotEnd = cut.end; cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
   }
 };
 

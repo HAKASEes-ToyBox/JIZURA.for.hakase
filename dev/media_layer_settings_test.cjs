@@ -34,9 +34,11 @@ const assert = require('node:assert/strict');
       const snapshot = layer => page.evaluate(layer => ({project:J.ui.project[layer],cuts:J.ui.plan[layer].cuts}), layer);
       for (const layer of ['foreground','media']) {
         const initial = await snapshot(layer);
-        assert.deepEqual(initial.project.effects, legacy.mediaEffects, 'old shared values must survive migration');
+        // Settings added since then take their defaults; every old shared value survives.
+        const kept = effects => Object.fromEntries(Object.keys(legacy.mediaEffects).map(key => [key, effects[key]]));
+        assert.deepEqual(kept(initial.project.effects), legacy.mediaEffects, 'old shared values must survive migration');
         assert.ok(initial.cuts.every(c => c.technique === 'neonContour' && c.placement === null));
-        assert.ok(initial.cuts.every(c => JSON.stringify(c.effectSettings) === JSON.stringify(legacy.mediaEffects)));
+        assert.ok(initial.cuts.every(c => JSON.stringify(kept(c.effectSettings)) === JSON.stringify(legacy.mediaEffects)));
       }
       assert.equal(await page.evaluate(() => J.ui.project.foreground.effects.enabled === J.ui.project.media.effects.enabled), false);
       assert.equal(await page.evaluate(() => Object.hasOwn(J.ui.project, 'mediaEffects')), false);
@@ -49,7 +51,7 @@ const assert = require('node:assert/strict');
         assert.equal(await panel.isVisible(), true);
         assert.equal(await page.locator(`#${other}EffectsPanel`).isVisible(), false);
         assert.equal(await panel.locator('[data-media-tech]').count(), await page.evaluate(()=>Object.keys(J.MEDIA_TECH).length));
-        assert.equal(await panel.locator('details[data-media-group]').count(),8);
+        assert.equal(await panel.locator('details[data-media-group]').count(),9);// 8 technique categories + 装飾
         assert.equal(await panel.locator('details[open]').count(),0,'categories initially collapse independently per layer');
         assert.equal(await panel.locator('[data-media-tech]').first().isVisible(),false);
         const cinema = panel.locator('[data-media-group="cinema"]'), total = await cinema.locator('[data-media-tech]').count();
@@ -149,7 +151,8 @@ const assert = require('node:assert/strict');
         const uiChecks=await panel.locator('[data-media-tech]').evaluateAll(inputs=>Object.fromEntries(inputs.map(el=>[el.dataset.mediaTech,el.checked])));
         assert.deepEqual(uiChecks,effects.enabled,'omakase updates visible checkbox state');
         for(const group of await panel.locator('details').all()) {
-          const total=await group.locator('[data-media-tech]').count(), on=await group.locator('[data-media-tech]:checked').count();
+          const input=await group.getAttribute('data-media-group')==='decor'?'[data-media-decor]':'[data-media-tech]';// 装飾 counts decorations
+          const total=await group.locator(input).count(), on=await group.locator(input+':checked').count();
           assert.equal(await group.locator('.tg-cnt').innerText(),`${on}/${total}`);
         }
       }

@@ -7,7 +7,7 @@ try{
 const setup=(layer,overrides,decor,decorEnabled)=>{const p=J.defaultProject(),m=p[layer];m.items=[{id:'a',name:'a.png',type:'image',width:160,height:90},{id:'b',name:'b.png',type:'image',width:160,height:90}];m.manualCuts=true;m.cutCount=overrides.length;m.timing.lineTimes=Object.fromEntries(overrides.map((_,i)=>[i,i*2]));m.cutOverrides=Object.fromEntries(overrides.map((o,i)=>[i,{itemId:i%2?'b':'a',entrance:'none',departure:'none',...o}]));m.effects={...J.mediaEffectSettings(p,layer),decor,...(decorEnabled?{decorEnabled}:{})};return p;};
 const cuts=(p,layer)=>{const plan=J.plan(p);return J.planMedia(p,plan,null,layer).cuts;};
 for(const layer of ['foreground','media']){
- check(J.mediaEffectSettings(J.defaultProject(),layer).decor===false,layer+' default off');
+ check(J.mediaEffectSettings(J.defaultProject(),layer).decor===true&&J.mediaEffectSettings({[layer]:{effects:{decor:false}}},layer).decor===false,layer+' default on, can be turned off');
  const autos=Array.from({length:12},()=>({technique:null}));
  check(cuts(setup(layer,autos,false),layer).every(c=>Array.isArray(c.decor)&&!c.decor.length),layer+' off gives no decor');
  const on=cuts(setup(layer,autos,true),layer),pool=J.mediaDecorCandidates(J.defaultProject(),layer);
@@ -52,12 +52,12 @@ check(warnings.filter(w=>w.includes('media decor')).length===0,'decor warnings '
 }finally{console.warn=warn}
 return failures;});
 assert.deepEqual(result,[]);
-// UI: the option sits in Details → Foreground / Background, off by default; manual decor via cut details.
+// UI: the option sits in Details → Foreground / Background, on by default; manual decor via cut details.
 await page.locator('#modePro').click();
 for(const layer of ['foreground','media']){
  await page.locator(`[data-tab="${layer}Fx"]`).click();const box=page.locator(`#${layer}EffectsPanel [data-media-setting="decor"]`);
- assert.equal(await box.isChecked(),false);assert.ok((await box.locator('xpath=..').textContent()).startsWith(lang?'Enable decorations':'装飾を有効にする'));
- await box.check();assert.equal(await page.evaluate(layer=>J.ui.project[layer].effects.decor,layer),true);await box.uncheck();
+ assert.equal(await box.isChecked(),true);assert.ok((await box.locator('xpath=..').textContent()).startsWith(lang?'Enable decorations':'装飾を有効にする'));
+ await box.uncheck();assert.equal(await page.evaluate(layer=>J.ui.project[layer].effects.decor,layer),false);await box.check();assert.equal(await page.evaluate(layer=>J.ui.project[layer].effects.decor,layer),true);await box.uncheck();
  const group=page.locator(`#${layer}EffectsPanel [data-media-group="decor"]`);assert.equal((await group.locator('.tg-name').textContent()),lang?'Decoration':'装飾');await group.locator('summary').click();
  const front=await page.evaluate(()=>J.order('decor').filter(k=>J.DECOR[k]).map(k=>J.DECOR[k].layer==='front'));assert.deepEqual(await group.locator('[data-media-decor]').evaluateAll(els=>els.map(e=>e.checked)),front);
  assert.equal(await group.locator('.tg-cnt').textContent(),front.filter(Boolean).length+'/'+front.length);

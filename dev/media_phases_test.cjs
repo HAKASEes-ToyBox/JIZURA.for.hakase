@@ -17,9 +17,12 @@ const assert=require('node:assert/strict');
    await page.locator('.media-technique').selectOption('beatPulse');
    await enter.selectOption('enter_flipX');await exit.selectOption('exit_fade');
    assert.deepEqual(await page.evaluate(layer=>{const c=J.ui.plan[layer].cuts[0];return [c.hold,c.enter,c.exit,c.bpm]},layer),['beatPulse','flipX','fade',120]);
+   // BPM is a song setting in the 歌詞・曲 tab.
+   await page.locator('#sourceLyrics').click();
    await page.locator('#bpm').fill('180');await page.locator('#bpm').dispatchEvent('change');
    assert.equal(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].bpm,layer),180);
    await page.locator('#bpm').fill('');await page.locator('#bpm').dispatchEvent('change');
+   await page.locator(layer==='foreground'?'#sourceForeground':'#sourceMedia').click();
    await page.locator(`[data-tab="${layer}Fx"]`).click();
    await page.locator(`#${layer}EffectsPanel [data-media-action="shuffle"]`).click();
    assert.equal(await enter.inputValue(),'enter_flipX');assert.equal(await exit.inputValue(),'exit_fade');
@@ -53,7 +56,8 @@ const assert=require('node:assert/strict');
    }
    for(const [key] of Object.entries(J.MEDIA_TECH).filter(([,d])=>d.group==='bpm')) {
     const c=plan({technique:key,entrance:'none',departure:'none',placement:{cx:.5,cy:.5,w:.4}},120);
-    check(raster(c,1.01)!==raster(c,key==='beatStep'?1.63:1.13),key+': visible beat motion');
+    // beatFlip turns only in the 4th beat of each bar (1.5–2 s at 120 BPM).
+    check(key==='beatFlip'?raster(c,1.51)!==raster(c,1.75):raster(c,1.01)!==raster(c,key==='beatStep'?1.63:1.13),key+': visible beat motion');
     const state=(cut,t)=>J.mediaBeatState(cut,(t-cut.start)/(cut.end-cut.start),120,80);
     const a=state(c,1.125),b=state({...c,start:.7,end:6.1},1.125),fast=state({...c,bpm:240},.5625);
     for(const k of Object.keys(a)){check(Math.abs(a[k]-b[k])<1e-9,key+': absolute clock '+k);check(Math.abs(a[k]-fast[k])<1e-9,key+': BPM speed '+k)}

@@ -5,6 +5,21 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
+// Same extensions the JIZURA app uses when saving/exporting each kind.
+const EXPORT_EXT = {
+  project: ".jizuraichi",
+  settings: ".jizuraichi",
+  favorites: ".jizuraichifav",
+  mp4: ".mp4",
+  png: ".zip",
+  "png-transparent": ".zip",
+  ae: ".json",
+};
+export function exportName(filename, kind) {
+  const ext = EXPORT_EXT[kind];
+  if (!ext || filename.toLowerCase().endsWith(ext)) return filename;
+  return filename.replace(/\.(jizuraichifav|jizuraichi|jizura|mp4|zip|json)$/i, "") + ext;
+}
 const here = path.dirname(fileURLToPath(import.meta.url)),
   root = path.dirname(here);
 export class Runtime {
@@ -138,6 +153,7 @@ export class Runtime {
       filename === ".."
     )
       throw Error("filename must be a simple file name");
+    filename = exportName(filename, kind);
     s.busy = true;
     const dest = path.join(this.output, filename);
     try {
