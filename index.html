@@ -458,13 +458,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .export-dialog .outbtns { margin: 16px 0; }
 .filename-field { margin-bottom: 10px; }
 
-.timeline-legend { display: flex; flex-wrap: wrap; gap: 7px 14px; margin: 12px 0 6px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-.timeline-legend-item { display: inline-flex; align-items: center; gap: 5px; }
-.timeline-legend-icon { display: inline-flex; align-items: center; justify-content: center; width: 19px; height: 19px; flex: 0 0 19px; border: 1px solid var(--line2); border-radius: 3px; color: var(--text); }
-.timeline-legend-icon svg { width: 14px; height: 14px; }
-.timeline-legend-icon.remove { color: #ff6173; border-color: #ff6173; }
-.timeline-legend-icon.link { border-radius: 50%; color: var(--cyan); border-color: var(--cyan); }
-.timeline-legend-icon.unlink { border-radius: 50%; }
 .cut-details-dialog { width: min(1180px, 96vw); height: min(90vh, 920px); max-height: 90vh; overflow: hidden; border: 1px solid #555; border-radius: 12px; padding: 0; background: #191b20; color: #eee; }
 .cut-details-dialog[open] { display: grid; grid-template-columns: minmax(300px, 42%) minmax(0, 1fr); }
 .cut-details-preview { min-height: 0; overflow: auto; padding: 24px; border-right: 1px solid #33353b; background: #15161a; }
@@ -555,7 +548,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
   .col-stage .timeline-position-label { margin: 2px 0; }
   .col-stage #foregroundTimeline, .col-stage #mediaTimeline { height: 44px; }
   .col-stage #timeline { height: 58px; }
-  .col-stage .timeline-legend { gap: 3px 8px; font-size: 10px; }
 }
 
 .timeline-toolbar .timeline-position-label { flex-shrink: 0; margin: 0; white-space: nowrap; }
@@ -772,7 +764,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-play span { position:absolute; bottom:6px; right:8px; background:#111b; padding:3px 8px; border-radius:3px; }
 .favorite-name { width:100%; margin:8px 0; }
 .favorite-actions { display:flex; gap:8px; }
-.favorite-delete { color:var(--danger); }
+.favorite-delete { background:var(--danger); border-color:var(--danger); color:#000; font-weight:700; }
+.favorite-delete:hover { background:#ff7b88; border-color:#ff7b88; }
 .favorite-error:empty { display:none; }
 .favorite-error { color:var(--danger); }
 .preview-options #effectFavorites { margin-right:auto; }
@@ -935,7 +928,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <button id="timelineDurationHandle" class="timeline-duration-handle" type="button" title="ドラッグして動画全体の長さを変更" aria-label="動画全体の長さをドラッグして変更"><span aria-hidden="true">◀▶</span></button>
       </div></div>
       </div>
-      <div id="timelineLegend" class="timeline-legend" aria-label="タイムラインのアイコン凡例"></div>
     </section>
 
     <!-- ================= right: look & output ================= -->
@@ -38636,7 +38628,7 @@ J.readEffectFavorites=async file=>{
 };
 J.chooseFavoriteImport=count=>new Promise(resolve=>{
   const L=J.mediaLabel,d=document.createElement('dialog');d.id='favoriteImportDialog';d.className='terms';
-  d.innerHTML='<form method="dialog"><h2></h2><p></p><div class="terms-foot"><button value="cancel"></button><button value="replace"></button><button value="append" class="primary"></button></div></form>';
+  d.innerHTML='<form method="dialog"><h2></h2><p></p><div class="terms-foot"><button value="append" class="primary"></button><button value="replace"></button><button value="cancel"></button></div></form>';
   d.querySelector('h2').textContent=L('お気に入りをインポート','Import favorites');
   d.querySelector('p').textContent=L(`${count}件のお気に入りを取り込みます。上書きすると現在のお気に入りをすべて置き換えます。`, `Import ${count} favorites. Replace overwrites all current favorites.`);
   for(const [value,ja,en] of [['cancel','キャンセル','Cancel'],['replace','上書き','Replace'],['append','追加','Append']])d.querySelector(`[value="${value}"]`).textContent=L(ja,en);
@@ -42170,18 +42162,6 @@ function bind() {
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
   $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
 
-  $('timelineLegend').innerHTML = [
-    [ICON.dice,'再抽選','Reroll',''],
-    [ICON.disableReroll,'この演出をOFFにして再抽選','Disable current effects and randomize',''],
-    [ICON.lock,'ロック','Lock',''],
-    [ICON.area,'表示範囲','Display area',''],
-    [ICON.details,'詳細編集','Edit details',''],
-    [ICON.remove,'削除','Delete','remove'],
-    [ICON.frontmost,'最前表示','Show in front',''],
-    ['🔗','開始位置をリンク','Link start positions','link'],
-    ['×','リンク解除','Unlink','unlink'],
-  ].map(([icon,ja,en,cls])=>`<span class="timeline-legend-item"><span class="timeline-legend-icon ${cls}" aria-hidden="true">${icon}</span><span>${J.mediaLabel(ja,en)}</span></span>`).join('');
-
   $('saveFilename').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('filenameDlg').querySelector('button[value="save"]').click();}});
   const menus = [...document.querySelectorAll('.header-menu')];
   menus.forEach(menu => {
@@ -42275,7 +42255,7 @@ function bind() {
   const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
   panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
   const pan=document.createElement('input');pan.type='range';pan.id='timelinePan';pan.min='0';pan.max='0';pan.value='0';pan.disabled=true;pan.setAttribute('aria-label',panLabel.textContent);panLabel.append(pan);
-  $('timelineLegend').before(panLabel);
+  $('timelineScroll').closest('.timeline-with-visibility').after(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
   for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});

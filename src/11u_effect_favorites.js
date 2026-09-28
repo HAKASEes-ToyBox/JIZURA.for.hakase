@@ -41,7 +41,7 @@ J.readEffectFavorites=async file=>{
 };
 J.chooseFavoriteImport=count=>new Promise(resolve=>{
   const L=J.mediaLabel,d=document.createElement('dialog');d.id='favoriteImportDialog';d.className='terms';
-  d.innerHTML='<form method="dialog"><h2></h2><p></p><div class="terms-foot"><button value="cancel"></button><button value="replace"></button><button value="append" class="primary"></button></div></form>';
+  d.innerHTML='<form method="dialog"><h2></h2><p></p><div class="terms-foot"><button value="append" class="primary"></button><button value="replace"></button><button value="cancel"></button></div></form>';
   d.querySelector('h2').textContent=L('お気に入りをインポート','Import favorites');
   d.querySelector('p').textContent=L(`${count}件のお気に入りを取り込みます。上書きすると現在のお気に入りをすべて置き換えます。`, `Import ${count} favorites. Replace overwrites all current favorites.`);
   for(const [value,ja,en] of [['cancel','キャンセル','Cancel'],['replace','上書き','Replace'],['append','追加','Append']])d.querySelector(`[value="${value}"]`).textContent=L(ja,en);

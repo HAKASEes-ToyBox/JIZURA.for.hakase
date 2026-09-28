@@ -3139,18 +3139,6 @@ function bind() {
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
   $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
 
-  $('timelineLegend').innerHTML = [
-    [ICON.dice,'再抽選','Reroll',''],
-    [ICON.disableReroll,'この演出をOFFにして再抽選','Disable current effects and randomize',''],
-    [ICON.lock,'ロック','Lock',''],
-    [ICON.area,'表示範囲','Display area',''],
-    [ICON.details,'詳細編集','Edit details',''],
-    [ICON.remove,'削除','Delete','remove'],
-    [ICON.frontmost,'最前表示','Show in front',''],
-    ['🔗','開始位置をリンク','Link start positions','link'],
-    ['×','リンク解除','Unlink','unlink'],
-  ].map(([icon,ja,en,cls])=>`<span class="timeline-legend-item"><span class="timeline-legend-icon ${cls}" aria-hidden="true">${icon}</span><span>${J.mediaLabel(ja,en)}</span></span>`).join('');
-
   $('saveFilename').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('filenameDlg').querySelector('button[value="save"]').click();}});
   const menus = [...document.querySelectorAll('.header-menu')];
   menus.forEach(menu => {
@@ -3244,7 +3232,7 @@ function bind() {
   const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
   panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
   const pan=document.createElement('input');pan.type='range';pan.id='timelinePan';pan.min='0';pan.max='0';pan.value='0';pan.disabled=true;pan.setAttribute('aria-label',panLabel.textContent);panLabel.append(pan);
-  $('timelineLegend').before(panLabel);
+  $('timelineScroll').closest('.timeline-with-visibility').after(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
   for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
