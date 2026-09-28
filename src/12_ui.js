@@ -1511,11 +1511,11 @@ function timelineBoundaryAt(ev, layer) {
   const cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0) : S.plan[layer].cuts;
   let best = null;
   for (const cut of cuts) {
-    const penalty = laneAt != null && info.lanes.get(cut) !== laneAt ? 6 : 0;
-    const start = Math.abs(ev.clientX - (rect.left + cut.start / duration * rect.width)) + penalty;
-    if (start < 9 && (!best || start < best.distance)) best = { cut, distance: start, end: false };
+    if (laneAt != null && info.lanes.get(cut) !== laneAt) continue;
+    const start = Math.abs(ev.clientX - (rect.left + cut.start / duration * rect.width));
+    if (start < 9 && (!best || start < best.distance) && timelineBoundaryForCut(cut, layer)) best = { cut, distance: start, end: false };
     if (!cut.manualEnd || layer === 'lyrics' && !Number.isInteger(cut.part)) continue;
-    const end = Math.abs(ev.clientX - (rect.left + cut.end / duration * rect.width)) + penalty;
+    const end = Math.abs(ev.clientX - (rect.left + cut.end / duration * rect.width));
     if (end < 9 && (!best || end < best.distance)) best = { cut, distance: end, end: true };
   }
   if (!best) return null;
@@ -1546,8 +1546,11 @@ function timelineBoundaryForCut(chosen, layer) {
     target = { line: chosen.line, part: 'interlude' };
   } else if (chosen.part === 0) {
     const line = chosen.line, lines = S.plan.lines;
-    min = line ? lines[line - 1].start + 0.35 : 0;
-    max = line + 1 < lines.length ? lines[line + 1].start - 0.5 : duration - 0.5;
+    // Saved/inserted lines can be out of source order. Use their actual timeline order.
+    const before = lines.filter((l, i) => i !== line && l.start < chosen.start);
+    const after = lines.filter((l, i) => i !== line && l.start > chosen.start);
+    min = before.length ? Math.max(...before.map(l => l.start)) + 0.04 : 0;
+    max = after.length ? Math.min(...after.map(l => l.start)) - 0.04 : duration - 0.04;
     const firstInner = S.project.timing.cutTimes && S.project.timing.cutTimes[`${line}:1`];
     if (firstInner != null && Number.isFinite(+firstInner)) max = Math.min(max, +firstInner - 0.22);
     target = { line, part: 0, nextLineStart: lines[line + 1] && lines[line + 1].start };
@@ -1558,6 +1561,8 @@ function timelineBoundaryForCut(chosen, layer) {
     max = (following ? following.start : S.plan.lines[chosen.line].visEnd ?? chosen.end) - 0.22;
     target = { line: chosen.line, part: chosen.part };
   }
+  // A previously saved short cut must remain draggable away from a tight boundary.
+  min = Math.min(min, chosen.start); max = Math.max(max, chosen.start);
   return max > min ? { layer, ref: boundaryRef(layer, chosen), start: chosen.start, min, max, ...target } : null;
 }
 function setTimelineBoundaryTime(drag, t) {
@@ -3454,6 +3459,7 @@ function bind() {
       const boundary = !S.exporting && !S.tap && timelineBoundaryAt(e, layer);
       const limits = boundary && (boundary.mode === 'end' ? boundary : boundaryGroupLimits(boundary.ref));
       drag = boundary && limits && limits.max > limits.min ? { ...boundary, min: limits.min, max: limits.max, mode: boundary.mode === 'end' ? 'end' : 'boundary', originX: e.clientX, preview: boundary.start, moved: false, duration: S.plan.duration } : { mode: 'seek' };
+      e.preventDefault();
       tl.setPointerCapture(e.pointerId);
       if (boundary) { pause(); S.timelineDrag = drag; }
       else timelineSeek(e);

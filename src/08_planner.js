@@ -324,10 +324,15 @@ J.plan = (project, audio) => {
     const tot = units.reduce((a, u) => a + u.w, 0);
     let acc = s; const bounds = [s];
     units.forEach((u, k) => { acc += D * u.w / tot; bounds.push(k === units.length - 1 ? visEnd : acc); });
+    // Resolve all requested boundaries before limiting them; the next manual start
+    // must not be replaced by its old, automatically distributed position.
     for (let k = 1; k < bounds.length - 1; k++) {
       const manual = cutTimes[`${li}:${k}`];
-      bounds[k] = J.clamp(manual != null && Number.isFinite(+manual) ? +manual : snap(bounds[k]), bounds[k - 1] + 0.22, bounds[k + 1] - 0.22);
+      bounds[k] = manual != null && Number.isFinite(+manual) ? +manual : snap(bounds[k]);
     }
+    const gap = Math.min(0.22, D / units.length);
+    for (let k = bounds.length - 2; k > 0; k--) bounds[k] = Math.min(bounds[k], bounds[k + 1] - gap);
+    for (let k = 1; k < bounds.length - 1; k++) bounds[k] = Math.max(bounds[k], bounds[k - 1] + gap);
     // scheme per line
     if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
     const emphLine = ln.impact || ln.emph.length > 0;
