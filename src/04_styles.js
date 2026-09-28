@@ -156,11 +156,34 @@ J.resolveStyle = (project) => {
   const base = J.STYLES[project.style] || J.STYLES.noir;
   const st = JSON.parse(JSON.stringify(base));
   const ov = project.colors || {};
-  // base colours (background / text) replace the main scheme only
-  // (colour-theme palettes set allSchemes so the whole style follows the chosen genre)
+  // Base colours (background / text). Colour-theme palettes set allSchemes so the whole style follows the
+  // chosen genre. Otherwise the main scheme takes them as they are and every other scheme follows them
+  // while keeping its light/dark tone: a user colour of the scheme's background tone becomes its
+  // background, one of the opposite tone its text; text the user left unset is kept readable.
   if (ov.enabled) {
-    const base = s => Object.assign({}, s, pickDefined(ov, ['bg', 'fg', 'sub', 'dim']));
-    st.schemes = ov.allSchemes ? st.schemes.map(base) : [base(st.schemes[0]), ...st.schemes.slice(1)];
+    const user = pickDefined(ov, ['bg', 'fg', 'sub', 'dim']);
+    const withInk = (s, o) => { if (o.fg !== s.fg && s.ink === s.fg) o.ink = o.fg; return o; };
+    if (ov.allSchemes) st.schemes = st.schemes.map(s => withInk(s, Object.assign({}, s, user)));
+    else {
+      const dark = h => J.lum(h) < .5;
+      st.schemes = st.schemes.map((s, i) => {
+        let set = user;
+        if (i > 0) {
+          set = {};
+          const bg = [user.bg, user.fg].find(c => c && dark(c) === dark(s.bg));
+          if (bg) set.bg = bg;
+          const fg = [user.fg, user.bg].find(c => c && c !== bg && dark(c) !== dark(bg || s.bg));
+          if (fg) set.fg = fg;
+          if (bg && bg === user.bg) Object.assign(set, pickDefined(user, ['sub', 'dim']));
+        }
+        const o = withInk(s, Object.assign({}, s, set));
+        if (i > 0) for (const [k, min] of [['fg', 3], ['ink', 3], ['sub', 2]]) {
+          if (set[k] || !o[k] || k === 'ink' && o.ink === o.fg) continue;
+          o[k] = J.fitContrast(o[k], o.bg, min);
+        }
+        return o;
+      });
+    }
   }
   // accent + chromatic ghost colours apply to every scheme; accent is re-lit per background for contrast
   if (ov.accentOn) {

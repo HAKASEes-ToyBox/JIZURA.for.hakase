@@ -3,8 +3,8 @@ const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.goto(url);await page.locator('#modePro').click();
 const button=page.locator('#relayoutAtPlayhead');
 // Placed last in the "At playhead" groups.
-assert.equal(await page.locator('.timeline-split > .timeline-action-group').last().locator('button').getAttribute('id'),'relayoutAtPlayhead');
-assert.equal((await button.textContent()).trim(),lang?'Re-layout':'再配置');
+assert.equal(await page.locator('.playhead-primary button').last().getAttribute('id'),'relayoutAtPlayhead');
+assert.equal((await button.textContent()).trim(),lang?'Shuffle layout':'配置をシャッフル');
 await page.evaluate(()=>{const p=J.ui.project;p.lyrics='[00:00]夜明けの色を覚えてる\n[00:04]ほどけた声が遠くで鳴った\n[00:08]ねえまだ間に合うかな';p.durationOverride=12;p.lyricEffects={...p.lyricEffects,autoPlacement:true};
  for(const [layer,id,color] of [['foreground','fg','#e33'],['media','bg','#33e']]){const c=document.createElement('canvas');c.width=400;c.height=300;c.getContext('2d').fillStyle=color;c.getContext('2d').fillRect(0,0,400,300);J.mediaAssets.set(id,{element:c,type:'image'});
   p[layer]={...p[layer],items:[{id,name:id+'.png',type:'image',width:400,height:300}],manualCuts:true,cutCount:3,timing:{lineTimes:{0:0,1:4,2:8}},cutOverrides:{0:{itemId:id,technique:null},1:{itemId:id,technique:null},2:{itemId:id,technique:null}}};}

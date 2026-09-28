@@ -12,6 +12,7 @@ J.SAMPLE_LYRICS = `夜明けの色を/覚えてる
 J.defaultProject = () => ({
   version: 1,
   title: '', artist: '',
+  projectName: '',                // set when the project is saved; the next save's default file name
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
   themes: [],
@@ -28,7 +29,6 @@ J.defaultProject = () => ({
   overrides: {},
   lyricCutOptions: {},
   lyricEffects: { autoPlacement: true, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
-  lyricBlankCuts: [],
   timelineLinks: [],
   layerVisibility: {foreground:true,lyrics:true,media:true},
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
@@ -225,6 +225,9 @@ J.computeTiming = (project, parsed, audio) => {
 
 /* ---------------- planning ---------------- */
 const wkey = (obj, k, d = 1) => (obj && obj[k] != null ? obj[k] : d);
+// カットの終了時間: with 「次カット再生まで」 (the default) a cut runs until the next one starts; with it off
+// ({ untilNext: false, endTime }) the cut ends at its own time — earlier leaves a gap, later overlaps.
+J.cutEndTime = options => options && options.untilNext === false && Number.isFinite(+options.endTime) ? Math.max(0, +options.endTime) : null;
 J.lyricArea = area => {
   if (!area || !['x', 'y', 'w', 'h'].every(k => Number.isFinite(+area[k]))) return null;
   const w = J.clamp(+area.w, 0.04, 4), h = J.clamp(+area.h, 0.04, 4);
@@ -243,7 +246,7 @@ J.plan = (project, audio) => {
   const fixedDuration = Number.isFinite(+project.durationOverride) && +project.durationOverride > 0 ? +project.durationOverride : null;
   if (fixedDuration != null) {
     const latestLine = tm.starts.length ? Math.max(...tm.starts) : 0;
-    const latestBlank = Math.max(0, ...(project.lyricBlankCuts || []).map(b => Number.isFinite(+b.start) ? +b.start : 0));
+    const latestBlank = 0;
     tm.duration = Math.max(0.1, fixedDuration, latestLine + 0.04, latestBlank + 0.04);
     tm.ends = tm.ends.map((end, i) => Math.max(tm.starts[i] + 0.04, Math.min(end, tm.duration)));
   }
@@ -311,7 +314,10 @@ J.plan = (project, audio) => {
     if (multiline && !ov.single) groups = chunks;
     else if (nG <= 1) groups = [ln.text];
     else groups = partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
-    const recap = !multiline && nC > groups.length && groups.length >= 2;
+    // A locked line keeps the division it had when it was locked, as long as its text is unchanged.
+    const lockedUnits = ov.lock && ov.lockedUnits?.text === ln.text && Array.isArray(ov.lockedUnits.groups) && ov.lockedUnits.groups.length ? ov.lockedUnits : null;
+    if (lockedUnits) groups = lockedUnits.groups.slice();
+    const recap = lockedUnits ? !!lockedUnits.recap : !multiline && nC > groups.length && groups.length >= 2;
     const units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
     if (recap) units.push({ text: ln.text, w: (units.reduce((a, u) => a + u.w, 0) / units.length) * 1.25, recap: true });
     const tot = units.reduce((a, u) => a + u.w, 0);
@@ -426,24 +432,22 @@ J.plan = (project, audio) => {
     for(const cut of plan.cuts)if(cut.line!==+line && cut.start<start && cut.end>start){cut.end=start;cut.dur=cut.end-cut.start;}
     plan.cuts=plan.cuts.filter(c=>c.line===+line || c.start<start || c.start>=end);
   }
-  const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
-    .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
-    .sort((a, b) => a.start - b.start);
-  for (let i = 0; i < blanks.length; i++) {
-    const blank = blanks[i];
-    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
-    const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
-    const end = Math.min(nextLine, nextBlank, plan.duration);
-    if (end - blank.start < 0.04) continue;
-    for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
-        cut.end = blank.start; cut.dur = cut.end - cut.start;
-      }
+  // Cuts with their own end time; a line's interlude starts after its lyrics end.
+  const endedLines = new Map();
+  for (const cut of plan.cuts) {
+    if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
+    const end = J.cutEndTime(project.lyricCutOptions?.[`${cut.line}:${cut.part}`]);
+    if (end != null) {
+      cut.end = Math.max(cut.start + .04, end); cut.dur = cut.end - cut.start; cut.manualEnd = true;
+      cut.inDur = Math.min(cut.inDur, cut.dur * .45); cut.outDur = Math.min(cut.outDur, cut.dur * .45);
     }
-    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
-    plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
+    endedLines.set(cut.line, Math.max(endedLines.get(cut.line) ?? 0, cut.end));
   }
+  plan.cuts = plan.cuts.filter(cut => {
+    if (cut.part !== 'interlude') return true;
+    cut.start = Math.max(cut.start, endedLines.get(cut.line) ?? 0); cut.dur = cut.end - cut.start;
+    return cut.dur >= .3;
+  });
   plan.cuts.sort((a, b) => a.start - b.start);
   if (fixedDuration != null) {
     plan.cuts = plan.cuts.filter(c => c.start < plan.duration - 1e-3);

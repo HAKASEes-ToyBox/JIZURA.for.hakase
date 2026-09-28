@@ -33,11 +33,11 @@ const assert = require('node:assert/strict');
       });
       await page.locator('#fileProject').setInputFiles({name:'fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(fixture))});
       await page.waitForFunction(() => J.ui.plan.lines.length === 5);
-      assert.equal(await page.evaluate(() => J.ui.plan.cuts.some(c => c.part === 1) && J.ui.plan.cuts.some(c => c.blank) && J.ui.plan.cuts.some(c => c.line === -1)), true);
+      assert.equal(await page.evaluate(() => J.ui.plan.cuts.some(c => c.part === 1) && J.ui.plan.cuts.some(c => c.manualEnd && Math.abs(c.end - 7) < 1e-6) && J.ui.plan.cuts.some(c => c.line === -1)), true);
       const project = () => page.evaluate(() => structuredClone(J.ui.project));
       const lyricTargets = mode => page.evaluate(mode => J.ui.plan.cuts
-        .filter(c => mode === 'cut' ? c.line >= 0 || c.blank : c.line >= 0 && c.part === 0)
-        .map(c => ({start:c.start,ref:c.blank ? `l:blank:${c.blankId}` : `l:${c.line}:${c.part}`})), mode);
+        .filter(c => mode === 'cut' ? c.line >= 0 : c.line >= 0 && c.part === 0)
+        .map(c => ({start:c.start,ref:`l:${c.line}:${c.part}`})), mode);
 
       for (const mode of ['cut','line']) {
         for (const layer of ['foreground','media']) {
@@ -89,7 +89,7 @@ const assert = require('node:assert/strict');
         if (mode === 'cut') {
           const targets = await lyricTargets(mode);
           assert.ok(targets.length > 5);
-          assert.ok(targets.some(c => c.ref === 'l:blank:blank-test'));
+          assert.ok(!targets.some(c => c.ref.startsWith('l:blank:')));
           assert.ok(targets.some(c => c.ref.endsWith(':interlude')));
           assert.equal(await page.locator('#timelineLinks .link-wire').count(), targets.length * 2);
           // Move an inner cut, then a line start: every linked boundary must remain aligned.

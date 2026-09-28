@@ -214,8 +214,15 @@
         const next = cuts(layer).find((c) => c.start > start + 0.000001),
           end = next?.start ?? S.plan.duration;
         if (layer === "lyrics") {
-          if (blank) A.insertBlankAtPlayhead();
-          else {
+          // 無表示カット is retired: a "blank" ends the lyric showing at the frame there (カットの終了時間).
+          if (blank) {
+            const showing = S.plan.cuts
+              .filter((c) => c.line >= 0 && Number.isInteger(c.part) && c.start < start - 0.04 && start < c.end)
+              .sort((a, b) => b.start - a.start)[0];
+            if (!showing) throw Error("No lyric showing at the frame");
+            const key = `${showing.line}:${showing.part}`;
+            S.project.lyricCutOptions[key] = { ...(S.project.lyricCutOptions[key] || {}), untilNext: false, endTime: +start.toFixed(3) };
+          } else {
             if (!text || !J.parseLyrics(text).lines.length)
               throw Error("No valid lyric line");
             A.insertLyricAtPlayhead(text, end);
@@ -253,11 +260,7 @@
       if (!c) throw Error("Cut not found");
       return mutate(() => {
         if (layer === "lyrics") {
-          if (c.blankId)
-            S.project.lyricBlankCuts = S.project.lyricBlankCuts.filter(
-              (b) => b.id !== c.blankId,
-            );
-          else A.removeLyricCut(c.line, c.part);
+          A.removeLyricCut(c.line, c.part);
         } else A.removeMediaCut(c.index, layer);
       });
     },

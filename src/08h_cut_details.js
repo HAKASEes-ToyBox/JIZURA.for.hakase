@@ -6,6 +6,8 @@ J.cutDetailKeys = {
   lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
+// The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
+J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -51,8 +53,12 @@ J.applyCutDetails = (cut, details, plan, layer) => {
 const planLyrics = J.plan;
 J.plan = function(project, ...args) {
   const plan = planLyrics(project,...args);
+  // A locked cut keeps the look captured when it was locked (J.cutLockSnapshot); the user's own
+  // detail edits still apply on top of it.
   for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
-    J.applyCutDetails(cut,project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details,plan,'lyrics');
+    const details=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details;
+    const locked=project.overrides?.[cut.line]?.lock ? project.overrides[cut.line].lockedEffects?.[cut.part] : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(details || {})} : details,plan,'lyrics');
   }
   // Events belong to their originating cut, including accents before its boundary.
   for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
@@ -85,7 +91,10 @@ J.plan = function(project, ...args) {
 const planMedia = J.planMedia;
 J.planMedia = function(project, plan, audioDuration, layer='media') {
   const result = planMedia(project,plan,audioDuration,layer);
-  for (const cut of result.cuts) J.applyCutDetails(cut,project[layer]?.cutOverrides?.[cut.index]?.details,plan,layer);
+  for (const cut of result.cuts) {
+    const options=project[layer]?.cutOverrides?.[cut.index],locked=options?.lock ? options.lockedEffects : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(options.details || {})} : options?.details,plan,layer);
+  }
   return result;
 };
 })();

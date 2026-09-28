@@ -664,6 +664,13 @@ body.preview-fullscreen-open { overflow: hidden; }
   .cut-details-preview canvas { max-height: 40dvh; }
   .cut-details-grid { grid-template-columns: minmax(0,1fr); }
 }
+/* 再生位置で編集: first row = action, second row = layer */
+.playhead-menu { flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+.playhead-primary, .playhead-secondary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.playhead-secondary[hidden] { display: none; }
+.playhead-primary button[aria-expanded="true"] { border-color: var(--amber); color: var(--amber); }
+.playhead-secondary { padding-left: 10px; border-left: 2px solid var(--amber); }
+.playhead-secondary button[hidden] { display: none; }
 
 </style>
 </head>
@@ -674,6 +681,7 @@ body.preview-fullscreen-open { overflow: hidden; }
     <div class="proj">
       <input id="songTitle" type="text" placeholder="曲名（タイトルカード・HUDに表示）" aria-label="曲名">
       <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
+      <input id="projectName" type="text" placeholder="プロジェクト名" aria-label="プロジェクト名" title="プロジェクト保存時のファイル名。保存すると更新されます">
     </div>
     <div class="modes" role="group" aria-label="表示モード">
       <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
@@ -803,8 +811,11 @@ body.preview-fullscreen-open { overflow: hidden; }
         <button id="btnOmakase" class="primary" title="スタイル・雰囲気・演出・配色をまるごとランダムに（キー R）">おまかせ</button>
       </div>
       <div class="timeline-toolbar">
-      <div class="timeline-position-label">再生位置で：</div>
-      <div class="timeline-split"><div class="timeline-action-group" role="group" aria-label="前景"><button id="insertForegroundAtPlayhead" type="button" disabled>前景を挿入</button><button id="splitForegroundCut" type="button" disabled>前景を分割</button></div><div class="timeline-action-group" role="group" aria-label="歌詞"><button id="insertLyricAtPlayhead" type="button" disabled>歌詞を挿入</button><button id="insertBlankAtPlayhead" type="button" disabled>歌詞無表示を挿入</button></div><div class="timeline-action-group" role="group" aria-label="背景"><button id="insertBackgroundAtPlayhead" type="button" disabled>背景を挿入</button><button id="splitBackgroundCut" type="button" disabled>背景を分割</button></div><div class="timeline-action-group" role="group" aria-label="配置の操作"><button id="relayoutAtPlayhead" type="button" title="再生位置のカットを自動で再配置" disabled>再配置</button></div></div>
+      <div class="timeline-position-label" id="playheadMenuLabel">再生位置で編集：</div>
+      <div class="timeline-split playhead-menu" id="playheadMenu">
+        <div class="playhead-primary" role="group" aria-labelledby="playheadMenuLabel"><button type="button" data-playhead-menu="insert" aria-expanded="false"></button><button type="button" data-playhead-menu="split" aria-expanded="false"></button><button type="button" data-playhead-menu="endHere" aria-expanded="false"></button><button type="button" data-playhead-menu="untilNext" aria-expanded="false"></button><button id="relayoutAtPlayhead" type="button" disabled></button></div>
+        <div class="playhead-secondary" role="group" hidden><button id="insertForegroundAtPlayhead" type="button" data-playhead-action="insert" data-layer="foreground" disabled></button><button id="insertLyricAtPlayhead" type="button" data-playhead-action="insert" data-layer="lyrics" disabled></button><button id="insertBackgroundAtPlayhead" type="button" data-playhead-action="insert" data-layer="media" disabled></button><button id="splitForegroundCut" type="button" data-playhead-action="split" data-layer="foreground" disabled></button><button id="splitBackgroundCut" type="button" data-playhead-action="split" data-layer="media" disabled></button><button id="endForegroundHere" type="button" data-playhead-action="endHere" data-layer="foreground" disabled></button><button id="endLyricHere" type="button" data-playhead-action="endHere" data-layer="lyrics" disabled></button><button id="endBackgroundHere" type="button" data-playhead-action="endHere" data-layer="media" disabled></button><button id="untilNextForeground" type="button" data-playhead-action="untilNext" data-layer="foreground" disabled></button><button id="untilNextLyric" type="button" data-playhead-action="untilNext" data-layer="lyrics" disabled></button><button id="untilNextBackground" type="button" data-playhead-action="untilNext" data-layer="media" disabled></button></div>
+      </div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
       </div>
       <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
@@ -1018,6 +1029,7 @@ body.preview-fullscreen-open { overflow: hidden; }
  <form method="dialog">
   <h2 id="filenameDlgTitle">ファイル名</h2>
   <label class="field filename-field">ファイル名<input id="saveFilename" type="text" maxlength="180" autocomplete="off"></label>
+  <label class="check"><input id="saveFilenameDate" type="checkbox"><span>ファイル名に日時を追加<small id="saveFilenamePreview"></small></span></label>
   <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
   <div class="terms-foot"><button value="cancel">キャンセル</button><button value="save" class="primary">保存</button></div>
  </form>
@@ -2178,11 +2190,34 @@ J.resolveStyle = (project) => {
   const base = J.STYLES[project.style] || J.STYLES.noir;
   const st = JSON.parse(JSON.stringify(base));
   const ov = project.colors || {};
-  // base colours (background / text) replace the main scheme only
-  // (colour-theme palettes set allSchemes so the whole style follows the chosen genre)
+  // Base colours (background / text). Colour-theme palettes set allSchemes so the whole style follows the
+  // chosen genre. Otherwise the main scheme takes them as they are and every other scheme follows them
+  // while keeping its light/dark tone: a user colour of the scheme's background tone becomes its
+  // background, one of the opposite tone its text; text the user left unset is kept readable.
   if (ov.enabled) {
-    const base = s => Object.assign({}, s, pickDefined(ov, ['bg', 'fg', 'sub', 'dim']));
-    st.schemes = ov.allSchemes ? st.schemes.map(base) : [base(st.schemes[0]), ...st.schemes.slice(1)];
+    const user = pickDefined(ov, ['bg', 'fg', 'sub', 'dim']);
+    const withInk = (s, o) => { if (o.fg !== s.fg && s.ink === s.fg) o.ink = o.fg; return o; };
+    if (ov.allSchemes) st.schemes = st.schemes.map(s => withInk(s, Object.assign({}, s, user)));
+    else {
+      const dark = h => J.lum(h) < .5;
+      st.schemes = st.schemes.map((s, i) => {
+        let set = user;
+        if (i > 0) {
+          set = {};
+          const bg = [user.bg, user.fg].find(c => c && dark(c) === dark(s.bg));
+          if (bg) set.bg = bg;
+          const fg = [user.fg, user.bg].find(c => c && c !== bg && dark(c) !== dark(bg || s.bg));
+          if (fg) set.fg = fg;
+          if (bg && bg === user.bg) Object.assign(set, pickDefined(user, ['sub', 'dim']));
+        }
+        const o = withInk(s, Object.assign({}, s, set));
+        if (i > 0) for (const [k, min] of [['fg', 3], ['ink', 3], ['sub', 2]]) {
+          if (set[k] || !o[k] || k === 'ink' && o.ink === o.fg) continue;
+          o[k] = J.fitContrast(o[k], o.bg, min);
+        }
+        return o;
+      });
+    }
   }
   // accent + chromatic ghost colours apply to every scheme; accent is re-lit per background for contrast
   if (ov.accentOn) {
@@ -3650,6 +3685,7 @@ J.SAMPLE_LYRICS = `夜明けの色を/覚えてる
 J.defaultProject = () => ({
   version: 1,
   title: '', artist: '',
+  projectName: '',                // set when the project is saved; the next save's default file name
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
   themes: [],
@@ -3666,7 +3702,6 @@ J.defaultProject = () => ({
   overrides: {},
   lyricCutOptions: {},
   lyricEffects: { autoPlacement: true, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
-  lyricBlankCuts: [],
   timelineLinks: [],
   layerVisibility: {foreground:true,lyrics:true,media:true},
   media: { items: [], randomOrder: false, loop: false, cutCount: 0, seed: 1, timing: { lineTimes: {} }, overrides: {}, cutOverrides: {}, blend: 'normal', opacity: 100 },
@@ -3863,6 +3898,9 @@ J.computeTiming = (project, parsed, audio) => {
 
 /* ---------------- planning ---------------- */
 const wkey = (obj, k, d = 1) => (obj && obj[k] != null ? obj[k] : d);
+// カットの終了時間: with 「次カット再生まで」 (the default) a cut runs until the next one starts; with it off
+// ({ untilNext: false, endTime }) the cut ends at its own time — earlier leaves a gap, later overlaps.
+J.cutEndTime = options => options && options.untilNext === false && Number.isFinite(+options.endTime) ? Math.max(0, +options.endTime) : null;
 J.lyricArea = area => {
   if (!area || !['x', 'y', 'w', 'h'].every(k => Number.isFinite(+area[k]))) return null;
   const w = J.clamp(+area.w, 0.04, 4), h = J.clamp(+area.h, 0.04, 4);
@@ -3881,7 +3919,7 @@ J.plan = (project, audio) => {
   const fixedDuration = Number.isFinite(+project.durationOverride) && +project.durationOverride > 0 ? +project.durationOverride : null;
   if (fixedDuration != null) {
     const latestLine = tm.starts.length ? Math.max(...tm.starts) : 0;
-    const latestBlank = Math.max(0, ...(project.lyricBlankCuts || []).map(b => Number.isFinite(+b.start) ? +b.start : 0));
+    const latestBlank = 0;
     tm.duration = Math.max(0.1, fixedDuration, latestLine + 0.04, latestBlank + 0.04);
     tm.ends = tm.ends.map((end, i) => Math.max(tm.starts[i] + 0.04, Math.min(end, tm.duration)));
   }
@@ -3949,7 +3987,10 @@ J.plan = (project, audio) => {
     if (multiline && !ov.single) groups = chunks;
     else if (nG <= 1) groups = [ln.text];
     else groups = partition(chunks, nG).map(g => g.join(/[A-Za-z]/.test(g.join('')) ? ' ' : ''));
-    const recap = !multiline && nC > groups.length && groups.length >= 2;
+    // A locked line keeps the division it had when it was locked, as long as its text is unchanged.
+    const lockedUnits = ov.lock && ov.lockedUnits?.text === ln.text && Array.isArray(ov.lockedUnits.groups) && ov.lockedUnits.groups.length ? ov.lockedUnits : null;
+    if (lockedUnits) groups = lockedUnits.groups.slice();
+    const recap = lockedUnits ? !!lockedUnits.recap : !multiline && nC > groups.length && groups.length >= 2;
     const units = groups.map(g => ({ text: g, w: [...g].length + 1.6 }));
     if (recap) units.push({ text: ln.text, w: (units.reduce((a, u) => a + u.w, 0) / units.length) * 1.25, recap: true });
     const tot = units.reduce((a, u) => a + u.w, 0);
@@ -4064,24 +4105,22 @@ J.plan = (project, audio) => {
     for(const cut of plan.cuts)if(cut.line!==+line && cut.start<start && cut.end>start){cut.end=start;cut.dur=cut.end-cut.start;}
     plan.cuts=plan.cuts.filter(c=>c.line===+line || c.start<start || c.start>=end);
   }
-  const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : [])
-    .filter(b => b && Number.isFinite(+b.start) && Number.isInteger(+b.beforeLine))
-    .map(b => ({ id: b.id, untilNextCut: !!b.untilNextCut, beforeLine: J.clamp(+b.beforeLine, 0, parsed.lines.length), start: Math.max(0, +b.start) }))
-    .sort((a, b) => a.start - b.start);
-  for (let i = 0; i < blanks.length; i++) {
-    const blank = blanks[i];
-    const nextLine = blank.untilNextCut ? (plan.cuts.find(c=>c.line>=0 && c.start>blank.start+1e-6)?.start ?? Infinity) : (tm.starts[blank.beforeLine] ?? Infinity);
-    const nextBlank = blanks[i + 1] ? blanks[i + 1].start : Infinity;
-    const end = Math.min(nextLine, nextBlank, plan.duration);
-    if (end - blank.start < 0.04) continue;
-    for (const cut of plan.cuts) {
-      if (cut.start < blank.start && cut.end > blank.start && (blank.untilNextCut || cut.line < blank.beforeLine)) {
-        cut.end = blank.start; cut.dur = cut.end - cut.start;
-      }
+  // Cuts with their own end time; a line's interlude starts after its lyrics end.
+  const endedLines = new Map();
+  for (const cut of plan.cuts) {
+    if (cut.line < 0 || !Number.isInteger(cut.part)) continue;
+    const end = J.cutEndTime(project.lyricCutOptions?.[`${cut.line}:${cut.part}`]);
+    if (end != null) {
+      cut.end = Math.max(cut.start + .04, end); cut.dur = cut.end - cut.start; cut.manualEnd = true;
+      cut.inDur = Math.min(cut.inDur, cut.dur * .45); cut.outDur = Math.min(cut.outDur, cut.dur * .45);
     }
-    plan.cuts = plan.cuts.filter(c => !((blank.untilNextCut || c.line < blank.beforeLine) && c.start >= blank.start && c.start < end));
-    plan.cuts.push(makeCut({ blank: true, blankId: blank.id, beforeLine: blank.beforeLine, text: '', lineText: '', line: -2, part: 'blank', start: blank.start, end, layout: 'blank', enter: 'cut', exit: 'cut', cam: 'none' }));
+    endedLines.set(cut.line, Math.max(endedLines.get(cut.line) ?? 0, cut.end));
   }
+  plan.cuts = plan.cuts.filter(cut => {
+    if (cut.part !== 'interlude') return true;
+    cut.start = Math.max(cut.start, endedLines.get(cut.line) ?? 0); cut.dur = cut.end - cut.start;
+    return cut.dur >= .3;
+  });
   plan.cuts.sort((a, b) => a.start - b.start);
   if (fixedDuration != null) {
     plan.cuts = plan.cuts.filter(c => c.start < plan.duration - 1e-3);
@@ -4879,7 +4918,7 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
     const rng = J.rng(seed), reroll = ov.seed != null;
     const videoDuration = videoDurationAt(i);
     const nextStart = i + 1 < count ? starts[i + 1] : duration;
-    return { index: i, itemId: item ? item.id : null, sourceItemId: baseItems[i]?.id || null, name: item ? item.name : '画像無し', type: item ? item.type : null, start: starts[i], end: videoDuration != null ? Math.min(nextStart, starts[i] + videoDuration) : nextStart, videoDuration,
+    return { index: i, itemId: item ? item.id : null, sourceItemId: baseItems[i]?.id || null, name: item ? item.name : '画像無し', type: item ? item.type : null, start: starts[i], end: J.cutEndTime(ov) != null ? Math.max(starts[i] + .04, Math.min(J.cutEndTime(ov), duration)) : videoDuration != null ? Math.min(nextStart, starts[i] + videoDuration) : nextStart, manualEnd: J.cutEndTime(ov) != null, videoDuration,
       layout: ov.layout === 'stretch' ? 'cover' : J.MEDIA_LAYOUT[ov.layout] ? ov.layout : reroll ? rng.pick(Object.keys(J.MEDIA_LAYOUT)) : 'contain', enter: ov.enter || (reroll ? rng.pick(Object.keys(J.MEDIA_ENTER)) : 'cut'),
       hold: ov.hold || (reroll ? rng.pick(Object.keys(J.MEDIA_HOLD)) : 'still'), exit: ov.exit || (reroll ? rng.pick(Object.keys(J.MEDIA_EXIT)) : 'cut'),
       treat: ov.treat || (reroll ? rng.pick(Object.keys(J.MEDIA_TREAT)) : 'none'),
@@ -4939,7 +4978,14 @@ J.mediaInsertChoices = (project,layer) => {
   const selected=m.insertSources || {files:true};
   return [...(selected.files && m.items.length?['files']:[]),...J.mediaCopyItems(layer).filter(item=>selected[item.id]).map(item=>item.id)];
 };
-J.mediaAt = (plan, t, layer = 'media') => plan[layer] && plan[layer].cuts.find(c => t >= c.start && t < c.end) || null;
+// The topmost (latest-starting) cut showing at t; cuts with their own end time may overlap.
+J.mediaAt = (plan, t, layer = 'media') => {
+  const cuts = plan[layer]?.cuts || [];
+  for (let i = cuts.length - 1; i >= 0; i--) if (t >= cuts[i].start && t < cuts[i].end) return cuts[i];
+  return null;
+};
+// All cuts showing at t, bottom first.
+J.mediaCutsAt = (plan, t, layer = 'media') => (plan[layer]?.cuts || []).filter(c => t >= c.start && t < c.end);
 J.mediaVideoTime = (cut, t, duration) => {
   if (!Number.isFinite(duration) || duration <= 0) return 0;
   const offset = Number.isFinite(+cut.videoStart) ? J.clamp(+cut.videoStart,0,Math.max(0,duration-0.001)) : 0;
@@ -5156,8 +5202,8 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
-J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
-  const cut = J.mediaAt(plan, t, layer); if (!J.mediaSourceAvailable(cut)) return false;
+J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = J.mediaAt(plan, t, layer)) => {
+  if (!J.mediaSourceAvailable(cut)) return false;
   owner ||= {};
   const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
@@ -5194,10 +5240,10 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false) => {
   return true;
 };
 // Use the same keyed transition masking for the displayed and copied foreground.
-J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false) => {
-  const foregroundCut=J.mediaAt(plan,t,'foreground');if(!foregroundCut)return false;
+J.drawForegroundLayer = (lx, plan, t, owner, previewEdit=false, foregroundCut=J.mediaAt(plan,t,'foreground')) => {
+  if(!foregroundCut)return false;
   const cw=lx.canvas.width,ch=lx.canvas.height;
-  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit);
+  J.drawMedia(lx, plan, t, owner, 'foreground', previewEdit, foregroundCut);
   if (!previewEdit && J.maskMediaLayer) J.maskMediaLayer(lx.canvas, foregroundCut, t, plan);
   const previousForeground = foregroundCut.index > 0 && plan.foreground.cuts[foregroundCut.index - 1];
   if (!previewEdit && foregroundCut.chromaKey && foregroundCut.trans && previousForeground && J.mediaAssets.has(previousForeground.itemId) && Math.abs(previousForeground.end - foregroundCut.start) < 0.06 && t - foregroundCut.start < foregroundCut.transDur) {
@@ -5427,13 +5473,14 @@ J.finishLyricPlan = (project, plan, audio) => {
     if (!groups.has(cut.group)) groups.set(cut.group, []);
     groups.get(cut.group).push(cut);
   }
+  // 1シーン: every cut of the group ends with its last cut (unless given its own end time). Placement below
+  // still uses each cut's own slot; the ends are extended at the end.
   plan.retainedCutIndices = [];
   for (const cuts of groups.values()) {
     const last = cuts[cuts.length - 1];
     for (const cut of cuts) {
-      cut.displayEnd = last.end;
-      cut.groupExit = last.exit;
-      cut.groupOutDur = last.outDur;
+      cut.displayEnd = cut.manualEnd ? cut.end : last.end;
+      if (!cut.manualEnd) { cut.groupExit = last.exit; cut.groupOutDur = last.outDur; }
       plan.retainedCutIndices.push(cut.index);
     }
   }
@@ -5481,6 +5528,10 @@ J.finishLyricPlan = (project, plan, audio) => {
       if (cut.text.includes('\n')) cut.params.sx = 1;
     }
   }
+  for (const index of plan.retainedCutIndices) {
+    const cut = plan.cuts[index];
+    if (cut.displayEnd > cut.end) { cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
+  }
 };
 
 // Resolve retained groups once at plan time: seeking never moves earlier lyrics.
@@ -5502,6 +5553,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     return J.arrangeLyricGroup(cuts,boxes,{seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap,avoid:settings.autoPlacement&&settings.avoidCenter?J.CENTER_AVOID:null});
   };
   const assign=(cut,area,mode)=>{
+    if(project.overrides?.[cut.line]?.lock)return;// locked lines keep their area
     cut.area=area;cut.areaMode=mode;
     if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE||cut.suppressed&&cut.contentScale===J.SUPPRESSED_TEXT_SCALE)cut.contentScale=1;
     const layout=J.LAYOUTS[cut.layout];
@@ -5572,22 +5624,15 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 };
 
 // Timing/linking uses the original start/end; rendering alone extends a group's
-// lifetime. Store indices rather than references to avoid duplicating cut graphs.
+// Every lyric cut shown at t: overlapping cuts (1シーン groups, own end times) are all included.
 J.lyricCutsAt = (plan, t) => {
-  const current = J.cutAt(plan, t), cuts = [];
   const inserted=plan.cuts.find(c=>c.insertedAtPlayhead && t>=c.start && t<c.end);
   if(inserted)return [inserted];
-  if(plan.cuts.some(c=>c.blank && t>=c.start && t<c.end))return cuts;
-  for (const index of plan.retainedCutIndices || []) {
-    const cut = plan.cuts[index];
-    if (cut && cut.start <= t && t < cut.displayEnd) cuts.push(cut);
-  }
-  if (current && !current.blank && !cuts.includes(current)) cuts.push(current);
-  return cuts.sort((a, b) => a.index - b.index);
+  return plan.cuts.filter(c => !c.blank && c.start <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
 };
 J.lyricRenderCut = cut => cut.displayEnd != null ? Object.assign({}, cut, {
   end: cut.displayEnd, dur: cut.displayEnd - cut.start,
-  exit: cut.groupExit, outDur: cut.groupOutDur,
+  exit: cut.groupExit ?? cut.exit, outDur: cut.groupOutDur ?? cut.outDur,
 }) : cut;
 })();
 
@@ -6544,6 +6589,8 @@ J.cutDetailKeys = {
   lyrics: ['text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
   media: ['enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
+// The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
+J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -6589,8 +6636,12 @@ J.applyCutDetails = (cut, details, plan, layer) => {
 const planLyrics = J.plan;
 J.plan = function(project, ...args) {
   const plan = planLyrics(project,...args);
+  // A locked cut keeps the look captured when it was locked (J.cutLockSnapshot); the user's own
+  // detail edits still apply on top of it.
   for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
-    J.applyCutDetails(cut,project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details,plan,'lyrics');
+    const details=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details;
+    const locked=project.overrides?.[cut.line]?.lock ? project.overrides[cut.line].lockedEffects?.[cut.part] : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(details || {})} : details,plan,'lyrics');
   }
   // Events belong to their originating cut, including accents before its boundary.
   for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
@@ -6623,7 +6674,10 @@ J.plan = function(project, ...args) {
 const planMedia = J.planMedia;
 J.planMedia = function(project, plan, audioDuration, layer='media') {
   const result = planMedia(project,plan,audioDuration,layer);
-  for (const cut of result.cuts) J.applyCutDetails(cut,project[layer]?.cutOverrides?.[cut.index]?.details,plan,layer);
+  for (const cut of result.cuts) {
+    const options=project[layer]?.cutOverrides?.[cut.index],locked=options?.lock ? options.lockedEffects : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(options.details || {})} : options?.details,plan,layer);
+  }
   return result;
 };
 })();
@@ -6944,12 +6998,12 @@ const E = J.E;
 
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0); return c; };
 
+// The latest-starting cut still showing at t (cuts may overlap).
 J.cutAt = (plan, t) => {
   const cs = plan.cuts; let lo = 0, hi = cs.length - 1, ans = -1;
   while (lo <= hi) { const m = (lo + hi) >> 1; if (cs[m].start <= t) { ans = m; lo = m + 1; } else hi = m - 1; }
-  if (ans < 0) return null;
-  const c = cs[ans];
-  return t < c.end ? c : null;
+  for (let i = ans; i >= 0; i--) if (t < cs[i].end) return cs[i];
+  return null;
 };
 
 class Renderer {
@@ -6998,16 +7052,20 @@ class Renderer {
     const W = plan.W, H = plan.H, scale = opt.scale || 1;
     const cw = ctx.canvas.width, ch = ctx.canvas.height;
     const foregroundCut = plan.foreground && J.mediaAt(plan, t, 'foreground');
-    if (!opt.noForeground && foregroundCut && J.mediaAssets.has(foregroundCut.itemId)) {
+    if (!opt.noForeground && foregroundCut && J.mediaCutsAt(plan, t, 'foreground').some(c => J.mediaAssets.has(c.itemId))) {
       const step = J.stepDur(plan.fx, plan.fps);
       const frontmost = !opt.noLyrics && J.lyricCutsAt(plan, Math.floor(t / step + 1e-6) * step).some(c => c.frontmost);
       this.frame(ctx, plan, t, Object.assign({}, opt, { noForeground: true, lyricLayer: 'below' }));
       const layer = this.ensure(this.foregroundLayer || (this.foregroundLayer = document.createElement('canvas')), cw, ch);
-      const lx = layer.getContext('2d'); lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
-      J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit);
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = foregroundCut.opacity / 100;
-      ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[foregroundCut.blend] || 'source-over';
-      ctx.drawImage(layer, 0, 0); ctx.restore();
+      const lx = layer.getContext('2d');
+      // Overlapping foreground cuts (own end times) composite bottom first, each with its own opacity and blend.
+      for (const cut of J.mediaCutsAt(plan, t, 'foreground').filter(c => J.mediaAssets.has(c.itemId))) {
+        lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
+        J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit, cut);
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = cut.opacity / 100;
+        ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
+        ctx.drawImage(layer, 0, 0); ctx.restore();
+      }
       if (frontmost) {
         // Blend frontmost cuts against the finished foreground, not against a
         // transparent intermediate layer where Multiply/Overlay lose meaning.
@@ -7016,7 +7074,7 @@ class Renderer {
       return;
     }
     const mediaCut = !opt.noMedia && !opt.transparent && plan.media && J.mediaAt(plan, t);
-    const backgroundMedia = J.mediaSourceAvailable(mediaCut);
+    const backgroundMedia = !!mediaCut && J.mediaCutsAt(plan, t, 'media').some(J.mediaSourceAvailable);
     const effectCut = J.cutAt(plan,t);
     const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style, fps = plan.fps;
     // motion is quantised to 'koma' drawings per second (24fps timebase); random flicker runs on a <=24Hz clock
@@ -7047,12 +7105,17 @@ class Renderer {
       ctx.fillStyle = st.schemes[0].bg; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
       const mediaLayer=this.ensure(this.mediaCompositeLayer || (this.mediaCompositeLayer=document.createElement('canvas')),cw,ch);
-      const mx=mediaLayer.getContext('2d');mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
-      J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit);
-      if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, mediaCut, t, plan);
-      ctx.globalAlpha=mediaCut.opacity/100;
-      ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[mediaCut.blend] || 'source-over';
-      ctx.drawImage(mediaLayer,0,0);ctx.restore();
+      const mx=mediaLayer.getContext('2d');
+      // Overlapping background cuts composite bottom first, each with its own mask, opacity and blend.
+      for (const cut of J.mediaCutsAt(plan, t, 'media').filter(J.mediaSourceAvailable)) {
+        mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
+        J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit, cut);
+        if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, cut, t, plan);
+        ctx.globalAlpha=cut.opacity/100;
+        ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[cut.blend] || 'source-over';
+        ctx.drawImage(mediaLayer,0,0);
+      }
+      ctx.restore();
     }
     else if (hidden.media===false && !opt.transparent) { ctx.fillStyle='#000';ctx.fillRect(0,0,W,H); }
     else if (key && !opt.transparent) { ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H); }
@@ -7070,11 +7133,6 @@ class Renderer {
         ctx.drawImage(this.paper(W, H), 0, 0, W, H);
         ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
-    }
-    if (mainCut && mainCut.blank && !activeCuts(tq).length) {
-      ctx.restore();
-      if (key && !opt.noPost && !backgroundMedia) this.keyFinish(ctx, key, opt);
-      return;
     }
     // ---------- camera & chroma amounts ----------
     const u = H / 1080;
@@ -38449,7 +38507,7 @@ const ICON = {
   frontmost: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="10" height="8" rx="1"/><path d="M5 2h9v8M8 4l2 2 2-2"/></svg>',
 };
 
-const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, linkDrag: null, slow: false, lineEls: [], blankEls: new Map(), mediaLineEls: [], sourceTab: 'lyrics', curLine: -2, timelineZoom: 1 };
+const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, linkDrag: null, slow: false, lineEls: [], mediaLineEls: [], sourceTab: 'lyrics', curLine: -2, timelineZoom: 1 };
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
@@ -38478,6 +38536,19 @@ function removeAudio() {
 }
 
 /* ---------------- project persistence ---------------- */
+// 無表示カット (retired): the lyric showing when a blank began now ends there (カットの終了時間).
+function migrateLyricBlankCuts(project) {
+  const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : []).filter(b => b && Number.isFinite(+b.start)).sort((a, b) => a.start - b.start);
+  delete project.lyricBlankCuts;
+  if (!blanks.length) return;
+  const plan = J.plan(project), done = new Set();
+  for (const blank of blanks) for (const cut of plan.cuts) {
+    const key = `${cut.line}:${cut.part}`;
+    if (cut.line < 0 || !Number.isInteger(cut.part) || done.has(key) || !(cut.start < +blank.start && cut.end > +blank.start)) continue;
+    project.lyricCutOptions[key] = { ...project.lyricCutOptions[key], untilNext: false, endTime: +(+blank.start).toFixed(3) };
+    done.add(key);
+  }
+}
 function mergeProject(p) {
   const d = J.defaultProject();
   const o = Object.assign(d, p || {});
@@ -38493,7 +38564,7 @@ function mergeProject(p) {
   o.lyricEffects = J.lyricEffectSettings(o);
   o.themes = J.themeIds(o);
   delete o.jevPrompt;
-  o.lyricBlankCuts = Array.isArray(p && p.lyricBlankCuts) ? p.lyricBlankCuts : [];
+  migrateLyricBlankCuts(o);
   o.timelineLinks = Array.isArray(p && p.timelineLinks) ? p.timelineLinks : [];
   o.media = J.normalizeMedia(p && p.media);
   o.foreground = J.normalizeMedia(p && p.foreground);
@@ -38706,7 +38777,16 @@ function draw() {
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo(); drawItemFrames();
+  updateTimeUI(); drawTimeline(); followTimelinePlayhead(); updateCutInfo(); drawItemFrames();
+}
+// While playing, page the zoomed timeline so the playhead stays in view (paused briefly after the user
+// scrolls it by hand).
+let timelineUserScroll = 0;
+function followTimelinePlayhead() {
+  if (!S.playing || S.timelineZoom <= 1 || performance.now() - timelineUserScroll < 1500) return;
+  const scroll = $('timelineScroll'), box = scroll.getBoundingClientRect(), line = $('timeline').getBoundingClientRect();
+  const x = line.left + line.width * J.clamp(S.t / Math.max(.001, S.plan.duration), 0, 1);
+  if (x < box.left + box.width * .05 || x > box.right - box.width * .08) scroll.scrollLeft += x - (box.left + box.width * .15);
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -38730,10 +38810,7 @@ function updateTimeUI() {
   $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('一時停止','Pause'):J.mediaLabel('再生','Play'));
   $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
   if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
-  $('insertBlankAtPlayhead').disabled=!canInsertBlankAtPlayhead();
-  for(const id of ['insertLyricAtPlayhead','insertForegroundAtPlayhead','insertBackgroundAtPlayhead'])$(id).disabled=!!(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04);
-  for(const [layer,id] of [['foreground','splitForegroundCut'],['media','splitBackgroundCut']])$(id).disabled=!mediaSplitTarget(layer);
-  $('relayoutAtPlayhead').disabled=!!(S.exporting || S.tap) || !relayoutTargets().length;
+  syncPlayheadMenu();
   $('timeNow').textContent = J.fmtTime(S.t);
   $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
   $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
@@ -38742,7 +38819,6 @@ function updateTimeUI() {
 function minimumProjectDuration() {
   let minimum = 0.1;
   for (const line of S.plan.lines) minimum = Math.max(minimum, line.start + 0.04);
-  for (const blank of S.project.lyricBlankCuts || []) if (Number.isFinite(+blank.start)) minimum = Math.max(minimum, +blank.start + 0.04);
   for (const layer of ['media', 'foreground']) {
     minimum = Math.max(minimum, S.plan[layer].cuts.length * 0.04);
     for (const [index, time] of Object.entries(S.project[layer].timing.lineTimes)) {
@@ -38830,8 +38906,38 @@ function setTimelineZoom(zoom) {
   $('timelineZoomIn').disabled = S.timelineZoom >= 8;
   drawTimeline(); drawTimelineLinks();
 }
+// Overlapping cuts (own end times, 1シーン groups) are drawn in stacked lanes, translucent, so every start
+// and end stays reachable. Lanes are assigned greedily by start time; layers grow taller with more lanes.
+function timelineCuts(layer) { return layer === 'lyrics' ? S.plan.cuts.filter(c => !c.blank) : S.plan[layer].cuts; }
+function timelineLanes(layer) {
+  const ends = [], lanes = new Map();
+  for (const cut of [...timelineCuts(layer)].sort((a, b) => a.start - b.start || a.index - b.index)) {
+    let lane = ends.findIndex(end => end <= cut.start + 1e-6);
+    if (lane < 0) { lane = ends.length; ends.push(0); }
+    ends[lane] = cut.end; lanes.set(cut, lane);
+  }
+  return { lanes, count: Math.max(1, ends.length) };
+}
+function timelineCanvas(layer) { return $(layer === 'lyrics' ? 'timeline' : layer === 'media' ? 'mediaTimeline' : 'foregroundTimeline'); }
+function fitTimelineHeight(canvas, count, step, free = 2) {
+  const extra = Math.max(0, count - free) * step;
+  if (+canvas.dataset.extra === extra) return;
+  canvas.dataset.extra = String(extra); canvas.style.height = '';
+  if (extra) canvas.style.height = canvas.clientHeight + extra + 'px';
+}
+// Bar band of a layer's canvas in CSS pixels, and a cut's lane within it.
+function timelineBand(layer, canvas = timelineCanvas(layer)) {
+  const h = canvas.clientHeight;
+  return layer === 'lyrics' ? { top: h * 0.3, bottom: h - 8 } : { top: 17, bottom: h - 3 };
+}
+function laneBox(layer, lane, count, canvas) {
+  const band = timelineBand(layer, canvas), height = (band.bottom - band.top) / count;
+  return { top: band.top + lane * height, height };
+}
 function drawTimeline() {
   sizeTimelineStack();
+  const lanesInfo = timelineLanes('lyrics');
+  fitTimelineHeight($('timeline'), lanesInfo.count, 22);
   const c = $('timeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
@@ -38845,17 +38951,20 @@ function drawTimeline() {
   const beats = S.plan.beats || [];
   x.fillStyle = '#3a3a44';
   for (const b of beats) { if (b > D) break; x.fillRect(Math.round(X(b)), h - 6 * dpr, 1, 6 * dpr); }
-  const top = h * 0.3, bot = h - 8 * dpr;
-  for (const cut of S.plan.cuts) {
-    const x0 = X(cut.start), x1 = X(cut.end);
-    const hue = cut.blank ? 190 : layoutHue(cut.layout);
-    x.fillStyle = `hsla(${hue},70%,58%,0.28)`; x.fillRect(x0, top, Math.max(1, x1 - x0 - 1), bot - top);
-    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, top, Math.max(1, 2 * dpr), bot - top);
-    if (cut.line >= 0) x.fillRect(x0 - 2 * dpr, top - 3 * dpr, 6 * dpr, 6 * dpr);
+  const top = h * 0.3, overlapping = lanesInfo.count > 1, mono = getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace';
+  for (const cut of timelineCuts('lyrics')) {
+    const x0 = X(cut.start), x1 = X(cut.end), lane = laneBox('lyrics', lanesInfo.lanes.get(cut), lanesInfo.count, c);
+    const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0));
+    const hue = layoutHue(cut.layout);
+    x.fillStyle = `hsla(${hue},70%,58%,${overlapping ? 0.2 : 0.28})`; x.fillRect(x0, y0, Math.max(1, x1 - x0 - 1), lh);
+    if (overlapping) { x.strokeStyle = `hsla(${hue},80%,62%,0.55)`; x.lineWidth = dpr; x.strokeRect(x0 + .5, y0 + .5, Math.max(1, x1 - x0 - 1), lh - 1); }
+    x.fillStyle = `hsla(${hue},80%,62%,${overlapping ? 0.8 : 0.95})`; x.fillRect(x0, y0, Math.max(1, 2 * dpr), lh);
+    x.fillRect(x0 - 2 * dpr, top - 3 * dpr, 6 * dpr, 6 * dpr);
+    if (cut.manualEnd) drawTimelineEndHandle(x, x1, y0, lh, dpr);
     if (x1 - x0 > 34 * dpr) {
-      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
-      x.save(); x.beginPath(); x.rect(x0, top, x1 - x0 - 3, bot - top); x.clip();
-      x.fillText(cut.blank ? '無表示' : (cut.text || cut.lineText || ''), x0 + 5 * dpr, top + 13 * dpr); x.restore();
+      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${mono}`;
+      x.save(); x.beginPath(); x.rect(x0, y0, x1 - x0 - 3, lh); x.clip();
+      x.fillText(cut.text || cut.lineText || '', x0 + 5 * dpr, y0 + Math.min(13 * dpr, lh - 3 * dpr)); x.restore();
     }
   }
   x.font = `${10 * dpr}px monospace`;
@@ -38878,25 +38987,35 @@ function extendTapPreview(t) {
     const last = S.plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = end;
   }
 }
+// End handle of a cut with its own end time (「次カット再生まで」 off): drag it to change the end.
+function drawTimelineEndHandle(x, px, y0, height, dpr) {
+  x.fillStyle = '#ece7e1'; x.fillRect(px - 2 * dpr, y0, 2 * dpr, height);
+  x.beginPath(); x.moveTo(px - 2 * dpr, y0); x.lineTo(px - 8 * dpr, y0); x.lineTo(px - 2 * dpr, y0 + 6 * dpr); x.closePath(); x.fill();
+}
 function drawMediaTimeline(layer = 'media') {
   const c = $(layer === 'media' ? 'mediaTimeline' : 'foregroundTimeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const lanesInfo = timelineLanes(layer), overlapping = lanesInfo.count > 1;
+  fitTimelineHeight(c, lanesInfo.count, 24, 1);
   const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
   const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration), X = t => t / D * w;
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
   x.fillStyle = '#8e8a94'; x.font = `${10 * dpr}px monospace`; x.fillText(layer === 'media' ? '背景' : '前景', 6 * dpr, 12 * dpr);
   for (const cut of S.plan[layer].cuts) {
-    const a = X(cut.start), b = X(cut.end);
-    x.fillStyle = cut.type === 'video' ? 'rgba(22,244,212,0.28)' : 'rgba(245,165,12,0.28)'; x.fillRect(a, 17 * dpr, Math.max(1, b - a - 1), h - 20 * dpr);
-    x.fillStyle = cut.type === 'video' ? '#16f4d4' : '#f5a50c'; x.fillRect(a, 17 * dpr, 2 * dpr, h - 20 * dpr);
+    const a = X(cut.start), b = X(cut.end), lane = laneBox(layer, lanesInfo.lanes.get(cut), lanesInfo.count, c);
+    const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0)), rgb = cut.type === 'video' ? '22,244,212' : '245,165,12';
+    x.fillStyle = `rgba(${rgb},${overlapping ? 0.2 : 0.28})`; x.fillRect(a, y0, Math.max(1, b - a - 1), lh);
+    if (overlapping) { x.strokeStyle = `rgba(${rgb},0.55)`; x.lineWidth = dpr; x.strokeRect(a + .5, y0 + .5, Math.max(1, b - a - 1), lh - 1); }
+    x.fillStyle = `rgba(${rgb},${overlapping ? 0.8 : 1})`; x.fillRect(a, y0, 2 * dpr, lh);
     x.fillRect(a - 2 * dpr, 14 * dpr, 6 * dpr, 6 * dpr);
+    if (cut.manualEnd) drawTimelineEndHandle(x, b, y0, lh, dpr);
   }
   x.fillStyle = '#f5a50c'; x.fillRect(Math.round(X(S.t)) - dpr, 0, 2 * dpr, h);
   drawTimelineDragGuide(x, w, h, dpr, layer);
 }
 function drawTimelineDragGuide(ctx, width, height, dpr, layer) {
   const drag = S.timelineDrag;
-  if (!drag || !drag.moved || !linkedRefs(drag.ref).some(ref => boundaryLayer(ref) === layer)) return;
+  if (!drag || !drag.moved || (drag.mode === 'end' ? drag.layer !== layer : !linkedRefs(drag.ref).some(ref => boundaryLayer(ref) === layer))) return;
   const px = drag.preview / Math.max(0.001, S.plan.duration) * width;
   ctx.fillStyle = '#16f4d4'; ctx.fillRect(Math.round(px) - 2 * dpr, 0, 4 * dpr, height);
   ctx.fillStyle = '#101318'; ctx.fillRect(J.clamp(px + 5 * dpr, 0, width - 47 * dpr), 1 * dpr, 47 * dpr, 15 * dpr);
@@ -38910,7 +39029,7 @@ function timelineSeek(ev) {
 function boundaryRef(layer, cut) {
   if (layer === 'foreground') return `f:${cut.index}`;
   if (layer === 'media') return `m:${cut.index}`;
-  return cut.blank ? `l:blank:${cut.blankId}` : `l:${cut.line}:${cut.part}`;
+  return `l:${cut.line}:${cut.part}`;
 }
 function boundaryLayer(ref) { return ref[0] === 'f' ? 'foreground' : ref[0] === 'm' ? 'media' : 'lyrics'; }
 function boundaryCut(ref) {
@@ -38920,7 +39039,6 @@ function boundaryCut(ref) {
     const index = +ref.slice(2);
     return Number.isInteger(index) && index >= 0 && ref === `${ref[0]}:${index}` ? S.plan[layer].cuts[index] || null : null;
   }
-  if (ref.startsWith('l:blank:')) return S.plan.cuts.find(c => c.blank && c.blankId === ref.slice(8)) || null;
   return S.plan.cuts.find(c => c.line >= 0 && boundaryRef('lyrics', c) === ref) || null;
 }
 function linkedRefs(ref) {
@@ -38934,17 +39052,45 @@ function linkedRefs(ref) {
 function timelineMarkers() {
   const stack = $('timelineStack'), D = Math.max(0.001, S.plan.duration), markers = [];
   for (const [layer, id] of [['foreground', 'foregroundTimeline'], ['lyrics', 'timeline'], ['media', 'mediaTimeline']]) {
-    const canvas = $(id), cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0 || c.blank) : S.plan[layer].cuts;
+    const canvas = $(id), cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0) : S.plan[layer].cuts;
     const y = canvas.offsetTop + 11;
     for (const cut of cuts) markers.push({ ref: boundaryRef(layer, cut), layer, x: canvas.offsetLeft + cut.start / D * canvas.clientWidth, y });
   }
   return markers;
 }
+// Lock: a locked cut keeps the look it had when locked (effects, colours, fonts, division, area/placement);
+// planning applies it under the user's own edits, so only direct operations on the cut change it.
+// Direct operations (re-roll, details, position) keep it locked and capture the new look afterwards.
+const LYRIC_UNLOCK = { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined, lockedEffects: undefined, lockedUnits: undefined };
+const MEDIA_UNLOCK = { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined, lockedEffects: undefined };
+function lyricLockPatch(index, plan = S.plan) {
+  const line = plan.lines[index], cuts = plan.cuts.filter(c => c.line === index && Number.isInteger(c.part));
+  return { lock: true, lockedSeed: line.seed,
+    lockedAreas: Object.fromEntries(cuts.map(c => [c.part, c.area || null])),
+    lockedComposites: Object.fromEntries(cuts.map(c => [c.part, { blend: c.blend, opacity: c.opacity }])),
+    lockedEffects: Object.fromEntries(cuts.map(c => [c.part, J.cutLockSnapshot(c, 'lyrics', plan)])),
+    lockedUnits: { text: line.text, groups: cuts.filter(c => !c.recap).map(c => c.text), recap: cuts.some(c => c.recap) } };
+}
+function mediaLockPatch(layer, index, plan = S.plan) {
+  const cut = plan[layer].cuts[index];
+  return { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure,
+    lockedPlacement: cut.placement, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId, lockedEffects: J.cutLockSnapshot(cut, layer, plan) };
+}
+// After a direct operation on a still-locked cut: plan once with the change, then lock that result.
+function relock(layer, index) {
+  const locked = layer === 'lyrics' ? S.project.overrides[index]?.lock : S.project[layer].cutOverrides[index]?.lock;
+  if (!locked) return;
+  const plan = composePlan(S.project);
+  if (layer === 'lyrics') { if (plan.lines[index]) setOv(index, lyricLockPatch(index, plan)); }
+  else if (plan[layer].cuts[index]) mediaOv(index, mediaLockPatch(layer, index, plan), layer);
+}
 function rerollLyricLine(index) {
   const line = S.plan.lines[index]; if (!line) return;
   const current = S.project.overrides[index] || {};
   J.clearPastedLyricEffects(S.project,index);
-  setOv(index, { seed: (current.seed | 0) + 1, lock: false });
+  // A locked line re-rolls its effects but keeps its place (re-layout is 再配置's job).
+  setOv(index, { seed: (current.seed | 0) + 1, ...LYRIC_UNLOCK, ...(current.lock ? { lock: true, lockedAreas: current.lockedAreas } : {}) });
+  relock('lyrics', index);
   replan(); seek(line.start + 0.001);
 }
 function disableAndReroll(layer,index,part=null) {
@@ -38988,9 +39134,7 @@ function disableRerollButton(layer,index,part=null){
 function toggleLyricLineLock(index) {
   const line = S.plan.lines[index]; if (!line) return;
   const current = S.project.overrides[index] || {};
-  const lockedAreas = Object.fromEntries(S.plan.cuts.filter(c => c.line === index && Number.isInteger(c.part)).map(c => [c.part, c.area || null]));
-  const lockedComposites = Object.fromEntries(S.plan.cuts.filter(c => c.line === index && Number.isInteger(c.part)).map(c => [c.part, { blend: c.blend, opacity: c.opacity }]));
-  setOv(index, current.lock ? { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined } : { lock: true, lockedSeed: line.seed, lockedAreas, lockedComposites });
+  setOv(index, current.lock ? LYRIC_UNLOCK : lyricLockPatch(index));
   replan();
 }
 function emphasisFrontmostHint() {
@@ -39021,13 +39165,14 @@ function mediaCutOptions(layer, index) {
 function rerollMediaCut(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
-  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, lock: false }, layer);
+  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedItemId: options.lockedItemId } : {}) }, layer);
+  relock(layer, index);
   replan(); seek(cut.start + 0.001);
 }
 function toggleMediaCutLock(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
-  mediaOv(index, options.lock ? { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined } : { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure, lockedPlacement: cut.placement && { ...cut.placement }, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId }, layer);
+  mediaOv(index, options.lock ? MEDIA_UNLOCK : mediaLockPatch(layer, index), layer);
   replan();
 }
 let effectClipboard=null,localEffectClipboard=false;
@@ -39066,8 +39211,7 @@ function detailButton(onClick) {
 let cutPreviewSolo=false,cutPreviewFocus=false;// remembered while the page is open
 function openCutDetails(layer,index,part=0) {
   const lyric = layer === 'lyrics', L = J.mediaLabel, clone = value => JSON.parse(JSON.stringify(value));
-  const blank = lyric && part === 'blank';
-  const cut = blank ? S.plan.cuts[index] : lyric ? S.plan.cuts.find(c=>c.line===index && c.part===part) : S.plan[layer]?.cuts[index];
+  const cut = lyric ? S.plan.cuts.find(c=>c.line===index && c.part===part) : S.plan[layer]?.cuts[index];
   if (!cut) return;
   pause();
   const key = `${index}:${part}`, original = clone(lyric ? S.project.lyricCutOptions[key] || {} : S.project[layer].cutOverrides[index] || {});
@@ -39082,7 +39226,7 @@ function openCutDetails(layer,index,part=0) {
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
   pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label><p class="hint"></p>`;
-  pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric&&!blank?` / ${part+1}`:''}`;
+  pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;
   pane.querySelector('.progress').setAttribute('aria-label',L('再生位置','Playback position'));
   pane.querySelector('.hint').textContent=L('このカットの区間をループ再生します。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
   const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
@@ -39094,8 +39238,8 @@ function openCutDetails(layer,index,part=0) {
   document.body.appendChild(dialog);
   const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
   let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
-  const findCut=plan=>blank ? plan.cuts.find(c=>c.blankId===cut.blankId)||plan.cuts[index] : lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
-  const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);if(!blank){if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
+  const findCut=plan=>lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
+  const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);{if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
   function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
@@ -39322,19 +39466,22 @@ function openCutDetails(layer,index,part=0) {
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置・サイズ（画面比率）','Placement / size (stage ratios)'],
     motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
     motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
-    technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    untilNext:['次カット再生まで','Until the next cut'],endTime:['カット終了時間（秒）','Cut end (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => names[key] ? L(...names[key]) : key;
-  const nativeKeys = blank ? [] : lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
+  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
     clearTimeout(previewTimer);
     current=refreshPreview();
     render();
   }
   function write(field,value,native) {
-    if (!lyric && native && ['technique','entrance','departure','itemId'].includes(field)) {
-      draft.lock = false; locked = false;
+    // Editing a locked media cut's technique / phases / asset is a direct operation: it stays locked
+    // with the new choice.
+    if (!lyric && native && draft.lock) {
+      const lockedField={technique:'lockedTechnique',entrance:'lockedEntrance',departure:'lockedDeparture',itemId:'lockedItemId'}[field];
+      if(lockedField)delete draft[lockedField];
     }
     if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
     schedulePreview();
@@ -39532,7 +39679,17 @@ function openCutDetails(layer,index,part=0) {
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
     fieldEditor(grid,'start',start,v=>{start=v;});
     const time=grid.querySelector('input');time.previousSibling.textContent=L('開始位置（秒・リンク先も移動）','Start (s; linked cuts move together)');time.min=group?.min??0;time.max=group?.max??S.plan.duration;time.disabled=!group;
-    if(!blank) {
+    // カット終了時間: editable only with 「次カット再生まで」 off (then it may pass the next cut's start).
+    if(!lyric || Number.isInteger(cut.part)) {
+      const auto=draft.untilNext!==false;let endInput=null;
+      fieldEditor(grid,'untilNext',auto,v=>{
+        if(v){delete draft.untilNext;delete draft.endTime;} else {draft.untilNext=false;if(!Number.isFinite(+draft.endTime))draft.endTime=+current.end.toFixed(3);}
+        endInput.disabled=v;endInput.value=String(v?+current.end.toFixed(3):draft.endTime);schedulePreview();
+      });
+      fieldEditor(grid,'endTime',+(auto||!Number.isFinite(+draft.endTime)?current.end:+draft.endTime).toFixed(3),v=>{draft.endTime=+Math.max(start+.04,v).toFixed(3);schedulePreview();});
+      endInput=grid.lastChild.querySelector('input');endInput.disabled=auto;endInput.min=String(+(start+.04).toFixed(3));endInput.max=String(+S.plan.duration.toFixed(3));
+    }
+    {
       fieldEditor(grid,'lock',locked,v=>{locked=v;});
       grid.lastChild.querySelector('span').textContent=lyric?L('行の構成をロック','Lock line composition'):L('カットをロック','Lock cut');
     }
@@ -39544,8 +39701,8 @@ function openCutDetails(layer,index,part=0) {
       if(field==='videoDuration')value=Number(value)||current.end-current.start;
       fieldEditor(grid,field,clone(value??(field==='opacity'?100:'')),v=>write(field,['itemId','technique','entrance','departure'].includes(field)&&v===''?null:v,true));
     }
-    if(!blank) maskEditor(grid);
-    for(const field of blank ? [] : J.cutDetailKeys[lyric?'lyrics':'media']) {
+    maskEditor(grid);
+    for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
       if(field==='mask') continue;// edited by maskEditor
       let value=current[field];
       if(field==='area')value ||= {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
@@ -39565,13 +39722,12 @@ function openCutDetails(layer,index,part=0) {
     formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       applyDisabledChoices(S.project);
-      if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
-      if(!blank && (locked !== initialLock || !lyric)) {
-        if(lyric) setOv(index,locked ? {lock:true,lockedSeed:S.plan.lines[index].seed,
-          lockedAreas:Object.fromEntries(S.plan.cuts.filter(c=>c.line===index&&Number.isInteger(c.part)).map(c=>[c.part,c.area||null])),
-          lockedComposites:Object.fromEntries(S.plan.cuts.filter(c=>c.line===index&&Number.isInteger(c.part)).map(c=>[c.part,{blend:c.blend,opacity:c.opacity}]))
-        } : {lock:false,lockedSeed:undefined,lockedAreas:undefined,lockedComposites:undefined});
-        else mediaOv(index,locked ? {lock:true,lockedSeed:current.seed,lockedTechnique:current.technique,lockedEntrance:current.entrance,lockedDeparture:current.departure,lockedPlacement:draft.placement||current.placement,lockedPlacementMode:current.placementMode,lockedItemId:current.itemId} : {lock:false},layer);
+      if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft;
+      {
+        // Locking here captures the edited result; an unchanged lock is re-captured with the edits.
+        if(lyric){ if(!locked) { if(initialLock) setOv(index,LYRIC_UNLOCK); } else { if(!initialLock) setOv(index,{lock:true}); relock('lyrics',index); } }
+        else if(!locked) mediaOv(index,MEDIA_UNLOCK,layer);
+        else { mediaOv(index,{lock:true},layer); relock(layer,index); }
       }
       if(group&&start!==cut.start) for(const member of group.members)setTimelineBoundaryTime(member,J.clamp(start,group.min,group.max));
       replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
@@ -39650,7 +39806,7 @@ function drawTimelineAssetSelects() {
   if(!overlay){overlay=document.createElement('div');overlay.id='timelineAssets';stack.append(overlay);}
   const retained=new Set();
   for(const layer of ['foreground','media']){
-    const m=S.project[layer],canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline');
+    const m=S.project[layer],canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline'),lanes=timelineLanes(layer);
     const options=`<option value="">${J.mediaLabel('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
     for(const cut of S.plan[layer].cuts){
       const key=`${layer}-${cut.index}`,duration=Math.max(.001,S.plan.duration);
@@ -39675,7 +39831,9 @@ function drawTimelineAssetSelects() {
       select.title=m.randomOrder?J.mediaLabel('素材を変更すると現在の並びでランダム順をオフにします','Changing the asset turns off random order and keeps the current order'):cut.name;
       select.setAttribute('aria-label',`${J.mediaLabel(layer==='foreground'?'前景':'背景',layer==='foreground'?'Foreground':'Background')} ${cut.index+1}: ${J.mediaLabel('素材を変更','Change asset')}`);
       select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+5}px`;
-      select.style.top=`${canvas.offsetTop+22}px`;select.style.width=`${width}px`;
+      // Each select sits on its cut's lane.
+      const lane=laneBox(layer,lanes.lanes.get(cut),lanes.count,canvas);
+      select.style.top=`${canvas.offsetTop+(lanes.count>1?lane.top+Math.max(0,(lane.height-20)/2):22)}px`;select.style.width=`${width}px`;
     }
   }
   for(const select of Array.from(overlay.children))if(!retained.has(select.dataset.key))select.remove();
@@ -39686,7 +39844,7 @@ function performTimelineAction(control) {
   if (!Number.isInteger(index) || index < 0) return;
   if(control.dataset.action==='disableReroll'){disableAndReroll(layer,index,control.dataset.part==null?null:+control.dataset.part);return;}
   if (['copy','paste'].includes(control.dataset.action)) { effectClipboardAction(control.dataset.action,layer,index,+control.dataset.part||0); return; }
-  if (control.dataset.action === 'details') { openCutDetails(layer,index,control.dataset.part === 'blank' ? 'blank' : +control.dataset.part || 0); return; }
+  if (control.dataset.action === 'details') { openCutDetails(layer,index,+control.dataset.part || 0); return; }
   if (control.dataset.action === 'area') {
     if (layer === 'lyrics') openAreaEditor(index);
     else if (layer === 'foreground' || layer === 'media') openMediaEditor(index, layer);
@@ -39757,21 +39915,20 @@ function drawTimelineLinks() {
     const cut = S.plan.cuts.find(c => c.line === line.index && c.part === 0);
     return cut ? action('lyrics', cut, line.index, !!(S.project.overrides[line.index] || {}).lock) : '';
   }).join('');
+  const lyricLanes = timelineLanes('lyrics');
   const frontmostActions = S.plan.cuts.filter(cut => cut.line >= 0 && Number.isInteger(cut.part)).map(cut => {
     const canvas = $('timeline'), startX = canvas.offsetLeft + cut.start / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
     const x = J.clamp(startX + 10, canvas.offsetLeft + 9, canvas.offsetLeft + canvas.clientWidth - 9);
-    const y = canvas.offsetTop + 33, active = !!cut.frontmost;
+    // With stacked lanes each cut's buttons sit on its own lane.
+    const lane = laneBox('lyrics', lyricLanes.lanes.get(cut), lyricLanes.count, canvas);
+    const y = canvas.offsetTop + (lyricLanes.count > 1 ? lane.top + lane.height / 2 : 33), active = !!cut.frontmost;
     const clipboard=['copy','paste'].map((action,i)=>`<g class="timeline-action" data-action="${action}" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${action==='copy'?J.mediaLabel('演出をコピー','Copy effects'):J.mediaLabel('演出をペースト','Paste effects')}" transform="translate(${Math.min(x+40+i*20,canvas.offsetLeft+canvas.clientWidth-9)} ${y})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON[action].replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`).join('');
     const graphic = ICON.frontmost.replace('<svg ', '<svg x="-7" y="-7" width="14" height="14" ');
     return `${clipboard}<g class="timeline-action ${active ? 'frontmost' : ''}" data-action="frontmost" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${cut.line + 1}行目${cut.part + 1}カット目を最前に表示" aria-pressed="${active}" transform="translate(${x} ${y})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${graphic}</g><g class="timeline-action" data-action="details" data-layer="lyrics" data-index="${cut.line}" data-part="${cut.part}" role="button" tabindex="0" aria-label="${J.mediaLabel('カットの詳細編集','Edit cut details')}" transform="translate(${Math.min(x + 20,canvas.offsetLeft + canvas.clientWidth - 9)} ${y})"><title>${J.mediaLabel('カットの詳細編集','Edit cut details')}</title><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON.details.replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`;
   }).join('');
-  const blankActions = S.plan.cuts.filter(c=>c.blank).map(c=> {
-    const canvas=$('timeline'), x=canvas.offsetLeft+c.start/S.plan.duration*canvas.clientWidth+10;
-    return `<g class="timeline-action" data-action="details" data-layer="lyrics" data-index="${c.index}" data-part="blank" role="button" tabindex="0" aria-label="${J.mediaLabel('カットの詳細編集','Edit cut details')}" transform="translate(${x} ${canvas.offsetTop+33})"><rect x="-9" y="-9" width="18" height="18" rx="3"/>${ICON.details.replace('<svg ','<svg x="-7" y="-7" width="14" height="14" ')}</g>`;
-  }).join('');
   const mediaActions = ['foreground', 'media'].map(layer => S.plan[layer].cuts.map(cut => action(layer,cut,cut.index,!!mediaCutOptions(layer,cut.index).lock)).join('')).join('');
   drawTimelineAssetSelects();
-  svg.innerHTML = links + preview + handles + lyricActions + frontmostActions + blankActions + mediaActions;
+  svg.innerHTML = links + preview + handles + lyricActions + frontmostActions + mediaActions;
 }
 function markerNear(clientX, clientY, sourceLayer) {
   const rect = $('timelineStack').getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
@@ -39783,15 +39940,33 @@ function markerNear(clientX, clientY, sourceLayer) {
   }
   return best;
 }
+// The start boundary or end handle under the pointer; with stacked lanes the pointer's lane wins.
 function timelineBoundaryAt(ev, layer) {
-  const rect = ev.currentTarget.getBoundingClientRect(), duration = S.plan.duration;
-  const cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0 || c.blank) : S.plan[layer].cuts;
-  let chosen = null, distance = 9;
+  const canvas = ev.currentTarget, rect = canvas.getBoundingClientRect(), duration = S.plan.duration;
+  const info = timelineLanes(layer), band = timelineBand(layer, canvas), y = ev.clientY - rect.top;
+  const laneAt = info.count > 1 && y >= band.top && y <= band.bottom ? Math.min(info.count - 1, Math.floor((y - band.top) / ((band.bottom - band.top) / info.count))) : null;
+  const cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0) : S.plan[layer].cuts;
+  let best = null;
   for (const cut of cuts) {
-    const px = rect.left + cut.start / duration * rect.width, delta = Math.abs(ev.clientX - px);
-    if (delta < distance) { chosen = cut; distance = delta; }
+    const penalty = laneAt != null && info.lanes.get(cut) !== laneAt ? 6 : 0;
+    const start = Math.abs(ev.clientX - (rect.left + cut.start / duration * rect.width)) + penalty;
+    if (start < 9 && (!best || start < best.distance)) best = { cut, distance: start, end: false };
+    if (!cut.manualEnd || layer === 'lyrics' && !Number.isInteger(cut.part)) continue;
+    const end = Math.abs(ev.clientX - (rect.left + cut.end / duration * rect.width)) + penalty;
+    if (end < 9 && (!best || end < best.distance)) best = { cut, distance: end, end: true };
   }
-  return chosen ? timelineBoundaryForCut(chosen, layer) : null;
+  if (!best) return null;
+  return best.end ? { mode: 'end', layer, key: layer === 'lyrics' ? `${best.cut.line}:${best.cut.part}` : best.cut.index, start: best.cut.end, min: best.cut.start + 0.04, max: duration }
+    : timelineBoundaryForCut(best.cut, layer);
+}
+// カットの終了時間 (turns 「次カット再生まで」 off); null restores it.
+function setCutEnd(layer, key, time) {
+  const patch = time == null ? { untilNext: undefined, endTime: undefined } : { untilNext: false, endTime: +time.toFixed(3) };
+  if (layer === 'lyrics') {
+    const options = S.project.lyricCutOptions, next = { ...options[key], ...patch };
+    for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
+    if (Object.keys(next).length) options[key] = next; else delete options[key];
+  } else mediaOv(key, patch, layer);
 }
 function timelineBoundaryForCut(chosen, layer) {
   const duration = S.plan.duration;
@@ -39801,12 +39976,6 @@ function timelineBoundaryForCut(chosen, layer) {
     min = index ? cutsForLayer[index - 1].start + 0.04 : 0;
     max = index + 1 < cutsForLayer.length ? cutsForLayer[index + 1].start - 0.04 : duration - 0.04;
     target = { index };
-  } else if (chosen.blank) {
-    const rows = [...S.plan.lines.map(line => ({ start: line.start })), ...S.plan.cuts.filter(c => c.blank).map(c => ({ start: c.start, id: c.blankId }))].sort((a, b) => a.start - b.start);
-    const i = rows.findIndex(row => row.id === chosen.blankId);
-    min = i > 0 ? rows[i - 1].start + 0.04 : 0;
-    max = i + 1 < rows.length ? rows[i + 1].start - 0.04 : duration - 0.04;
-    target = { blankId: chosen.blankId };
   } else if (chosen.part === 'interlude') {
     const previous = S.plan.cuts.find(c => c.line === chosen.line && typeof c.part === 'number' && c.end === chosen.start);
     min = previous ? previous.start + 0.22 : S.plan.lines[chosen.line].start + 0.5;
@@ -39821,8 +39990,9 @@ function timelineBoundaryForCut(chosen, layer) {
     target = { line, part: 0, nextLineStart: lines[line + 1] && lines[line + 1].start };
   } else {
     const previous = S.plan.cuts.find(c => c.line === chosen.line && c.part === chosen.part - 1);
+    const following = S.plan.cuts.find(c => c.line === chosen.line && c.part === chosen.part + 1);
     min = previous ? previous.start + 0.22 : S.plan.lines[chosen.line].start + 0.22;
-    max = chosen.end - 0.22;
+    max = (following ? following.start : S.plan.lines[chosen.line].visEnd ?? chosen.end) - 0.22;
     target = { line: chosen.line, part: chosen.part };
   }
   return max > min ? { layer, ref: boundaryRef(layer, chosen), start: chosen.start, min, max, ...target } : null;
@@ -39830,10 +40000,7 @@ function timelineBoundaryForCut(chosen, layer) {
 function setTimelineBoundaryTime(drag, t) {
   if (drag.layer === 'lyrics') {
     const timing = S.project.timing;
-    if (drag.blankId) {
-      const blank = S.project.lyricBlankCuts.find(b => b.id === drag.blankId);
-      if (blank) blank.start = t;
-    } else if (drag.part === 0) {
+    if (drag.part === 0) {
       timing.lineTimes[drag.line] = t;
       if (drag.nextLineStart != null && timing.lineTimes[drag.line + 1] == null) timing.lineTimes[drag.line + 1] = +drag.nextLineStart.toFixed(3);
     } else {
@@ -39881,7 +40048,6 @@ function updateCutInfo() {
   const idx = `${cut ? cut.index : -1}/${mc ? mc.index : -1}/${fc ? fc.index : -1}`;
   const li = cut ? cut.line : -1;
   if (li !== S.curLine) { S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li)); S.curLine = li; }
-  S.blankEls.forEach((el, id) => el.classList.toggle('cur', !!cut && cut.blankId === id));
   const active = S.sourceTab === 'foreground' ? fc : mc;
   S.mediaLineEls.forEach((el, i) => el.classList.toggle('cur', !!active && i === active.index));
   if (idx === lastCutIdx) return;
@@ -39895,12 +40061,9 @@ function updateCutInfo() {
 // At a line's own start it takes the first half of that line's slot, so no cut collapses to nothing.
 function lyricInsertRange(start) {
   const at=S.plan.lines.find(line=>Math.abs(line.start-start)<.05);
-  const lineEnd=line=>Math.min(S.plan.lines.find(l=>l.index>line.index && l.start>line.start+1e-6)?.start ?? S.plan.duration,
-    S.plan.cuts.find(c=>c.blank && c.start>line.start+1e-6)?.start ?? Infinity);
+  const lineEnd=line=>S.plan.lines.find(l=>l.index>line.index && l.start>line.start+1e-6)?.start ?? S.plan.duration;
   if(at)return {at,end:start+(lineEnd(at)-start)/2};
-  const nextLine=S.plan.lines.find(line=>line.start>start+1e-6)?.start ?? S.plan.duration;
-  const nextBlank=S.plan.cuts.find(c=>c.blank && c.start>start+1e-6)?.start ?? Infinity;
-  return {at:null,end:Math.min(nextLine,nextBlank)};
+  return {at:null,end:S.plan.lines.find(line=>line.start>start+1e-6)?.start ?? S.plan.duration};
 }
 function insertLyricAtPlayhead(text) {
   if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
@@ -39956,33 +40119,6 @@ function openInsertAtPlayhead(layer) {
   dialog.querySelector('textarea')?.addEventListener('input',e=>e.target.setCustomValidity(''));
   dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();dialog.querySelector('textarea,select').focus();
 }
-function canInsertBlankAtPlayhead() {
-  if(!S.plan || S.exporting || S.tap || S.project.lyricBlankCuts.length>=1000)return false;
-  if(S.plan.cuts.some(c=>c.blank && S.t>=c.start && S.t<c.end))return false;
-  const end=S.plan.cuts.find(c=>c.line>=0 && c.start>S.t+1e-6)?.start ?? S.plan.duration;
-  return S.t>=0 && end-S.t>=.04;
-}
-function insertBlankAtPlayhead() {
-  if(!canInsertBlankAtPlayhead())return;
-  pause();
-  const start=S.t,next=S.plan.lines.find(line=>line.start>start+1e-6);
-  S.project.lyricBlankCuts.push({id:crypto.randomUUID(),start,beforeLine:next?.index ?? S.plan.lines.length,untilNextCut:true});
-  replan();seek(start);
-}
-function insertLyricBlankCut(rows, position) {
-  if (S.project.lyricBlankCuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
-  const previous = rows[position - 1], next = rows[position];
-  let start = previous ? (next ? (previous.start + next.start) / 2 : (previous.start + S.plan.duration) / 2) : 0;
-  if (next && next.start - start < 0.04) {
-    if (next.blankId) {
-      const blank = S.project.lyricBlankCuts.find(b => b.id === next.blankId);
-      if (blank) blank.start = +Math.max(0.4, next.start + 0.4).toFixed(3);
-    } else S.project.timing.lineTimes[next.line] = +Math.max(0.4, next.start + 0.4).toFixed(3);
-  }
-  if (!next && S.plan.duration - start < 0.04) start = Math.max(0, S.plan.duration - 0.4);
-  S.project.lyricBlankCuts.push({ id: crypto.randomUUID(), beforeLine: next ? next.line ?? next.beforeLine : S.plan.lines.length, start: +start.toFixed(3) });
-  replan(); seek(start + 0.001);
-}
 function reconcileLyricLines(previous, next) {
   const oldLines = J.parseLyrics(previous).lines, newLines = J.parseLyrics(next).lines;
   if (oldLines.length === newLines.length) return false;
@@ -40006,9 +40142,24 @@ function reconcileLyricLines(previous, next) {
     }
   }
   const anchors = [[-1, -1], ...[...oldToNew].sort((a, b) => a[0] - b[0]), [oldLines.length, newLines.length]];
+  // Shared characters at either end: typing before a line and pressing Enter splits "new + old" in two,
+  // and the old line (with its time, lock and settings) belongs to the half that keeps its text.
+  const overlap = (a, b) => {
+    let p = 0, s = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+    return Math.max(p, s);
+  };
   for (let a = 1; a < anchors.length; a++) {
     const [oldBefore, newBefore] = anchors[a - 1], [oldAfter, newAfter] = anchors[a];
-    for (let k = 1; k <= Math.min(oldAfter - oldBefore - 1, newAfter - newBefore - 1); k++) oldToNew.set(oldBefore + k, newBefore + k);
+    const oldGap = oldAfter - oldBefore - 1, newGap = newAfter - newBefore - 1;
+    if (oldGap === 1 && newGap > 1) {
+      const text = oldLines[oldBefore + 1].text;
+      let best = 1;
+      for (let k = 2; k <= newGap; k++) if (overlap(text, newLines[newBefore + k].text) > overlap(text, newLines[newBefore + best].text)) best = k;
+      oldToNew.set(oldBefore + 1, newBefore + best);
+      continue;
+    }
+    for (let k = 1; k <= Math.min(oldGap, newGap); k++) oldToNew.set(oldBefore + k, newBefore + k);
   }
   const oldStarts = J.computeTiming(S.project, { lines: oldLines }, audioLike()).starts;
   const oldTimes = S.project.timing.lineTimes || {};
@@ -40029,10 +40180,7 @@ function reconcileLyricLines(previous, next) {
     let end = i; while (end < newLines.length && !newToOld.has(end)) end++;
     if (end < newLines.length) {
       const before = newToOld.get(i - 1), after = newToOld.get(end);
-      const left = before == null ? 0 : oldStarts[before];
-      // An empty cut between the neighbours would swallow lines placed after it; keep them before it.
-      const blank = (S.project.lyricBlankCuts || []).map(b => +b.start).filter(t => t > left + .3 * (end - i) && t < oldStarts[after]).sort((a, b) => a - b)[0];
-      const right = blank ?? oldStarts[after];
+      const left = before == null ? 0 : oldStarts[before], right = oldStarts[after];
       for (let j = i; j < end; j++) newTimes[j] = +(left + (right - left) * (j - i + 1) / (end - i + 1)).toFixed(3);
     }
     i = end;
@@ -40059,11 +40207,6 @@ function reconcileLyricLines(previous, next) {
     if (mapped != null) newCutOptions[`${mapped}:${match[2]}`] = value;
   }
   S.project.lyricCutOptions = newCutOptions;
-  const newStarts = J.computeTiming(S.project, { lines: newLines }, audioLike()).starts;
-  for (const blank of S.project.lyricBlankCuts) {
-    const following = newStarts.findIndex(start => start > +blank.start + 1e-6);
-    blank.beforeLine = following < 0 ? newLines.length : following;
-  }
   const mapRef = ref => {
     const match = /^l:(\d+):(.*)$/.exec(ref);
     if (!match) return ref;
@@ -40077,28 +40220,11 @@ function reconcileLyricLines(previous, next) {
   return true;
 }
 function renderLines() {
-  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.blankEls = new Map(); S.curLine = -2;
+  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2;
   const ov = S.project.overrides;
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
-  const rows = [...S.plan.lines.map(ln => ({ line: ln.index, start: ln.start })), ...S.plan.cuts.filter(c => c.blank).map(c => ({ blankId: c.blankId, beforeLine: c.beforeLine, start: c.start }))].sort((a, b) => a.start - b.start);
-  const addButton = position => {
-    const row = document.createElement('li'); row.className = 'media-cut-insert';
-    row.innerHTML = `<button class="ghost small" type="button" aria-label="${position + 1}番目に無表示カットを追加">＋ 無表示カットを追加</button>`;
-    row.querySelector('button').addEventListener('click', () => insertLyricBlankCut(rows, position));
-    ol.appendChild(row);
-  };
-  rows.forEach((row, position) => {
-    addButton(position);
-    if (row.blankId) {
-      const li = document.createElement('li'); li.className = 'ln lyric-ln lyric-blank-ln';
-      li.innerHTML = `<span class="no">—</span><input class="time mono" type="number" step="0.01" min="0" value="${row.start.toFixed(2)}" aria-label="無表示カットの開始秒"><span class="txt">無表示</span><div class="meta"><span class="cuts"></span><span class="tools"><button class="ghost small remove-blank" type="button" aria-label="無表示カットを削除">削除</button></span></div>`;
-      li.querySelector('.time').addEventListener('change', e => { const blank = S.project.lyricBlankCuts.find(b => b.id === row.blankId); if (blank) blank.start = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
-      li.querySelector('.txt').addEventListener('click', () => seek(row.start + 0.001));
-      li.querySelector('.remove-blank').addEventListener('click', () => { S.project.lyricBlankCuts = S.project.lyricBlankCuts.filter(b => b.id !== row.blankId); replan(); });
-      li.querySelector('.tools').appendChild(detailButton(()=>openCutDetails('lyrics',S.plan.cuts.find(c=>c.blankId===row.blankId).index,'blank')));
-      ol.appendChild(li); S.blankEls.set(row.blankId, li);
-      return;
-    }
+  const rows = S.plan.lines.map(ln => ({ line: ln.index, start: ln.start }));
+  rows.forEach(row => {
     const i = row.line, ln = S.plan.lines[i];
     const o = ov[i] || {};
     const li = document.createElement('li'); li.className = 'ln lyric-ln';
@@ -40160,7 +40286,6 @@ function renderLines() {
     });
     ol.appendChild(li); S.lineEls.push(li);
   });
-  addButton(rows.length);
   $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
   syncSourceTab();
 }
@@ -40226,14 +40351,21 @@ function applyAreaEditor(following) {
   if (!S.areaEdit || !S.areaEdit.draft) return;
   const { kind, index, draft } = S.areaEdit;
   remember();
+  // 「以降にも適用」 leaves other locked cuts alone; the edited cut itself stays locked with its new place.
   if (kind !== 'lyric') {
     for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
+      if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
       mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined }, kind);
     }
+    relock(kind, index);
   } else {
     const area = J.lyricArea({ ...draft, angle: S.areaEdit.angle, lockAspect: S.areaEdit.lockAspect });
     const automatic = S.areaEdit.autoDraft === JSON.stringify(area);
-    for (let i = index; i < (following ? S.plan.lines.length : index + 1); i++) setOv(i, { area: automatic ? undefined : area, lockedAreas: undefined });
+    for (let i = index; i < (following ? S.plan.lines.length : index + 1); i++) {
+      if (i !== index && S.project.overrides[i]?.lock) continue;
+      setOv(i, { area: automatic ? undefined : area, lockedAreas: undefined });
+    }
+    relock('lyrics', index);
   }
   S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   replan(); commit();
@@ -40332,8 +40464,8 @@ function mediaLyricTargets(layer) {
   const m = layer && S.project[layer];
   const choices=J.mediaInsertChoices(S.project,layer);
   if (!m || !choices.length) return [];
-  // Cut mode includes every linkable lyric boundary, including blanks/interludes.
-  let targets = S.plan.cuts.filter(cut => m.lyricInsertMode === 'cut' ? cut.line >= 0 || cut.blank : cut.line >= 0 && cut.part === 0);
+  // Cut mode includes every linkable lyric boundary, including interludes.
+  let targets = S.plan.cuts.filter(cut => m.lyricInsertMode === 'cut' ? cut.line >= 0 : cut.line >= 0 && cut.part === 0);
   if (m.groupLyricsAsOneCut !== false) {
     const seen = new Set();
     targets = targets.filter(cut => {
@@ -40436,6 +40568,67 @@ function relayoutTargets() {
     if (cut && cut.itemId && !mediaCutOptions(layer, cut.index).lock) targets.push({ layer, cut });
   }
   return targets;
+}
+// 「再生位置で編集」: the first row picks the action, the second row the layer. Buttons that cannot act at the
+// playhead are greyed out, and an action whose layers all are is too.
+const PLAYHEAD_LABELS = {
+  insert: ['挿入', 'Insert'], split: ['分割', 'Split'], endHere: ['ここまで再生', 'Play until here'], untilNext: ['次カットまで再生', 'Play until the next cut'],
+};
+const LAYER_LABELS = { foreground: ['前景', 'Foreground'], lyrics: ['歌詞', 'Lyrics'], media: ['背景', 'Background'] };
+const PLAYHEAD_TITLES = {
+  insert: ['を再生位置に挿入', ': insert at the playhead'], split: ['を再生位置で分割', ': split at the playhead'],
+  endHere: ['のカットを再生位置で終わらせる', ': end the cut at the playhead'], untilNext: ['のカットを次のカットの開始まで表示', ': show the cut until the next cut starts'],
+};
+function initPlayheadMenu() {
+  const L = J.mediaLabel;
+  for (const button of document.querySelectorAll('[data-playhead-menu]')) {
+    button.textContent = L(...PLAYHEAD_LABELS[button.dataset.playheadMenu]);
+    button.addEventListener('click', () => { S.playheadMenu = S.playheadMenu === button.dataset.playheadMenu ? null : button.dataset.playheadMenu; syncPlayheadMenu(); });
+  }
+  for (const button of document.querySelectorAll('[data-playhead-action]')) {
+    const [layerJa, layerEn] = LAYER_LABELS[button.dataset.layer], [ja, en] = PLAYHEAD_TITLES[button.dataset.playheadAction];
+    button.textContent = L(layerJa, layerEn); button.title = L(layerJa + ja, layerEn + en); button.setAttribute('aria-label', button.title);
+  }
+  $('relayoutAtPlayhead').textContent = L('配置をシャッフル', 'Shuffle layout');
+  $('relayoutAtPlayhead').title = L('再生位置のカットの配置を組み直す', 'Re-lay out the cuts at the playhead');
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.playheadMenu) { S.playheadMenu = null; syncPlayheadMenu(); } });
+}
+// The cut 「ここまで再生」 / 「次カットまで再生」 acts on: the latest-starting cut before the playhead
+// (the one showing, or the last one to have ended); 次カットまで再生 only for a cut with its own end.
+function playheadEndTarget(layer, manualOnly) {
+  if (S.exporting || S.tap || !S.plan) return null;
+  const cuts = (layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0 && Number.isInteger(c.part)) : S.plan[layer].cuts)
+    .filter(c => c.start < S.t - 0.04 && (!manualOnly || c.manualEnd));
+  const pick = list => list.reduce((best, c) => !best || c.start > best.start ? c : best, null);
+  const target = pick(cuts.filter(c => S.t < c.end)) || pick(cuts);
+  if (!target || !manualOnly && Math.abs(target.end - S.t) < 0.01) return null;
+  return { cut: target, key: layer === 'lyrics' ? `${target.line}:${target.part}` : target.index };
+}
+function playheadActionEnabled(action, layer) {
+  const busy = S.exporting || S.tap || !S.plan;
+  if (action === 'insert') return !busy && S.t < S.plan.duration - .04;
+  if (action === 'split') return !!mediaSplitTarget(layer);
+  return !!playheadEndTarget(layer, action === 'untilNext');
+}
+function syncPlayheadMenu() {
+  const menu = S.playheadMenu;
+  for (const button of document.querySelectorAll('[data-playhead-action]')) {
+    button.hidden = button.dataset.playheadAction !== menu;
+    button.disabled = !playheadActionEnabled(button.dataset.playheadAction, button.dataset.layer);
+  }
+  for (const button of document.querySelectorAll('[data-playhead-menu]')) {
+    const action = button.dataset.playheadMenu;
+    button.disabled = ![...document.querySelectorAll(`[data-playhead-action="${action}"]`)].some(b => !b.disabled);
+    button.setAttribute('aria-expanded', String(menu === action));
+  }
+  document.querySelector('.playhead-secondary').hidden = !menu;
+  $('relayoutAtPlayhead').disabled = !!(S.exporting || S.tap) || !relayoutTargets().length;
+}
+function playheadEnd(layer, untilNext) {
+  const target = playheadEndTarget(layer, untilNext); if (!target) return;
+  pause();
+  setCutEnd(layer, target.key, untilNext ? null : S.t);
+  replan();
 }
 function relayoutAtPlayhead() {
   const targets = relayoutTargets(); if (!targets.length) return;
@@ -41049,13 +41242,31 @@ function baseName() {
   const k = J.keyMode(S.project);
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
+// 「ファイル名に日時を追加」: _yyyyMMddHHmm (local time) before the extension; the choice is remembered here.
+const fileStamp = (d = new Date()) => '_' + [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()].map((v, i) => String(v).padStart(i ? 2 : 4, '0')).join('');
+function withFileStamp(filename) { const dot = filename.lastIndexOf('.'); return filename.slice(0, dot) + fileStamp() + filename.slice(dot); }
+function syncFilenamePreview() {
+  const ext = $('filenameDlg').dataset.ext || '.jizuraichi', name = J.exportFilename($('saveFilename').value, ext, baseName());
+  $('saveFilenamePreview').textContent = $('saveFilenameDate').checked ? J.mediaLabel('保存名：', 'Saved as: ') + withFileStamp(name) : '';
+}
+// Resolves { filename, name }: the file name to write, and its name without extension or added date.
 function requestFilename(kind) {
-  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings';
+  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings', ext = project ? '.jizuraichi' : '.json';
   $('filenameDlgTitle').textContent = J.mediaLabel(project ? 'プロジェクトを保存' : 'AE用に書き出し', project ? 'Save project' : 'Export for AE');
   if (kind === 'settings') $('filenameDlgTitle').textContent = J.mediaLabel('設定のみ書き出し', 'Export settings only');
-  $('saveFilename').value = baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '.jizuraichi' : '_ae.json');
+  // A saved project's name is the next project save's default.
+  const saved = kind === 'project' && S.project.projectName ? S.project.projectName : '';
+  $('saveFilename').value = (saved || baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '' : '_ae')) + ext;
+  dlg.dataset.ext = ext;
+  try { $('saveFilenameDate').checked = localStorage.getItem('jizura.filenameDate') === 'true'; } catch (e) {}
+  syncFilenamePreview();
   dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
-  return new Promise(resolve=>dlg.addEventListener('close',()=>resolve(dlg.returnValue === 'save' ? J.exportFilename($('saveFilename').value,project ? '.jizuraichi' : '.json',baseName()) : null),{once:true}));
+  return new Promise(resolve=>dlg.addEventListener('close',()=>{
+    if (dlg.returnValue !== 'save') { resolve(null); return; }
+    const plain = J.exportFilename($('saveFilename').value, ext, baseName());
+    try { localStorage.setItem('jizura.filenameDate', String($('saveFilenameDate').checked)); } catch (e) {}
+    resolve({ filename: $('saveFilenameDate').checked ? withFileStamp(plain) : plain, name: plain.slice(0, -ext.length) });
+  },{once:true}));
 }
 function confirmHiddenLayers() {
   return !['foreground','lyrics','media'].some(layer=>S.project.layerVisibility?.[layer]===false) || window.confirm(J.mediaLabel('非表示のレイヤーは書き出しに含まれません。よろしいですか？','Hidden layers will not be included in the export. Continue?'));
@@ -41287,7 +41498,7 @@ function renderThemes() {
 }
 function syncUI() {
   renderThemes();
-  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
+  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || ''; $('projectName').value = S.project.projectName || '';
   $('lyrics').value = S.project.lyrics;
   $('bpm').value = S.project.timing.bpm > 0 ? S.project.timing.bpm : '';
   $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : 'なし';
@@ -41391,7 +41602,6 @@ function bind() {
     });
   }
   for(const [id,layer] of [['insertLyricAtPlayhead','lyrics'],['insertForegroundAtPlayhead','foreground'],['insertBackgroundAtPlayhead','media']])$(id).addEventListener('click',()=>openInsertAtPlayhead(layer));
-  $('insertBlankAtPlayhead').addEventListener('click',insertBlankAtPlayhead);
   for(const layer of ['foreground','lyrics','media']){
     const button=document.createElement('button');button.type='button';button.dataset.layer=layer;
     button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg>';
@@ -41400,7 +41610,11 @@ function bind() {
   }
   $('splitForegroundCut').addEventListener('click',()=>openSplitMediaCut('foreground'));
   $('splitBackgroundCut').addEventListener('click',()=>openSplitMediaCut('media'));
-  $('relayoutAtPlayhead').addEventListener('click',relayoutAtPlayhead);
+  $('relayoutAtPlayhead').addEventListener('click',()=>{S.playheadMenu=null;relayoutAtPlayhead();syncPlayheadMenu();});
+  for(const [id,layer] of [['endForegroundHere','foreground'],['endLyricHere','lyrics'],['endBackgroundHere','media']])$(id).addEventListener('click',()=>playheadEnd(layer,false));
+  for(const [id,layer] of [['untilNextForeground','foreground'],['untilNextLyric','lyrics'],['untilNextBackground','media']])$(id).addEventListener('click',()=>playheadEnd(layer,true));
+  document.querySelector('.playhead-secondary').addEventListener('click',e=>{if(e.target.closest('[data-playhead-action]')){S.playheadMenu=null;syncPlayheadMenu();}});
+  initPlayheadMenu();
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
@@ -41411,6 +41625,8 @@ function bind() {
   $('timelineLegend').before(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
+  for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
+  $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
   $('sourceLyrics').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'lyrics'; syncSourceTab(); });
   $('sourceMedia').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'media'; renderMediaList(); renderMediaLines(); });
   $('sourceForeground').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'foreground'; renderMediaList(); renderMediaLines(); });
@@ -41532,6 +41748,9 @@ function bind() {
   });
   $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; markUndoGroup('title'); replanSoon(300); });
   $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; markUndoGroup('artist'); replanSoon(300); });
+  $('projectName').addEventListener('input', e => { S.project.projectName = e.target.value; markUndoGroup('projectName'); replanSoon(300); });
+  $('saveFilename').addEventListener('input', syncFilenamePreview);
+  $('saveFilenameDate').addEventListener('change', syncFilenamePreview);
   $('btnSyntax').addEventListener('click', e => { const s = $('syntax'); s.hidden = !s.hidden; e.target.setAttribute('aria-expanded', String(!s.hidden)); });
   $('bpm').addEventListener('change', e => { S.project.timing.bpm = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
   $('offset').addEventListener('change', e => { S.project.timing.offset = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
@@ -41619,8 +41838,8 @@ function bind() {
     let drag = null;
     tl.addEventListener('pointerdown', e => {
       const boundary = !S.exporting && !S.tap && timelineBoundaryAt(e, layer);
-      const limits = boundary && boundaryGroupLimits(boundary.ref);
-      drag = boundary && limits && limits.max > limits.min ? { ...boundary, min: limits.min, max: limits.max, mode: 'boundary', originX: e.clientX, preview: boundary.start, moved: false, duration: S.plan.duration } : { mode: 'seek' };
+      const limits = boundary && (boundary.mode === 'end' ? boundary : boundaryGroupLimits(boundary.ref));
+      drag = boundary && limits && limits.max > limits.min ? { ...boundary, min: limits.min, max: limits.max, mode: boundary.mode === 'end' ? 'end' : 'boundary', originX: e.clientX, preview: boundary.start, moved: false, duration: S.plan.duration } : { mode: 'seek' };
       tl.setPointerCapture(e.pointerId);
       if (boundary) { pause(); S.timelineDrag = drag; }
       else timelineSeek(e);
@@ -41637,9 +41856,10 @@ function bind() {
     });
     tl.addEventListener('pointerup', () => {
       if (!drag) return;
-      if (drag.mode === 'boundary') {
+      if (drag.mode === 'boundary' || drag.mode === 'end') {
         S.timelineDrag = null;
-        if (drag.moved) commitTimelineBoundary(drag);
+        if (drag.moved && drag.mode === 'end') { setCutEnd(drag.layer, drag.key, drag.preview); replan(); }
+        else if (drag.moved) commitTimelineBoundary(drag);
         else seek(drag.start);
         drawTimeline();
         drawTimelineLinks();
@@ -41821,16 +42041,19 @@ function bind() {
   });
   $('btnSave').addEventListener('click', async () => {
     if (S.projectBusy) return;
-    const filename = await requestFilename('project'); if (!filename) return;
+    const request = await requestFilename('project'); if (!request) return;
     S.projectBusy = true; $('btnSave').disabled = true;
+    // The saved name (without an added date) becomes the project name, stored in the file too.
+    const previousName = S.project.projectName;
+    S.project.projectName = request.name; $('projectName').value = request.name;
     const project = JSON.parse(JSON.stringify(S.project)), audio = S.audioFile;
-    try { await J.saveFile(filename, await J.packProject(project, audio)); }
-    catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    try { await J.saveFile(request.filename, await J.packProject(project, audio)); autosave(); }
+    catch (err) { S.project.projectName = previousName; $('projectName').value = previousName || ''; toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
     finally { S.projectBusy = false; $('btnSave').disabled = false; }
   });
   $('btnSaveSettings').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
-    const filename = await requestFilename('settings'); if (!filename) return;
+    const filename = (await requestFilename('settings'))?.filename; if (!filename) return;
     S.projectBusy = true; $('btnSaveSettings').disabled = true;
     try { await J.saveFile(filename, await J.packProject(J.settingsProject(S.project), null)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
@@ -41858,7 +42081,7 @@ function bind() {
   $('btnAE').addEventListener('click', async () => {
     if (S.projectBusy || S.exporting) return;
     if(!confirmHiddenLayers())return;
-    const filename = await requestFilename('ae'); if (!filename) return;
+    const filename = (await requestFilename('ae'))?.filename; if (!filename) return;
     try { await J.saveFile(filename, JSON.stringify(J.planForAE(S.plan, S.project), null, 1)); }
     catch (err) { toast(J.mediaLabel('保存できませんでした：','Could not save: ') + err.message); }
   });
@@ -41876,6 +42099,12 @@ function bind() {
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
+    // Ctrl+S / ⌘S saves the project (also while typing) instead of the browser's "save page".
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
+      e.preventDefault();
+      if (!e.repeat && !S.projectBusy && !S.exporting && !document.querySelector('dialog[open]')) $('btnSave').click();
+      return;
+    }
     const tag = (e.target && e.target.tagName) || '';
     const typing = (e.target && e.target.isContentEditable) || /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (!typing && !e.altKey && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undoMove(e.shiftKey ? 1 : -1); return; }
@@ -42033,7 +42262,7 @@ J.ui = S;
 // hooks for hosts that embed the app (the After Effects CEP panel)
 J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
   openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
-  insertBlankAtPlayhead, removeLyricCut, removeMediaCut, connectTimelineBoundaries,
+  removeLyricCut, removeMediaCut, connectTimelineBoundaries,
   boundaryGroupLimits, commitTimelineBoundary };
 })();
 
