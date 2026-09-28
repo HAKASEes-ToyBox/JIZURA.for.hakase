@@ -697,3 +697,19 @@ body.preview-fullscreen-open { overflow: hidden; }
 #tapPanel { position:absolute; left:8px; right:8px; width:min(520px,calc(100% - 16px)); margin-inline:auto; z-index:40; background:#241f16; box-shadow:0 8px 28px #000b; box-sizing:border-box; }
 #tapPanel[hidden] { display:none; }
 #tapPanel .next { overflow-wrap:anywhere; }
+
+/* A phone uses the available width, not the laptop preview minimum. Keep text
+   autosizing from enlarging controls after drawers or canvas content change. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+#app { width:100%; min-width:0; }
+#app .work, .col-stage > * { min-width:0; }
+.viewport { min-width:0; grid-template-columns:minmax(0,1fr); }
+.viewport canvas { max-width:100%; }
+@media (max-width:760px) {
+  #app .bar { width:100%; gap:10px; }
+  #app .brand, #app .acts, #app .proj { max-width:100%; min-width:0; }
+  #app.compact-ui .col-stage { padding:8px 4px; }
+  .transport .undo-btns { flex-wrap:wrap; }
+  .transport input.tc, .timeline-asset-select { font-size:16px; }
+  .preview-options button, .playhead-primary button { max-width:100%; white-space:normal; }
+}

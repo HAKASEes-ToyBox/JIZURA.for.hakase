@@ -716,6 +716,22 @@ body.preview-fullscreen-open { overflow: hidden; }
 #tapPanel[hidden] { display:none; }
 #tapPanel .next { overflow-wrap:anywhere; }
 
+/* A phone uses the available width, not the laptop preview minimum. Keep text
+   autosizing from enlarging controls after drawers or canvas content change. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+#app { width:100%; min-width:0; }
+#app .work, .col-stage > * { min-width:0; }
+.viewport { min-width:0; grid-template-columns:minmax(0,1fr); }
+.viewport canvas { max-width:100%; }
+@media (max-width:760px) {
+  #app .bar { width:100%; gap:10px; }
+  #app .brand, #app .acts, #app .proj { max-width:100%; min-width:0; }
+  #app.compact-ui .col-stage { padding:8px 4px; }
+  .transport .undo-btns { flex-wrap:wrap; }
+  .transport input.tc, .timeline-asset-select { font-size:16px; }
+  .preview-options button, .playhead-primary button { max-width:100%; white-space:normal; }
+}
+
 </style>
 </head>
 <body>
@@ -38798,17 +38814,23 @@ function sizeViewport() {
   const full=document.fullscreenElement===vp||vp.classList.contains('preview-fullscreen');
   // Measure the desktop layout, not the expanded compact layout, to avoid breakpoint oscillation.
   const wasCompact=app.classList.contains('compact-ui');
-  if(!full)app.classList.remove('compact-ui');
+  const screenW=document.documentElement.clientWidth, screenH=document.documentElement.clientHeight;
+  const phone=screenW<=760;
+  // Do not briefly restore desktop columns on phones: mobile layout viewports can
+  // expand to accommodate their intrinsic width before the next resize callback.
+  if(!full)app.classList.toggle('compact-ui',screenW<=1180||!!S.tap);
   const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && el.id!=='tapPanel' && getComputedStyle(el).display!=='none');
   const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
   const desktopH=Math.max(0,innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   const desktopW=vp.clientWidth||800,fitH=Math.min(desktopW/ar,desktopH);
-  const compact=full?wasCompact:!!S.tap||innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
+  const compact=full?wasCompact:!!S.tap||screenW<=1180||Math.min(fitH,fitH*ar)<270;
   app.classList.toggle('compact-ui',compact);
   if(compact!==wasCompact){S.sourceOpen=false;syncSourceDrawer();}
-  let cssW=vp.clientWidth||800,cssH=cssW/ar;
+  const viewportStyle=getComputedStyle(vp);
+  const availableW=vp.clientWidth-(parseFloat(viewportStyle.paddingLeft)||0)-(parseFloat(viewportStyle.paddingRight)||0);
+  let cssW=Math.max(1,Math.min(availableW,screenW)),cssH=cssW/ar;
   // Preserve a 270px short edge where screen width permits; scroll controls below the preview.
-  const maxH=full?innerHeight:compact?Math.max(270/Math.min(1,ar),innerHeight*.5):Math.max(60,desktopH);
+  const maxH=full?screenH:phone?Math.max(1,screenH*.5):compact?Math.max(270/Math.min(1,ar),screenH*.5):Math.max(60,desktopH);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
