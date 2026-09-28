@@ -290,6 +290,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     return J.arrangeLyricGroup(cuts,boxes,{seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap,avoid:settings.autoPlacement&&settings.avoidCenter?J.CENTER_AVOID:null});
   };
   const assign=(cut,area,mode)=>{
+    if(project.overrides?.[cut.line]?.lock)return;// locked lines keep their area
     cut.area=area;cut.areaMode=mode;
     if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE||cut.suppressed&&cut.contentScale===J.SUPPRESSED_TEXT_SCALE)cut.contentScale=1;
     const layout=J.LAYOUTS[cut.layout];

@@ -279,7 +279,16 @@ function draw() {
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo(); drawItemFrames();
+  updateTimeUI(); drawTimeline(); followTimelinePlayhead(); updateCutInfo(); drawItemFrames();
+}
+// While playing, page the zoomed timeline so the playhead stays in view (paused briefly after the user
+// scrolls it by hand).
+let timelineUserScroll = 0;
+function followTimelinePlayhead() {
+  if (!S.playing || S.timelineZoom <= 1 || performance.now() - timelineUserScroll < 1500) return;
+  const scroll = $('timelineScroll'), box = scroll.getBoundingClientRect(), line = $('timeline').getBoundingClientRect();
+  const x = line.left + line.width * J.clamp(S.t / Math.max(.001, S.plan.duration), 0, 1);
+  if (x < box.left + box.width * .05 || x > box.right - box.width * .08) scroll.scrollLeft += x - (box.left + box.width * .15);
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -513,11 +522,39 @@ function timelineMarkers() {
   }
   return markers;
 }
+// Lock: a locked cut keeps the look it had when locked (effects, colours, fonts, division, area/placement);
+// planning applies it under the user's own edits, so only direct operations on the cut change it.
+// Direct operations (re-roll, details, position) keep it locked and capture the new look afterwards.
+const LYRIC_UNLOCK = { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined, lockedEffects: undefined, lockedUnits: undefined };
+const MEDIA_UNLOCK = { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined, lockedEffects: undefined };
+function lyricLockPatch(index, plan = S.plan) {
+  const line = plan.lines[index], cuts = plan.cuts.filter(c => c.line === index && Number.isInteger(c.part));
+  return { lock: true, lockedSeed: line.seed,
+    lockedAreas: Object.fromEntries(cuts.map(c => [c.part, c.area || null])),
+    lockedComposites: Object.fromEntries(cuts.map(c => [c.part, { blend: c.blend, opacity: c.opacity }])),
+    lockedEffects: Object.fromEntries(cuts.map(c => [c.part, J.cutLockSnapshot(c, 'lyrics', plan)])),
+    lockedUnits: { text: line.text, groups: cuts.filter(c => !c.recap).map(c => c.text), recap: cuts.some(c => c.recap) } };
+}
+function mediaLockPatch(layer, index, plan = S.plan) {
+  const cut = plan[layer].cuts[index];
+  return { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure,
+    lockedPlacement: cut.placement, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId, lockedEffects: J.cutLockSnapshot(cut, layer, plan) };
+}
+// After a direct operation on a still-locked cut: plan once with the change, then lock that result.
+function relock(layer, index) {
+  const locked = layer === 'lyrics' ? S.project.overrides[index]?.lock : S.project[layer].cutOverrides[index]?.lock;
+  if (!locked) return;
+  const plan = composePlan(S.project);
+  if (layer === 'lyrics') { if (plan.lines[index]) setOv(index, lyricLockPatch(index, plan)); }
+  else if (plan[layer].cuts[index]) mediaOv(index, mediaLockPatch(layer, index, plan), layer);
+}
 function rerollLyricLine(index) {
   const line = S.plan.lines[index]; if (!line) return;
   const current = S.project.overrides[index] || {};
   J.clearPastedLyricEffects(S.project,index);
-  setOv(index, { seed: (current.seed | 0) + 1, lock: false });
+  // A locked line re-rolls its effects but keeps its place (re-layout is 再配置's job).
+  setOv(index, { seed: (current.seed | 0) + 1, ...LYRIC_UNLOCK, ...(current.lock ? { lock: true, lockedAreas: current.lockedAreas } : {}) });
+  relock('lyrics', index);
   replan(); seek(line.start + 0.001);
 }
 function disableAndReroll(layer,index,part=null) {
@@ -561,9 +598,7 @@ function disableRerollButton(layer,index,part=null){
 function toggleLyricLineLock(index) {
   const line = S.plan.lines[index]; if (!line) return;
   const current = S.project.overrides[index] || {};
-  const lockedAreas = Object.fromEntries(S.plan.cuts.filter(c => c.line === index && Number.isInteger(c.part)).map(c => [c.part, c.area || null]));
-  const lockedComposites = Object.fromEntries(S.plan.cuts.filter(c => c.line === index && Number.isInteger(c.part)).map(c => [c.part, { blend: c.blend, opacity: c.opacity }]));
-  setOv(index, current.lock ? { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined } : { lock: true, lockedSeed: line.seed, lockedAreas, lockedComposites });
+  setOv(index, current.lock ? LYRIC_UNLOCK : lyricLockPatch(index));
   replan();
 }
 function emphasisFrontmostHint() {
@@ -594,13 +629,14 @@ function mediaCutOptions(layer, index) {
 function rerollMediaCut(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
-  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, lock: false }, layer);
+  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedItemId: options.lockedItemId } : {}) }, layer);
+  relock(layer, index);
   replan(); seek(cut.start + 0.001);
 }
 function toggleMediaCutLock(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
-  mediaOv(index, options.lock ? { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined } : { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure, lockedPlacement: cut.placement && { ...cut.placement }, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId }, layer);
+  mediaOv(index, options.lock ? MEDIA_UNLOCK : mediaLockPatch(layer, index), layer);
   replan();
 }
 let effectClipboard=null,localEffectClipboard=false;
@@ -906,8 +942,11 @@ function openCutDetails(layer,index,part=0) {
     render();
   }
   function write(field,value,native) {
-    if (!lyric && native && ['technique','entrance','departure','itemId'].includes(field)) {
-      draft.lock = false; locked = false;
+    // Editing a locked media cut's technique / phases / asset is a direct operation: it stays locked
+    // with the new choice.
+    if (!lyric && native && draft.lock) {
+      const lockedField={technique:'lockedTechnique',entrance:'lockedEntrance',departure:'lockedDeparture',itemId:'lockedItemId'}[field];
+      if(lockedField)delete draft[lockedField];
     }
     if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
     schedulePreview();
@@ -1139,12 +1178,11 @@ function openCutDetails(layer,index,part=0) {
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       applyDisabledChoices(S.project);
       if(!blank) { if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft; }
-      if(!blank && (locked !== initialLock || !lyric)) {
-        if(lyric) setOv(index,locked ? {lock:true,lockedSeed:S.plan.lines[index].seed,
-          lockedAreas:Object.fromEntries(S.plan.cuts.filter(c=>c.line===index&&Number.isInteger(c.part)).map(c=>[c.part,c.area||null])),
-          lockedComposites:Object.fromEntries(S.plan.cuts.filter(c=>c.line===index&&Number.isInteger(c.part)).map(c=>[c.part,{blend:c.blend,opacity:c.opacity}]))
-        } : {lock:false,lockedSeed:undefined,lockedAreas:undefined,lockedComposites:undefined});
-        else mediaOv(index,locked ? {lock:true,lockedSeed:current.seed,lockedTechnique:current.technique,lockedEntrance:current.entrance,lockedDeparture:current.departure,lockedPlacement:draft.placement||current.placement,lockedPlacementMode:current.placementMode,lockedItemId:current.itemId} : {lock:false},layer);
+      if(!blank) {
+        // Locking here captures the edited result; an unchanged lock is re-captured with the edits.
+        if(lyric){ if(!locked) { if(initialLock) setOv(index,LYRIC_UNLOCK); } else { if(!initialLock) setOv(index,{lock:true}); relock('lyrics',index); } }
+        else if(!locked) mediaOv(index,MEDIA_UNLOCK,layer);
+        else { mediaOv(index,{lock:true},layer); relock(layer,index); }
       }
       if(group&&start!==cut.start) for(const member of group.members)setTimelineBoundaryTime(member,J.clamp(start,group.min,group.max));
       replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
@@ -1579,9 +1617,24 @@ function reconcileLyricLines(previous, next) {
     }
   }
   const anchors = [[-1, -1], ...[...oldToNew].sort((a, b) => a[0] - b[0]), [oldLines.length, newLines.length]];
+  // Shared characters at either end: typing before a line and pressing Enter splits "new + old" in two,
+  // and the old line (with its time, lock and settings) belongs to the half that keeps its text.
+  const overlap = (a, b) => {
+    let p = 0, s = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+    return Math.max(p, s);
+  };
   for (let a = 1; a < anchors.length; a++) {
     const [oldBefore, newBefore] = anchors[a - 1], [oldAfter, newAfter] = anchors[a];
-    for (let k = 1; k <= Math.min(oldAfter - oldBefore - 1, newAfter - newBefore - 1); k++) oldToNew.set(oldBefore + k, newBefore + k);
+    const oldGap = oldAfter - oldBefore - 1, newGap = newAfter - newBefore - 1;
+    if (oldGap === 1 && newGap > 1) {
+      const text = oldLines[oldBefore + 1].text;
+      let best = 1;
+      for (let k = 2; k <= newGap; k++) if (overlap(text, newLines[newBefore + k].text) > overlap(text, newLines[newBefore + best].text)) best = k;
+      oldToNew.set(oldBefore + 1, newBefore + best);
+      continue;
+    }
+    for (let k = 1; k <= Math.min(oldGap, newGap); k++) oldToNew.set(oldBefore + k, newBefore + k);
   }
   const oldStarts = J.computeTiming(S.project, { lines: oldLines }, audioLike()).starts;
   const oldTimes = S.project.timing.lineTimes || {};
@@ -1799,14 +1852,21 @@ function applyAreaEditor(following) {
   if (!S.areaEdit || !S.areaEdit.draft) return;
   const { kind, index, draft } = S.areaEdit;
   remember();
+  // 「以降にも適用」 leaves other locked cuts alone; the edited cut itself stays locked with its new place.
   if (kind !== 'lyric') {
     for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
+      if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
       mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined }, kind);
     }
+    relock(kind, index);
   } else {
     const area = J.lyricArea({ ...draft, angle: S.areaEdit.angle, lockAspect: S.areaEdit.lockAspect });
     const automatic = S.areaEdit.autoDraft === JSON.stringify(area);
-    for (let i = index; i < (following ? S.plan.lines.length : index + 1); i++) setOv(i, { area: automatic ? undefined : area, lockedAreas: undefined });
+    for (let i = index; i < (following ? S.plan.lines.length : index + 1); i++) {
+      if (i !== index && S.project.overrides[i]?.lock) continue;
+      setOv(i, { area: automatic ? undefined : area, lockedAreas: undefined });
+    }
+    relock('lyrics', index);
   }
   S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   replan(); commit();
@@ -2984,6 +3044,8 @@ function bind() {
   $('timelineLegend').before(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
+  for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
+  $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
   $('sourceLyrics').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'lyrics'; syncSourceTab(); });
   $('sourceMedia').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'media'; renderMediaList(); renderMediaLines(); });
   $('sourceForeground').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'foreground'; renderMediaList(); renderMediaLines(); });
@@ -3449,6 +3511,12 @@ function bind() {
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
+    // Ctrl+S / ⌘S saves the project (also while typing) instead of the browser's "save page".
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
+      e.preventDefault();
+      if (!e.repeat && !S.projectBusy && !S.exporting && !document.querySelector('dialog[open]')) $('btnSave').click();
+      return;
+    }
     const tag = (e.target && e.target.tagName) || '';
     const typing = (e.target && e.target.isContentEditable) || /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
     if (!typing && !e.altKey && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undoMove(e.shiftKey ? 1 : -1); return; }
