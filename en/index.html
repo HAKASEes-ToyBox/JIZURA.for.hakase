@@ -732,6 +732,33 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .preview-options button, .playhead-primary button { max-width:100%; white-space:normal; }
 }
 
+/* Denser stage controls on small displays; drawer and popup targets stay roomy. */
+@media (max-width:1180px), (max-height:800px) {
+  .col-stage .transport, .col-stage .preview-options { gap:4px; }
+  .col-stage .transport button, .col-stage .preview-options button,
+  .col-stage .playhead-primary button, .col-stage .timeline-zoom button {
+    font-size:12px; line-height:1.3; padding:4px 7px; min-height:30px;
+  }
+  .col-stage .transport .play { width:32px; height:30px; padding:0; }
+  .col-stage .transport .tc:not(input) { font-size:12px; }
+  .col-stage .undo-btns, .col-stage .hist-btns, .col-stage .playhead-primary { gap:4px; }
+  .col-stage .timeline-toolbar { gap:4px 6px; margin-bottom:4px; }
+  .col-stage .timeline-position-label, .col-stage .preview-options { font-size:12px; }
+  .col-stage .timeline-zoom { gap:3px; }
+  .col-stage .timeline-zoom span { min-width:36px; }
+}
+@media (max-width:760px) {
+  .col-stage .transport button, .col-stage .preview-options button,
+  .col-stage .playhead-primary button, .col-stage .timeline-zoom button {
+    font-size:11px; padding:3px 5px; min-height:32px;
+  }
+  .col-stage .transport .play { height:32px; }
+  .col-stage .transport .tc:not(input) { font-size:11px; }
+  .col-stage .transport #btnOmakase { letter-spacing:0; }
+  .col-stage .timeline-position-label, .col-stage .preview-options { font-size:11px; }
+  .col-stage .timeline-toolbar .timeline-split { flex:1 1 180px; }
+}
+
 </style>
 </head>
 <body>
