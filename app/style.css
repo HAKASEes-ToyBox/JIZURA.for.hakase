@@ -762,3 +762,5 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-card { cursor:pointer; }
 #effectFavoritesDialog { overscroll-behavior:contain; }
 .favorite-transfer-status:empty { display:none; }
+
+#effectFavoritesDialog.favorite-drop-active { outline:3px dashed var(--cyan); outline-offset:-6px; }

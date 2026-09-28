@@ -781,6 +781,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #effectFavoritesDialog { overscroll-behavior:contain; }
 .favorite-transfer-status:empty { display:none; }
 
+#effectFavoritesDialog.favorite-drop-active { outline:3px dashed var(--cyan); outline-offset:-6px; }
+
 </style>
 </head>
 <body>
@@ -797,10 +799,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <details class="header-menu" id="projectMenu">
         <summary>プロジェクト</summary><div class="header-menu-items">
           <button id="btnNew">新規</button>
-          <label class="file" tabindex="0" title="素材入りプロジェクト（.jizuraichi）を開く">開く<input id="fileProject" type="file"></label>
+          <label class="file" tabindex="0" title="素材入りプロジェクト（.jizuraichi）を開く">開く<input id="fileProject" type="file" accept=".jizuraichi,.json"></label>
           <button id="btnSave" title="画像・動画・音声を含むプロジェクトを保存">保存</button>
           <button id="btnSaveSettings">設定のみ書き出し</button>
-          <label class="file" tabindex="0">設定のみ読み込み<input id="fileSettings" type="file"></label>
+          <label class="file" tabindex="0">設定のみ読み込み<input id="fileSettings" type="file" accept=".jizuraichi,.json"></label>
         </div>
       </details>
       <details class="header-menu" id="outputMenu">
@@ -38694,8 +38696,9 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     finally{transferBusy(false);}
   };
   importButton.onclick=()=>{if(!busy)fileInput.click();};
-  fileInput.onchange=async()=>{
-    const file=fileInput.files?.[0];fileInput.value='';if(!file||busy)return;
+  fileInput.onchange=()=>{const file=fileInput.files?.[0];fileInput.value='';importFile(file);};
+  async function importFile(file){
+    if(!file||busy||dead)return;
     transferBusy(true);status.textContent='';
     try{
       const loaded=await J.readEffectFavorites(file);if(dead)return;
@@ -38716,6 +38719,28 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     }catch(e){status.textContent=L('読み込めませんでした：','Could not import: ')+e.message;}
     finally{transferBusy(false);}
   };
+  let dragDepth=0;
+  const isFileDrag=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
+  dialog.addEventListener('dragenter',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    dragDepth++;if(!busy)dialog.classList.add('favorite-drop-active');
+  });
+  dialog.addEventListener('dragover',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    event.dataTransfer.dropEffect=busy?'none':'copy';
+  });
+  dialog.addEventListener('dragleave',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    if(--dragDepth<=0){dragDepth=0;dialog.classList.remove('favorite-drop-active');}
+  });
+  dialog.addEventListener('drop',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    dragDepth=0;dialog.classList.remove('favorite-drop-active');if(busy)return;
+    const files=Array.from(event.dataTransfer.files);
+    if(files.length!==1){status.textContent=L('ファイルを1つずつドロップしてください。','Drop one file at a time.');return;}
+    if(!/\.(jizuraichifav|jizuraichi|json)$/i.test(files[0].name)){status.textContent=L('お気に入りファイルまたはプロジェクトファイルを指定してください。','Choose a favorites or project file.');return;}
+    importFile(files[0]);
+  });
   async function ensureSample(){
     if(target||sampleId||!list.some(f=>f.payload.kind==='media'))return;
     const image=J.effectPreviewImage;await image.decode();if(dead)return;

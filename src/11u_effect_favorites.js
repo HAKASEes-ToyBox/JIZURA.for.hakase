@@ -101,8 +101,9 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     finally{transferBusy(false);}
   };
   importButton.onclick=()=>{if(!busy)fileInput.click();};
-  fileInput.onchange=async()=>{
-    const file=fileInput.files?.[0];fileInput.value='';if(!file||busy)return;
+  fileInput.onchange=()=>{const file=fileInput.files?.[0];fileInput.value='';importFile(file);};
+  async function importFile(file){
+    if(!file||busy||dead)return;
     transferBusy(true);status.textContent='';
     try{
       const loaded=await J.readEffectFavorites(file);if(dead)return;
@@ -123,6 +124,28 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     }catch(e){status.textContent=L('読み込めませんでした：','Could not import: ')+e.message;}
     finally{transferBusy(false);}
   };
+  let dragDepth=0;
+  const isFileDrag=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
+  dialog.addEventListener('dragenter',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    dragDepth++;if(!busy)dialog.classList.add('favorite-drop-active');
+  });
+  dialog.addEventListener('dragover',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    event.dataTransfer.dropEffect=busy?'none':'copy';
+  });
+  dialog.addEventListener('dragleave',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    if(--dragDepth<=0){dragDepth=0;dialog.classList.remove('favorite-drop-active');}
+  });
+  dialog.addEventListener('drop',event=>{
+    if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();
+    dragDepth=0;dialog.classList.remove('favorite-drop-active');if(busy)return;
+    const files=Array.from(event.dataTransfer.files);
+    if(files.length!==1){status.textContent=L('ファイルを1つずつドロップしてください。','Drop one file at a time.');return;}
+    if(!/\.(jizuraichifav|jizuraichi|json)$/i.test(files[0].name)){status.textContent=L('お気に入りファイルまたはプロジェクトファイルを指定してください。','Choose a favorites or project file.');return;}
+    importFile(files[0]);
+  });
   async function ensureSample(){
     if(target||sampleId||!list.some(f=>f.payload.kind==='media'))return;
     const image=J.effectPreviewImage;await image.decode();if(dead)return;
