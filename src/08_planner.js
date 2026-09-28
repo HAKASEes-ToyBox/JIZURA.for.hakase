@@ -28,6 +28,7 @@ J.defaultProject = () => ({
   timing: { bpm: 0, offset: 0.4, snap: true, tail: 0.9, lineTimes: {}, cutTimes: {}, lineScale: 1 },
   overrides: {},
   lyricCutOptions: {},
+  effectFavorites: [], favoriteSequence: 0,
   lyricEffects: { autoPlacement: true, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   timelineLinks: [],
   layerVisibility: {foreground:true,lyrics:true,media:true},

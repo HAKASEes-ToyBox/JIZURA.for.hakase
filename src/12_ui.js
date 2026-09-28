@@ -9,8 +9,8 @@ const LS_KEY = 'jizura.project.v1';
 const MEDIA_DELETE_KEY = 'jizura.media.pendingDelete.v1';
 const HUD_CHARS = '0123456789:./-_()【】・No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
 const ICON = {
-  copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M10 3V2H2v8h1"/></svg>',
-  paste: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5 3H2v11h12V3h-3"/><rect x="5" y="1" width="6" height="4" rx="1"/><path d="M5 8h6M5 11h6"/></svg>',
+  copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m8 1 2.1 4.5 4.9.7-3.5 3.5.8 4.9L8 12.3l-4.3 2.3.8-4.9L1 6.2l4.9-.7Z"/></svg>',
+  paste: '<svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 8H1m3-3L1 8l3 3m12-10 2.1 4.5 4.9.7-3.5 3.5.8 4.9-4.3-2.3-4.3 2.3.8-4.9L9 6.2l4.9-.7Z"/></svg>',
 
   details: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/><path d="M5 2v4M11 6v4M7 10v4" stroke-width="3"/></svg>',
   area: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10"/><path d="M2 6h12M5 3v10"/></svg>',
@@ -80,6 +80,8 @@ function mergeProject(p) {
   o.themes = J.themeIds(o);
   delete o.jevPrompt;
   migrateLyricBlankCuts(o);
+  o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
+  o.favoriteSequence = Math.max(o.effectFavorites.length,Math.floor(+o.favoriteSequence)||0);
   o.timelineLinks = Array.isArray(p && p.timelineLinks) ? p.timelineLinks : [];
   o.media = J.normalizeMedia(p && p.media);
   o.foreground = J.normalizeMedia(p && p.foreground);
@@ -704,32 +706,39 @@ function toggleMediaCutLock(layer, index) {
   mediaOv(index, options.lock ? MEDIA_UNLOCK : mediaLockPatch(layer, index), layer);
   replan();
 }
-let effectClipboard=null,localEffectClipboard=false;
-async function effectClipboardAction(action,layer,index,part=0){
-  const getCut=()=>layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer]?.cuts[index];
-  const cut=getCut();if(!cut)return;
-  const L=J.mediaLabel;
+function effectFavoriteAction(action,layer,index,part=0){
+  const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer]?.cuts[index];
+  if(!cut)return;
+  pause();
   if(action==='copy'){
-    const text=JSON.stringify(J.cutEffectsPayload(cut,layer,S.plan));effectClipboard=text;
-    try{await navigator.clipboard.writeText(text);localEffectClipboard=false;toast(L('演出をクリップボードにコピーしました','Effects copied to clipboard'));}
-    catch(e){localEffectClipboard=true;toast(L('演出をコピーしました（このページ内で貼り付け可能）','Effects copied (paste within this page)'));}
-    return;
-  }
-  pause();const project=S.project;
-  let text;if(localEffectClipboard)text=effectClipboard;else try{text=await navigator.clipboard.readText();}catch(e){text=effectClipboard;}
-  if(project!==S.project||getCut()!==cut||S.playing){toast(L('カットが変更されました。もう一度貼り付けてください','The cut changed. Paste again.'));return;}
-  try{
-    const payload=J.readCutEffects(text);
-    if(payload.kind!==(layer==='lyrics'?'lyrics':'media')){toast(L('歌詞同士、または前景・背景同士で貼り付けてください','Paste between lyric cuts, or between foreground/background cuts'));return;}
-    remember();J.pasteCutEffects(S.project,S.plan,layer,cut,payload);replan();
-    toast(L('表示エリアを維持して演出を貼り付けました','Effects pasted; display area preserved'));
-  }catch(e){toast(L('貼り付け可能な演出がクリップボードにありません','The clipboard does not contain valid cut effects'));}
+    const list=S.project.effectFavorites ||= [];
+    const number=(S.project.favoriteSequence||0)+1;
+    const name=prompt(J.mediaLabel('お気に入りの名前','Favorite name'),J.mediaLabel('お気に入り','Favorite ')+number);
+    if(name===null)return;
+    remember();S.project.favoriteSequence=number;
+    list.push({id:J.favoriteId(),name:name.trim()||J.mediaLabel('お気に入り','Favorite ')+number,payload:J.cutEffectsPayload(cut,layer,S.plan)});
+    autosave();toast(J.mediaLabel('演出をお気に入りに追加しました','Effects added to favorites'));
+  }else openEffectFavorites({layer,index,part,cut});
 }
-function effectClipboardButtons(layer,index,part=0){
+function openEffectFavorites(target=null){
+  pause();const project=S.project;
+  J.openEffectFavorites({project,target,compose:composePlan,
+    changed:()=>{autosave();},
+    apply:payload=>{
+      if(project!==S.project)return false;
+      const cut=target.layer==='lyrics'?S.plan.cuts.find(c=>c.line===target.index&&c.part===target.part):S.plan[target.layer]?.cuts[target.index];
+      if(cut!==target.cut)return false;
+      remember();J.pasteCutEffects(S.project,S.plan,target.layer,cut,payload);replan();
+      toast(J.mediaLabel('お気に入りの演出を適用しました','Favorite effects applied'));return true;
+    },
+    closed:()=>{J.syncMediaPreview(S.plan,S.t,false);S.need=true;}
+  });
+}
+function effectFavoriteButtons(layer,index,part=0){
   return ['copy','paste'].map(action=>{
     const button=document.createElement('button');button.type='button';button.className='icon ghost effect-'+action;
-    button.title=action==='copy'?J.mediaLabel('演出をコピー','Copy effects'):J.mediaLabel('演出をペースト','Paste effects');button.setAttribute('aria-label',button.title);
-    button.innerHTML=ICON[action];button.onclick=()=>effectClipboardAction(action,layer,index,part);return button;
+    button.title=action==='copy'?J.mediaLabel('演出をお気に入りに追加','Add effects to favorites'):J.mediaLabel('お気に入りから演出を適用','Apply favorite effects');button.setAttribute('aria-label',button.title);
+    button.innerHTML=ICON[action];button.onclick=()=>effectFavoriteAction(action,layer,index,part);return button;
   });
 }
 function detailButton(onClick) {
@@ -1291,7 +1300,7 @@ function drawItemFrames() {
       items.push({layer,cut,index:cut.index,area:{...area,angle:cut.placement?.angle||0}});
     }
   }
-  const L=J.mediaLabel,labels={copy:L('演出をコピー','Copy effects'),paste:L('演出をペースト','Paste effects'),dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const L=J.mediaLabel,labels={copy:L('演出をお気に入りに追加','Add effects to favorites'),paste:L('お気に入りから演出を適用','Apply favorite effects'),dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
   const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
@@ -1382,7 +1391,7 @@ function openTimelineCutMenu(trigger) {
   const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer].cuts[index];
   if(!cut)return;
   const L=J.mediaLabel,locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
-  const labels={dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L(locked?'ロック解除':'ロック',locked?'Unlock':'Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),copy:L('演出をコピー','Copy effects'),paste:L('演出をペースト','Paste effects'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const labels={dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L(locked?'ロック解除':'ロック',locked?'Unlock':'Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),copy:L('演出をお気に入りに追加','Add effects to favorites'),paste:L('お気に入りから演出を適用','Apply favorite effects'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
   const actions=['dice','disableReroll','lock',...(layer==='lyrics'||J.mediaSourceAvailable(cut)?['area']:[]),'details','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'remove'];
   const menu=document.createElement('div'),controller=new AbortController(),signal=controller.signal;
   menu.id='timelineCutMenu';menu.className='timeline-cut-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',L('カットの操作','Cut actions'));
@@ -1413,7 +1422,7 @@ function performTimelineAction(control) {
   const layer = control.dataset.layer, index = +control.dataset.index;
   if (!Number.isInteger(index) || index < 0) return;
   if(control.dataset.action==='disableReroll'){disableAndReroll(layer,index,control.dataset.part==null?null:+control.dataset.part);return;}
-  if (['copy','paste'].includes(control.dataset.action)) { effectClipboardAction(control.dataset.action,layer,index,+control.dataset.part||0); return; }
+  if (['copy','paste'].includes(control.dataset.action)) { effectFavoriteAction(control.dataset.action,layer,index,+control.dataset.part||0); return; }
   if (control.dataset.action === 'details') { openCutDetails(layer,index,+control.dataset.part || 0); return; }
   if (control.dataset.action === 'area') {
     if (layer === 'lyrics') openAreaEditor(index);
@@ -1832,7 +1841,7 @@ function renderLines() {
       blend.addEventListener('change', e => setLyricCutComposite(i, c.part, { blend: e.target.value || undefined }));
       opacity.addEventListener('change', e => setLyricCutComposite(i, c.part, { opacity: e.target.value === '' ? undefined : J.clamp(+e.target.value || 0, 0, 100) }));
       reset.addEventListener('click', () => setLyricCutComposite(i, c.part, { blend: undefined, opacity: undefined }));
-      cutOption.append(name, detailButton(() => openCutDetails('lyrics',i,c.part)), ...effectClipboardButtons('lyrics',i,c.part), label, controls); cutsEl.appendChild(cutOption);
+      cutOption.append(name, detailButton(() => openCutDetails('lyrics',i,c.part)), ...effectFavoriteButtons('lyrics',i,c.part), label, controls); cutsEl.appendChild(cutOption);
     });
     ol.appendChild(li); S.lineEls.push(li);
   });
@@ -2421,7 +2430,7 @@ function renderMediaLines() {
     li.querySelector('.dice').addEventListener('click', () => rerollMediaCut(layer, i));
     li.querySelector('.dice').after(disableRerollButton(layer,i));
     li.querySelector('.tools').insertBefore(detailButton(() => openCutDetails(layer,i)), li.querySelector('.remove-media-cut'));
-    li.querySelector('.tools').append(...effectClipboardButtons(layer,i));
+    li.querySelector('.tools').append(...effectFavoriteButtons(layer,i));
     li.querySelector('.lock').addEventListener('click', () => toggleMediaCutLock(layer, i));
     li.querySelector('.remove-media-cut').addEventListener('click', () => removeMediaCut(i, layer));
     ol.appendChild(li); S.mediaLineEls.push(li);
@@ -3374,6 +3383,8 @@ function bind() {
   $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
+  $('effectFavorites').textContent=J.mediaLabel('☆お気に入り演出','☆ Favorite effects');
+  $('effectFavorites').onclick=()=>openEffectFavorites();
   $('previewFullscreen').addEventListener('click',async()=>{
     try { await $('viewport').requestFullscreen(); }
     catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }

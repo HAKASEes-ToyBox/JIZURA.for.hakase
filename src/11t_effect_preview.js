@@ -5,6 +5,7 @@
 if (typeof Image === 'undefined') return;
 let dialog, canvas, heading, frame=0, generation=0, assetId=null, current=null;
 const image=new Image();image.src='__EFFECT_PREVIEW_IMAGE__';
+J.effectPreviewImage=image; // Shared by the favorites gallery without duplicating the embedded asset.
 // Media previews only: these values drive the preview, never the project.
 const MEDIA_SLIDERS=[['motion','動きの強さ','Motion intensity',0,2],['treatment','加工の強さ','Treatment intensity',0,1],['duration','登場・退場時間','Entrance / exit (s)',.05,1.5]];
 function stop(){generation++;cancelAnimationFrame(frame);frame=0;if(assetId)J.mediaAssets.delete(assetId);assetId=null;current=null;}

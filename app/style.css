@@ -740,3 +740,18 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .col-stage .timeline-position-label, .col-stage .preview-options { font-size:11px; }
   .col-stage .timeline-toolbar .timeline-split { flex:1 1 180px; }
 }
+#effectFavoritesDialog { width:min(980px,94vw); max-height:90dvh; padding:16px; overflow:auto; }
+#effectFavoritesDialog > header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#effectFavoritesDialog h2 { font-size:16px; }
+.favorite-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:12px; }
+.favorite-card { min-width:0; padding:10px; background:var(--raised); border:1px solid var(--line2); border-radius:6px; }
+.favorite-card.active { border-color:var(--cyan); }
+.favorite-play { display:block; position:relative; width:100%; padding:0; overflow:hidden; }
+.favorite-play canvas { display:block; width:100%; height:180px; object-fit:contain; background:#111; }
+.favorite-play span { position:absolute; bottom:6px; right:8px; background:#111b; padding:3px 8px; border-radius:3px; }
+.favorite-name { width:100%; margin:8px 0; }
+.favorite-actions { display:flex; gap:8px; }
+.favorite-delete { color:var(--danger); }
+.favorite-error:empty { display:none; }
+.favorite-error { color:var(--danger); }
+.preview-options #effectFavorites { margin-right:auto; }
