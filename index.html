@@ -710,6 +710,12 @@ body.preview-fullscreen-open { overflow: hidden; }
 .media-upload-row .file { flex-shrink:0; }
 #app.compact-ui #settingsDrawer { width:min(370px,calc(100vw - 88px)); }
 
+/* Tap sync overlays the controls/timeline without consuming preview space. */
+.col-stage { position:relative; }
+#tapPanel { position:absolute; left:8px; right:8px; width:min(520px,calc(100% - 16px)); margin-inline:auto; z-index:40; background:#241f16; box-shadow:0 8px 28px #000b; box-sizing:border-box; }
+#tapPanel[hidden] { display:none; }
+#tapPanel .next { overflow-wrap:anywhere; }
+
 </style>
 </head>
 <body>
@@ -812,13 +818,7 @@ body.preview-fullscreen-open { overflow: hidden; }
           <button id="btnResetTimes" class="ghost small">手動タイミングを消す</button>
         </div>
       </div>
-      <div id="tapPanel" class="tapbox" hidden>
-        <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
-        <div class="hint" id="tapHint">曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。</div>
-        <div class="next">次: <b id="tapLine">—</b></div>
-        <button id="tapBtn" class="tap">TAP</button>
-        <button id="tapStop" class="ghost">終了する</button>
-      </div>
+
 
       <div class="sec">
         <div class="sec-h"><h2 id="cutsHeading">行とカット</h2><span id="linesInfo" class="muted mono"></span></div>
@@ -830,6 +830,13 @@ body.preview-fullscreen-open { overflow: hidden; }
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="プレビュー">
       <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">全画面を終了</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="再生">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="再生位置"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">ドラッグして歌詞の表示範囲を指定</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div id="tapPanel" class="tapbox" hidden>
+        <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
+        <div class="hint" id="tapHint">曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。</div>
+        <div class="next">次: <b id="tapLine">—</b></div>
+        <button id="tapBtn" class="tap">TAP</button>
+        <button id="tapStop" class="ghost">終了する</button>
+      </div>
       <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>アスペクト比を固定</label><label>幅（画面比％）<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>高さ（画面比％）<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">角度（°）<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">全域へリセット</button><button id="areaResetAuto" class="ghost" type="button">自動配置に戻す</button><button id="areaApplyOne" class="primary" disabled>この行だけに適用</button><button id="areaApplyFollowing" disabled>これ以降全てに適用</button><button id="areaCancel" class="ghost">キャンセル</button></div>
       <div class="transport">
@@ -38792,11 +38799,11 @@ function sizeViewport() {
   // Measure the desktop layout, not the expanded compact layout, to avoid breakpoint oscillation.
   const wasCompact=app.classList.contains('compact-ui');
   if(!full)app.classList.remove('compact-ui');
-  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && el.id!=='tapPanel' && getComputedStyle(el).display!=='none');
   const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
   const desktopH=Math.max(0,innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   const desktopW=vp.clientWidth||800,fitH=Math.min(desktopW/ar,desktopH);
-  const compact=full?wasCompact:innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
+  const compact=full?wasCompact:!!S.tap||innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
   app.classList.toggle('compact-ui',compact);
   if(compact!==wasCompact){S.sourceOpen=false;syncSourceDrawer();}
   let cssW=vp.clientWidth||800,cssH=cssW/ar;
@@ -38808,6 +38815,7 @@ function sizeViewport() {
   if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
   c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
   positionAreaEditor();
+  if(S.tap)$('tapPanel').style.top=(vp.offsetTop+vp.offsetHeight+6)+'px';
   S.need = true;
 }
 function draw() {
@@ -41446,7 +41454,8 @@ function startTap() {
   S.tap = { i: 0, layer, append: !!layer, fileIndex: 0, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
   $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
-  $('tapPanel').hidden = false; syncTapButtons();
+  S.sourceOpen=false;S.settingsOpen=false;S.playheadMenu=null;closeTimelineCutMenu();syncSettingsDrawer();syncSourceDrawer();syncPlayheadMenu();
+  $('tapPanel').hidden = false; syncTapButtons();sizeViewport();drawTimeline();drawTimelineLinks();
   if (S.tap.append && !S.audio) extendTapPreview(0);
   seek(0); updateTap();
   const session=S.tap,deadline=performance.now()+3000;
@@ -41462,7 +41471,7 @@ function startTap() {
     countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
     session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));
   };
-  tick();
+  tick();sizeViewport();
 }
 function tapNow() {
   if (!S.tap || S.tap.countingDown) return;

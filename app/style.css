@@ -691,3 +691,9 @@ body.preview-fullscreen-open { overflow: hidden; }
 .media-upload-row .hint { flex:1; min-width:0; margin:0; }
 .media-upload-row .file { flex-shrink:0; }
 #app.compact-ui #settingsDrawer { width:min(370px,calc(100vw - 88px)); }
+
+/* Tap sync overlays the controls/timeline without consuming preview space. */
+.col-stage { position:relative; }
+#tapPanel { position:absolute; left:8px; right:8px; width:min(520px,calc(100% - 16px)); margin-inline:auto; z-index:40; background:#241f16; box-shadow:0 8px 28px #000b; box-sizing:border-box; }
+#tapPanel[hidden] { display:none; }
+#tapPanel .next { overflow-wrap:anywhere; }

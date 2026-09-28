@@ -267,11 +267,11 @@ function sizeViewport() {
   // Measure the desktop layout, not the expanded compact layout, to avoid breakpoint oscillation.
   const wasCompact=app.classList.contains('compact-ui');
   if(!full)app.classList.remove('compact-ui');
-  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && el.id!=='tapPanel' && getComputedStyle(el).display!=='none');
   const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
   const desktopH=Math.max(0,innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
   const desktopW=vp.clientWidth||800,fitH=Math.min(desktopW/ar,desktopH);
-  const compact=full?wasCompact:innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
+  const compact=full?wasCompact:!!S.tap||innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
   app.classList.toggle('compact-ui',compact);
   if(compact!==wasCompact){S.sourceOpen=false;syncSourceDrawer();}
   let cssW=vp.clientWidth||800,cssH=cssW/ar;
@@ -283,6 +283,7 @@ function sizeViewport() {
   if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
   c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
   positionAreaEditor();
+  if(S.tap)$('tapPanel').style.top=(vp.offsetTop+vp.offsetHeight+6)+'px';
   S.need = true;
 }
 function draw() {
@@ -2921,7 +2922,8 @@ function startTap() {
   S.tap = { i: 0, layer, append: !!layer, fileIndex: 0, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
   $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
-  $('tapPanel').hidden = false; syncTapButtons();
+  S.sourceOpen=false;S.settingsOpen=false;S.playheadMenu=null;closeTimelineCutMenu();syncSettingsDrawer();syncSourceDrawer();syncPlayheadMenu();
+  $('tapPanel').hidden = false; syncTapButtons();sizeViewport();drawTimeline();drawTimelineLinks();
   if (S.tap.append && !S.audio) extendTapPreview(0);
   seek(0); updateTap();
   const session=S.tap,deadline=performance.now()+3000;
@@ -2937,7 +2939,7 @@ function startTap() {
     countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
     session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));
   };
-  tick();
+  tick();sizeViewport();
 }
 function tapNow() {
   if (!S.tap || S.tap.countingDown) return;
