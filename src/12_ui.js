@@ -262,15 +262,21 @@ function showMsg(m) { const el = $('viewMsg'); if (!m) { el.hidden = true; retur
 function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
-  let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  const stage=vp.closest('.col-stage'),style=getComputedStyle(stage);
-  const children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
-  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const app=$('app'),stage=vp.closest('.col-stage');
   const full=document.fullscreenElement===vp||vp.classList.contains('preview-fullscreen');
-  // Phones need a readable preview; let the page scroll instead of squeezing
-  // the canvas into the space left by wrapped controls and the keyboard.
-  const compact=matchMedia('(max-width: 1180px)').matches;
-  const maxH=full ? window.innerHeight : compact ? Math.max(180,window.innerHeight*.5) : Math.max(60,window.innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
+  // Measure the desktop layout, not the expanded compact layout, to avoid breakpoint oscillation.
+  const wasCompact=app.classList.contains('compact-ui');
+  if(!full)app.classList.remove('compact-ui');
+  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && getComputedStyle(el).display!=='none');
+  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const desktopH=Math.max(0,innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
+  const desktopW=vp.clientWidth||800,fitH=Math.min(desktopW/ar,desktopH);
+  const compact=full?wasCompact:innerWidth<=1180||Math.min(fitH,fitH*ar)<270;
+  app.classList.toggle('compact-ui',compact);
+  if(compact!==wasCompact){S.sourceOpen=false;syncSourceDrawer();}
+  let cssW=vp.clientWidth||800,cssH=cssW/ar;
+  // Preserve a 270px short edge where screen width permits; scroll controls below the preview.
+  const maxH=full?innerHeight:compact?Math.max(270/Math.min(1,ar),innerHeight*.5):Math.max(60,desktopH);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
@@ -2654,6 +2660,23 @@ function toast(m, cols) {
 }
 
 /* ---------------- かんたん / 詳細 ---------------- */
+function syncSourceDrawer() {
+  const compact=$('app').classList.contains('compact-ui'),panel=document.querySelector('.col-left');
+  panel.classList.toggle('source-open',compact&&!!S.sourceOpen);
+  for(const [id,tab]of [['sourceForeground','foreground'],['sourceLyrics','lyrics'],['sourceMedia','media']]){
+    $(id).setAttribute('aria-expanded',String(!compact||!!S.sourceOpen&&S.sourceTab===tab));
+  }
+  $('closeSourceDrawer').setAttribute('aria-label',J.mediaLabel('素材設定を閉じる','Close source settings'));
+}
+function selectSourceDrawer(tab) {
+  if($('app').classList.contains('compact-ui')){
+    S.sourceOpen=!(S.sourceOpen&&S.sourceTab===tab);
+    if(S.sourceOpen){S.settingsOpen=false;syncSettingsDrawer();}
+  }
+  cancelAreaEditor();S.sourceTab=tab;syncSourceTab();
+  if(tab!=='lyrics'){renderMediaList();renderMediaLines();}
+  syncSourceDrawer();
+}
 function positionSettingsDrawer() {
   const top=Math.max(0,document.querySelector('.bar').getBoundingClientRect().bottom);
   $('app').style.setProperty('--settings-top',Math.min(top,innerHeight-100)+'px');
@@ -2670,7 +2693,7 @@ function syncSettingsDrawer() {
   positionSettingsDrawer();
 }
 function toggleSettingsDrawer(mode) {
-  S.settingsOpen=!(S.settingsOpen&&S.mode===mode);setMode(mode);
+  S.settingsOpen=!(S.settingsOpen&&S.mode===mode);if(S.settingsOpen){S.sourceOpen=false;syncSourceDrawer();}setMode(mode);
 }
 function setMode(m) {
   S.mode = m === 'easy' ? 'easy' : 'pro';
@@ -3204,9 +3227,11 @@ function bind() {
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
   for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
   $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
-  $('sourceLyrics').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'lyrics'; syncSourceTab(); });
-  $('sourceMedia').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'media'; renderMediaList(); renderMediaLines(); });
-  $('sourceForeground').addEventListener('click', () => { cancelAreaEditor(); S.sourceTab = 'foreground'; renderMediaList(); renderMediaLines(); });
+  $('sourceLyrics').addEventListener('click',()=>selectSourceDrawer('lyrics'));
+  $('sourceMedia').addEventListener('click',()=>selectSourceDrawer('media'));
+  $('sourceForeground').addEventListener('click',()=>selectSourceDrawer('foreground'));
+  $('closeSourceDrawer').addEventListener('click',()=>{S.sourceOpen=false;syncSourceDrawer();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.sourceOpen&&!document.querySelector('dialog[open]')){S.sourceOpen=false;syncSourceDrawer();}});
   $('btnMediaFromLyrics').addEventListener('click', insertMediaFromLyrics);
   $('mediaLyricInsertMode').addEventListener('change', e => {
     const layer = activeMediaLayer(); if (!layer) return;

@@ -675,3 +675,14 @@ body.preview-fullscreen-open { overflow: hidden; }
 .settings-drawer-heading { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); }
 .settings-drawer-heading button { font-size:20px; line-height:1; min-width:32px; }
 @media(max-width:1180px) { #app .work { grid-template-columns:minmax(0,1fr); } }
+
+.source-drawer-heading { display:none; }
+#app.compact-ui .work { display:block; padding-left:44px; padding-right:44px; }
+#app.compact-ui .col-stage { width:100%; }
+#app.compact-ui .col-left { position:fixed; left:44px; top:var(--settings-top,60px); bottom:0; width:min(370px,calc(100vw - 88px)); overflow:auto; overscroll-behavior:contain; z-index:30; visibility:hidden; pointer-events:none; border:1px solid var(--line2); box-shadow:8px 0 24px #0008; }
+#app.compact-ui .col-left.source-open { visibility:visible; pointer-events:auto; }
+#app.compact-ui .source-tabs { position:fixed; left:0; top:var(--settings-top,60px); width:44px; display:flex; flex-direction:column; visibility:visible; pointer-events:auto; z-index:31; background:var(--panel); border:1px solid var(--line2); border-radius:0 5px 5px 0; }
+#app.compact-ui .source-tabs button { writing-mode:vertical-rl; width:42px; min-height:86px; padding:12px 10px; border:0; border-right:2px solid transparent; }
+#app.compact-ui .source-tabs button[aria-expanded="true"] { color:var(--amber); border-right-color:var(--amber); background:var(--raised2); }
+#app.compact-ui .source-drawer-heading { display:flex; justify-content:flex-end; padding:8px; }
+#app.compact-ui .source-drawer-heading button { font-size:20px; min-width:32px; }
