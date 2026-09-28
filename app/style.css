@@ -758,3 +758,10 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-help:empty { display:none; }
 .favorite-card { cursor:pointer; }
 #effectFavoritesDialog { overscroll-behavior:contain; }
+#effectFavoritesDialog > header { flex-wrap:wrap; gap:8px; }
+#effectFavoritesDialog > header h2 { margin-right:auto; }
+.favorite-transfer-status:empty { display:none; }
+@media(max-width:600px) {
+  #effectFavoritesDialog > header h2 { flex-basis:100%; }
+  #effectFavoritesDialog .favorite-close { margin-left:auto; }
+}

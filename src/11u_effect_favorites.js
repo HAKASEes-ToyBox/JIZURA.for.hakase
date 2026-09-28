@@ -27,9 +27,29 @@ J.requestFavoriteName=initial=>new Promise(resolve=>{
   dialog.addEventListener('close',()=>{const value=dialog.returnValue==='save'?(input.value.trim()||initial):null;dialog.remove();resolve(value);},{once:true});
   document.body.append(dialog);dialog.showModal();input.select();
 });
+J.exportEffectFavorites=project=>{
+  const preset=J.defaultProject();preset.lyrics='';preset.effectFavorites=clone(project.effectFavorites||[]);preset.favoriteSequence=project.favoriteSequence||0;
+  preset.userFonts=clone(project.userFonts||[]);preset.compositeFonts=clone(project.compositeFonts||[]);
+  return J.packProject(preset,null);
+};
+J.readEffectFavorites=async file=>{
+  const loaded=await J.unpackProject(file),raw=loaded.project.effectFavorites||[];
+  if(!Array.isArray(raw))throw Error(J.mediaLabel('お気に入りの形式が不正です','Invalid favorites format'));
+  const favorites=J.normalizeEffectFavorites(raw);
+  if(favorites.length!==raw.length)throw Error(J.mediaLabel('読み込めない演出が含まれています','Some favorite effects cannot be imported'));
+  return {...loaded,favorites};
+};
+J.chooseFavoriteImport=count=>new Promise(resolve=>{
+  const L=J.mediaLabel,d=document.createElement('dialog');d.id='favoriteImportDialog';d.className='terms';
+  d.innerHTML='<form method="dialog"><h2></h2><p></p><div class="terms-foot"><button value="cancel"></button><button value="replace"></button><button value="append" class="primary"></button></div></form>';
+  d.querySelector('h2').textContent=L('お気に入りをインポート','Import favorites');
+  d.querySelector('p').textContent=L(`${count}件のお気に入りを取り込みます。上書きすると現在のお気に入りをすべて置き換えます。`, `Import ${count} favorites. Replace overwrites all current favorites.`);
+  for(const [value,ja,en] of [['cancel','キャンセル','Cancel'],['replace','上書き','Replace'],['append','追加','Append']])d.querySelector(`[value="${value}"]`).textContent=L(ja,en);
+  d.addEventListener('close',()=>{const mode=d.returnValue;d.remove();resolve(['append','replace'].includes(mode)?mode:null);},{once:true});document.body.append(d);d.showModal();
+});
 J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
   const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='effectFavoritesDialog';
-  dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
+  dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-import"></button><button type="button" class="favorite-export"></button><input type="file" class="favorite-file" hidden accept=".jizuraichifav,.jizuraichi,.json"><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
   dialog.querySelector('h2').textContent=L('お気に入り演出','Favorite effects');
   dialog.setAttribute('aria-label',L('お気に入り演出','Favorite effects'));
   dialog.querySelector('.favorite-close').setAttribute('aria-label',L('閉じる','Close'));
@@ -37,6 +57,46 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
   document.body.append(dialog);
   const list=project.effectFavorites ||= [],host=dialog.querySelector('.favorite-groups');
   let active=null,frame=0,dead=false,token=0,sampleId=null;
+  let busy=false;
+  const importButton=dialog.querySelector('.favorite-import'),exportButton=dialog.querySelector('.favorite-export'),fileInput=dialog.querySelector('.favorite-file');
+  importButton.textContent=L('インポート','Import');exportButton.textContent=L('エクスポート','Export');
+  const status=document.createElement('p');status.className='favorite-transfer-status';status.setAttribute('role','status');dialog.append(status);
+  function transferBusy(value){busy=value;importButton.disabled=exportButton.disabled=value;}
+  exportButton.onclick=async()=>{
+    if(busy)return;transferBusy(true);status.textContent='';
+    try{await J.saveFile('favorites.jizuraichifav',await J.exportEffectFavorites(project));}
+    catch(e){status.textContent=L('書き出せませんでした：','Could not export: ')+e.message;}
+    finally{transferBusy(false);}
+  };
+  importButton.onclick=()=>{if(!busy)fileInput.click();};
+  fileInput.onchange=async()=>{
+    const file=fileInput.files?.[0];fileInput.value='';if(!file||busy)return;
+    transferBusy(true);status.textContent='';
+    try{
+      const loaded=await J.readEffectFavorites(file);if(dead)return;
+      const mode=await J.chooseFavoriteImport(loaded.favorites.length);if(!mode||dead)return;
+      // Existing song, cuts and material stay intact. Restore only missing font dependencies.
+      const fonts=(loaded.project.userFonts||[]).filter(f=>!(project.userFonts||[]).some(old=>old.key===f.key));
+      for(const entry of loaded.files)if(entry.kind==='font'&&fonts.some(f=>f.key===entry.id))await J.saveFontFile(entry.id,entry.file);
+      await J.restoreFontFiles(fonts);if(dead)return;
+      project.userFonts=[...(project.userFonts||[]),...fonts];
+      for(const f of fonts)if(!J.FONTS[f.key])J.addUserFont(f.key,f.label,f.family,f.weight||400);
+      project.compositeFonts=[...(project.compositeFonts||[]),...(loaded.project.compositeFonts||[]).filter(f=>!(project.compositeFonts||[]).some(old=>old.key===f.key))];
+      J.setCompositeFonts(project.compositeFonts);
+      if(mode==='replace')list.length=0;
+      list.push(...loaded.favorites.map(f=>({...f,id:J.favoriteId()})));
+      project.favoriteSequence=Math.max(project.favoriteSequence||0,loaded.project.favoriteSequence||0,list.length);
+      changed();await ensureSample();if(dead)return;render();
+      status.textContent=L(`${loaded.favorites.length}件をインポートしました`, `Imported ${loaded.favorites.length} favorites`);
+    }catch(e){status.textContent=L('読み込めませんでした：','Could not import: ')+e.message;}
+    finally{transferBusy(false);}
+  };
+  async function ensureSample(){
+    if(target||sampleId||!list.some(f=>f.payload.kind==='media'))return;
+    const image=J.effectPreviewImage;await image.decode();if(dead)return;
+    sampleId='__favorite_preview_'+J.favoriteId();J.mediaAssets.set(sampleId,{element:image,type:'image'});
+  }
+
   const renderer=new J.Renderer(),queue=[];
   const observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){observer.unobserve(entry.target);queue.push(entry.target);}}, {root:dialog});
   let pressedOutside=false;
@@ -139,10 +199,7 @@ J.openEffectFavorites=({project,target,compose,changed,apply,closed})=>{
   }
   dialog.showModal();
   (async()=>{
-    if(!target&&list.some(f=>f.payload.kind==='media')){
-      const image=J.effectPreviewImage;
-      try{await image.decode();if(dead)return;sampleId='__favorite_preview_'+J.favoriteId();J.mediaAssets.set(sampleId,{element:image,type:'image'});}catch(e){if(dead)return;dialog.querySelector('.favorite-help').textContent=e.message;return;}
-    }
+    try{await ensureSample();}catch(e){if(!dead)status.textContent=e.message;return;}
     if(dead)return;render();const first=host.querySelector('.favorite-card');if(first)start(first,first.favorite);frame=requestAnimationFrame(tick);
   })();
 };
