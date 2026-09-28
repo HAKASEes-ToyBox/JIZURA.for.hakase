@@ -1364,7 +1364,7 @@ function closeTimelineCutMenu(restoreFocus=false) {
 function openTimelineCutMenu(trigger) {
   if(S.exporting || S.tap)return;
   if(timelineCutMenu?.trigger===trigger){closeTimelineCutMenu(true);return;}
-  closeTimelineCutMenu();pause();
+  closeTimelineCutMenu();S.playheadMenu=null;syncPlayheadMenu();pause();
   const layer=trigger.dataset.layer,index=+trigger.dataset.index,part=+trigger.dataset.part||0;
   const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer].cuts[index];
   if(!cut)return;
@@ -2118,13 +2118,28 @@ const PLAYHEAD_TITLES = {
 };
 function initPlayheadMenu() {
   const L = J.mediaLabel;
+  const popup=document.querySelector('.playhead-secondary');
+  popup.id='playheadPopup';popup.classList.add('timeline-cut-menu');popup.setAttribute('role','menu');
+  document.body.append(popup);
+  const close=()=>{S.playheadMenu=null;syncPlayheadMenu();};
+  document.addEventListener('pointerdown',e=>{if(S.playheadMenu&&!popup.contains(e.target)&&!e.target.closest('[data-playhead-menu]'))close();},{capture:true});
+  window.addEventListener('resize',close);
+  document.addEventListener('scroll',e=>{if(S.playheadMenu&&!popup.contains(e.target))close();},{capture:true});
+  popup.addEventListener('keydown',e=>{
+    e.stopPropagation();const buttons=[...popup.querySelectorAll('button:not([hidden]):not(:disabled)')],index=buttons.indexOf(document.activeElement);
+    if(e.key==='Escape'){e.preventDefault();const trigger=document.querySelector(`[data-playhead-menu="${S.playheadMenu}"]`);close();trigger?.focus({preventScroll:true});}
+    else if(buttons.length&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length].focus({preventScroll:true});}
+    else if(e.key==='Tab')close();
+  });
   for (const button of document.querySelectorAll('[data-playhead-menu]')) {
     button.textContent = L(...PLAYHEAD_LABELS[button.dataset.playheadMenu]);
-    button.addEventListener('click', () => { S.playheadMenu = S.playheadMenu === button.dataset.playheadMenu ? null : button.dataset.playheadMenu; syncPlayheadMenu(); });
+    button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-controls','playheadPopup');
+    button.addEventListener('click', () => { closeTimelineCutMenu();S.playheadMenu = S.playheadMenu === button.dataset.playheadMenu ? null : button.dataset.playheadMenu; syncPlayheadMenu();if(S.playheadMenu)popup.querySelector('button:not([hidden]):not(:disabled)')?.focus({preventScroll:true}); });
   }
   for (const button of document.querySelectorAll('[data-playhead-action]')) {
     const [layerJa, layerEn] = LAYER_LABELS[button.dataset.layer], [ja, en] = PLAYHEAD_TITLES[button.dataset.playheadAction];
-    button.textContent = L(layerJa, layerEn); button.title = L(layerJa + ja, layerEn + en); button.setAttribute('aria-label', button.title);
+    const y={foreground:2,lyrics:6,media:10}[button.dataset.layer];
+    button.innerHTML=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12" opacity=".35"/><rect x="2" y="${y}" width="12" height="4" rx="1" fill="currentColor"/></svg><span>${L(layerJa, layerEn)}</span>`;button.setAttribute('role','menuitem'); button.title = L(layerJa + ja, layerEn + en); button.setAttribute('aria-label', button.title);
   }
   $('relayoutAtPlayhead').textContent = L('配置をシャッフル', 'Shuffle layout');
   $('relayoutAtPlayhead').title = L('再生位置のカットの配置を組み直す', 'Re-lay out the cuts at the playhead');
@@ -2148,6 +2163,7 @@ function playheadActionEnabled(action, layer) {
   return !!playheadEndTarget(layer, action === 'untilNext');
 }
 function syncPlayheadMenu() {
+  if(S.exporting||S.tap)S.playheadMenu=null;
   const menu = S.playheadMenu;
   for (const button of document.querySelectorAll('[data-playhead-action]')) {
     button.hidden = button.dataset.playheadAction !== menu;
@@ -2158,7 +2174,12 @@ function syncPlayheadMenu() {
     button.disabled = ![...document.querySelectorAll(`[data-playhead-action="${action}"]`)].some(b => !b.disabled);
     button.setAttribute('aria-expanded', String(menu === action));
   }
-  document.querySelector('.playhead-secondary').hidden = !menu;
+  const popup=document.querySelector('.playhead-secondary');popup.hidden = !menu;
+  if(menu){
+    const trigger=document.querySelector(`[data-playhead-menu="${menu}"]`);
+    if(trigger.disabled){S.playheadMenu=null;popup.hidden=true;trigger.setAttribute('aria-expanded','false');}
+    else{popup.setAttribute('aria-label',trigger.textContent);const r=trigger.getBoundingClientRect(),box=popup.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';popup.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';}
+  }
   $('relayoutAtPlayhead').disabled = !!(S.exporting || S.tap) || !relayoutTargets().length;
 }
 function playheadEnd(layer, untilNext) {

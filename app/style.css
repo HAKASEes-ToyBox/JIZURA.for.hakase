@@ -646,12 +646,12 @@ body.preview-fullscreen-open { overflow: hidden; }
   .cut-details-preview canvas { max-height: 40dvh; }
   .cut-details-grid { grid-template-columns: minmax(0,1fr); }
 }
-/* 再生位置で編集: first row = action, second row = layer */
+/* Playhead actions open a floating layer menu. */
 .playhead-menu { flex-direction: column; flex-wrap: nowrap; gap: 6px; }
 .playhead-primary, .playhead-secondary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .playhead-secondary[hidden] { display: none; }
 .playhead-primary button[aria-expanded="true"] { border-color: var(--amber); color: var(--amber); }
-.playhead-secondary { padding-left: 10px; border-left: 2px solid var(--amber); }
+.playhead-secondary { flex-direction:column; align-items:stretch; gap:2px; min-width:150px; }
 .playhead-secondary button[hidden] { display: none; }
 
 /* Cut actions are kept outside the scrolling timeline so the menu is never clipped. */
@@ -662,3 +662,5 @@ body.preview-fullscreen-open { overflow: hidden; }
 .timeline-cut-menu button[data-action="remove"] { color:#ff8790; }
 .timeline-cut-menu .menu-check { margin-left:auto; color:var(--cyan); }
 @media (pointer:coarse) { .timeline-cut-menu button { min-height:44px; } }
+
+.playhead-secondary button:disabled { opacity:.4; cursor:default; }
