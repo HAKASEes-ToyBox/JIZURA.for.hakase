@@ -664,3 +664,14 @@ body.preview-fullscreen-open { overflow: hidden; }
 @media (pointer:coarse) { .timeline-cut-menu button { min-height:44px; } }
 
 .playhead-secondary button:disabled { opacity:.4; cursor:default; }
+
+/* Right-hand settings drawer: the stage keeps the space formerly used by the sidebar. */
+#app .work { grid-template-columns:minmax(270px,330px) minmax(0,1fr); padding-right:44px; }
+#app .settings-rail { position:fixed; top:var(--settings-top,60px); right:0; width:44px; display:flex; flex-direction:column; gap:0; z-index:31; background:var(--panel); border:1px solid var(--line2); border-radius:5px 0 0 5px; }
+#app .settings-rail button { writing-mode:vertical-rl; min-height:86px; width:42px; padding:12px 10px; border:0; border-radius:0; border-left:2px solid transparent; }
+#app .settings-rail button[aria-expanded="true"] { border-left-color:var(--amber); color:var(--amber); background:var(--raised2); }
+#app #settingsDrawer { position:fixed; top:var(--settings-top,60px); right:44px; bottom:0; width:min(370px,calc(100vw - 44px)); z-index:30; overflow:auto; overscroll-behavior:contain; border:1px solid var(--line2); box-shadow:-8px 0 24px #0008; }
+#app #settingsDrawer[hidden] { display:none; }
+.settings-drawer-heading { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); }
+.settings-drawer-heading button { font-size:20px; line-height:1; min-width:32px; }
+@media(max-width:1180px) { #app .work { grid-template-columns:minmax(0,1fr); } }

@@ -2654,6 +2654,24 @@ function toast(m, cols) {
 }
 
 /* ---------------- かんたん / 詳細 ---------------- */
+function positionSettingsDrawer() {
+  const top=Math.max(0,document.querySelector('.bar').getBoundingClientRect().bottom);
+  $('app').style.setProperty('--settings-top',Math.min(top,innerHeight-100)+'px');
+}
+function syncSettingsDrawer() {
+  const open=!!S.settingsOpen;
+  $('settingsDrawer').hidden=!open;
+  $('app').classList.toggle('settings-open',open);
+  for(const [id,mode] of [['modeEasy','easy'],['modePro','pro']]){
+    const active=open&&S.mode===mode;$(id).setAttribute('aria-expanded',String(active));$(id).setAttribute('aria-pressed',String(active));
+  }
+  $('settingsDrawerTitle').textContent=S.mode==='easy'?J.mediaLabel('かんたん','Easy'):J.mediaLabel('詳細','Details');
+  $('closeSettingsDrawer').setAttribute('aria-label',J.mediaLabel('設定を閉じる','Close settings'));
+  positionSettingsDrawer();
+}
+function toggleSettingsDrawer(mode) {
+  S.settingsOpen=!(S.settingsOpen&&S.mode===mode);setMode(mode);
+}
 function setMode(m) {
   S.mode = m === 'easy' ? 'easy' : 'pro';
   const easy = S.mode === 'easy';
@@ -2662,6 +2680,7 @@ function setMode(m) {
   $('modeEasy').setAttribute('aria-pressed', String(easy));
   $('modePro').setAttribute('aria-pressed', String(!easy));
   try { localStorage.setItem('jizura.mode', S.mode); } catch (e) {}
+  syncSettingsDrawer();
   if (easy) { showNow(); syncOut(); codecNote(); }
   sizeViewport(); drawTimeline(); loadThumbFonts();
 }
@@ -3576,8 +3595,13 @@ function bind() {
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
   $('eMP4').addEventListener('click', () => runExport('mp4'));
   // かんたんモード
-  $('modeEasy').addEventListener('click', () => setMode('easy'));
-  $('modePro').addEventListener('click', () => setMode('pro'));
+  $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
+  $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
+  $('closeSettingsDrawer').addEventListener('click',()=>{S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.settingsOpen&&!document.querySelector('dialog[open]')&&!timelineCutMenu&&!S.playheadMenu){S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();}});
+  window.addEventListener('scroll',positionSettingsDrawer,{passive:true});
+  window.addEventListener('resize',positionSettingsDrawer);
+  if(window.ResizeObserver)new ResizeObserver(positionSettingsDrawer).observe(document.querySelector('.bar'));
   $('btnOmakase').addEventListener('click', omakase);
   $('btnOmakaseBig').addEventListener('click', omakase);
   ['btnPrev', 'btnPrev2'].forEach(id => $(id).addEventListener('click', () => histGo(-1)));

@@ -683,6 +683,17 @@ body.preview-fullscreen-open { overflow: hidden; }
 
 .playhead-secondary button:disabled { opacity:.4; cursor:default; }
 
+/* Right-hand settings drawer: the stage keeps the space formerly used by the sidebar. */
+#app .work { grid-template-columns:minmax(270px,330px) minmax(0,1fr); padding-right:44px; }
+#app .settings-rail { position:fixed; top:var(--settings-top,60px); right:0; width:44px; display:flex; flex-direction:column; gap:0; z-index:31; background:var(--panel); border:1px solid var(--line2); border-radius:5px 0 0 5px; }
+#app .settings-rail button { writing-mode:vertical-rl; min-height:86px; width:42px; padding:12px 10px; border:0; border-radius:0; border-left:2px solid transparent; }
+#app .settings-rail button[aria-expanded="true"] { border-left-color:var(--amber); color:var(--amber); background:var(--raised2); }
+#app #settingsDrawer { position:fixed; top:var(--settings-top,60px); right:44px; bottom:0; width:min(370px,calc(100vw - 44px)); z-index:30; overflow:auto; overscroll-behavior:contain; border:1px solid var(--line2); box-shadow:-8px 0 24px #0008; }
+#app #settingsDrawer[hidden] { display:none; }
+.settings-drawer-heading { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); }
+.settings-drawer-heading button { font-size:20px; line-height:1; min-width:32px; }
+@media(max-width:1180px) { #app .work { grid-template-columns:minmax(0,1fr); } }
+
 </style>
 </head>
 <body>
@@ -693,10 +704,6 @@ body.preview-fullscreen-open { overflow: hidden; }
       <input id="songTitle" type="text" placeholder="Song title (shown on title cards and HUD)" aria-label="Song title">
       <input id="songArtist" type="text" placeholder="Artist" aria-label="Artist">
       <input id="projectName" type="text" placeholder="Project name" aria-label="Project name" title="File name for saving the project; updated when you save">
-    </div>
-    <div class="modes" role="group" aria-label="Editor mode">
-      <button id="modeEasy" aria-pressed="false" title="A simple workspace focused on automatic creation">Simple</button>
-      <button id="modePro" aria-pressed="true" title="Show all settings">Advanced</button>
     </div>
     <nav class="lang-switch" aria-label="Language"><a href="../index.html" lang="ja">日本語</a><span aria-current="page">English</span></nav>
     <div class="acts">
@@ -841,7 +848,12 @@ body.preview-fullscreen-open { overflow: hidden; }
     </section>
 
     <!-- ================= right: look & output ================= -->
-    <section class="col col-right" aria-label="Style and export">
+    <div class="modes settings-rail" role="group" aria-label="Editor mode">
+      <button id="modeEasy" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="A simple workspace focused on automatic creation">Simple</button>
+      <button id="modePro" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="Show all settings">Advanced</button>
+    </div>
+    <section id="settingsDrawer" class="col col-right" aria-label="Style and export" hidden>
+      <div class="settings-drawer-heading"><strong id="settingsDrawerTitle"></strong><button id="closeSettingsDrawer" type="button">×</button></div>
       <div id="easyPanel" class="easy" hidden>
         <div class="easy-hero">
           <button id="btnOmakaseBig" class="omakase">Create a variation</button>
@@ -41393,6 +41405,24 @@ function toast(m, cols) {
 }
 
 /* ---------------- かんたん / 詳細 ---------------- */
+function positionSettingsDrawer() {
+  const top=Math.max(0,document.querySelector('.bar').getBoundingClientRect().bottom);
+  $('app').style.setProperty('--settings-top',Math.min(top,innerHeight-100)+'px');
+}
+function syncSettingsDrawer() {
+  const open=!!S.settingsOpen;
+  $('settingsDrawer').hidden=!open;
+  $('app').classList.toggle('settings-open',open);
+  for(const [id,mode] of [['modeEasy','easy'],['modePro','pro']]){
+    const active=open&&S.mode===mode;$(id).setAttribute('aria-expanded',String(active));$(id).setAttribute('aria-pressed',String(active));
+  }
+  $('settingsDrawerTitle').textContent=S.mode==='easy'?J.mediaLabel('かんたん','Easy'):J.mediaLabel('詳細','Details');
+  $('closeSettingsDrawer').setAttribute('aria-label',J.mediaLabel('設定を閉じる','Close settings'));
+  positionSettingsDrawer();
+}
+function toggleSettingsDrawer(mode) {
+  S.settingsOpen=!(S.settingsOpen&&S.mode===mode);setMode(mode);
+}
 function setMode(m) {
   S.mode = m === 'easy' ? 'easy' : 'pro';
   const easy = S.mode === 'easy';
@@ -41401,6 +41431,7 @@ function setMode(m) {
   $('modeEasy').setAttribute('aria-pressed', String(easy));
   $('modePro').setAttribute('aria-pressed', String(!easy));
   try { localStorage.setItem('jizura.mode', S.mode); } catch (e) {}
+  syncSettingsDrawer();
   if (easy) { showNow(); syncOut(); codecNote(); }
   sizeViewport(); drawTimeline(); loadThumbFonts();
 }
@@ -42315,8 +42346,13 @@ function bind() {
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
   $('eMP4').addEventListener('click', () => runExport('mp4'));
   // かんたんモード
-  $('modeEasy').addEventListener('click', () => setMode('easy'));
-  $('modePro').addEventListener('click', () => setMode('pro'));
+  $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
+  $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
+  $('closeSettingsDrawer').addEventListener('click',()=>{S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.settingsOpen&&!document.querySelector('dialog[open]')&&!timelineCutMenu&&!S.playheadMenu){S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();}});
+  window.addEventListener('scroll',positionSettingsDrawer,{passive:true});
+  window.addEventListener('resize',positionSettingsDrawer);
+  if(window.ResizeObserver)new ResizeObserver(positionSettingsDrawer).observe(document.querySelector('.bar'));
   $('btnOmakase').addEventListener('click', omakase);
   $('btnOmakaseBig').addEventListener('click', omakase);
   ['btnPrev', 'btnPrev2'].forEach(id => $(id).addEventListener('click', () => histGo(-1)));

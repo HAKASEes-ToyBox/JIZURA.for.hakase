@@ -6,10 +6,6 @@
       <input id="songArtist" type="text" placeholder="アーティスト" aria-label="アーティスト">
       <input id="projectName" type="text" placeholder="プロジェクト名" aria-label="プロジェクト名" title="プロジェクト保存時のファイル名。保存すると更新されます">
     </div>
-    <div class="modes" role="group" aria-label="表示モード">
-      <button id="modeEasy" aria-pressed="false" title="おまかせボタン中心のシンプルな画面">かんたん</button>
-      <button id="modePro" aria-pressed="true" title="すべての設定を表示">詳細</button>
-    </div>
     <div class="acts">
       <details class="header-menu" id="projectMenu">
         <summary>プロジェクト</summary><div class="header-menu-items">
@@ -152,7 +148,12 @@
     </section>
 
     <!-- ================= right: look & output ================= -->
-    <section class="col col-right" aria-label="スタイルと書き出し">
+    <div class="modes settings-rail" role="group" aria-label="表示モード">
+      <button id="modeEasy" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="おまかせボタン中心のシンプルな画面">かんたん</button>
+      <button id="modePro" aria-pressed="false" aria-expanded="false" aria-controls="settingsDrawer" title="すべての設定を表示">詳細</button>
+    </div>
+    <section id="settingsDrawer" class="col col-right" aria-label="スタイルと書き出し" hidden>
+      <div class="settings-drawer-heading"><strong id="settingsDrawerTitle"></strong><button id="closeSettingsDrawer" type="button">×</button></div>
       <div id="easyPanel" class="easy" hidden>
         <div class="easy-hero">
           <button id="btnOmakaseBig" class="omakase">おまかせで作る</button>
