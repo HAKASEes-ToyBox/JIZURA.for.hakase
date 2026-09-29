@@ -123,6 +123,22 @@ await page.locator('#mediaLineList .foreground-placement-open').first().click();
 await page.locator('#areaApplyOne').click();
 const edited=await page.evaluate(()=>{const o=J.ui.project.media.cutOverrides[0],c=J.ui.plan.media.cuts[0];return {manual:c.placementMode,mask:JSON.stringify(o.details?.mask&&J.normalizeMask(o.details.mask)),planMask:JSON.stringify(c.mask),bg:c.bgLayout};});
 assert.equal(edited.manual,'manual');assert.equal(edited.mask,beforeEdit.sig,'the window is kept');assert.equal(edited.planMask,beforeEdit.sig);assert.equal(edited.bg,undefined,'no longer an automatic layout');
+// ---- split freezes the window with the placement; shuffling the layout hands both back to automatic
+await page.evaluate(()=>{const def=J.BACKGROUND_LAYOUTS.find(l=>l.id==='halfSplit');J.backgroundLayoutPool=()=>[{...def,weight:1e7}];
+ const p=J.defaultProject();p.seed=4;p.lyrics='[00:00]夜明けの色を覚えてる';p.durationOverride=10;
+ p.media={...p.media,items:[{id:'bg',name:'bg.png',type:'image',width:400,height:300}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'bg',technique:'pushIn'}}};
+ J.ui.project=p;J.uiApi.syncUI();J.uiApi.replan();J.uiApi.seek(4);});
+const original=await page.evaluate(()=>JSON.stringify({sig:J.ui.plan.media.cuts[0].bgLayout?.sig,placement:J.ui.plan.media.cuts[0].placement}));
+assert.ok(JSON.parse(original).sig,'layout to split');
+await page.evaluate(()=>J.uiApi.splitMediaCut('media'));
+const split=await page.evaluate(()=>{const o=J.ui.project.media.cutOverrides;return [0,1].map(i=>({mask:JSON.stringify(o[i].details?.mask&&J.normalizeMask(o[i].details.mask)),flag:o[i].layoutMask,placement:!!o[i].placement}));});
+for(const half of split){assert.equal(half.placement,true);assert.equal(half.mask,JSON.parse(original).sig,'the split keeps the window');assert.equal(half.flag,half.mask,'and marks it as the layout window');}
+await page.evaluate(()=>J.uiApi.seek(7));
+await page.locator('#relayoutAtPlayhead').click();
+const shuffled=await page.evaluate(()=>{const o=J.ui.project.media.cutOverrides,cuts=J.ui.plan.media.cuts;return {second:{mask:!!o[1].details?.mask,flag:o[1].layoutMask,placement:!!o[1].placement,auto:cuts[1].placementMode},first:{mask:!!o[0].details?.mask,flag:!!o[0].layoutMask,placement:!!o[0].placement},secondMask:cuts[1].mask?JSON.stringify(cuts[1].mask)===cuts[1].bgLayout?.sig:null};});
+assert.deepEqual(shuffled.second,{mask:false,flag:undefined,placement:false,auto:'auto'},'the shuffled half is automatic again, window included');
+assert.notEqual(shuffled.secondMask,false,'its mask is a fresh layout or none, never the old frozen one');
+assert.deepEqual(shuffled.first,{mask:true,flag:true,placement:true},'the other half is untouched');
 // ---- dissolving between two windows: each side keeps its own window until the end
 const trans=await page.evaluate(()=>{
  const orb=J.BACKGROUND_LAYOUTS.find(l=>l.id==='orb'),card=J.BACKGROUND_LAYOUTS.find(l=>l.id==='card');J.backgroundLayoutPool=cut=>[{...(cut.index?card:orb),weight:1e7}];

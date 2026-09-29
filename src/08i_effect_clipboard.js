@@ -81,14 +81,15 @@ J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
     // Masks are shape settings like the placement: the target keeps its own.
     const old={...project[layer].overrides?.[cut.itemId],...project[layer].cutOverrides[cut.index]},details={...clone(payload.details),...pick(old.details||{},['mask'])};
     // The placement below becomes manual: keep the target's automatic layout window with it.
-    if(details.mask===undefined&&cut.bgLayout&&cut.mask)details.mask=clone(cut.mask);
+    let layoutMask;
+    if(details.mask===undefined&&cut.bgLayout&&cut.mask&&JSON.stringify(cut.mask)===cut.bgLayout.sig){details.mask=clone(cut.mask);layoutMask=cut.bgLayout.sig;}
     details.effectSettings={...cut.effectSettings,...details.effectSettings};
     let placement=cut.placement;
     if(!placement){const dim=J.mediaSourceDimensions(plan,cut,cut.start)||{width:plan.W,height:plan.H};
       const scale=cut.layout==='cover'?Math.max(plan.W/dim.width,plan.H/dim.height):Math.min(plan.W/dim.width,plan.H/dim.height);
       placement={cx:.5,cy:.5,w:dim.width*scale/plan.W,h:dim.height*scale/plan.H,angle:0,lockAspect:true};
     }
-    const patch={...old,...clone(payload.native),placement:clone(placement),details};
+    const patch={...old,...clone(payload.native),placement:clone(placement),details,...(layoutMask?{layoutMask}:{})};
     if(old.lock)Object.assign(patch,{lockedTechnique:patch.technique,lockedEntrance:patch.entrance,lockedDeparture:patch.departure,lockedPlacement:clone(placement),lockedPlacementMode:'manual',lockedLayout:undefined});
     project[layer].cutOverrides[cut.index]=patch;
   }

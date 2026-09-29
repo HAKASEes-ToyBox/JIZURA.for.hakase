@@ -1929,9 +1929,9 @@ function applyAreaEditor(following) {
     for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
       if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
       // The placement becomes manual; an automatic layout's window stays with it as the cut's own mask.
-      const auto = S.plan[kind].cuts[i], window = kind === 'media' && auto?.bgLayout && auto.mask && JSON.stringify(auto.mask) === auto.bgLayout.sig ? auto.mask : null;
-      const details = window ? { ...(S.project[kind].cutOverrides[i]?.details || {}), mask: JSON.parse(JSON.stringify(window)) } : null;
-      mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined, ...(details ? { details } : {}) }, kind);
+      const auto = S.plan[kind].cuts[i], windowSig = layoutWindowSig(kind, auto);
+      const details = windowSig ? { ...(S.project[kind].cutOverrides[i]?.details || {}), mask: JSON.parse(JSON.stringify(auto.mask)) } : null;
+      mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined, ...(details ? { details, layoutMask: windowSig } : {}) }, kind);
     }
     relock(kind, index);
   } else {
@@ -2115,6 +2115,20 @@ function renderMediaList() {
   $('mediaRandom').checked = !!m.randomOrder;
   $('mediaLoop').checked = !!m.loop;
 }
+// A dynamic layout's window (mask) shown by a cut, or null when its mask is a hand-made one. When such a
+// cut's placement is frozen (split, moved by hand, favorite pasted) the window is frozen with it as the cut's
+// own mask, marked with layoutMask (its signature) so that going back to automatic takes it back as well.
+function layoutWindowSig(layer, cut) {
+  return layer === 'media' && cut?.bgLayout && cut.mask && JSON.stringify(cut.mask) === cut.bgLayout.sig ? cut.bgLayout.sig : null;
+}
+// The override patch that hands a frozen layout window back to automatic (a mask edited since stays).
+function autoWindowReset(layer, index) {
+  const o = S.project[layer]?.cutOverrides?.[index];
+  if (!o?.layoutMask) return {};
+  const details = { ...(o.details || {}) };
+  if (JSON.stringify(details.mask) === o.layoutMask) delete details.mask;
+  return { layoutMask: undefined, details: Object.keys(details).length ? details : undefined };
+}
 function mediaOv(index, patch, layer = activeMediaLayer() || 'media') {
   const m = S.project[layer];
   const o = Object.assign({}, m.cutOverrides[index] || {}, patch);
@@ -2239,7 +2253,7 @@ function relayoutAtPlayhead() {
       if (options.details) { delete options.details.area; if (!Object.keys(options.details).length) delete options.details; }
       if (S.project.overrides?.[cut.line]?.area) delete S.project.overrides[cut.line].area;
       options.placementSeed = fresh();
-    } else mediaOv(cut.index, { placement: undefined, placementSeed: fresh() }, layer);
+    } else mediaOv(cut.index, { placement: undefined, placementSeed: fresh(), ...autoWindowReset(layer, cut.index) }, layer);
   }
   replan();
   const note = !lyricAuto && targets.some(t => t.layer === 'lyrics') ? L('（歌詞の自動配置がOFFのため、歌詞は全域のままです）', ' (automatic lyric placement is off, so lyrics keep the full stage)') : '';
@@ -2269,6 +2283,7 @@ function splitMediaCut(layer,randomLeft=false,randomRight=false) {
     technique:cut.technique,entrance:cut.entrance,departure:cut.departure,
     placement:clone(cut.placement),blend:cut.blend,opacity:cut.opacity,
     details:Object.fromEntries(J.cutDetailKeys.media.filter(k=>cut[k]!==undefined).map(k=>[k,clone(cut[k])]))};
+  const windowSig=layoutWindowSig(layer,cut);if(windowSig)resolved.layoutMask=windowSig;
   const first=clone(resolved),second=clone(resolved);
   for(const [side,random] of [[first,randomLeft],[second,randomRight]]){
     if(!random)continue;
@@ -2439,7 +2454,7 @@ function renderMediaLines() {
     const placementOpen = li.querySelector('.foreground-placement-open');
     if (placementOpen) placementOpen.addEventListener('click', () => openMediaEditor(i, layer));
     const placementReset = li.querySelector('.foreground-placement-reset');
-    if (placementReset) placementReset.addEventListener('click', () => { mediaOv(i, { placement: null, lock: false, lockedPlacement: undefined, lockedPlacementMode: undefined }); replan(); });
+    if (placementReset) placementReset.addEventListener('click', () => { mediaOv(i, { placement: null, lock: false, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedLayout: undefined, ...autoWindowReset(layer, i) }); replan(); });
     const chroma = li.querySelector('.media-chroma-toggle');
     if (chroma) {
       chroma.addEventListener('change', e => { mediaOv(i, { chromaKey: e.target.checked }); replan(); });
