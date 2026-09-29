@@ -308,8 +308,10 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   const fgBounds=fgPlan?.opacity>0 ? fgPlan.cuts.map(f=>({cut:f,box:J.foregroundBounds(project,plan,f)})) : [];
   const lockedCut=c=>!!project.overrides?.[c.line]?.lock;
   const arranged=(cuts,maxOverlap)=>{
-    if(!J.composeLyricScene || cuts.some(c=>c.areaMode==='manual'))return null;
-    const start=cuts[0].start,end=cuts.at(-1).displayEnd,free=cuts.filter(c=>!lockedCut(c));
+    if(!J.composeLyricScene)return null;
+    // A hand-set area (or a locked line) stays exactly where it is; the other lyrics are composed around it.
+    const fixedCut=c=>lockedCut(c)||c.areaMode==='manual';
+    const start=cuts[0].start,end=cuts.at(-1).displayEnd,free=cuts.filter(c=>!fixedCut(c));
     if(free.length<2)return null;
     const grown=(b,k)=>{const w=b.w*k,h=b.h*k;return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};};
     const obstacles=[];
@@ -317,8 +319,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
       for(const f of fgBounds)if(f.box&&f.cut.start<end&&f.cut.end>start)obstacles.push(grown(f.box,settings.avoidanceStrength));
       for(const b of bgScenes)if(b.start<end&&b.end>start)for(const box of b.boxes)obstacles.push(grown(box,settings.avoidanceStrength));
     }
-    // Locked lines keep their areas: everything else keeps clear of them.
-    for(const c of cuts)if(lockedCut(c)&&c.area)obstacles.push(c.area);
+    for(const c of cuts)if(fixedCut(c)&&c.area)obstacles.push(c.area);
     if(settings.autoPlacement&&settings.avoidCenter&&J.CENTER_AVOID)obstacles.push(J.CENTER_AVOID);
     const scene=J.lyricScene?J.lyricScene(cuts[0],fgBounds,end,bgScenes):{};
     const result=J.composeLyricScene(free,{aspect:plan.W/plan.H,seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap,obstacles,zone:scene.zone,center:scene.fgCenter});
@@ -353,7 +354,9 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
     // 重ねず1シーン without a foreground: arranged with no overlap; strength blends from the current areas.
-    const result=arranged(cuts,0);
+    // Hand-set areas stay as set, unless they collide with each other: a 重ねず group then still packs them apart.
+    const manual=cuts.filter(c=>c.areaMode==='manual'),manualClash=manual.some((c,i)=>manual.slice(i+1).some(d=>overlap(bounds(c.area),bounds(d.area))>1e-8));
+    const result=manualClash?null:arranged(cuts,0);
     if(result){
       result.cuts.forEach((cut,i)=>{
         const a=cut.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true},r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
@@ -362,6 +365,8 @@ J.applyLyricGroupAvoidance = (project, plan) => {
       });
       continue;
     }
+    // Nothing to compose: the hand-set areas are the user's choice, so do not re-pack them.
+    if(manual.length&&!manualClash)continue;
     if(!boxes.some((box,i)=>boxes.slice(i+1).some(other=>overlap(box,other)>1e-8)))continue;
     const obstacles=foreground?.opacity>0?foreground.cuts.filter(f=>f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
       .map(f=>J.foregroundBounds(project,plan,f)).filter(Boolean).map(b=>{
