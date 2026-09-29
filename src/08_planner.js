@@ -11,7 +11,7 @@ J.SAMPLE_LYRICS = `夜明けの色を/覚えてる
 
 J.defaultProject = () => ({
   version: 1,
-  title: '', artist: '',
+  title: '夜明けの色', artist: 'JIZURA',
   projectName: '',                // set when the project is saved; the next save's default file name
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
@@ -280,11 +280,36 @@ J.plan = (project, audio) => {
   const nSchemes = st.schemes.length;
   const addEvent = (t, type, amp, dur) => plan.events.push({ t, type, amp, dur });
 
-  // title card
+  // title card (decor, treat, cam, enter, exit フル装飾対応)
   const firstStart = tm.starts.length ? tm.starts[0] : 0;
-  if (title && firstStart >= 1.1) {
-    const rng = J.rng(J.h(project.seed, 999));
-    plan.cuts.push(makeCut({ text: title, note: artist, lineText: title, line: -1, start: 0.1, end: firstStart - 0.04, layout: 'title', enter: rng.pick(['blur', 'type', 'wipe', 'assemble']), exit: rng.pick(['blur', 'drift', 'wipe']), hold: 'still', params: J.LAYOUTS.title.plan(rng, {}, st), decor: [], scheme: 0, seed: J.h(project.seed, 999, 1) }));
+  const showTitle = !!title;
+  if (showTitle) {
+    const ov = (project.overrides || {})[-1] || {};
+    const titleSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, 999, ov.seed | 0);
+    const rng = J.rng(titleSeed);
+    const manualTitleCut = (project.timing && project.timing.cutTimes) ? (Array.isArray(project.timing.cutTimes) ? project.timing.cutTimes.find(c => c.line === -1) : null) : null;
+    const titleStart = manualTitleCut ? manualTitleCut.start : 0.1;
+    const titleEnd = manualTitleCut ? manualTitleCut.end : (firstStart >= 1.2 ? Math.max(0.6, firstStart - 0.04) : 2.2);
+    const candLayouts = (J.TITLE_LAYOUT_ORDER && J.TITLE_LAYOUT_ORDER.length) ? J.TITLE_LAYOUT_ORDER : ['title'];
+    const layout = ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : rng.pick(candLayouts);
+    const LD = J.LAYOUTS[layout] || J.LAYOUTS.title;
+    const enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : rng.pick(['blur', 'type', 'wipe', 'assemble', 'pop', 'drop']);
+    const exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : rng.pick(['blur', 'drift', 'wipe']);
+    const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : 'still';
+    const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
+    const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, false, history);
+    const treatP = (J.TREAT[treat] && J.TREAT[treat].plan) ? J.TREAT[treat].plan(rng, st) : {};
+    const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, false, history);
+    const camP = (J.CAMERA[cam] && J.CAMERA[cam].plan) ? J.CAMERA[cam].plan(rng, st) : {};
+    const params = LD.plan(rng, { text: title, n: [...title].length, W, H, dur: titleEnd - titleStart }, st);
+    const titleCut = makeCut({
+      text: title, note: artist, lineText: title, line: -1,
+      start: titleStart, end: titleEnd, layout, enter, exit, hold,
+      params, decor, treat, treatP, cam, camP, scheme: 0, seed: J.h(titleSeed, 17)
+    });
+    plan.cuts.push(titleCut);
+    history.push({ layout, enter, exit, hold, treat, cam, trans: null, decor: decor.map(d => d.id) });
+    plan.titleLine = { index: -1, text: title, note: artist, start: titleStart, end: titleEnd, seed: titleSeed, cut: titleCut };
   }
 
   parsed.lines.forEach((ln, li) => {

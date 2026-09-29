@@ -117,6 +117,30 @@ async function cleanupDeletedMedia() {
   try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify(pendingMediaDeletes().filter(id => !pending.includes(id) || failed.includes(id)))); } catch (e) {}
 }
 const U = { list: [], i: -1, restoring: false, pendingGroup: null, lastGroup: null, lastAt: 0 };
+const MediaElementCache = new Map();
+
+function cacheMediaElement(id, asset) {
+  if (!id || !asset) return;
+  MediaElementCache.set(id, { url: asset.url, element: asset.element, type: asset.type, poster: asset.poster, posterElement: asset.posterElement, file: asset.file });
+}
+
+function restoreMediaElements(proj) {
+  if (!proj || !J.mediaAssets) return;
+  for (const layer of ['media', 'foreground']) {
+    const m = proj[layer];
+    if (m && m.items) {
+      for (const item of m.items) {
+        if (!J.mediaAssets.has(item.id)) {
+          const cached = MediaElementCache.get(item.id);
+          if (cached) {
+            J.mediaAssets.set(item.id, cached);
+          }
+        }
+      }
+    }
+  }
+}
+
 function initUndo() { U.list = [JSON.stringify(S.project)]; U.i = 0; updateUndoButtons(); }
 function markUndoGroup(group) { U.pendingGroup = group; }
 function updateUndoButtons() {
@@ -125,6 +149,9 @@ function updateUndoButtons() {
 }
 function recordUndoState() {
   if (U.restoring || !S.project) return;
+  if (J.mediaAssets) {
+    for (const [id, asset] of J.mediaAssets) cacheMediaElement(id, asset);
+  }
   const snap = JSON.stringify(S.project), group = U.pendingGroup, now = Date.now();
   U.pendingGroup = null;
   if (U.i < 0) { U.list = [snap]; U.i = 0; updateUndoButtons(); return; }
@@ -148,20 +175,19 @@ function undoMove(direction) {
   $('tapPanel').hidden = true; syncTapButtons();
   U.restoring = true; U.i = next; U.pendingGroup = null; U.lastGroup = null;
   S.project = mergeProject(JSON.parse(U.list[next]));
+  restoreMediaElements(S.project);
   if (S.project.audioAsset?.id !== S.audioAssetId) {
     S.audioLoad = (S.audioLoad || 0) + 1;
     S.audio = null; S.audioFile = null; refreshAudioName(); restoreAudioAsset();
   }
   fontKey = ''; syncUI(); replan(); flushSave();
-  // mergeProject normalizes (e.g. favorite payload key order); store the normalized snapshot so the
-  // next undo/redo doesn't see it as a new edit and drop the redo steps.
   U.list[U.i] = JSON.stringify(S.project);
   U.restoring = false; updateUndoButtons();
 }
 let saveTimer = 0;
 function autosave() { recordUndoState(); clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 700); }
 function flushSave() { recordUndoState(); clearTimeout(saveTimer); try { localStorage.setItem(LS_KEY, JSON.stringify(S.project)); } catch (e) {} }
-window.addEventListener('pagehide', () => { if (S.project) { flushSave(); cleanupDeletedMedia(); } });
+window.addEventListener('pagehide', () => { if (S.project && !U.restoring) { flushSave(); cleanupDeletedMedia(); } });
 
 /* ---------------- planning ---------------- */
 function audioLike() {
@@ -1795,6 +1821,58 @@ function reconcileLyricLines(previous, next) {
 function renderLines() {
   const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2;
   const ov = S.project.overrides;
+
+  // 先頭の曲タイトル行 (#00)
+  if (S.plan && S.plan.titleLine) {
+    const tln = S.plan.titleLine;
+    const to = ov[-1] || {};
+    const titleLayoutKeys = J.TITLE_LAYOUT_ORDER || ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
+    const titleLayoutOpts = '<option value="">自動（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
+    const tli = document.createElement('li');
+    tli.className = 'ln lyric-ln ln-title';
+    tli.innerHTML = `<span class="no">#00</span>
+      <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始秒" style="opacity:0.6;cursor:default">
+      <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
+      <div class="meta"><span class="cuts"></span>
+      <span class="tools">
+        <select aria-label="タイトルレイアウト指定">${titleLayoutOpts}</select>
+        <button class="icon ghost dice" title="タイトルの装飾・配置・演出を再抽選" ${to.lock ? 'disabled' : ''}>${ICON.dice}</button>
+        <button class="icon ghost lock" title="タイトルの構成をロック" aria-pressed="${to.lock ? 'true' : 'false'}">${ICON.lock}</button>
+      </span></div>`;
+    tli.querySelector('select').value = to.layout || '';
+    tli.querySelector('.txt').addEventListener('click', () => seek(0.001));
+    tli.querySelector('select').addEventListener('change', e => { setOv(-1, { layout: e.target.value || undefined }); replan(); });
+    tli.querySelector('.dice').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) return;
+      recordUndoState();
+      setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
+      replan();
+      seek(0.001);
+    });
+    tli.querySelector('.lock').addEventListener('click', () => {
+      const cur = ov[-1] || {};
+      if (cur.lock) setOv(-1, { lock: false, lockedSeed: undefined });
+      else setOv(-1, { lock: true, lockedSeed: tln.seed });
+      replan();
+    });
+    const tcutsEl = tli.querySelector('.cuts');
+    S.plan.cuts.filter(c => c.line === -1).forEach(c => {
+      const sp = document.createElement('span');
+      sp.className = 'lyric-cut-option';
+      const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
+      const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
+      sp.textContent = `${layName} [${decorNames}]`;
+      sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
+      sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
+      sp.style.cursor = 'pointer';
+      sp.addEventListener('click', () => seek(0.001));
+      tcutsEl.appendChild(sp);
+    });
+    ol.appendChild(tli);
+    S.titleLineEl = tli;
+  }
+
   const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
   const rows = S.plan.lines.map(ln => ({ line: ln.index, start: ln.start }));
   rows.forEach(row => {
@@ -1810,6 +1888,7 @@ function renderLines() {
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
         <select aria-label="レイアウト指定">${layoutOpts}</select>
+        <button class="icon ghost tap-from" title="この行からタップ同期（Spaceキーで曲合わせ）" aria-label="${i + 1}行目からタップ同期">◎</button>
         <button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>
         <button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
@@ -1820,6 +1899,7 @@ function renderLines() {
       if (isFinite(v)) S.project.timing.lineTimes[i] = Math.max(0, v); else delete S.project.timing.lineTimes[i];
       replan();
     });
+    li.querySelector('.tap-from').addEventListener('click', () => startTap(i));
     li.querySelector('.txt').addEventListener('click', () => seek(ln.start + 0.001));
     li.querySelector('.lyric-area-thumb').addEventListener('click', () => openAreaEditor(i));
     li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
@@ -2944,17 +3024,19 @@ async function runExport(kind) {
 }
 
 /* ---------------- tap sync ---------------- */
-function startTap() {
+function startTap(fromIndex = 0) {
   const layer = activeMediaLayer();
   if (!(layer ? J.mediaInsertChoices(S.project,layer).length : S.plan.lines.length)) return;
   pause();
-  S.tap = { i: 0, layer, append: !!layer, fileIndex: 0, countingDown: true };
+  fromIndex = Math.max(0, Math.min(fromIndex, (layer ? S.plan[layer].cuts.length : S.plan.lines.length) - 1));
+  S.tap = { i: fromIndex, layer, append: !!layer, fileIndex: 0, countingDown: true, fromIndex };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-  $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
+  $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : (fromIndex > 0 ? `${fromIndex + 1}行目からタップ同期します。Spaceキーまたはボタンを押してください。` : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。');
   S.sourceOpen=false;S.settingsOpen=false;S.playheadMenu=null;closeTimelineCutMenu();syncSettingsDrawer();syncSourceDrawer();syncPlayheadMenu();
   $('tapPanel').hidden = false; syncTapButtons();sizeViewport();drawTimeline();drawTimelineLinks();
   if (S.tap.append && !S.audio) extendTapPreview(0);
-  seek(0); updateTap();
+  const startSeekT = fromIndex > 0 && S.plan.lines[fromIndex - 1] ? Math.max(0, S.plan.lines[fromIndex - 1].start) : 0;
+  seek(startSeekT); updateTap();
   const session=S.tap,deadline=performance.now()+3000;
   const countdown=$('tapCountdown');countdown.hidden=false;
   $('tapStop').focus();
@@ -2963,7 +3045,7 @@ function startTap() {
     const remaining=Math.ceil((deadline-performance.now())/1000);
     if(remaining<=0){
       session.countingDown=false;countdown.hidden=true;syncTapButtons();
-      seek(0);play();$('tapBtn').focus();return;
+      seek(startSeekT);play();$('tapBtn').focus();return;
     }
     countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
     session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));

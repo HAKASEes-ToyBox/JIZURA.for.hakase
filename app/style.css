@@ -142,6 +142,7 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .lyric-ln .meta { flex-wrap: wrap; }
 .lyric-ln .tools { order: 0; margin-left: auto; }
 .lyric-ln .cuts { order: 1; flex: 1 1 100%; }
+.ln-title { border-left: 3px solid var(--cyan) !important; background: rgba(22, 244, 212, 0.05); }
 .media-ln .tools { flex: 1 1 100%; flex-wrap: wrap; }
 .media-ln .tools select { max-width: 78px; }
 .media-video-loop { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted); cursor: pointer; }

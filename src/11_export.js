@@ -66,6 +66,7 @@ async function resample(buffer, sr, duration) {
 
 /* ---------- MP4 ---------- */
 J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signal }) => {
+  if (J.pauseAllVideos) J.pauseAllVideos();
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
@@ -154,6 +155,7 @@ class ZipWriter {
   }
 }
 J.exportPNGZip = async ({ plan, project, transparent, onProgress, signal, every = 1 }) => {
+  if (J.pauseAllVideos) J.pauseAllVideos();
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
