@@ -40825,7 +40825,7 @@ function rerollLyricLine(index) {
   // A locked line re-rolls its effects but keeps its place (re-layout is 再配置's job).
   setOv(index, { seed: (current.seed | 0) + 1, ...LYRIC_UNLOCK, ...(current.lock ? { lock: true, lockedAreas: current.lockedAreas } : {}) });
   relock('lyrics', index);
-  replan(); seek(line.start + 0.001);
+  replan();
 }
 function disableAndReroll(layer,index,part=null) {
   const project=S.project;
@@ -40901,7 +40901,7 @@ function rerollMediaCut(layer, index) {
   if (!cut || !options) return;
   mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedLayout: options.lockedLayout, lockedItemId: options.lockedItemId } : {}) }, layer);
   relock(layer, index);
-  replan(); seek(cut.start + 0.001);
+  replan();
 }
 function toggleMediaCutLock(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
