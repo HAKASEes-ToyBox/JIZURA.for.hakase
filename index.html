@@ -502,7 +502,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frames .lyrics { color:#68e3ca; }
 .item-frames .media { color:#95baff; }
 .item-frame-tools { position:absolute; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
-.item-frame-tools span { font-size:10px; padding:0 4px; white-space:nowrap; }
+.item-frame-tools span { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; }
 .item-frame-action { display:flex; align-items:center; justify-content:center; width:25px; min-width:20px; height:23px; padding:3px; border:0; border-radius:2px; background:transparent; color:inherit; }
 .item-frame-action svg { width:16px; height:16px; pointer-events:none; }
 .item-frame-action.active { background:#3b6560; color:#fff; }
@@ -5164,20 +5164,34 @@ J.storeMedia = async (id, file) => {
     storageChanged();
   }
 };
-J.loadMedia = async id => temporaryMedia.has(id) ? temporaryMedia.get(id) : dbOp('readonly', s => s.get(id));
+J.loadMedia = async id => {
+  if (temporaryMedia.has(id)) return temporaryMedia.get(id);
+  const file = await dbOp('readonly', s => s.get(id));
+  // Do not let callers retain a Blob backed by IndexedDB's on-disk file.
+  // This also covers restored audio and project/export APIs, not only video URLs.
+  return file ? J.snapshotMediaFile(file) : file;
+};
 J.removeMedia = async id => {
   if (temporaryMedia.delete(id)) storageChanged();
   return dbOp('readwrite', s => s.delete(id));
 };
+J.releaseMediaAsset = asset => {
+  if (!asset) return;
+  if (asset.element && asset.type === 'video') {
+    asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
+  } else if (asset.element) asset.element.removeAttribute('src');
+  if (asset.posterElement) asset.posterElement.removeAttribute('src');
+  if (asset.url) URL.revokeObjectURL(asset.url);
+};
 J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   file = await J.snapshotMediaFile(file);
   return new Promise((resolve, reject) => {
-  const previous = assets.get(item.id); if (previous) URL.revokeObjectURL(previous.url);
+  const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
   const el = document.createElement(item.type === 'video' ? 'video' : 'img');
   if (item.type === 'video') { el.muted = true; el.playsInline = true; el.preload = 'auto'; }
   let settled=false;
-  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;URL.revokeObjectURL(url);reject(new Error(J.mediaLabel('素材を読み込めませんでした：','Could not load asset: ')+item.name));};
+  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;J.releaseMediaAsset({element:el,type:item.type,url});reject(new Error(J.mediaLabel('素材を読み込めませんでした：','Could not load asset: ')+item.name));};
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
@@ -39195,9 +39209,9 @@ async function cleanupDeletedMedia() {
   for (const id of pending) {
     if (active.has(id)) continue;
     try {
-      await J.removeMedia(id);
       const asset = J.mediaAssets.get(id);
-      if (asset) { URL.revokeObjectURL(asset.url); J.mediaAssets.delete(id); }
+      if (asset) { J.releaseMediaAsset(asset); J.mediaAssets.delete(id); }
+      await J.removeMedia(id);
     } catch (e) { failed.push(id); }
   }
   try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify(pendingMediaDeletes().filter(id => !pending.includes(id) || failed.includes(id)))); } catch (e) {}
@@ -40401,7 +40415,9 @@ function drawItemFrames() {
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
     const actions=['dice','disableReroll','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
-    const width=Math.min(view.width,actions.length*25+68),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
+    const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('画像無し','No image'));
+    const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
+    const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
     let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
     while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
     occupied.push({x,y,w:width});
@@ -40409,7 +40425,7 @@ function drawItemFrames() {
       const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
       return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
     }).join('');
-    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;max-width:${view.width}px" data-layer="${layer}"><span>${layerNames[layer]} ${index+1}</span>${controls}</div>`;
+    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><span title="${escapeHtml(frameName)}">${escapeHtml(frameName)}</span>${controls}</div>`;
   }).join('');
   if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
 }
@@ -42898,8 +42914,7 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
 
 function releaseProjectAssets(assets) {
   for (const asset of assets.values()) {
-    if (asset.type === 'video') { asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load(); }
-    URL.revokeObjectURL(asset.url);
+    J.releaseMediaAsset(asset);
   }
   assets.clear();
 }

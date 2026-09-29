@@ -484,7 +484,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frames .lyrics { color:#68e3ca; }
 .item-frames .media { color:#95baff; }
 .item-frame-tools { position:absolute; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
-.item-frame-tools span { font-size:10px; padding:0 4px; white-space:nowrap; }
+.item-frame-tools span { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; }
 .item-frame-action { display:flex; align-items:center; justify-content:center; width:25px; min-width:20px; height:23px; padding:3px; border:0; border-radius:2px; background:transparent; color:inherit; }
 .item-frame-action svg { width:16px; height:16px; pointer-events:none; }
 .item-frame-action.active { background:#3b6560; color:#fff; }

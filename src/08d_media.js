@@ -326,20 +326,34 @@ J.storeMedia = async (id, file) => {
     storageChanged();
   }
 };
-J.loadMedia = async id => temporaryMedia.has(id) ? temporaryMedia.get(id) : dbOp('readonly', s => s.get(id));
+J.loadMedia = async id => {
+  if (temporaryMedia.has(id)) return temporaryMedia.get(id);
+  const file = await dbOp('readonly', s => s.get(id));
+  // Do not let callers retain a Blob backed by IndexedDB's on-disk file.
+  // This also covers restored audio and project/export APIs, not only video URLs.
+  return file ? J.snapshotMediaFile(file) : file;
+};
 J.removeMedia = async id => {
   if (temporaryMedia.delete(id)) storageChanged();
   return dbOp('readwrite', s => s.delete(id));
 };
+J.releaseMediaAsset = asset => {
+  if (!asset) return;
+  if (asset.element && asset.type === 'video') {
+    asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
+  } else if (asset.element) asset.element.removeAttribute('src');
+  if (asset.posterElement) asset.posterElement.removeAttribute('src');
+  if (asset.url) URL.revokeObjectURL(asset.url);
+};
 J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   file = await J.snapshotMediaFile(file);
   return new Promise((resolve, reject) => {
-  const previous = assets.get(item.id); if (previous) URL.revokeObjectURL(previous.url);
+  const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
   const el = document.createElement(item.type === 'video' ? 'video' : 'img');
   if (item.type === 'video') { el.muted = true; el.playsInline = true; el.preload = 'auto'; }
   let settled=false;
-  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;URL.revokeObjectURL(url);reject(new Error(J.mediaLabel('素材を読み込めませんでした：','Could not load asset: ')+item.name));};
+  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;J.releaseMediaAsset({element:el,type:item.type,url});reject(new Error(J.mediaLabel('素材を読み込めませんでした：','Could not load asset: ')+item.name));};
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
