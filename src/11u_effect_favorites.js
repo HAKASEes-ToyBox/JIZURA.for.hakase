@@ -159,10 +159,6 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
   const disarm=()=>{if(armedDelete){armedDelete.textContent='×';armedDelete.setAttribute('aria-label',L('削除を確認','Confirm deletion'));armedDelete=null;}};
   document.addEventListener('click',outsideDelete,true);
   function outsideDelete(event){if(armedDelete&&!armedDelete.contains(event.target))disarm();}
-  let pressedOutside=false;
-  const outside=e=>{const r=dialog.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};
-  dialog.addEventListener('pointerdown',e=>{pressedOutside=e.target===dialog&&outside(e);});
-  dialog.addEventListener('click',e=>{if(pressedOutside&&e.target===dialog&&outside(e))dialog.close();pressedOutside=false;});
   dialog.addEventListener('close',()=>{document.removeEventListener('click',outsideDelete,true);dead=true;token++;cancelAnimationFrame(frame);observer.disconnect();active=null;queue.length=0;if(sampleId)J.mediaAssets.delete(sampleId);dialog.remove();closed();});
   Object.defineProperty(dialog,'favoritePreview',{get:()=>active&&({plan:active.plan,cut:active.cut})});
   function sample(kind){
