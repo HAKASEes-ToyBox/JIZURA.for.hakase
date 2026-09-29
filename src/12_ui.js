@@ -244,7 +244,7 @@ const replanSoon = (ms = 220) => { clearTimeout(replanTimer); replanTimer = setT
 let fontKey = '';
 let thumbFonts = null;
 async function ensureFonts() {
-  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS;
+  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan);
   const keys = J.fontsOfPlan(S.plan);                       // only the faces this plan draws with
   const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length;
   if (key === fontKey) return;
@@ -2916,7 +2916,7 @@ async function runExport(kind) {
   const onProgress = (p, m) => { boxes.forEach(b => { b.querySelector('.exp-bar').style.width = (p * 100).toFixed(1) + '%'; }); setText(m); };
   const t0 = performance.now();
   try {
-    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS, J.fontsOfPlan(S.plan));
+    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
     if (kind === 'mp4') {
       const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal });
       txt.textContent = `完成 ${(r.blob.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;

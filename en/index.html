@@ -1476,7 +1476,12 @@ function attachFamily(spec) {
   cssJobs.set(spec, job);
   return job;
 }
-/* font keys a plan draws with: style roles, per-cut font params, mono for HUD */
+/* drawing-program nodes of every lyric / media cut (custom favorite effects) */
+const drawingNodes = plan => [plan?.cuts, plan?.media?.cuts, plan?.foreground?.cuts]
+  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []);
+/* literal strings drawn by drawing programs; their glyphs must be loaded like lyrics */
+J.drawingText = plan => drawingNodes(plan).map(n => typeof n.text === 'string' && n.text[0] !== '$' ? n.text : '').join('');
+/* font keys a plan draws with: style roles, per-cut font params, drawing programs, mono for HUD */
 J.fontsOfPlan = (plan) => {
   const set = new Set(['mono']);
   if (!plan) return [...set];
@@ -1487,6 +1492,7 @@ J.fontsOfPlan = (plan) => {
     if (typeof v === 'string' && J.FONTS[v]) set.add(v);
     else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string' && J.FONTS[x]) set.add(x); });
   }
+  for (const node of drawingNodes(plan)) if (node.font) set.add(node.font);
   for (const key of [...set]) {
     const composite = J.FONTS[key]?.composite;
     if (composite) { set.add(composite.base); Object.values(composite.parts).forEach(part => set.add(part)); }
@@ -38847,7 +38853,7 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     const id=++token;active=null;
     try{
       const state=draft(favorite);
-      await J.ensureFonts(state.cut.text||'',J.fontsOfPlan(state.plan));
+      await J.ensureFonts((state.cut.text||'')+J.drawingText(state.plan),J.fontsOfPlan(state.plan));
       if(dead||id!==token||!card.isConnected)return;
       for(const other of host.querySelectorAll('.favorite-card'))other.classList.toggle('active',other===card);
       active={...state,card,canvas:card.querySelector('canvas'),started:performance.now()};
@@ -39053,7 +39059,7 @@ J.favoriteAPI={
       let plan=build();const find=()=>layer==='lyrics'?plan.cuts.filter(c=>c.line>=0)[target?.index||0]:plan[layer].cuts[target?.index||0];
       const original=find();if(!original)throw Error('Target cut not found');J.pasteCutEffects(p,plan,layer,original,payload);plan=build();const cut=find();
       const duration=Math.min(cut.end,plan.duration)-cut.start;if(time>=duration)throw Error('time must be less than cut duration '+duration);
-      await J.ensureFonts(cut.text||'',J.fontsOfPlan(plan));await document.fonts.ready;await J.prepareMediaFrame(plan,cut.start+time);
+      await J.ensureFonts((cut.text||'')+J.drawingText(plan),J.fontsOfPlan(plan));await document.fonts.ready;await J.prepareMediaFrame(plan,cut.start+time);
       const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(Math.min(width,1920*plan.W/plan.H)));cv.height=Math.max(1,Math.round(cv.width*plan.H/plan.W));
       new J.Renderer().frame(cv.getContext('2d'),plan,cut.start+time,{scale:cv.width/plan.W,noHud:true});
       return {data:cv.toDataURL('image/png').split(',')[1],width:cv.width,height:cv.height,time,duration};
@@ -39551,7 +39557,7 @@ const replanSoon = (ms = 220) => { clearTimeout(replanTimer); replanTimer = setT
 let fontKey = '';
 let thumbFonts = null;
 async function ensureFonts() {
-  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS;
+  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan);
   const keys = J.fontsOfPlan(S.plan);                       // only the faces this plan draws with
   const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length;
   if (key === fontKey) return;
@@ -42223,7 +42229,7 @@ async function runExport(kind) {
   const onProgress = (p, m) => { boxes.forEach(b => { b.querySelector('.exp-bar').style.width = (p * 100).toFixed(1) + '%'; }); setText(m); };
   const t0 = performance.now();
   try {
-    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS, J.fontsOfPlan(S.plan));
+    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
     if (kind === 'mp4') {
       const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal });
       txt.textContent = `Done: ${(r.blob.size / 1048576).toFixed(1)}MB · ${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''} · ${((performance.now() - t0) / 1000).toFixed(0)}s`;

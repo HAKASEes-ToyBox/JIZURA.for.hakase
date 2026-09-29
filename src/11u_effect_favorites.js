@@ -219,7 +219,7 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
     const id=++token;active=null;
     try{
       const state=draft(favorite);
-      await J.ensureFonts(state.cut.text||'',J.fontsOfPlan(state.plan));
+      await J.ensureFonts((state.cut.text||'')+J.drawingText(state.plan),J.fontsOfPlan(state.plan));
       if(dead||id!==token||!card.isConnected)return;
       for(const other of host.querySelectorAll('.favorite-card'))other.classList.toggle('active',other===card);
       active={...state,card,canvas:card.querySelector('canvas'),started:performance.now()};
