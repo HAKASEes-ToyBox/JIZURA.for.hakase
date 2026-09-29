@@ -2,6 +2,13 @@
    Blob slices avoid base64 expansion and copying entire videos into JS strings. */
 (() => {
 'use strict';
+// iOS Files may disable unknown custom extensions. Keep desktop filters, but let
+// iPhone/iPad select any document; the portable readers validate its contents.
+J.configurePortableFileInput = input => {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    /Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1;
+  if (ios) input.removeAttribute('accept');
+};
 const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
 // Explicit settings allowlist keeps song content and future asset fields out of presets.

@@ -80,6 +80,7 @@ J.settingsFromFavorites=project=>{
 J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=>{
   const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='effectFavoritesDialog';
   dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-import"></button><button type="button" class="favorite-export"></button><button type="button" class="favorite-configure"></button><input type="file" class="favorite-file" hidden accept=".jizuraichifav,.jizuraichi,.json"><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
+  J.configurePortableFileInput(dialog.querySelector('.favorite-file'));
   dialog.querySelector('h2').textContent=L('お気に入り演出','Favorite effects');
   dialog.setAttribute('aria-label',L('お気に入り演出','Favorite effects'));
   dialog.querySelector('.favorite-close').setAttribute('aria-label',L('閉じる','Close'));

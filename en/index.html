@@ -7994,6 +7994,13 @@ J.planForAE = (plan, project) => {
    Blob slices avoid base64 expansion and copying entire videos into JS strings. */
 (() => {
 'use strict';
+// iOS Files may disable unknown custom extensions. Keep desktop filters, but let
+// iPhone/iPad select any document; the portable readers validate its contents.
+J.configurePortableFileInput = input => {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    /Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1;
+  if (ios) input.removeAttribute('accept');
+};
 const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
@@ -38744,6 +38751,7 @@ J.settingsFromFavorites=project=>{
 J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=>{
   const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='effectFavoritesDialog';
   dialog.innerHTML='<header><h2></h2><button type="button" class="favorite-import"></button><button type="button" class="favorite-export"></button><button type="button" class="favorite-configure"></button><input type="file" class="favorite-file" hidden accept=".jizuraichifav,.jizuraichi,.json"><button type="button" class="favorite-close">×</button></header><p class="favorite-help"></p><div class="favorite-groups"></div>';
+  J.configurePortableFileInput(dialog.querySelector('.favorite-file'));
   dialog.querySelector('h2').textContent=L('お気に入り演出','Favorite effects');
   dialog.setAttribute('aria-label',L('お気に入り演出','Favorite effects'));
   dialog.querySelector('.favorite-close').setAttribute('aria-label',L('閉じる','Close'));
@@ -42510,6 +42518,7 @@ function bind() {
   });
   document.addEventListener('click', e => menus.forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
   document.addEventListener('keydown', e => {if(e.key==='Escape')menus.forEach(menu=>{menu.open=false;});});
+  ['fileProject','fileSettings'].forEach(id => J.configurePortableFileInput($(id)));
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
   $('fileProject').addEventListener('change',()=>{$('projectMenu').open=false;});
   document.querySelectorAll('[data-export-dialog]').forEach(button=>button.addEventListener('click',()=>openExportDialog(button.dataset.exportDialog)));
