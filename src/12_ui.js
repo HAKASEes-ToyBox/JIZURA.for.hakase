@@ -918,6 +918,14 @@ function openCutDetails(layer,index,part=0) {
     tools.add.setAttribute('aria-label',L('図形を追加','Add shape'));tools.remove.textContent=L('選択中の図形を削除','Remove selected shape');
     const canvas=section.querySelector('canvas'),shapeBox=section.querySelector('.cut-mask-shape');
     const save=()=>{write('mask',clone(mask),false);draw();};
+    const opacityLabel=document.createElement('label');
+    opacityLabel.innerHTML=`<span>${L('不透明度（％）','Opacity (%)')}</span> <input type="number" min="0" max="100" step="1" data-mask-field="opacity">`;
+    const opacityInput=opacityLabel.querySelector('input');opacityInput.value=mask.opacity;
+    opacityInput.addEventListener('input',()=>{
+      if(opacityInput.value===''||!opacityInput.validity.valid)return;
+      mask.opacity=Number(opacityInput.value);save();
+    });
+    section.querySelector('.cut-mask-controls').append(opacityLabel);
     function draw(){
       const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
       if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
@@ -928,7 +936,7 @@ function openCutDetails(layer,index,part=0) {
       sx.fillStyle='rgba(0,0,0,.62)';
       if(mask.invert){for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
       else{sx.fillRect(0,0,w,ch);sx.globalCompositeOperation='destination-out';for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
-      if(mask.enabled)x.drawImage(shade,0,0);
+      if(mask.enabled){x.save();x.globalAlpha=mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
         if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}

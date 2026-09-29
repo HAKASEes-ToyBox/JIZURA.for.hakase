@@ -20,7 +20,7 @@ J.normalizeMask = m => {
   const shapes = (Array.isArray(m.shapes) ? m.shapes : []).filter(s => s && J.MASK_SHAPES.includes(s.type)).map(s => ({
     type: s.type, cx: num(s.cx, .5), cy: num(s.cy, .5), w: Math.max(0, num(s.w, .5)), h: Math.max(0, num(s.h, .5)), angle: J.clamp(num(s.angle, 0), -180, 180), lockAspect: s.lockAspect !== false,
   })).filter(s => s.w > 0 && s.h > 0);
-  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, shapes, motion: J.normalizeMaskMotion(m.motion) };
+  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, opacity: J.clamp(num(m.opacity, 100), 0, 100), shapes, motion: J.normalizeMaskMotion(m.motion) };
 };
 // The editor previews the unmasked reference while it is drawn.
 J.masksSuspended = false;
@@ -98,7 +98,14 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
     for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
   }
-  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none';
+  const opacity = J.clamp(num(mask.opacity, 100), 0, 100) / 100;
+  // Interpolate the mask coverage with an unmasked frame. Fill the union once,
+  // so overlapping shapes do not multiply the opacity.
+  if (!mask.invert && opacity < 1) {
+    mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalCompositeOperation = 'destination-over';
+    mx.globalAlpha = 1 - opacity; mx.fillStyle = '#fff'; mx.fillRect(0, 0, m.width, m.height);
+  }
+  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = mask.invert ? opacity : 1; x.filter = 'none';
   x.globalCompositeOperation = mask.invert ? 'destination-out' : 'destination-in'; x.drawImage(m, 0, 0); x.restore();
 };
 const dims = src => [src.videoWidth || src.naturalWidth || src.width || 0, src.videoHeight || src.naturalHeight || src.height || 0];

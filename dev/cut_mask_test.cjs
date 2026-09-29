@@ -4,6 +4,19 @@ const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.goto(url);
 const result=await page.evaluate(()=>{
 const failures=[],check=(ok,m)=>{if(!ok)failures.push(m)};
+// Mask opacity controls concealment, including overlapping shapes and inversion.
+check(J.normalizeMask({}).opacity===100,'legacy mask opacity defaults to 100');
+check(J.normalizeMask({opacity:150}).opacity===100&&J.normalizeMask({opacity:-1}).opacity===0,'opacity bounds');
+for(const invert of [false,true])for(const opacity of [0,50,100]){
+ const c=document.createElement('canvas');c.width=100;c.height=100;const x=c.getContext('2d');
+ x.fillStyle='rgba(255,0,0,0.8)';x.fillRect(0,0,100,100);
+ const m=J.normalizeMask({enabled:true,invert,opacity,shapes:[{type:'rect',cx:.4,cy:.5,w:.4,h:.6},{type:'rect',cx:.6,cy:.5,w:.4,h:.6}]});
+ J.applyMaskToCanvas(c,m,new DOMMatrix([100,0,0,100,0,0]),1,1);
+ for(const [px,inside] of [[5,false],[30,true],[50,true]]){
+  const expected=204*((invert?inside:!inside)?1-opacity/100:1);
+  check(Math.abs(x.getImageData(px,50,1,1).data[3]-expected)<=1,`opacity ${opacity}, invert ${invert}, pixel ${px}`);
+ }
+}
 for(const [id,color] of [['bl','#1030ff'],['gr','#10ff30']]){const c=document.createElement('canvas');c.width=160;c.height=90;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,160,90);J.mediaAssets.set(id,{element:c,type:'image'});}
 const out=document.createElement('canvas');out.width=320;out.height=180;const ctx=out.getContext('2d'),renderer=new J.Renderer();
 const project=(opts={})=>{const p=J.defaultProject();p.lyrics=opts.lyrics||'';p.title='';p.durationOverride=8;p.lyricEffects={...p.lyricEffects,autoPlacement:false};p.overrides={0:{single:true,layout:'center'}};// one full-stage, centred cut
@@ -130,11 +143,15 @@ assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Ma
 assert.deepEqual(await section.locator('select[data-mask-motion]').evaluateAll(els=>els.map(e=>e.value)),['none','none','none']);
 await section.locator('[data-mask-motion="technique"]').selectOption('rollAcross');await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await section.locator('[data-mask-motion="departure"]').selectOption('exit_fade');
 await section.locator('[data-mask-motion="duration"]').fill('0.8');await section.locator('[data-mask-motion="duration"]').dispatchEvent('change');
+assert.equal(await section.locator('[data-mask-field="opacity"]').inputValue(),'100');
+await section.locator('[data-mask-field="opacity"]').fill('50');
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Cut:':'カット：'));
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].details.mask;return {enabled:m.enabled,target:m.target,invert:m.invert,types:m.shapes.map(s=>s.type),plan:!!J.ui.plan.media.cuts[0].mask};});
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
+assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.opacity),50);
+assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].mask.opacity),50);
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
 assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
