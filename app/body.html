@@ -336,7 +336,11 @@
 
 <dialog id="themesDlg" class="terms" aria-labelledby="themesTitle">
  <form method="dialog"><h2 id="themesTitle">テーマ設定</h2>
- <p>複数選択できます。おまかせでは、選んだテーマのいずれかに合う設定候補から構成します。未選択の場合は制限しません。</p>
+ <div class="theme-balance" role="radiogroup" aria-label="統一感・にぎやかさ">
+  <label><input type="radio" name="themeBalance" value="unified"><span>統一感重視</span></label>
+  <label><input type="radio" name="themeBalance" value="lively"><span>にぎやかさ重視</span></label>
+ </div>
+ <p id="themeBalanceNote" class="note" aria-live="polite"></p>
  <div id="themeChoices"></div>
  <div class="acts"><button id="btnClearThemes" type="button">選択を解除</button><button value="cancel">キャンセル</button><button id="btnApplyThemes" type="button">適用</button></div>
  </form>

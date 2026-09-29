@@ -78,6 +78,7 @@ function mergeProject(p) {
   o.lyricCutOptions = (p && p.lyricCutOptions) || {};
   o.lyricEffects = J.lyricEffectSettings(o);
   o.themes = J.themeIds(o);
+  o.themeBalance = o.themeBalance === 'unified' ? 'unified' : 'lively';
   delete o.jevPrompt;
   migrateLyricBlankCuts(o);
   o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
@@ -3149,6 +3150,10 @@ function renderMediaEffects(layer) {
 function renderThemes() {
   const ids = J.themeIds(S.project), ct = J.normalizeColorTheme(S.project.colorTheme);
   $('themeLabels').innerHTML = ids.length ? ids.map(id=>`<span class="theme-label">${J.THEMES[id].name}</span>`).join('') : `<span class="muted">${J.mediaLabel('未選択：すべてのテーマ','Not selected: unrestricted')}</span>`;
+  if (S.project.themeBalance === 'unified') {
+    const chip = document.createElement('span'); chip.className = 'theme-label'; chip.textContent = J.mediaLabel('統一感重視', 'Unified look');
+    $('themeLabels').prepend(chip);
+  }
   if (J.colorThemeActive(S.project)) {
     const chip = document.createElement('span'); chip.className = 'theme-label theme-color-label';
     chip.textContent = J.mediaLabel('カラー：','Colour: ') + (ct.genre !== 'auto' ? J.COLOR_GENRES[ct.genre].name : '');
@@ -3201,8 +3206,18 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
+  // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
+  const themeBalanceNote = () => {
+    const L = J.mediaLabel, unified = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified';
+    $('themeBalanceNote').textContent = unified
+      ? L('おまかせで有効になる演出を絞り、同じ演出を連続して使いやすくします。1シーン内・空行で区切られた歌詞のまとまりの中では、同じ強調度の歌詞に同じ演出を使います。', 'Randomize switches on far fewer effects and favours repeating the same ones. Within a block (a One scene group, or lyrics between blank lines), lyrics of the same emphasis get the same effects.')
+      : L('標準の挙動です。おまかせは幅広い演出を候補に入れ、カットごとに変化のあるにぎやかな見た目にします。', 'The standard behaviour. Randomize draws on a wide range of effects and varies them from cut to cut for a lively look.');
+  };
+  document.querySelectorAll('#themesDlg input[name=themeBalance]').forEach(input => input.addEventListener('change', themeBalanceNote));
   $('btnThemes').addEventListener('click', () => {
     const selected = new Set(J.themeIds(S.project));
+    document.querySelector(`#themesDlg input[name=themeBalance][value=${S.project.themeBalance === 'unified' ? 'unified' : 'lively'}]`).checked = true;
+    themeBalanceNote();
     $('themeChoices').innerHTML = ['genre','taste'].map(category => `<fieldset><legend>${J.mediaLabel(category === 'genre' ? '曲ジャンル' : 'テイスト',category === 'genre' ? 'Music genre' : 'Taste')}</legend>${Object.entries(J.THEMES).filter(([,t])=>t.category===category).map(([id,t])=>`<label class="check"><input type="checkbox" data-theme="${id}" ${selected.has(id)?'checked':''}><span>${t.name}<small>${t.description}</small></span></label>`).join('')}</fieldset>`).join('');
     // Colour: a genre and one theme colour for random palettes, taking priority over the themes above.
     const ct = J.normalizeColorTheme(S.project.colorTheme), L = J.mediaLabel, colors = document.createElement('fieldset'); colors.className = 'theme-colors';
@@ -3219,7 +3234,8 @@ function bind() {
     $('themesDlg').showModal();
   });
   $('btnApplyThemes').addEventListener('click', () => {
-    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme));
+    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme)), balanceBefore = S.project.themeBalance;
+    S.project.themeBalance = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified' ? 'unified' : 'lively';
     S.project.themes = [...$('themeChoices').querySelectorAll('input[data-theme]:checked')].map(el=>el.dataset.theme);
     S.project.colorTheme = J.normalizeColorTheme({ genre: $('colorGenre').value, color: $('colorThemeOn').checked ? $('colorThemeColor').value : null });
     // A changed colour theme is applied right away, so the choice shows immediately.
@@ -3227,6 +3243,8 @@ function bind() {
       remember(); S.project.colors = J.themedColors(S.project, S.project.style, Math.random); renderColors(); replan(); commit();
     }
     renderThemes(); autosave(); $('themesDlg').close();
+    // The unified look also shapes how the current lyrics are planned (shared effects, repeats).
+    if (S.project.themeBalance !== balanceBefore) { remember(); replan(); commit(); }
   });
   $('btnClearThemes').addEventListener('click', () => { $('themeChoices').querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false); $('colorGenre').value = 'auto'; $('colorGenre').dispatchEvent(new Event('change')); });
 

@@ -16,6 +16,7 @@ J.defaultProject = () => ({
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
   themes: [],
+  themeBalance: 'lively',         // テーマ設定: 'lively' (にぎやかさ重視, standard) | 'unified' (統一感重視)
   style: 'noir', mood: null,
   extra: false,                   // random picks may use the parts added after the first version (追加分)
   wa: true,                       // …and the 和風 motifs (提灯・障子・家紋…) — applied after 'extra'
@@ -276,6 +277,12 @@ J.plan = (project, audio) => {
     return best;
   };
   const history = [], bgHistory = [], fxHistory = [];
+  // 統一感重視: lyrics of one block (a 1シーン group, or the lyrics between blank lines) that have the same
+  // emphasis share their effects; repeats are favoured and fewer background / colour switches happen.
+  const unified = project.themeBalance === 'unified';
+  UNITY = unified;
+  const blockLooks = new Map(), cutBlock = new Map();
+  let paragraph = 0;
   let schemeIdx = 0;
   const nSchemes = st.schemes.length;
   const addEvent = (t, type, amp, dur) => plan.events.push({ t, type, amp, dur });
@@ -288,6 +295,7 @@ J.plan = (project, audio) => {
   }
 
   parsed.lines.forEach((ln, li) => {
+    if (li > 0 && ln.gapBefore) paragraph++;
     const s = tm.starts[li], e = tm.ends[li];
     const ov = (project.overrides || {})[li] || {};
     const area = J.lyricArea(ov.area), layoutW = area ? W * area.w : W, layoutH = area ? H * area.h : H;
@@ -334,12 +342,14 @@ J.plan = (project, audio) => {
     for (let k = bounds.length - 2; k > 0; k--) bounds[k] = Math.min(bounds[k], bounds[k + 1] - gap);
     for (let k = 1; k < bounds.length - 1; k++) bounds[k] = Math.max(bounds[k], bounds[k - 1] + gap);
     // scheme per line
-    if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
+    if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1) * (unified ? .4 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
     const emphLine = ln.impact || ln.emph.length > 0;
     // background graphic: chosen per line, occasionally re-rolled per cut
-    let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : pickBg(rng, st, en, fx, bgHistory);
+    const blockNum = ln.group != null ? 1000 + ln.group : paragraph, blockBg = unified && !ov.bg ? blockLooks.get('bg|' + blockNum) : null;
+    let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : blockBg ? blockBg.name : pickBg(rng, st, en, fx, bgHistory);
     bgHistory.push(lineBg);
-    let lineBgP = J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
+    let lineBgP = blockBg ? blockBg.P : J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
+    if (unified && !ov.bg && !blockBg) blockLooks.set('bg|' + blockNum, { name: lineBg, P: lineBgP });
     let textOffset = 0;
     units.forEach((u, k) => {
       const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
@@ -352,10 +362,22 @@ J.plan = (project, audio) => {
       const emph = ln.impact && (k === 0 || u.recap) || emphasis;
       const fx = suppressed ? Object.assign({}, plan.fx, { motion: plan.fx.motion * 0.25, glitch: plan.fx.glitch * 0.25, decor: plan.fx.decor * 0.4 }) : plan.fx;
       const eventStart = plan.events.length;
-      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
-      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
-      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
-      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : pickHold(rng, en, fx, history);
+      // The effects this block already gave to lyrics of the same emphasis (統一感重視), reused when they still fit.
+      const roleIdx = emph ? 1 : suppressed ? 2 : 0, shareKey = blockNum + '|' + roleIdx;
+      const share = unified ? (blockLooks.get(shareKey) || (blockLooks.set(shareKey, {}), blockLooks.get(shareKey))) : {};
+      const shareable = unified && !ln.effectsOnly && !txt.includes('\n');
+      const sharedLayout = shareable && share.layout && J.LAYOUTS[share.layout] && en.layout[share.layout] && J.LAYOUTS[share.layout].fits(nn)
+        && !(dur < 0.5 && ['wave', 'ring', 'labels', 'gloss', 'type', 'tile'].includes(share.layout)) ? share.layout : null;
+      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : sharedLayout || pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
+      if (shareable && !share.layout && !ov.layout) share.layout = layout;
+      const enterOk = shareable && share.enter && J.ENTER[share.enter] && en.enter[share.enter] !== false && !(J.ENTER[share.enter].minDur && dur < J.ENTER[share.enter].minDur) && !(J.ENTER[share.enter].maxChars && nn > J.ENTER[share.enter].maxChars);
+      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : enterOk ? share.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
+      if (shareable && !share.enter && !ov.enter) share.enter = enter;
+      const exitOk = shareable && share.exit && J.EXIT[share.exit] && en.exit[share.exit] !== false && !(J.EXIT[share.exit].minDur && dur < J.EXIT[share.exit].minDur);
+      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : exitOk ? share.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
+      if (shareable && !share.exit && !ov.exit) share.exit = exit;
+      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : shareable && share.hold && J.HOLD[share.hold] && en.hold[share.hold] !== false ? share.hold : pickHold(rng, en, fx, history);
+      if (shareable && !share.hold && !ov.hold) share.hold = hold;
       let inDur = J.clamp(dur * 0.36, 0.12, 0.6);
       if (enter === 'type') inDur = J.clamp(nn * 0.055 + 0.1, 0.15, dur * 0.65);
       if (enter === 'assemble') inDur = J.clamp(dur * 0.45, 0.22, 0.75);
@@ -366,17 +388,22 @@ J.plan = (project, audio) => {
       if (J.EXIT[exit] && J.EXIT[exit].outDur) outDur = J.EXIT[exit].outDur(dur, nn);
       if (inDur + outDur > dur * 0.92) { const f = dur * 0.92 / (inDur + outDur); inDur *= f; outDur *= f; }
       let sch = schemeIdx;
-      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
+      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch * (unified ? .3 : 1))) sch = (schemeIdx + 1) % nSchemes;
       const LD = J.LAYOUTS[layout];
-      const params = LD.plan(rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
+      const params = LD.plan(unified ? J.rng(J.h(project.seed | 0, blockNum, roleIdx, 6151)) : rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
       if (txt.includes('\n')) params.sx = 1;
-      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
-      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, emph, history);
-      const treatP = J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
-      if (!ov.bg && k > 0 && rng.chance(0.18 * fx.bgSwitch + 0.04)) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
+      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : shareable && share.decor && share.layout === layout ? share.decor.map(d => ({ ...d })) : pickDecor(rng, st, en, fx, layout, history);
+      if (shareable && !share.decor && !Array.isArray(ov.decor)) share.decor = decor.map(d => ({ ...d }));
+      const treatOk = shareable && share.treat !== undefined && (share.treat === 'none' || (J.TREAT[share.treat] && LD.treat !== false && (LD.treat !== 'safe' || J.TREAT[share.treat].safe)));
+      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : treatOk ? share.treat : pickTreat(rng, st, en, fx, LD, emph, history);
+      const treatP = treatOk && !ov.treat ? { ...share.treatP } : J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+      if (shareable && share.treat === undefined && !ov.treat) { share.treat = treat; share.treatP = { ...treatP }; }
+      if (!ov.bg && k > 0 && rng.chance((0.18 * fx.bgSwitch + 0.04) * (unified ? .15 : 1))) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
       const bg = LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg;
-      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, emph, history);
-      const camP = J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
+      const camOk = shareable && share.cam && J.CAMERA[share.cam] && en.cam?.[share.cam] !== false && !(LD.cam === false && share.cam !== 'push');
+      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : camOk ? share.cam : pickCam(rng, st, en, fx, LD, emph, history);
+      const camP = camOk && !ov.cam ? { ...share.camP } : J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
+      if (shareable && !share.cam && !ov.cam) { share.cam = cam; share.camP = { ...camP }; }
       // cut-to-cut transition (replaces the previous cut's exit and this cut's entrance)
       const prevCut = plan.cuts[plan.cuts.length - 1];
       // Emphasis is a lyric directive, including when an older cut saved OFF.
@@ -384,7 +411,9 @@ J.plan = (project, audio) => {
       let trans = null, transP = {}, transDur = 0;
       const canTrans = prevCut && ln.group == null && prevCut.group == null && !!prevCut.frontmost === frontmost && Math.abs(prevCut.end - cs) < 0.06 && prevCut.layout !== 'interlude' && dur > 0.5;
       if (canTrans) {
-        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : pickTrans(rng, st, en, fx, emph, history);
+        const transOk = shareable && share.trans !== undefined && (share.trans === null || (J.TRANS[share.trans] && en.trans?.[share.trans] !== false));
+        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : transOk ? share.trans : pickTrans(rng, st, en, fx, emph, history);
+        if (shareable && share.trans === undefined && !ov.trans) share.trans = trans;
         if (trans) {
           const TD = J.TRANS[trans];
           transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
@@ -402,6 +431,7 @@ J.plan = (project, audio) => {
       const cut = makeCut({ text: txt, insertedAtPlayhead: tm.insertionEnds[li]!=null, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? J.SUPPRESSED_TEXT_SCALE : emphasis ? J.EMPHASIS_TEXT_SCALE : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
+      if (shareable && !ov.layout) cutBlock.set(cut, { key: shareKey, W: layoutW, H: layoutH });
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
       // events at cut start
       // events at cut start — durations are on a 24fps timebase so every output rate looks the same
@@ -433,6 +463,37 @@ J.plan = (project, audio) => {
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, part: 'interlude', start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
   });
+  // 統一感重視, last touch: a layout only fits some text lengths, so a block may have had to leave its shared layout
+  // for one cut. Give every lyric of the same block and emphasis the one layout (and decor / treatment) that fits them all.
+  if (unified) {
+    const groups = new Map();
+    for (const [cut, info] of cutBlock) (groups.get(info.key) || groups.set(info.key, []).get(info.key)).push(cut);
+    for (const [key, cuts] of groups) {
+      if (cuts.length < 2) continue;
+      const nOf = c => [...c.text.replace(/\s+/g, '')].length, shortBad = ['wave', 'ring', 'labels', 'gloss', 'type', 'tile'];
+      const fitsAll = k => en.layout[k] && J.LAYOUTS[k] && cuts.every(c => J.LAYOUTS[k].fits(nOf(c)) && !(c.dur < 0.5 && shortBad.includes(k)));
+      if (new Set(cuts.map(c => c.layout)).size > 1) {
+        const counts = new Map(); for (const c of cuts) counts.set(c.layout, (counts.get(c.layout) || 0) + 1);
+        let pick = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).find(fitsAll);
+        if (!pick) { const all = J.LAYOUT_ORDER.filter(fitsAll); if (all.length) pick = all[J.h(project.seed | 0, key.length, cuts.length, 6152) % all.length]; }
+        if (pick) for (const c of cuts) if (c.layout !== pick) {
+          const info = cutBlock.get(c), roleIdx = +key.split('|')[1];
+          c.layout = pick;
+          c.params = J.LAYOUTS[pick].plan(J.rng(J.h(project.seed | 0, +key.split('|')[0], roleIdx, 6151)), { text: c.text, n: nOf(c), W: info.W, H: info.H, dur: c.dur }, st);
+          if (c.text.includes('\n')) c.params.sx = 1;
+        }
+      }
+      // same decor and text treatment as the block's first lyric of this emphasis (when they suit the layout)
+      const first = cuts[0], LD = J.LAYOUTS[first.layout] || {};
+      if (cuts.every(c => c.layout === first.layout)) {
+        const treatOk = first.treat === 'none' || (J.TREAT[first.treat] && LD.treat !== false && (LD.treat !== 'safe' || J.TREAT[first.treat].safe));
+        for (const c of cuts.slice(1)) {
+          c.decor = first.decor.map(d => ({ ...d }));
+          if (treatOk) { c.treat = first.treat; c.treatP = { ...first.treatP }; }
+        }
+      }
+    }
+  }
   for(const [line,end] of tm.insertionEnds.entries())if(end!=null){
     const start=tm.starts[line];
     for(const cut of plan.cuts)if(cut.line!==+line && cut.start<start && cut.end>start){cut.end=start;cut.dur=cut.end-cut.start;}
@@ -491,9 +552,11 @@ function partition(chunks, k) {
   if (cur.length) groups.push(cur);
   return groups;
 }
+// 統一感重視 (themeBalance 'unified', set per plan): the same effect again is favoured instead of avoided.
+let UNITY = false;
 function novelty(history, key, val) {
   let w = 1;
-  for (let i = history.length - 1, d = 0; i >= 0 && d < 6; i--, d++) if (history[i][key] === val) w *= d < 2 ? 0.2 : 0.6;
+  for (let i = history.length - 1, d = 0; i >= 0 && d < 6; i--, d++) if (history[i][key] === val) w *= UNITY ? (d < 2 ? 2.6 : 1.5) : (d < 2 ? 0.2 : 0.6);
   return w;
 }
 const PORTRAIT_W = { vcols: 1.9, condensed: 1.3, huge: 1.3, center: 1.2, stack: 1.1, mixed: 0.7, marquee: 0.6, wave: 0.6, diag: 0.8, type: 0.8, gloss: 0.5 };
@@ -571,7 +634,7 @@ function pickDecor(rng, st, en, fx, layout, history = []) {
   const recent = new Set(history.slice(-2).flatMap(h => h.decor || []));
   const LD = J.LAYOUTS[layout] || {};
   const cands = J.DECOR_ORDER.filter(k => en.decor[k] && J.DECOR[k] && !(LD.busy && J.DECOR[k].layer === 'back' && !J.DECOR[k].subtle))
-    .map(k => [k, wkey(st.decor, k, J.DECOR[k].w != null ? J.DECOR[k].w * 0.5 : 0.35) * (recent.has(k) ? 0.35 : 1)]);
+    .map(k => [k, wkey(st.decor, k, J.DECOR[k].w != null ? J.DECOR[k].w * 0.5 : 0.35) * (recent.has(k) ? (UNITY ? 2.2 : 0.35) : 1)]);
   const out = [];
   for (let i = 0; i < count && cands.length; i++) {
     const k = rng.wpick(cands);
@@ -592,7 +655,7 @@ function pickBg(rng, st, en, fx, bgHist) {
   if (!rng.chance(0.2 + 0.35 * (fx.decor ?? 0.5) + 0.2 * (fx.bgSwitch ?? 0.35))) return 'none';
   const last = bgHist.slice(-3);
   const cands = J.BG_ORDER.filter(k => k !== 'none' && en.bg && en.bg[k] !== false && J.BG[k])
-    .map(k => [k, wkey(st.bias && st.bias.bg, k, J.BG[k].w ?? 1) * (last.includes(k) ? 0.25 : 1)]);
+    .map(k => [k, wkey(st.bias && st.bias.bg, k, J.BG[k].w ?? 1) * (last.includes(k) ? (UNITY ? 2.4 : 0.25) : 1)]);
   return cands.length ? rng.wpick(cands) : 'none';
 }
 function pickCam(rng, st, en, fx, LD, emph, history) {
@@ -619,7 +682,7 @@ function pickFx(rng, st, en, fx, emph, fxHist, kind) {
   if (!rng.chance(p)) return null;
   const last = fxHist.slice(-3);
   const cands = J.FXE_ORDER.filter(k => { const D = J.FXE[k]; return D && !D.builtin && en.fx && en.fx[k] !== false && (kind === 'edge' ? D.edge !== false : D.mid); })
-    .map(k => { const D = J.FXE[k]; let w = wkey(st.bias && st.bias.fx, k, D.w ?? 1) * (last.includes(k) ? 0.2 : 1); if (D.glitchy) w *= 0.3 + g * 1.4; return [k, w]; });
+    .map(k => { const D = J.FXE[k]; let w = wkey(st.bias && st.bias.fx, k, D.w ?? 1) * (last.includes(k) ? (UNITY ? 1.8 : 0.2) : 1); if (D.glitchy) w *= 0.3 + g * 1.4; return [k, w]; });
   return cands.length ? rng.wpick(cands) : null;
 }
 

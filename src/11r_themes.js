@@ -126,7 +126,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
   look.fx.motion = Math.min(1,J.lerp(...theme.motion,rnd()));
   if (!theme.flash) {look.fx.glitch=Math.min(look.fx.glitch,.2);look.fx.chroma=Math.min(look.fx.chroma,.4);}
   for (const group of J.GROUP_KEYS) {
-    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<.75);
+    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<(project.themeBalance==='unified'?.4:.75));
     if (!selected.length && pool.length) selected.push(pick(pool));
     for (const id of neutral[group] || []) if (pool.includes(id)) selected.push(id);
     const enabled = new Set(selected);
@@ -137,7 +137,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
     // Preserve a usable independent pool for main motion, entrance and exit.
     for (const stage of [undefined,'enter','exit']) {
       const pool = pools.media.filter(id=>J.MEDIA_TECH[id].stage===stage && J.mediaTechAllowed(id,layer));
-      for (const id of pool) if (rnd()<.65) on.add(id);
+      for (const id of pool) if (rnd()<(project.themeBalance==='unified'?.3:.65)) on.add(id);
       if (pool.length && !pool.some(id=>on.has(id))) on.add(pick(pool));
     }
     settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).filter(id=>J.mediaTechAllowed(id,layer)).map(id=>[id,on.has(id)]));

@@ -67,14 +67,16 @@ J.mediaEffectSettings = (p, layer = 'media') => {
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
   // Only the techniques this layer can use (the background-only masks stay out of the foreground).
   const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH).filter(key => !J.mediaTechAllowed || J.mediaTechAllowed(key, layer));
-  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < .55]));
+  // 統一感重視 switches on far fewer techniques.
+  const unified = project.themeBalance === 'unified';
+  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < (unified ? .2 : .55)]));
   // Keep a usable pool even for an unlucky draw, while still producing a subset.
   const pick = () => keys[Math.floor(rnd() * keys.length)];
   if (keys.length && !keys.some(key => settings.enabled[key])) settings.enabled[pick()] = true;
   if (keys.length > 1 && keys.every(key => settings.enabled[key])) settings.enabled[pick()] = false;
   // Decorations: a random set of front ones (back ones sit under the source), at least one.
   const decor = (J.order ? J.order('decor') : []).filter(key => J.DECOR?.[key]), front = decor.filter(key => J.DECOR[key].layer === 'front');
-  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < .55]));
+  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < (unified ? .25 : .55)]));
   if (front.length && !front.some(key => settings.decorEnabled[key])) settings.decorEnabled[front[Math.floor(rnd() * front.length)]] = true;
   return settings;
 };

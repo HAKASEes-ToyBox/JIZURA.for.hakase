@@ -422,6 +422,15 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .theme-settings { margin: 12px 0; }
 #themeLabels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; font-size: 11px; }
 .theme-label { padding: 3px 7px; border: 1px solid var(--amber); border-radius: 12px; color: var(--amber); }
+/* テーマ設定: 統一感重視 / にぎやかさ重視 (a two-way switch; the note under it describes the active side) */
+.theme-balance { display: flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; margin: 8px 0 6px; }
+.theme-balance label { flex: 1; display: flex; cursor: pointer; }
+.theme-balance input { position: absolute; opacity: 0; pointer-events: none; }
+.theme-balance span { flex: 1; text-align: center; padding: 8px 10px; font-weight: bold; color: var(--muted, #aaa); background: transparent; transition: background .15s, color .15s; }
+.theme-balance label + label span { border-left: 1px solid var(--line2); }
+.theme-balance input:checked + span { background: var(--accent, #f5a623); color: #1a1408; }
+.theme-balance input:focus-visible + span { outline: 2px solid var(--accent, #f5a623); outline-offset: -3px; }
+#themeBalanceNote { margin: 0 0 4px; min-height: 3.2em; }
 #themeChoices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
 #themeChoices fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 #themeChoices legend { font-weight: bold; }

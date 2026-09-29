@@ -12,7 +12,7 @@ BODY = {
     'このfork版は、ワンストップでのリリックビデオ作成をコンセプトに<br>オリジナル版JIZURAに機能を追加したものです。<br>編集・書き出しはブラウザ内で処理します。': 'This fork adds features to the original JIZURA<br>based on the concept of one-stop lyric video creation.<br>Editing and export run in your browser.',
 
     'テーマ設定': 'Theme settings', '選択を解除': 'Clear selection',
-    '複数選択できます。おまかせでは、選んだテーマのいずれかに合う設定候補から構成します。未選択の場合は制限しません。': 'Select multiple themes. Randomize builds an arrangement from candidates matching one of your selected themes. No selection means unrestricted.',
+    '統一感重視': 'Unified look', 'にぎやかさ重視': 'Lively look', '統一感・にぎやかさ': 'Unified or lively',
     'このfork版は、テーマに合わせた構成選定と、背景・前景の画像・動画編集機能を追加しています。編集・書き出しはブラウザ内で処理します。': 'This fork adds theme-guided arrangements and background/foreground image and video editing. Editing and export run in your browser.',
     '<button id="btnApplyThemes" type="button">適用</button>': '<button id="btnApplyThemes" type="button">Apply</button>',
 

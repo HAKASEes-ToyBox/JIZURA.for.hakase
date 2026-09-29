@@ -440,6 +440,15 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .theme-settings { margin: 12px 0; }
 #themeLabels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; font-size: 11px; }
 .theme-label { padding: 3px 7px; border: 1px solid var(--amber); border-radius: 12px; color: var(--amber); }
+/* テーマ設定: 統一感重視 / にぎやかさ重視 (a two-way switch; the note under it describes the active side) */
+.theme-balance { display: flex; border: 1px solid var(--line2); border-radius: 8px; overflow: hidden; margin: 8px 0 6px; }
+.theme-balance label { flex: 1; display: flex; cursor: pointer; }
+.theme-balance input { position: absolute; opacity: 0; pointer-events: none; }
+.theme-balance span { flex: 1; text-align: center; padding: 8px 10px; font-weight: bold; color: var(--muted, #aaa); background: transparent; transition: background .15s, color .15s; }
+.theme-balance label + label span { border-left: 1px solid var(--line2); }
+.theme-balance input:checked + span { background: var(--accent, #f5a623); color: #1a1408; }
+.theme-balance input:focus-visible + span { outline: 2px solid var(--accent, #f5a623); outline-offset: -3px; }
+#themeBalanceNote { margin: 0 0 4px; min-height: 3.2em; }
 #themeChoices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
 #themeChoices fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 #themeChoices legend { font-weight: bold; }
@@ -1120,7 +1129,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 <dialog id="themesDlg" class="terms" aria-labelledby="themesTitle">
  <form method="dialog"><h2 id="themesTitle">Theme settings</h2>
- <p>Select multiple themes. Randomize builds an arrangement from candidates matching one of your selected themes. No selection means unrestricted.</p>
+ <div class="theme-balance" role="radiogroup" aria-label="Unified or lively">
+  <label><input type="radio" name="themeBalance" value="unified"><span>Unified look</span></label>
+  <label><input type="radio" name="themeBalance" value="lively"><span>Lively look</span></label>
+ </div>
+ <p id="themeBalanceNote" class="note" aria-live="polite"></p>
  <div id="themeChoices"></div>
  <div class="acts"><button id="btnClearThemes" type="button">Clear selection</button><button value="cancel">Cancel</button><button id="btnApplyThemes" type="button">Apply</button></div>
  </form>
@@ -3803,6 +3816,7 @@ J.defaultProject = () => ({
   durationOverride: null,         // null = automatic; otherwise total video length in seconds
   lyrics: J.SAMPLE_LYRICS,
   themes: [],
+  themeBalance: 'lively',         // テーマ設定: 'lively' (にぎやかさ重視, standard) | 'unified' (統一感重視)
   style: 'noir', mood: null,
   extra: false,                   // random picks may use the parts added after the first version (追加分)
   wa: true,                       // …and the 和風 motifs (提灯・障子・家紋…) — applied after 'extra'
@@ -4063,6 +4077,12 @@ J.plan = (project, audio) => {
     return best;
   };
   const history = [], bgHistory = [], fxHistory = [];
+  // 統一感重視: lyrics of one block (a 1シーン group, or the lyrics between blank lines) that have the same
+  // emphasis share their effects; repeats are favoured and fewer background / colour switches happen.
+  const unified = project.themeBalance === 'unified';
+  UNITY = unified;
+  const blockLooks = new Map(), cutBlock = new Map();
+  let paragraph = 0;
   let schemeIdx = 0;
   const nSchemes = st.schemes.length;
   const addEvent = (t, type, amp, dur) => plan.events.push({ t, type, amp, dur });
@@ -4075,6 +4095,7 @@ J.plan = (project, audio) => {
   }
 
   parsed.lines.forEach((ln, li) => {
+    if (li > 0 && ln.gapBefore) paragraph++;
     const s = tm.starts[li], e = tm.ends[li];
     const ov = (project.overrides || {})[li] || {};
     const area = J.lyricArea(ov.area), layoutW = area ? W * area.w : W, layoutH = area ? H * area.h : H;
@@ -4121,12 +4142,14 @@ J.plan = (project, audio) => {
     for (let k = bounds.length - 2; k > 0; k--) bounds[k] = Math.min(bounds[k], bounds[k + 1] - gap);
     for (let k = 1; k < bounds.length - 1; k++) bounds[k] = Math.max(bounds[k], bounds[k - 1] + gap);
     // scheme per line
-    if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
+    if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1) * (unified ? .4 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
     const emphLine = ln.impact || ln.emph.length > 0;
     // background graphic: chosen per line, occasionally re-rolled per cut
-    let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : pickBg(rng, st, en, fx, bgHistory);
+    const blockNum = ln.group != null ? 1000 + ln.group : paragraph, blockBg = unified && !ov.bg ? blockLooks.get('bg|' + blockNum) : null;
+    let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : blockBg ? blockBg.name : pickBg(rng, st, en, fx, bgHistory);
     bgHistory.push(lineBg);
-    let lineBgP = J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
+    let lineBgP = blockBg ? blockBg.P : J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
+    if (unified && !ov.bg && !blockBg) blockLooks.set('bg|' + blockNum, { name: lineBg, P: lineBgP });
     let textOffset = 0;
     units.forEach((u, k) => {
       const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
@@ -4139,10 +4162,22 @@ J.plan = (project, audio) => {
       const emph = ln.impact && (k === 0 || u.recap) || emphasis;
       const fx = suppressed ? Object.assign({}, plan.fx, { motion: plan.fx.motion * 0.25, glitch: plan.fx.glitch * 0.25, decor: plan.fx.decor * 0.4 }) : plan.fx;
       const eventStart = plan.events.length;
-      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
-      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
-      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
-      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : pickHold(rng, en, fx, history);
+      // The effects this block already gave to lyrics of the same emphasis (統一感重視), reused when they still fit.
+      const roleIdx = emph ? 1 : suppressed ? 2 : 0, shareKey = blockNum + '|' + roleIdx;
+      const share = unified ? (blockLooks.get(shareKey) || (blockLooks.set(shareKey, {}), blockLooks.get(shareKey))) : {};
+      const shareable = unified && !ln.effectsOnly && !txt.includes('\n');
+      const sharedLayout = shareable && share.layout && J.LAYOUTS[share.layout] && en.layout[share.layout] && J.LAYOUTS[share.layout].fits(nn)
+        && !(dur < 0.5 && ['wave', 'ring', 'labels', 'gloss', 'type', 'tile'].includes(share.layout)) ? share.layout : null;
+      const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : sharedLayout || pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
+      if (shareable && !share.layout && !ov.layout) share.layout = layout;
+      const enterOk = shareable && share.enter && J.ENTER[share.enter] && en.enter[share.enter] !== false && !(J.ENTER[share.enter].minDur && dur < J.ENTER[share.enter].minDur) && !(J.ENTER[share.enter].maxChars && nn > J.ENTER[share.enter].maxChars);
+      let enter = ov.enter && J.ENTER[ov.enter] ? ov.enter : enterOk ? share.enter : pickEnter(rng, st, en, layout, dur, history, emph, nn);
+      if (shareable && !share.enter && !ov.enter) share.enter = enter;
+      const exitOk = shareable && share.exit && J.EXIT[share.exit] && en.exit[share.exit] !== false && !(J.EXIT[share.exit].minDur && dur < J.EXIT[share.exit].minDur);
+      let exit = ov.exit && J.EXIT[ov.exit] ? ov.exit : exitOk ? share.exit : pickExit(rng, st, en, layout, dur, k === units.length - 1, history);
+      if (shareable && !share.exit && !ov.exit) share.exit = exit;
+      const hold = ov.hold && J.HOLD[ov.hold] ? ov.hold : shareable && share.hold && J.HOLD[share.hold] && en.hold[share.hold] !== false ? share.hold : pickHold(rng, en, fx, history);
+      if (shareable && !share.hold && !ov.hold) share.hold = hold;
       let inDur = J.clamp(dur * 0.36, 0.12, 0.6);
       if (enter === 'type') inDur = J.clamp(nn * 0.055 + 0.1, 0.15, dur * 0.65);
       if (enter === 'assemble') inDur = J.clamp(dur * 0.45, 0.22, 0.75);
@@ -4153,17 +4188,22 @@ J.plan = (project, audio) => {
       if (J.EXIT[exit] && J.EXIT[exit].outDur) outDur = J.EXIT[exit].outDur(dur, nn);
       if (inDur + outDur > dur * 0.92) { const f = dur * 0.92 / (inDur + outDur); inDur *= f; outDur *= f; }
       let sch = schemeIdx;
-      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch)) sch = (schemeIdx + 1) % nSchemes;
+      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch * (unified ? .3 : 1))) sch = (schemeIdx + 1) % nSchemes;
       const LD = J.LAYOUTS[layout];
-      const params = LD.plan(rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
+      const params = LD.plan(unified ? J.rng(J.h(project.seed | 0, blockNum, roleIdx, 6151)) : rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
       if (txt.includes('\n')) params.sx = 1;
-      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : pickDecor(rng, st, en, fx, layout, history);
-      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : pickTreat(rng, st, en, fx, LD, emph, history);
-      const treatP = J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
-      if (!ov.bg && k > 0 && rng.chance(0.18 * fx.bgSwitch + 0.04)) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
+      const decor = Array.isArray(ov.decor) ? ov.decor.filter(id => J.DECOR[id]).map(id => decorParams(rng, id)) : shareable && share.decor && share.layout === layout ? share.decor.map(d => ({ ...d })) : pickDecor(rng, st, en, fx, layout, history);
+      if (shareable && !share.decor && !Array.isArray(ov.decor)) share.decor = decor.map(d => ({ ...d }));
+      const treatOk = shareable && share.treat !== undefined && (share.treat === 'none' || (J.TREAT[share.treat] && LD.treat !== false && (LD.treat !== 'safe' || J.TREAT[share.treat].safe)));
+      const treat = ov.treat && J.TREAT[ov.treat] ? ov.treat : treatOk ? share.treat : pickTreat(rng, st, en, fx, LD, emph, history);
+      const treatP = treatOk && !ov.treat ? { ...share.treatP } : J.TREAT[treat].plan ? J.TREAT[treat].plan(rng, st) : {};
+      if (shareable && share.treat === undefined && !ov.treat) { share.treat = treat; share.treatP = { ...treatP }; }
+      if (!ov.bg && k > 0 && rng.chance((0.18 * fx.bgSwitch + 0.04) * (unified ? .15 : 1))) { lineBg = pickBg(rng, st, en, fx, bgHistory); lineBgP = J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {}; }
       const bg = LD.busy && !(J.BG[lineBg] && J.BG[lineBg].subtle) ? 'none' : lineBg;
-      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : pickCam(rng, st, en, fx, LD, emph, history);
-      const camP = J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
+      const camOk = shareable && share.cam && J.CAMERA[share.cam] && en.cam?.[share.cam] !== false && !(LD.cam === false && share.cam !== 'push');
+      const cam = ov.cam && J.CAMERA[ov.cam] ? ov.cam : camOk ? share.cam : pickCam(rng, st, en, fx, LD, emph, history);
+      const camP = camOk && !ov.cam ? { ...share.camP } : J.CAMERA[cam].plan ? J.CAMERA[cam].plan(rng, st) : {};
+      if (shareable && !share.cam && !ov.cam) { share.cam = cam; share.camP = { ...camP }; }
       // cut-to-cut transition (replaces the previous cut's exit and this cut's entrance)
       const prevCut = plan.cuts[plan.cuts.length - 1];
       // Emphasis is a lyric directive, including when an older cut saved OFF.
@@ -4171,7 +4211,9 @@ J.plan = (project, audio) => {
       let trans = null, transP = {}, transDur = 0;
       const canTrans = prevCut && ln.group == null && prevCut.group == null && !!prevCut.frontmost === frontmost && Math.abs(prevCut.end - cs) < 0.06 && prevCut.layout !== 'interlude' && dur > 0.5;
       if (canTrans) {
-        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : pickTrans(rng, st, en, fx, emph, history);
+        const transOk = shareable && share.trans !== undefined && (share.trans === null || (J.TRANS[share.trans] && en.trans?.[share.trans] !== false));
+        trans = ov.trans && J.TRANS[ov.trans] ? ov.trans : transOk ? share.trans : pickTrans(rng, st, en, fx, emph, history);
+        if (shareable && share.trans === undefined && !ov.trans) share.trans = trans;
         if (trans) {
           const TD = J.TRANS[trans];
           transDur = J.clamp(TD.dur || 0.35, 0.12, Math.min(0.6, dur * 0.45));
@@ -4189,6 +4231,7 @@ J.plan = (project, audio) => {
       const cut = makeCut({ text: txt, insertedAtPlayhead: tm.insertionEnds[li]!=null, lyricSize: ln.lyricSize, effectsOnly: !!ln.effectsOnly, lineText: ln.text, note: ln.note, line: li, part: k, group: ln.group, avoidOverlap: !!ln.avoidOverlap, start: cs, end: ce, layout, enter, exit, hold, inDur, outDur, params, decor, scheme: sch, seed: J.h(lineSeed, k, 17), area, frontmost: !!frontmost, emphasis, suppressed, motionScale: suppressed ? 0.25 : 1, contentScale: suppressed ? J.SUPPRESSED_TEXT_SCALE : emphasis ? J.EMPHASIS_TEXT_SCALE : 1, emph, recap: !!u.recap, words: J.chunkText(txt), stagger: rng.range(0.025, 0.06),
         treat, treatP, bg, bgP: bg === lineBg ? lineBgP : {}, cam, camP, trans, transP, transDur });
       plan.cuts.push(cut);
+      if (shareable && !ov.layout) cutBlock.set(cut, { key: shareKey, W: layoutW, H: layoutH });
       history.push({ layout, enter, exit, hold, treat, cam, trans, decor: decor.map(d => d.id) });
       // events at cut start
       // events at cut start — durations are on a 24fps timebase so every output rate looks the same
@@ -4220,6 +4263,37 @@ J.plan = (project, audio) => {
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, part: 'interlude', start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
   });
+  // 統一感重視, last touch: a layout only fits some text lengths, so a block may have had to leave its shared layout
+  // for one cut. Give every lyric of the same block and emphasis the one layout (and decor / treatment) that fits them all.
+  if (unified) {
+    const groups = new Map();
+    for (const [cut, info] of cutBlock) (groups.get(info.key) || groups.set(info.key, []).get(info.key)).push(cut);
+    for (const [key, cuts] of groups) {
+      if (cuts.length < 2) continue;
+      const nOf = c => [...c.text.replace(/\s+/g, '')].length, shortBad = ['wave', 'ring', 'labels', 'gloss', 'type', 'tile'];
+      const fitsAll = k => en.layout[k] && J.LAYOUTS[k] && cuts.every(c => J.LAYOUTS[k].fits(nOf(c)) && !(c.dur < 0.5 && shortBad.includes(k)));
+      if (new Set(cuts.map(c => c.layout)).size > 1) {
+        const counts = new Map(); for (const c of cuts) counts.set(c.layout, (counts.get(c.layout) || 0) + 1);
+        let pick = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).find(fitsAll);
+        if (!pick) { const all = J.LAYOUT_ORDER.filter(fitsAll); if (all.length) pick = all[J.h(project.seed | 0, key.length, cuts.length, 6152) % all.length]; }
+        if (pick) for (const c of cuts) if (c.layout !== pick) {
+          const info = cutBlock.get(c), roleIdx = +key.split('|')[1];
+          c.layout = pick;
+          c.params = J.LAYOUTS[pick].plan(J.rng(J.h(project.seed | 0, +key.split('|')[0], roleIdx, 6151)), { text: c.text, n: nOf(c), W: info.W, H: info.H, dur: c.dur }, st);
+          if (c.text.includes('\n')) c.params.sx = 1;
+        }
+      }
+      // same decor and text treatment as the block's first lyric of this emphasis (when they suit the layout)
+      const first = cuts[0], LD = J.LAYOUTS[first.layout] || {};
+      if (cuts.every(c => c.layout === first.layout)) {
+        const treatOk = first.treat === 'none' || (J.TREAT[first.treat] && LD.treat !== false && (LD.treat !== 'safe' || J.TREAT[first.treat].safe));
+        for (const c of cuts.slice(1)) {
+          c.decor = first.decor.map(d => ({ ...d }));
+          if (treatOk) { c.treat = first.treat; c.treatP = { ...first.treatP }; }
+        }
+      }
+    }
+  }
   for(const [line,end] of tm.insertionEnds.entries())if(end!=null){
     const start=tm.starts[line];
     for(const cut of plan.cuts)if(cut.line!==+line && cut.start<start && cut.end>start){cut.end=start;cut.dur=cut.end-cut.start;}
@@ -4278,9 +4352,11 @@ function partition(chunks, k) {
   if (cur.length) groups.push(cur);
   return groups;
 }
+// 統一感重視 (themeBalance 'unified', set per plan): the same effect again is favoured instead of avoided.
+let UNITY = false;
 function novelty(history, key, val) {
   let w = 1;
-  for (let i = history.length - 1, d = 0; i >= 0 && d < 6; i--, d++) if (history[i][key] === val) w *= d < 2 ? 0.2 : 0.6;
+  for (let i = history.length - 1, d = 0; i >= 0 && d < 6; i--, d++) if (history[i][key] === val) w *= UNITY ? (d < 2 ? 2.6 : 1.5) : (d < 2 ? 0.2 : 0.6);
   return w;
 }
 const PORTRAIT_W = { vcols: 1.9, condensed: 1.3, huge: 1.3, center: 1.2, stack: 1.1, mixed: 0.7, marquee: 0.6, wave: 0.6, diag: 0.8, type: 0.8, gloss: 0.5 };
@@ -4358,7 +4434,7 @@ function pickDecor(rng, st, en, fx, layout, history = []) {
   const recent = new Set(history.slice(-2).flatMap(h => h.decor || []));
   const LD = J.LAYOUTS[layout] || {};
   const cands = J.DECOR_ORDER.filter(k => en.decor[k] && J.DECOR[k] && !(LD.busy && J.DECOR[k].layer === 'back' && !J.DECOR[k].subtle))
-    .map(k => [k, wkey(st.decor, k, J.DECOR[k].w != null ? J.DECOR[k].w * 0.5 : 0.35) * (recent.has(k) ? 0.35 : 1)]);
+    .map(k => [k, wkey(st.decor, k, J.DECOR[k].w != null ? J.DECOR[k].w * 0.5 : 0.35) * (recent.has(k) ? (UNITY ? 2.2 : 0.35) : 1)]);
   const out = [];
   for (let i = 0; i < count && cands.length; i++) {
     const k = rng.wpick(cands);
@@ -4379,7 +4455,7 @@ function pickBg(rng, st, en, fx, bgHist) {
   if (!rng.chance(0.2 + 0.35 * (fx.decor ?? 0.5) + 0.2 * (fx.bgSwitch ?? 0.35))) return 'none';
   const last = bgHist.slice(-3);
   const cands = J.BG_ORDER.filter(k => k !== 'none' && en.bg && en.bg[k] !== false && J.BG[k])
-    .map(k => [k, wkey(st.bias && st.bias.bg, k, J.BG[k].w ?? 1) * (last.includes(k) ? 0.25 : 1)]);
+    .map(k => [k, wkey(st.bias && st.bias.bg, k, J.BG[k].w ?? 1) * (last.includes(k) ? (UNITY ? 2.4 : 0.25) : 1)]);
   return cands.length ? rng.wpick(cands) : 'none';
 }
 function pickCam(rng, st, en, fx, LD, emph, history) {
@@ -4406,7 +4482,7 @@ function pickFx(rng, st, en, fx, emph, fxHist, kind) {
   if (!rng.chance(p)) return null;
   const last = fxHist.slice(-3);
   const cands = J.FXE_ORDER.filter(k => { const D = J.FXE[k]; return D && !D.builtin && en.fx && en.fx[k] !== false && (kind === 'edge' ? D.edge !== false : D.mid); })
-    .map(k => { const D = J.FXE[k]; let w = wkey(st.bias && st.bias.fx, k, D.w ?? 1) * (last.includes(k) ? 0.2 : 1); if (D.glitchy) w *= 0.3 + g * 1.4; return [k, w]; });
+    .map(k => { const D = J.FXE[k]; let w = wkey(st.bias && st.bias.fx, k, D.w ?? 1) * (last.includes(k) ? (UNITY ? 1.8 : 0.2) : 1); if (D.glitchy) w *= 0.3 + g * 1.4; return [k, w]; });
   return cands.length ? rng.wpick(cands) : null;
 }
 
@@ -4495,13 +4571,15 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
   // technique subset per group: everything tagged with the mood (plus the mood's hand-picked core items),
   // a sprinkle of everything else, and a minimum count so the planner always has room to vary
   const enabled = {};
-  const MIN = { layout: 6, enter: 5, exit: 5, hold: 3, decor: 6, treat: 4, bg: 4, cam: 3, fx: 4, trans: 3 };
+  // 統一感重視: far fewer techniques are switched on, so the planner has less to vary between.
+  const unified = project.themeBalance === 'unified';
+  const MIN = unified ? { layout: 3, enter: 3, exit: 2, hold: 2, decor: 3, treat: 2, bg: 2, cam: 2, fx: 2, trans: 2 } : { layout: 6, enter: 5, exit: 5, hold: 3, decor: 6, treat: 4, bg: 4, cam: 3, fx: 4, trans: 3 };
   for (const g of J.GROUP_KEYS) {
     const order = J.order(g).filter(k => !(J.registry(g)[k] || {}).special && (!J.randomOk || J.randomOk(project, g, k)));
     const hand = ['layout', 'enter', 'exit'].includes(g) && Array.isArray(M[g]) ? M[g] : [];   // (M.fx holds slider ranges, not a list)
     const prefer = mood === 'chaos' ? null : new Set([...hand, ...J.taggedWith(g, mood)]);
     const on = {};
-    for (const k of order) on[k] = prefer ? (prefer.has(k) || rnd() < 0.22) : rnd() < 0.8;
+    for (const k of order) on[k] = prefer ? (prefer.has(k) ? (!unified || rnd() < 0.45) : rnd() < (unified ? 0.03 : 0.22)) : rnd() < (unified ? 0.3 : 0.8);
     const offs = order.filter(k => !on[k]);
     let n = order.length - offs.length;
     while (n < Math.min(MIN[g] || 3, order.length) && offs.length) { const k = offs.splice(Math.floor(rnd() * offs.length), 1)[0]; on[k] = true; n++; }
@@ -6119,14 +6197,16 @@ J.mediaEffectSettings = (p, layer = 'media') => {
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
   // Only the techniques this layer can use (the background-only masks stay out of the foreground).
   const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH).filter(key => !J.mediaTechAllowed || J.mediaTechAllowed(key, layer));
-  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < .55]));
+  // 統一感重視 switches on far fewer techniques.
+  const unified = project.themeBalance === 'unified';
+  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < (unified ? .2 : .55)]));
   // Keep a usable pool even for an unlucky draw, while still producing a subset.
   const pick = () => keys[Math.floor(rnd() * keys.length)];
   if (keys.length && !keys.some(key => settings.enabled[key])) settings.enabled[pick()] = true;
   if (keys.length > 1 && keys.every(key => settings.enabled[key])) settings.enabled[pick()] = false;
   // Decorations: a random set of front ones (back ones sit under the source), at least one.
   const decor = (J.order ? J.order('decor') : []).filter(key => J.DECOR?.[key]), front = decor.filter(key => J.DECOR[key].layer === 'front');
-  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < .55]));
+  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < (unified ? .25 : .55)]));
   if (front.length && !front.some(key => settings.decorEnabled[key])) settings.decorEnabled[front[Math.floor(rnd() * front.length)]] = true;
   return settings;
 };
@@ -8838,7 +8918,7 @@ J.planForAE = (plan, project) => {
 const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
-const settingKeys = ['themes','style','mood','extra','wa','horror','typo','kinetic','keyBg',
+const settingKeys = ['themes','themeBalance','style','mood','extra','wa','horror','typo','kinetic','keyBg',
   'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
   'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence'];
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -39291,7 +39371,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
   look.fx.motion = Math.min(1,J.lerp(...theme.motion,rnd()));
   if (!theme.flash) {look.fx.glitch=Math.min(look.fx.glitch,.2);look.fx.chroma=Math.min(look.fx.chroma,.4);}
   for (const group of J.GROUP_KEYS) {
-    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<.75);
+    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<(project.themeBalance==='unified'?.4:.75));
     if (!selected.length && pool.length) selected.push(pick(pool));
     for (const id of neutral[group] || []) if (pool.includes(id)) selected.push(id);
     const enabled = new Set(selected);
@@ -39302,7 +39382,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
     // Preserve a usable independent pool for main motion, entrance and exit.
     for (const stage of [undefined,'enter','exit']) {
       const pool = pools.media.filter(id=>J.MEDIA_TECH[id].stage===stage && J.mediaTechAllowed(id,layer));
-      for (const id of pool) if (rnd()<.65) on.add(id);
+      for (const id of pool) if (rnd()<(project.themeBalance==='unified'?.3:.65)) on.add(id);
       if (pool.length && !pool.some(id=>on.has(id))) on.add(pick(pool));
     }
     settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).filter(id=>J.mediaTechAllowed(id,layer)).map(id=>[id,on.has(id)]));
@@ -40283,6 +40363,7 @@ function mergeProject(p) {
   o.lyricCutOptions = (p && p.lyricCutOptions) || {};
   o.lyricEffects = J.lyricEffectSettings(o);
   o.themes = J.themeIds(o);
+  o.themeBalance = o.themeBalance === 'unified' ? 'unified' : 'lively';
   delete o.jevPrompt;
   migrateLyricBlankCuts(o);
   o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
@@ -43354,6 +43435,10 @@ function renderMediaEffects(layer) {
 function renderThemes() {
   const ids = J.themeIds(S.project), ct = J.normalizeColorTheme(S.project.colorTheme);
   $('themeLabels').innerHTML = ids.length ? ids.map(id=>`<span class="theme-label">${J.THEMES[id].name}</span>`).join('') : `<span class="muted">${J.mediaLabel('未選択：すべてのテーマ','Not selected: unrestricted')}</span>`;
+  if (S.project.themeBalance === 'unified') {
+    const chip = document.createElement('span'); chip.className = 'theme-label'; chip.textContent = J.mediaLabel('統一感重視', 'Unified look');
+    $('themeLabels').prepend(chip);
+  }
   if (J.colorThemeActive(S.project)) {
     const chip = document.createElement('span'); chip.className = 'theme-label theme-color-label';
     chip.textContent = J.mediaLabel('カラー：','Colour: ') + (ct.genre !== 'auto' ? J.COLOR_GENRES[ct.genre].name : '');
@@ -43406,8 +43491,18 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
+  // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
+  const themeBalanceNote = () => {
+    const L = J.mediaLabel, unified = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified';
+    $('themeBalanceNote').textContent = unified
+      ? L('おまかせで有効になるEffectsを絞り、同じEffectsを連続して使いやすくします。1シーン内 · 空line で区切られた歌詞のまとまりの中では、同じ強調度の歌詞に同じEffectsを使います。', 'Randomize switches on far fewer effects and favours repeating the same ones. Within a block (a One scene group, or lyrics between blank lines), lyrics of the same emphasis get the same effects.')
+      : L('標準の挙動です。おまかせは幅広いEffectsを候補に入れ、cutsごとに変化のあるにぎやかな見た目にします。', 'The standard behaviour. Randomize draws on a wide range of effects and varies them from cut to cut for a lively look.');
+  };
+  document.querySelectorAll('#themesDlg input[name=themeBalance]').forEach(input => input.addEventListener('change', themeBalanceNote));
   $('btnThemes').addEventListener('click', () => {
     const selected = new Set(J.themeIds(S.project));
+    document.querySelector(`#themesDlg input[name=themeBalance][value=${S.project.themeBalance === 'unified' ? 'unified' : 'lively'}]`).checked = true;
+    themeBalanceNote();
     $('themeChoices').innerHTML = ['genre','taste'].map(category => `<fieldset><legend>${J.mediaLabel(category === 'genre' ? '曲ジャンル' : 'テイスト',category === 'genre' ? 'Music genre' : 'Taste')}</legend>${Object.entries(J.THEMES).filter(([,t])=>t.category===category).map(([id,t])=>`<label class="check"><input type="checkbox" data-theme="${id}" ${selected.has(id)?'checked':''}><span>${t.name}<small>${t.description}</small></span></label>`).join('')}</fieldset>`).join('');
     // Colour: a genre and one theme colour for random palettes, taking priority over the themes above.
     const ct = J.normalizeColorTheme(S.project.colorTheme), L = J.mediaLabel, colors = document.createElement('fieldset'); colors.className = 'theme-colors';
@@ -43424,7 +43519,8 @@ function bind() {
     $('themesDlg').showModal();
   });
   $('btnApplyThemes').addEventListener('click', () => {
-    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme));
+    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme)), balanceBefore = S.project.themeBalance;
+    S.project.themeBalance = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified' ? 'unified' : 'lively';
     S.project.themes = [...$('themeChoices').querySelectorAll('input[data-theme]:checked')].map(el=>el.dataset.theme);
     S.project.colorTheme = J.normalizeColorTheme({ genre: $('colorGenre').value, color: $('colorThemeOn').checked ? $('colorThemeColor').value : null });
     // A changed colour theme is applied right away, so the choice shows immediately.
@@ -43432,6 +43528,8 @@ function bind() {
       remember(); S.project.colors = J.themedColors(S.project, S.project.style, Math.random); renderColors(); replan(); commit();
     }
     renderThemes(); autosave(); $('themesDlg').close();
+    // The unified look also shapes how the current lyrics are planned (shared effects, repeats).
+    if (S.project.themeBalance !== balanceBefore) { remember(); replan(); commit(); }
   });
   $('btnClearThemes').addEventListener('click', () => { $('themeChoices').querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false); $('colorGenre').value = 'auto'; $('colorGenre').dispatchEvent(new Event('change')); });
 
