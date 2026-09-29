@@ -149,7 +149,8 @@ J.backgroundPlacement = (cut, plan, fit, options = {}) => {
   cut.composition = pattern.id;
   return { cx: at(anchor(pattern.ax), w), cy: at(anchor(pattern.ay), h), w, h, lockAspect: true, angle: 0 };
 };// A per-cut placement seed (set by 再配置) re-rolls placement only; techniques keep using cut.seed.
-J.placementSeed = cut => Number.isFinite(cut?.placementSeed) ? J.h(cut.seed, cut.placementSeed | 0, 887) : cut.seed;
+// A lyric of a 1シーン group is placed from its own base seed, so re-rolling its effects (which changes cut.seed) keeps the placement.
+J.placementSeed = cut => { const base = cut?.placementBase ?? cut?.seed; return Number.isFinite(cut?.placementSeed) ? J.h(base, cut.placementSeed | 0, 887) : base; };
 const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
 // The chain runs on each cut's own seed ("base"), so re-laying out one cut (placement seed) never
