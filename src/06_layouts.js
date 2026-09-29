@@ -803,6 +803,189 @@ J.LAYOUTS = {
       return { x0: W * 0.35, x1: W * 0.65, y0: H * 0.3, y1: H * 0.7, cx: W / 2, cy: H / 2, boxes: [] };
     },
   },
+
+  /* ------------------------------------------------ special: outro (オーディオリアクティブ後奏) */
+  outro: {
+    name: '後奏', special: true, fits: () => false,
+    plan: (rng) => ({ variant: rng.pick(['radial', 'grid', 'pulse']) }),
+    render(env) {
+      const { W, H, sc, ctx, st } = env, P = env.cut.params, lb = env.ltb, t = env.t || 0;
+      const minDim = Math.min(W, H), cx = W / 2, cy = H / 2;
+      const progress = J.clamp(env.lt / Math.max(0.1, env.cut.dur));
+      const fade = (1 - E.inQuad(env.pOut)) * E.outQuad(env.pIn);
+
+      // オーディオリアクティブ値の計算
+      const rawEnergy = typeof env.energy === 'number' ? env.energy : 0.15;
+      const energy = J.clamp(rawEnergy * 2.8, 0.12, 1.0);
+      const beatPulse = typeof env.beatPulse === 'number' ? env.beatPulse : (env.beat?.isOnset ? 1.0 : (0.25 + 0.5 * Math.sin(lb * 4)));
+
+      // スタイル判定と記号パレット
+      const styleKey = (st && st.id) || env.plan?.styleKey || 'noir';
+      const isWa = !!st.wa || styleKey.includes('wa') || styleKey === 'edo';
+      const isCyber = styleKey.includes('cyber') || styleKey.includes('neon') || styleKey === 'glitch';
+      const isPop = styleKey.includes('pop') || styleKey.includes('candy') || styleKey === 'retro';
+      const isKinetic = styleKey.includes('kinetic') || styleKey.includes('bold');
+      const isHorror = styleKey.includes('horror') || styleKey.includes('dark');
+      const isEditorial = styleKey.includes('editorial') || styleKey === 'type';
+
+      let symbols = ['✦', '★', '◆', '●', '▲', '■', '＋', '×'];
+      let coreType = 'circle';
+      if (isWa) {
+        symbols = ['❀', '✿', '❁', '〜', '◉', '⚹', '〰', '◇', '◆'];
+        coreType = 'ripple';
+      } else if (isCyber) {
+        symbols = ['◈', '▣', '⌘', '⏦', '▸', '01', '█', '░', '▲', '▰'];
+        coreType = 'hex';
+      } else if (isPop) {
+        symbols = ['★', '☆', '♪', '♫', '→', '✦', '✴', '♡', '●', '◇'];
+        coreType = 'star';
+      } else if (isKinetic) {
+        symbols = ['→', '↗', '⇒', '▶', '▷', '|', '┃', '◁', '▲'];
+        coreType = 'arrows';
+      } else if (isHorror) {
+        symbols = ['†', '✝', '☠', '▓', '░', '][', 'ϟ', 'ᛥ', '✕'];
+        coreType = 'distort';
+      } else if (isEditorial) {
+        symbols = ['¶', '§', '■', '□', '●', '○', '「', '」', '※', '†'];
+        coreType = 'bracket';
+      } else {
+        symbols = ['+', '×', '│', '─', '┼', '╋', '□', '▫', '▪', '／'];
+        coreType = 'bracket';
+      }
+
+      ctx.save();
+
+      // 1. 背景補助グリッド/波形（低音・エネルギー連動）
+      const bgAlpha = (0.05 + energy * 0.12) * fade;
+      if (isCyber) {
+        const step = Math.round(minDim * 0.08);
+        for (let x = (cx % step); x < W; x += step) env.line([[x, 0], [x, H]], sc.accent, 1, bgAlpha * 0.6, false);
+        for (let y = (cy % step); y < H; y += step) env.line([[0, y], [W, y]], sc.accent, 1, bgAlpha * 0.6, false);
+        // 水平音波
+        const wavePts = [];
+        for (let x = 0; x <= W; x += 16) {
+          const wy = cy + Math.sin(x * 0.015 + lb * 5) * (minDim * 0.08 * energy);
+          wavePts.push([x, wy]);
+        }
+        env.line(wavePts, sc.accent, 1.5, bgAlpha * 1.8, false);
+      } else if (isWa) {
+        // 和風の霞・二重輪
+        for (let r = 1; r <= 3; r++) {
+          const wr = minDim * (0.2 + r * 0.12) * (1 + 0.03 * Math.sin(lb * 2 + r));
+          env.circle(cx, cy, wr, null, sc.sub, 1, bgAlpha * 0.8, false);
+        }
+      } else {
+        // 標準グリッド/クロスライン
+        env.line([[cx, 0], [cx, H]], sc.sub, 1, bgAlpha * 0.8, false);
+        env.line([[0, cy], [W, cy]], sc.sub, 1, bgAlpha * 0.8, false);
+      }
+
+      // 2. 放射状の記号群（音量・ビート連動）
+      const symbolCount = Math.floor(8 + energy * 20);
+      const baseR = minDim * 0.12 * (0.85 + beatPulse * 0.35);
+      const spread = minDim * 0.38 * energy;
+      const fontSize = J.clamp(minDim * 0.035 * (0.7 + energy * 0.6), 14, 48);
+
+      for (let i = 0; i < symbolCount; i++) {
+        const angle = (i / symbolCount) * J.TAU + lb * (0.35 + energy * 0.5) * (i % 2 === 0 ? 1 : -0.7);
+        const breathe = Math.sin(lb * 2.5 + i * 1.3) * 0.5 + 0.5;
+        const dist = baseR + spread * (0.3 + breathe * 0.7);
+        const sx = cx + Math.cos(angle) * dist;
+        const sy = cy + Math.sin(angle) * dist;
+        const char = symbols[i % symbols.length];
+        const charAlpha = (0.35 + energy * 0.45) * (0.6 + beatPulse * 0.4) * fade;
+        const charScale = (0.7 + energy * 0.7) * (0.9 + beatPulse * 0.3);
+        const col = [sc.accent, sc.fg, sc.sub, sc.accent2 || sc.accent][i % 4];
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle + Math.PI / 2 + (i % 2 === 0 ? lb : -lb));
+        ctx.scale(charScale, charScale);
+        env.draw({
+          text: char,
+          font: st.fonts?.mono?.[0] || st.fonts?.body?.[0] || 'sans-serif',
+          size: fontSize,
+          x: 0, y: 0,
+          color: col,
+          alpha: charAlpha,
+          ghost: false
+        });
+        ctx.restore();
+      }
+
+      // 3. 中央コア図形（スタイル別）
+      const coreSize = minDim * 0.09 * (1 + beatPulse * 0.28 + energy * 0.25) * fade;
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      if (coreType === 'hex') { // cyber
+        const r = coreSize * 1.3;
+        const pts = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * J.TAU - Math.PI / 6;
+          pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+        }
+        env.poly(pts, null, fade * 0.9, false);
+        ctx.strokeStyle = sc.accent; ctx.lineWidth = Math.max(1.5, 2.5 * energy); ctx.stroke();
+        // 回転バー
+        ctx.rotate(lb * 2.2);
+        env.rect(-coreSize * 0.08, -coreSize, coreSize * 0.16, coreSize * 2, sc.accent, fade * 0.75, false);
+        env.rect(-coreSize, -coreSize * 0.08, coreSize * 2, coreSize * 0.16, sc.accent, fade * 0.75, false);
+      } else if (coreType === 'ripple') { // wa
+        for (let r = 1; r <= 3; r++) {
+          const rad = coreSize * (0.6 * r) + Math.sin(lb * 3 + r) * (coreSize * 0.15);
+          env.circle(0, 0, Math.max(2, rad), null, sc.accent, 1.5, (0.7 / r) * fade, false);
+        }
+        env.circle(0, 0, coreSize * 0.3 * (1 + beatPulse * 0.35), sc.accent, null, 0, fade * 0.9, false);
+      } else if (coreType === 'star') { // pop
+        const spikes = 5, outerR = coreSize * 1.5, innerR = coreSize * 0.7;
+        const pts = [];
+        for (let k = 0; k < spikes * 2; k++) {
+          const a = (k / (spikes * 2)) * J.TAU - Math.PI / 2 + lb * 0.8;
+          const rad = k % 2 === 0 ? outerR : innerR;
+          pts.push([Math.cos(a) * rad, Math.sin(a) * rad]);
+        }
+        env.poly(pts, sc.accent, fade * 0.9, false);
+      } else if (coreType === 'arrows') { // kinetic
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * J.TAU + lb * 1.5;
+          const r = coreSize * 1.3;
+          ctx.save();
+          ctx.translate(Math.cos(a) * r, Math.sin(a) * r);
+          ctx.rotate(a + Math.PI / 2);
+          env.rect(-coreSize * 0.2, -coreSize * 0.06, coreSize * 0.4, coreSize * 0.12, sc.fg, fade * 0.85, false);
+          ctx.restore();
+        }
+        env.circle(0, 0, coreSize * 0.4, null, sc.accent, 2, fade * 0.9, false);
+      } else { // noir / bracket / standard
+        const s = coreSize * 1.4, l = s * 0.35;
+        env.line([[-s + l, -s], [-s, -s], [-s, -s + l]], sc.fg, 2, fade * 0.85, false);
+        env.line([[s - l, -s], [s, -s], [s, -s + l]], sc.fg, 2, fade * 0.85, false);
+        env.line([[-s + l, s], [-s, s], [-s, s - l]], sc.fg, 2, fade * 0.85, false);
+        env.line([[s - l, s], [s, s], [s, s - l]], sc.fg, 2, fade * 0.85, false);
+        env.line([[-s * 0.5, 0], [s * 0.5, 0]], sc.accent, 1.5, fade * 0.5, false);
+        env.line([[0, -s * 0.5], [0, s * 0.5]], sc.accent, 1.5, fade * 0.5, false);
+      }
+      ctx.restore();
+
+      // 4. 曲名または FIN テキスト（控えめな余韻）
+      const finText = env.cut.text ? `— ${env.cut.text} —` : '— FIN —';
+      const finSize = J.clamp(minDim * 0.024, 13, 26);
+      env.draw({
+        text: finText,
+        font: st.fonts?.body?.[0] || 'sans-serif',
+        size: finSize,
+        x: cx, y: H * 0.88,
+        track: 0.32,
+        color: sc.sub,
+        alpha: (0.4 + energy * 0.3) * fade,
+        ghost: false
+      });
+
+      ctx.restore();
+      return { x0: W * 0.2, x1: W * 0.8, y0: H * 0.2, y1: H * 0.8, cx, cy, boxes: [] };
+    },
+  },
 };
 J.LAYOUT_ORDER = ['center', 'mixed', 'vcols', 'marquee', 'tile', 'scatter', 'ring', 'wave', 'huge', 'labels', 'condensed', 'gloss', 'type', 'diag', 'circle', 'stack', 'pill'];
 J.TITLE_LAYOUT_ORDER = ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];

@@ -524,7 +524,8 @@ function drawTimeline() {
     if (x1 - x0 > 34 * dpr) {
       x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${mono}`;
       x.save(); x.beginPath(); x.rect(x0, y0, x1 - x0 - 3, lh); x.clip();
-      x.fillText(cut.text || cut.lineText || '', x0 + 5 * dpr, y0 + Math.min(13 * dpr, lh - 3 * dpr)); x.restore();
+      const cutLabel = cut.part === 'outro' ? '〔後奏〕' : (cut.part === 'interlude' ? '〔間奏〕' : (cut.text || cut.lineText || ''));
+      x.fillText(cutLabel, x0 + 5 * dpr, y0 + Math.min(13 * dpr, lh - 3 * dpr)); x.restore();
     }
   }
   x.font = `${10 * dpr}px monospace`;

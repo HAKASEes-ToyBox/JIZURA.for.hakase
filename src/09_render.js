@@ -203,7 +203,7 @@ class Renderer {
         const lt = tp - cut.start, motion = cut.motionScale ?? 1;
         const envOptions = {
           pass: P.pass, passColor: P.pass === 'A' ? csc.ghostA : P.pass === 'B' ? csc.ghostB : null,
-          t: tp, lt, ltb: lt + P.lag, step: Math.floor(tp / clock + 1e-6), scale, allowFilter, energy, beat: beatInfo,
+          t: tp, lt, ltb: lt + P.lag, step: Math.floor(tp / clock + 1e-6), scale, allowFilter, energy, beat: beatInfo, beatPulse,
         };
         let X = target, env = this.makeEnv(X, plan, cut, csc, envOptions), cam = null;
         const CD = J.CAMERA[cut.cam] || J.CAMERA.push;

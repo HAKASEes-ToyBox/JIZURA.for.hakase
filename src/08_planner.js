@@ -479,6 +479,38 @@ J.plan = (project, audio) => {
     cut.start = Math.max(cut.start, endedLines.get(cut.line) ?? 0); cut.dur = cut.end - cut.start;
     return cut.dur >= .3;
   });
+
+  // outro (後奏): 最後の歌詞終了時刻から楽曲終了時刻までの空隙を検出し、オーディオリアクティブ後奏カットを自動生成
+  let maxLyricEnd = 0;
+  for (const cut of plan.cuts) {
+    if (cut.line >= 0 && Number.isInteger(cut.part)) {
+      maxLyricEnd = Math.max(maxLyricEnd, cut.end);
+    }
+  }
+  const outroGap = plan.duration - maxLyricEnd;
+  if (maxLyricEnd > 0 && outroGap >= 0.8) {
+    const rOutro = J.rng(J.h(project.seed, 808));
+    const outroCut = makeCut({
+      text: title || '',
+      lineText: '',
+      line: -2,
+      part: 'outro',
+      start: maxLyricEnd,
+      end: plan.duration,
+      layout: 'outro',
+      enter: 'blur',
+      exit: 'blur',
+      hold: 'still',
+      inDur: 0.35,
+      outDur: 0.35,
+      params: (J.LAYOUTS.outro && J.LAYOUTS.outro.plan) ? J.LAYOUTS.outro.plan(rOutro) : {},
+      decor: pickDecor(rOutro, st, en, Object.assign({}, fx, { decor: 1 }), 'outro'),
+      scheme: schemeIdx,
+      seed: J.h(project.seed, 809)
+    });
+    plan.cuts.push(outroCut);
+  }
+
   plan.cuts.sort((a, b) => a.start - b.start);
   if (fixedDuration != null) {
     plan.cuts = plan.cuts.filter(c => c.start < plan.duration - 1e-3);
