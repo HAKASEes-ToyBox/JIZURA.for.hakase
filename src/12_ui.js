@@ -2313,7 +2313,6 @@ function openSplitMediaCut(layer) {
     splitMediaCut(layer,dialog.querySelector('[name=left]').checked,dialog.querySelector('[name=right]').checked);
     dialog.close();
   };
-  dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
   dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
 }
 function splitMediaCut(layer,randomLeft=false,randomRight=false) {
@@ -2751,6 +2750,40 @@ function toast(m, cols) {
 }
 
 /* ---------------- かんたん / 詳細 ---------------- */
+// Share light-dismiss across static and dynamically created dialogs/drawers.
+// Require the gesture to start outside too, so dragging controls out does not dismiss.
+function initOutsideDismiss() {
+  let pressed=null;
+  const outside=(dialog,e)=>{const r=dialog.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};
+  const panelTargets=e=>({
+    settings:S.settingsOpen&&!e.target.closest('#settingsDrawer,#modeEasy,#modePro'),
+    source:S.sourceOpen&&$('app').classList.contains('compact-ui')&&!e.target.closest('.col-left')
+  });
+  document.addEventListener('pointerdown',e=>{
+    pressed=null;if(e.button!==0)return;
+    const dialog=e.target.closest('dialog[open]');
+    if(dialog){if(e.target===dialog&&outside(dialog,e))pressed={dialog};return;}
+    if(document.querySelector('dialog[open]'))return;
+    pressed=panelTargets(e);
+  },true);
+  document.addEventListener('pointercancel',()=>{pressed=null;},true);
+  document.addEventListener('click',e=>{
+    const start=pressed;pressed=null;if(!start)return;
+    if(start.dialog){
+      const dialog=start.dialog;
+      if(dialog.open&&e.target===dialog&&outside(dialog,e)){
+        e.preventDefault();e.stopImmediatePropagation();
+        // Use the existing Escape/cancel guards and close cleanup (no Apply/Save).
+        if(dialog.dispatchEvent(new Event('cancel',{cancelable:true})))dialog.close('cancel');
+      }
+      return;
+    }
+    if(document.querySelector('dialog[open]'))return;
+    const end=panelTargets(e);
+    if(start.settings&&end.settings){S.settingsOpen=false;syncSettingsDrawer();}
+    if(start.source&&end.source){S.sourceOpen=false;syncSourceDrawer();}
+  },true);
+}
 function syncSourceDrawer() {
   const compact=$('app').classList.contains('compact-ui'),panel=document.querySelector('.col-left');
   panel.classList.toggle('source-open',compact&&!!S.sourceOpen);
@@ -3745,6 +3778,7 @@ function bind() {
   // かんたんモード
   $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
   $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
+  initOutsideDismiss();
   $('closeSettingsDrawer').addEventListener('click',()=>{S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.settingsOpen&&!document.querySelector('dialog[open]')&&!timelineCutMenu&&!S.playheadMenu){S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();}});
   window.addEventListener('scroll',positionSettingsDrawer,{passive:true});
@@ -3762,7 +3796,6 @@ function bind() {
   const dlg = $('termsDlg');
   const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
-  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close ? dlg.close() : dlg.removeAttribute('open'); });   // click on the backdrop
   $('btnNew').addEventListener('click', () => { if (!S.exporting && !S.projectBusy) $('newProjectDlg').showModal(); });
   $('btnCreateProject').addEventListener('click', () => {
     const project = J.defaultProject(); project.lyrics = ''; project.aspect = $('newProjectAspect').value;

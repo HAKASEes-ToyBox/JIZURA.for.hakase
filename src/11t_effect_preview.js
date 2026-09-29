@@ -19,16 +19,7 @@ function ensureDialog(){
   document.body.append(dialog);canvas=dialog.querySelector('canvas');heading=dialog.querySelector('h2');
   // The close event is queued: if the preview was reopened meanwhile (close, then ▶ at once), keep the new one.
   dialog.addEventListener('close',()=>{if(!dialog.open)stop();});
-  const outside = event => {
-    const rect=dialog.getBoundingClientRect();
-    return event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom;
-  };
-  let pressedOutside=false;
-  dialog.addEventListener('pointerdown',event=>{pressedOutside=event.target===dialog && outside(event);});
-  dialog.addEventListener('click',event=>{
-    if(pressedOutside && event.target===dialog && outside(event))dialog.close();
-    pressedOutside=false;
-  });
+
 }
 J.makeEffectPreviewPlan=(group,key,layer='lyrics',id,settings)=>{
   // Media phases last at most 30% of a cut, so long entrance/exit times get longer preview cuts.
