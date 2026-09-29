@@ -63,6 +63,13 @@ const result=await page.evaluate(()=>{
  check(relaxedScenes<=scenes*.03,'lyrics over the foreground/window '+relaxedScenes+'/'+scenes);check(tiny<=scenes*.03,'unreadably small '+tiny+'/'+scenes);
  check(composed>=scenes*.985,'composed '+composed+'/'+scenes);check(names.size>=14,'arrangement variety '+names.size);
  check(smallCommon<=commonScenes*.06,'small type in scenes of up to five lyrics '+smallCommon+'/'+commonScenes);check(hierE[1]&&hierE[0]>=hierE[1]*.9,'emphasis larger '+hierE.join('/'));check(hierS[1]&&hierS[0]>=hierS[1]*.9,'suppression smaller '+hierS.join('/'));
+ // A foreground plus several lyrics (with and without keeping the centre clear) must not squeeze the lyrics into a
+ // narrow strip: the type stays large by using the whole free space around them.
+ {let worst=1,scenesFg=0,low=0;
+  for(const center of [false,true])for(const n of [4,5,7])for(const avoid of [false,true])for(let seed=1;seed<=10;seed++){
+   const p=build(n,{fg:true,avoid,seed,extra:{lyricEffects:{autoPlacement:true,avoidCenter:center}}}),G=group(run(p)),f=Math.min(...G.map(c=>fontOf(c,16/9)));
+   scenesFg++;worst=Math.min(worst,f);if(f<.06){low++;const k=`${center?'centre':'free'} n${n} ${avoid?'avoid':'shared'}`;(stats.lowBy||(stats.lowBy={}))[k]=((stats.lowBy||{})[k]||0)+1;}}
+  stats.foregroundWorstFont=+worst.toFixed(3);check(low<=scenesFg*.12&&worst>=.045,'foreground scenes keep readable type: '+low+'/'+scenesFg+' below .06, worst '+worst.toFixed(3));}
  // variety for one fixed scene across seeds; the placement seed (配置をシャッフル) re-rolls it; deterministic otherwise
  {const seen=new Set();for(let s=1;s<=20;s++)seen.add(group(run(build(5,{seed:s})))[0].arrangement);check(seen.size>=6,'variety across seeds '+seen.size);stats.varietyN5=seen.size;
   const p=build(5,{seed:4}),a=JSON.stringify(group(run(p)).map(c=>c.area)),b=JSON.stringify(group(run(p)).map(c=>c.area));check(a===b,'deterministic');

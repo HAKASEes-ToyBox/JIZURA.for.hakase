@@ -168,20 +168,21 @@ const ALIGN_Q = { center: 1, left: .94, right: .84, alt: .82, stair: .8, stairR:
 const PLACEMENTS = [[.5, .5], [0, .5], [1, .5], [.5, 0], [.5, 1], [0, 0], [1, 1], [1, 0], [0, 1]];
 
 // Layout specs (independent of the region): items in em space with their bounding box.
-const buildSpecs = (units, env) => {
+// lite: only the basic row / stack flows (for the parts of a scene split across regions).
+const buildSpecs = (units, env, lite = false) => {
   const n = units.length, specs = [], seen = new Set();
   const tightOk = env.maxOverlap > 0;
   const add = (spec, sig) => { if (seen.has(sig)) return; seen.add(sig); specs.push(spec); };
   const heroes = [...units.filter(u => u.cls === 'emphasis').map(u => u.i), ...(units.some(u => u.cls === 'emphasis') ? [] : [n - 1, 0])];
-  for (const contrast of [1, .55]) for (const wrapAt of [3.4, 4.8, 6.5, 10, 1e9]) {
+  for (const contrast of [1, .55]) for (const wrapAt of lite ? [4.8, 1e9] : [3.4, 4.8, 6.5, 10, 1e9]) {
     if (contrast < 1 && !units.some(u => u.cls !== 'normal')) continue;
     const avgR = units.reduce((s, u) => s + rOf(u, contrast), 0) / n, gx = GAP_X * avgR, gy = GAP_Y * avgR;
     const blocks = units.map(u => blockOf(u, wrapAt, contrast)), sigW = contrast + ':' + blocks.map(b => Math.round(b.w * 20)).join();
     const maxW = Math.max(...blocks.map(b => b.w)), total = blocks.reduce((s, b) => s + b.w, 0) + gx * (n - 1);
-    const widths = [...new Set([maxW, maxW * 1.3, maxW * 1.7, maxW * 2.3, total * .5, total * .7, total].map(w => +Math.max(w, maxW).toFixed(3)))];
-    for (const width of widths) for (const align of Object.keys(ALIGN_Q)) for (const justify of [false, true]) {
+    const widths = [...new Set((lite ? [maxW, maxW * 1.7, total * .6, total] : [maxW, maxW * 1.3, maxW * 1.7, maxW * 2.3, total * .5, total * .7, total]).map(w => +Math.max(w, maxW).toFixed(3)))];
+    for (const width of widths) for (const align of lite ? ['center', 'left', 'right', 'alt'] : Object.keys(ALIGN_Q)) for (const justify of lite ? [false] : [false, true]) {
       if (justify && (!['center', 'left'].includes(align) || units.some(u => u.cls !== 'normal'))) continue;
-      for (const tight of tightOk ? [false, true] : [false]) {
+      for (const tight of tightOk && !lite ? [false, true] : [false]) {
         if (tight && (justify || !['center', 'left', 'alt'].includes(align))) continue;
         const L = flow(blocks, { width, align, justify, tight, gx, gy, phase: env.phase });
         const single = !L.rows.includes('.');
@@ -189,7 +190,7 @@ const buildSpecs = (units, env) => {
       ...L, q: (ALIGN_Q[align] + (justify ? .08 : 0) - (tight ? .55 : 0)) * (single ? .9 : 1), order: 1, tight }, `f${sigW}|${L.rows}|${align}|${justify}|${tight}`);
       }
     }
-    if (n >= 3 && n <= 12) {
+    if (!lite && n >= 3 && n <= 12) {
       const total2 = blocks.reduce((s, b) => s + b.h, 0) + gy * (n - 1);
       for (const parts of [2, 3]) if (n >= parts * 2 - 1) for (const align of ['left', 'center']) for (const stagger of [0, .5]) {
         const L = columns(blocks, { height: total2 / parts * 1.08, gx, gy, align, stagger });
@@ -222,27 +223,47 @@ const anchorSpecs = (units, env) => {
   return out;
 };
 
+// Every maximal empty rectangle of the stage around the obstacles (biggest first): the whole free space, not just
+// the strips outside the obstacles' bounding box.
+const freeRects = (stage, obstacles) => {
+  // Coordinates are rounded alike for edges and obstacles, so a rectangle ending at an obstacle's edge never overlaps it.
+  const clampTo = (v, lo, hi) => +Math.min(hi, Math.max(lo, v)).toFixed(5);
+  let obs = obstacles.map(o => { const x = clampTo(o.x, stage.x, stage.x + stage.w), y = clampTo(o.y, stage.y, stage.y + stage.h), x2 = clampTo(o.x + o.w, stage.x, stage.x + stage.w), y2 = clampTo(o.y + o.h, stage.y, stage.y + stage.h); return { x, y, w: x2 - x, h: y2 - y }; }).filter(o => o.w > 1e-6 && o.h > 1e-6);
+  if (obs.length > 6) { obs.sort((a, b) => area(b) - area(a)); obs = [...obs.slice(0, 5), bboxOf(obs.slice(5))]; }
+  const xs = [...new Set([stage.x, stage.x + stage.w, ...obs.flatMap(o => [o.x, o.x + o.w])].map(v => +v.toFixed(5)))].sort((a, b) => a - b);
+  const ys = [...new Set([stage.y, stage.y + stage.h, ...obs.flatMap(o => [o.y, o.y + o.h])].map(v => +v.toFixed(5)))].sort((a, b) => a - b);
+  const found = [];
+  for (let i = 0; i < xs.length; i++) for (let j = i + 1; j < xs.length; j++) {
+    if (xs[j] - xs[i] < .1) continue;
+    for (let k = 0; k < ys.length; k++) for (let l = k + 1; l < ys.length; l++) {
+      if (ys[l] - ys[k] < .1) continue;
+      const r = { x: xs[i], y: ys[k], w: xs[j] - xs[i], h: ys[l] - ys[k] };
+      if (area(r) >= .035 && !obs.some(o => overlapArea(r, o) > 1e-7)) found.push(r);
+    }
+  }
+  found.sort((a, b) => area(b) - area(a));
+  const keep = [];
+  for (const r of found) if (!keep.some(q => q.x <= r.x + 1e-9 && q.y <= r.y + 1e-9 && q.x + q.w >= r.x + r.w - 1e-9 && q.y + q.h >= r.y + r.h - 1e-9)) keep.push(r);
+  return keep.slice(0, 10);
+};
 const regionsFor = (env, hasEmphasis) => {
   const stage = { x: MARGIN, y: MARGIN, w: 1 - 2 * MARGIN, h: 1 - 2 * MARGIN }, obs = (env.obstacles || []).filter(o => o && o.w > 0 && o.h > 0);
   const out = [];
   const push = (rect, tag, bonus = 0) => { if (rect && rect.w >= .1 && rect.h >= .1 && area(rect) >= .035) out.push({ rect, tag, bonus }); };
-  if (env.zone) {
-    const z = inter(env.zone, stage);
-    if (z) { const cover = obs.reduce((s, o) => s + overlapArea(z, o), 0) / area(z); if (cover < .05) push(z, 'zone', 1.1); }
-  }
-  if (!obs.length) push(stage, 'stage');
-  else {
+  if (!obs.length) {
+    push(stage, 'stage');
+    if (env.zone) push(inter(env.zone, stage), 'zone', 1.5);
+  } else {
     if (hasEmphasis) push(stage, 'stage');
-    const U = bboxOf(obs);
-    for (const [tag, r] of [['above', { x: stage.x, y: stage.y, w: stage.w, h: U.y - stage.y - .015 }], ['below', { x: stage.x, y: U.y + U.h + .015, w: stage.w, h: stage.y + stage.h - (U.y + U.h + .015) }],
-      ['left', { x: stage.x, y: stage.y, w: U.x - stage.x - .015, h: stage.h }], ['right', { x: U.x + U.w + .015, y: stage.y, w: stage.x + stage.w - (U.x + U.w + .015), h: stage.h }]]) push(r, tag);
-    for (const r of (J.emptyRegions ? J.emptyRegions(obs) : []).slice(0, 4)) push(inter(r, stage), 'free');
-    if (env.zone) for (const o of out.slice()) if (o.tag !== 'zone') { const z = inter(o.rect, env.zone); if (z) push(z, 'zone', .8); }
+    const free = freeRects(stage, obs);
+    for (const r of free) push(r, 'free');
+    // The lyric zone of the scene's composition comes first, wherever the obstacles leave it free.
+    if (env.zone) for (const r of free) push(inter(r, env.zone), 'zone', 1.5);
   }
   // Unique, biggest first (zone regions keep their bonus).
   const key = r => [r.x, r.y, r.w, r.h].map(v => v.toFixed(3)).join();
   const uniq = new Map(); for (const o of out) { const k = key(o.rect); if (!uniq.has(k) || uniq.get(k).bonus < o.bonus) uniq.set(k, o); }
-  return [...uniq.values()].sort((a, b) => area(b.rect) * (1 + b.bonus) - area(a.rect) * (1 + a.bonus)).slice(0, 6);
+  return [...uniq.values()].sort((a, b) => area(b.rect) * (1 + b.bonus) - area(a.rect) * (1 + a.bonus)).slice(0, 8);
 };
 
 // Fit a spec into a region (em → stage fractions), return the candidate rects or null.
@@ -309,31 +330,64 @@ J.composeLyricScene = (cuts, env = {}) => {
       for (const spec of specs) consider(spec, fitSpec(spec, region.rect, S, [.5, .5]), region, [.5, .5]);
       for (const spec of anchored) consider(spec, fromAnchored(spec, region.rect, S), region, null);
     }
-    // Split across two free regions in reading order (top strip then bottom, left then right): each side is
-    // composed on its own, with a matching type size.
-    if (n >= 3 && n <= 14 && regions.length >= 2) {
-      const usableRegions = regions.filter(r => r.tag !== 'stage').slice(0, 4).sort((p, q) => (p.rect.y + p.rect.h / 2) * 1.6 + p.rect.x - ((q.rect.y + q.rect.h / 2) * 1.6 + q.rect.x));
-      const sideBest = (list, region) => {
-        const sub = list.map((u, i) => ({ ...u, i })), subSpecs = buildSpecs(sub, { ...env, maxOverlap: 0 });
-        let best = null;
-        for (const spec of subSpecs) {
-          if (spec.hero !== undefined || !spec.order) continue;
+    // Split across two to four free regions in reading order (top, left, right, bottom): each part is composed on its
+    // own, with a matching type size. Overlapping regions are carved apart. Around a kept-clear centre or a big
+    // foreground this uses the whole free frame instead of one narrow strip.
+    if (n >= 3 && n <= 16 && regions.length >= 2) {
+      const base = regions.filter(r => r.tag !== 'stage').sort((p, q) => area(q.rect) - area(p.rect)).slice(0, 6), reading = r => (r.rect.y + r.rect.h / 2) * 1.6 + r.rect.x + r.rect.w / 2;
+      const rectKey = r => [r.x, r.y, r.w, r.h].map(v => v.toFixed(3)).join();
+      const sideMemo = new Map();
+      const sideBest = (from, to, region) => {
+        const key = `${from}-${to}-${rectKey(region.rect)}`;
+        if (sideMemo.has(key)) return sideMemo.get(key);
+        const sub = units.slice(from, to).map((u, i) => ({ ...u, i })); let best = null;
+        for (const spec of buildSpecs(sub, { ...env, maxOverlap: 0 }, true)) {
           const fit = fitSpec(spec, region.rect, S, [.5, .5]); if (!fit) continue;
           const font = Math.min(...fit.rects.map(r => r.font)), value = font * (.55 + .45 * spec.q);
           if (!best || value > best.value) best = { value, fit, spec, font };
         }
-        return best;
+        sideMemo.set(key, best); return best;
       };
-      for (let a = 0; a < usableRegions.length; a++) for (let b = a + 1; b < usableRegions.length; b++) {
-        const A = usableRegions[a], B = usableRegions[b];
-        if (overlapArea(A.rect, B.rect) > .02 * Math.min(area(A.rect), area(B.rect))) continue;
-        const share = area(A.rect) / (area(A.rect) + area(B.rect)), m0 = Math.round(n * share);
-        for (const m of new Set([m0, m0 - 1, m0 + 1].filter(v => v >= 1 && v <= n - 1))) {
-          const left = sideBest(units.slice(0, m), A), right = sideBest(units.slice(m), B);
-          if (!left || !right) continue;
-          const rects = [...left.fit.rects, ...right.fit.rects];
-          const bothBoxes = bboxOf([A.rect, B.rect]);
-          consider({ name: 'split', q: .84, order: .95, rows: 'split' }, { k: Math.min(left.fit.k, right.fit.k), rects, pen: Math.abs(Math.log(left.font / right.font)) * 1.6 }, { rect: bothBoxes, tag: 'split', bonus: A.bonus / 2 + B.bonus / 2 }, null);
+      // Keep the regions apart: each later one loses what an earlier one already takes (its biggest remainder stays).
+      const carve = list => {
+        const out = [];
+        for (const region of list) {
+          let rect = region.rect;
+          for (const c of out) {
+            if (overlapArea(rect, c.rect) <= 1e-7) continue;
+            const pieces = [{ x: rect.x, y: rect.y, w: c.rect.x - rect.x, h: rect.h }, { x: c.rect.x + c.rect.w, y: rect.y, w: rect.x + rect.w - c.rect.x - c.rect.w, h: rect.h },
+              { x: rect.x, y: rect.y, w: rect.w, h: c.rect.y - rect.y }, { x: rect.x, y: c.rect.y + c.rect.h, w: rect.w, h: rect.y + rect.h - c.rect.y - c.rect.h }].filter(q => q.w >= .1 && q.h >= .1);
+            if (!pieces.length) return null;
+            rect = pieces.reduce((a, b) => area(b) > area(a) ? b : a);
+          }
+          out.push({ ...region, rect });
+        }
+        return out;
+      };
+      const combos = [];
+      const choose = (start, chosen, k) => { if (chosen.length === k) { combos.push(chosen.slice()); return; } for (let i = start; i < base.length; i++) { chosen.push(base[i]); choose(i + 1, chosen, k); chosen.pop(); } };
+      for (let k = 2; k <= Math.min(4, n, base.length); k++) choose(0, [], k);
+      for (const combo of combos) {
+        const regs = carve([...combo].sort((p, q) => reading(p) - reading(q)));
+        if (!regs) continue;
+        const total = regs.reduce((sum, r) => sum + area(r.rect), 0), k = regs.length;
+        // Units per region by area share (each at least one), and the neighbours' shifts of one.
+        const counts = regs.map(r => Math.max(1, Math.round(n * area(r.rect) / total)));
+        for (let guard = 0; counts.reduce((a, b) => a + b, 0) !== n && guard < 40; guard++) {
+          const sum = counts.reduce((a, b) => a + b, 0), order = counts.map((c, i) => [c / area(regs[i].rect), i]).sort((a, b) => sum > n ? b[0] - a[0] : a[0] - b[0]);
+          const hit = order.find(([, i]) => sum > n ? counts[i] > 1 : true);
+          counts[hit[1]] += sum > n ? -1 : 1;
+        }
+        const variants = [counts];
+        for (let i = 0; i < k - 1; i++) for (const d of [1, -1]) { const c = counts.slice(); c[i] += d; c[i + 1] -= d; if (c[i] >= 1 && c[i + 1] >= 1) variants.push(c); }
+        for (const cs of variants) {
+          let from = 0; const parts = [];
+          for (let i = 0; i < k; i++) { const part = sideBest(from, from + cs[i], regs[i]); if (!part) break; parts.push(part); from += cs[i]; }
+          if (parts.length !== k) continue;
+          const rects = parts.flatMap(part => part.fit.rects), fonts = parts.map(part => part.font);
+          consider({ name: 'split' + k, label: 'split' + k + ':' + parts.map(part => part.spec.name).join('+'), q: .84, order: .95, rows: 'split' + k },
+            { k: Math.min(...parts.map(part => part.fit.k)), rects, pen: 1.6 * (Math.max(...fonts) - Math.min(...fonts)) / Math.max(...fonts) },
+            { rect: bboxOf(regs.map(r => r.rect)), tag: 'split', bonus: regs.reduce((sum, r) => sum + r.bonus, 0) / k }, null);
         }
       }
     }
@@ -344,7 +398,7 @@ J.composeLyricScene = (cuts, env = {}) => {
       const sub = rest.map((u, i) => ({ ...u, i })), heroBlock = blockOf(units[h], 1e9, 1);
       for (const region of regions.filter(r => r.tag !== 'stage').slice(0, 4)) {
         let best = null;
-        for (const spec of buildSpecs(sub, { ...env, maxOverlap: 0 })) {
+        for (const spec of buildSpecs(sub, { ...env, maxOverlap: 0 }, true)) {
           if (spec.hero !== undefined || !spec.order) continue;
           const fit = fitSpec(spec, region.rect, S, [.5, .5]); if (!fit) continue;
           const font = Math.min(...fit.rects.map(r => r.font)), value = font * (.55 + .45 * spec.q);
@@ -392,7 +446,7 @@ J.composeLyricScene = (cuts, env = {}) => {
       near += 1 - Math.min(1, gap / .25);
     }
     return 3.8 * size + .45 * (1 - Math.min(1, Math.abs(fill - .55) / .55)) + .9 * balance + .95 * c.spec.q + .7 * c.spec.order + hierarchy
-      + (pairs ? .4 * near / pairs : 0) + region.bonus - c.pen - 3 * c.hit - (c.minFont < FMIN ? 2.5 + 7 * (FMIN - c.minFont) / FMIN : 0) - c.worst * 1.5;
+      + (pairs ? .4 * near / pairs : 0) + region.bonus * clamp((c.typical / typicalMax - .5) / .25, 0, 1) - c.pen - 3 * c.hit - (c.minFont < FMIN ? 2.5 + 7 * (FMIN - c.minFont) / FMIN : 0) - c.worst * 1.5;
   };
   if (!cands.length) return null;
   const typicalOf = c => Math.exp(units.reduce((s, u, i) => s + u.n * Math.log(Math.max(c.rects[i].font, 1e-3)), 0) / totalChars);
@@ -410,10 +464,12 @@ J.composeLyricScene = (cuts, env = {}) => {
   // every scene differs and no single template (say, the poster rows) takes over.
   const best = cands[0].score, families = new Map();
   for (const c of cands) if (!families.has(c.spec.name)) families.set(c.spec.name, c);
-  const lottery = [...families.values()].filter(c => c.score >= best - 1.25).map(c => [c, Math.exp((c.score - best) / .55)]);
+  // Only families that read almost as large as the biggest reachable type enter it (variety never costs size).
+  const bigEnough = c => c.typical >= .82 * typicalMax || c === cands[0];
+  const lottery = [...families.values()].filter(c => c.score >= best - 1.25 && bigEnough(c)).map(c => [c, Math.exp((c.score - best) / .55)]);
   const chosen = rng.wpick(lottery);
   const variants = cands.filter(c => c.spec.name === chosen.spec.name && c.score >= chosen.score - .14).slice(0, 8);
   const pick = rng.wpick(variants.map(c => [c, Math.exp((c.score - chosen.score) / .07)])), r = pick.rects;
-  return { name: pick.spec.name, rects: r.map(({ x, y, w, h }) => ({ x, y, w, h })), scale: pick.k, score: pick.score, region: pick.region.tag, candidates: cands.length };
+  return { name: pick.spec.label || pick.spec.name, rects: r.map(({ x, y, w, h }) => ({ x, y, w, h })), scale: pick.k, score: pick.score, region: pick.region.tag, candidates: cands.length };
 };
 })();
