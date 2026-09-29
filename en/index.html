@@ -3687,7 +3687,7 @@ J.LAYOUTS = {
       const energy = J.clamp(rawEnergy * 2.8, 0.12, 1.0);
       const beatPulse = typeof env.beatPulse === 'number' ? env.beatPulse : (env.beat?.isOnset ? 1.0 : (0.25 + 0.5 * Math.sin(lb * 4)));
 
-      // スタイル判定と記号パレット
+      // スタイル判定と variant（自動分割サブカットごとの個別形態）
       const styleKey = (st && st.id) || env.plan?.styleKey || 'noir';
       const isWa = !!st.wa || styleKey.includes('wa') || styleKey === 'edo';
       const isCyber = styleKey.includes('cyber') || styleKey.includes('neon') || styleKey === 'glitch';
@@ -3696,30 +3696,19 @@ J.LAYOUTS = {
       const isHorror = styleKey.includes('horror') || styleKey.includes('dark');
       const isEditorial = styleKey.includes('editorial') || styleKey === 'type';
 
-      let symbols = ['✦', '★', '◆', '●', '▲', '■', '＋', '×'];
-      let coreType = 'circle';
-      if (isWa) {
-        symbols = ['❀', '✿', '❁', '〜', '◉', '⚹', '〰', '◇', '◆'];
-        coreType = 'ripple';
-      } else if (isCyber) {
-        symbols = ['◈', '▣', '⌘', '⏦', '▸', '01', '█', '░', '▲', '▰'];
-        coreType = 'hex';
-      } else if (isPop) {
-        symbols = ['★', '☆', '♪', '♫', '→', '✦', '✴', '♡', '●', '◇'];
-        coreType = 'star';
-      } else if (isKinetic) {
-        symbols = ['→', '↗', '⇒', '▶', '▷', '|', '┃', '◁', '▲'];
-        coreType = 'arrows';
-      } else if (isHorror) {
-        symbols = ['†', '✝', '☠', '▓', '░', '][', 'ϟ', 'ᛥ', '✕'];
-        coreType = 'distort';
-      } else if (isEditorial) {
-        symbols = ['¶', '§', '■', '□', '●', '○', '「', '」', '※', '†'];
-        coreType = 'bracket';
-      } else {
-        symbols = ['+', '×', '│', '─', '┼', '╋', '□', '▫', '▪', '／'];
-        coreType = 'bracket';
-      }
+      // P.variant が指定されている場合はそれを最優先し、未指定ならスタイルから自動判定
+      const coreType = P.variant || (isWa ? 'ripple' : isCyber ? 'hex' : isPop ? 'star' : isKinetic ? 'arrows' : isHorror ? 'cross' : 'bracket');
+
+      const SIGIL_MAP = {
+        hex: ['◈', '▣', '⌘', '⏦', '▸', '01', '█', '░', '▲', '▰'],
+        ripple: ['❀', '✿', '❁', '〜', '◉', '⚹', '〰', '◇', '◆'],
+        star: ['★', '☆', '♪', '♫', '→', '✦', '✴', '♡', '●', '◇'],
+        arrows: ['→', '↗', '⇒', '▶', '▷', '|', '┃', '◁', '▲'],
+        bracket: ['¶', '§', '■', '□', '●', '○', '「', '」', '※', '†'],
+        cross: ['†', '✝', '☠', '▓', '░', '][', 'ϟ', 'ᛥ', '✕'],
+        circle: ['✦', '★', '◆', '●', '▲', '■', '＋', '×']
+      };
+      const symbols = SIGIL_MAP[coreType] || SIGIL_MAP.circle;
 
       ctx.save();
 
@@ -3825,6 +3814,11 @@ J.LAYOUTS = {
           ctx.restore();
         }
         env.circle(0, 0, coreSize * 0.4, null, sc.accent, 2, fade * 0.9, false);
+      } else if (coreType === 'cross' || coreType === 'distort') { // cross / distort
+        const arm = coreSize * 1.3, thick = coreSize * 0.28;
+        env.rect(-thick, -arm, thick * 2, arm * 2, sc.accent, fade * 0.85, false);
+        env.rect(-arm, -thick, arm * 2, thick * 2, sc.accent, fade * 0.85, false);
+        env.circle(0, 0, thick * 1.6, null, sc.fg, 1.5, fade * 0.9, false);
       } else { // noir / bracket / standard
         const s = coreSize * 1.4, l = s * 0.35;
         env.line([[-s + l, -s], [-s, -s], [-s, -s + l]], sc.fg, 2, fade * 0.85, false);
@@ -3836,19 +3830,22 @@ J.LAYOUTS = {
       }
       ctx.restore();
 
-      // 4. 曲名または FIN テキスト（控えめな余韻）
-      const finText = env.cut.text ? `— ${env.cut.text} —` : '— FIN —';
-      const finSize = J.clamp(minDim * 0.024, 13, 26);
-      env.draw({
-        text: finText,
-        font: st.fonts?.body?.[0] || 'sans-serif',
-        size: finSize,
-        x: cx, y: H * 0.88,
-        track: 0.32,
-        color: sc.sub,
-        alpha: (0.4 + energy * 0.3) * fade,
-        ghost: false
-      });
+      // 4. 曲名または FIN テキスト（最終カットのみ表示し、中間カットは純粋な幾何学モーショングラフィックスに専念）
+      const isFinal = P.isFinal !== false;
+      if (isFinal) {
+        const finText = env.cut.text ? `— ${env.cut.text} —` : '— FIN —';
+        const finSize = J.clamp(minDim * 0.024, 13, 26);
+        env.draw({
+          text: finText,
+          font: st.fonts?.body?.[0] || 'sans-serif',
+          size: finSize,
+          x: cx, y: H * 0.88,
+          track: 0.32,
+          color: sc.sub,
+          alpha: (0.4 + energy * 0.3) * fade,
+          ghost: false
+        });
+      }
 
       ctx.restore();
       return { x0: W * 0.2, x1: W * 0.8, y0: H * 0.2, y1: H * 0.8, cx, cy, boxes: [] };
@@ -4605,7 +4602,7 @@ J.plan = (project, audio) => {
     return cut.dur >= .3;
   });
 
-  // outro (後奏): 最後の歌詞終了時刻から楽曲終了時刻までの空隙を検出し、オーディオリアクティブ後奏カットを自動生成
+  // outro (後奏): 最後の歌詞終了時刻から楽曲終了時刻までの空隙を検出し、ビートに同期して複数サブカットに自動分割
   let maxLyricEnd = 0;
   for (const cut of plan.cuts) {
     if (cut.line >= 0 && Number.isInteger(cut.part)) {
@@ -4614,26 +4611,56 @@ J.plan = (project, audio) => {
   }
   const outroGap = plan.duration - maxLyricEnd;
   if (maxLyricEnd > 0 && outroGap >= 0.8) {
-    const rOutro = J.rng(J.h(project.seed, 808));
-    const outroCut = makeCut({
-      text: title || '',
-      lineText: '',
-      line: -2,
-      part: 'outro',
-      start: maxLyricEnd,
-      end: plan.duration,
-      layout: 'outro',
-      enter: 'blur',
-      exit: 'blur',
-      hold: 'still',
-      inDur: 0.35,
-      outDur: 0.35,
-      params: (J.LAYOUTS.outro && J.LAYOUTS.outro.plan) ? J.LAYOUTS.outro.plan(rOutro) : {},
-      decor: pickDecor(rOutro, st, en, Object.assign({}, fx, { decor: 1 }), 'outro'),
-      scheme: schemeIdx,
-      seed: J.h(project.seed, 809)
-    });
-    plan.cuts.push(outroCut);
+    // 適切なサブカット数を算出 (1カットあたり約1.8秒〜2.5秒を理想とする)
+    const nOutro = outroGap < 2.5 ? 1 : Math.min(8, Math.max(2, Math.round(outroGap / 2.1)));
+    const bounds = [maxLyricEnd];
+    if (nOutro > 1) {
+      for (let k = 1; k < nOutro; k++) {
+        const rawT = maxLyricEnd + (outroGap * k) / nOutro;
+        bounds.push(snap(rawT));
+      }
+      bounds.push(plan.duration);
+      // 境界の単調増加と最小間隔を保証
+      for (let k = 1; k < bounds.length - 1; k++) {
+        bounds[k] = Math.max(bounds[k - 1] + 0.45, Math.min(bounds[k], bounds[k + 1] - 0.45));
+      }
+    } else {
+      bounds.push(plan.duration);
+    }
+
+    const VARIANTS = ['hex', 'ripple', 'star', 'arrows', 'bracket', 'cross'];
+    const CAMS = ['push', 'pulse', 'shake', 'drift'];
+    for (let i = 0; i < nOutro; i++) {
+      const s = bounds[i], e = bounds[i + 1], dur = e - s;
+      if (dur < 0.2) continue;
+      const rOutro = J.rng(J.h(project.seed, 808, i));
+      const curScheme = nSchemes > 1 ? (schemeIdx + i) % nSchemes : schemeIdx;
+      const outroCut = makeCut({
+        text: title || '',
+        lineText: '',
+        line: -2,
+        part: nOutro > 1 ? `outro_${i + 1}` : 'outro',
+        start: s,
+        end: e,
+        layout: 'outro',
+        enter: i === 0 ? 'blur' : rOutro.pick(['cut', 'zoom', 'wipe', 'pop']),
+        exit: i === nOutro - 1 ? 'blur' : rOutro.pick(['cut', 'shrink', 'blur']),
+        hold: rOutro.pick(['still', 'jitter', 'drift', 'wave']),
+        inDur: Math.min(0.25, dur * 0.35),
+        outDur: Math.min(0.25, dur * 0.35),
+        cam: CAMS[i % CAMS.length],
+        params: {
+          variant: VARIANTS[i % VARIANTS.length],
+          outroIndex: i,
+          outroCount: nOutro,
+          isFinal: i === nOutro - 1
+        },
+        decor: pickDecor(rOutro, st, en, Object.assign({}, fx, { decor: 1 }), 'outro'),
+        scheme: curScheme,
+        seed: J.h(project.seed, 809, i)
+      });
+      plan.cuts.push(outroCut);
+    }
   }
 
   plan.cuts.sort((a, b) => a.start - b.start);
@@ -40350,7 +40377,9 @@ function drawTimeline() {
     if (x1 - x0 > 34 * dpr) {
       x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${mono}`;
       x.save(); x.beginPath(); x.rect(x0, y0, x1 - x0 - 3, lh); x.clip();
-      const cutLabel = cut.part === 'outro' ? '〔後奏〕' : (cut.part === 'interlude' ? '〔間奏〕' : (cut.text || cut.lineText || ''));
+      const cutLabel = typeof cut.part === 'string' && cut.part.startsWith('outro')
+        ? (cut.part === 'outro' ? '〔後奏〕' : `〔後奏 ${cut.part.split('_')[1]}〕`)
+        : (cut.part === 'interlude' ? '〔間奏〕' : (cut.text || cut.lineText || ''));
       x.fillText(cutLabel, x0 + 5 * dpr, y0 + Math.min(13 * dpr, lh - 3 * dpr)); x.restore();
     }
   }

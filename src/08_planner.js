@@ -480,7 +480,7 @@ J.plan = (project, audio) => {
     return cut.dur >= .3;
   });
 
-  // outro (後奏): 最後の歌詞終了時刻から楽曲終了時刻までの空隙を検出し、オーディオリアクティブ後奏カットを自動生成
+  // outro (後奏): 最後の歌詞終了時刻から楽曲終了時刻までの空隙を検出し、ビートに同期して複数サブカットに自動分割
   let maxLyricEnd = 0;
   for (const cut of plan.cuts) {
     if (cut.line >= 0 && Number.isInteger(cut.part)) {
@@ -489,26 +489,56 @@ J.plan = (project, audio) => {
   }
   const outroGap = plan.duration - maxLyricEnd;
   if (maxLyricEnd > 0 && outroGap >= 0.8) {
-    const rOutro = J.rng(J.h(project.seed, 808));
-    const outroCut = makeCut({
-      text: title || '',
-      lineText: '',
-      line: -2,
-      part: 'outro',
-      start: maxLyricEnd,
-      end: plan.duration,
-      layout: 'outro',
-      enter: 'blur',
-      exit: 'blur',
-      hold: 'still',
-      inDur: 0.35,
-      outDur: 0.35,
-      params: (J.LAYOUTS.outro && J.LAYOUTS.outro.plan) ? J.LAYOUTS.outro.plan(rOutro) : {},
-      decor: pickDecor(rOutro, st, en, Object.assign({}, fx, { decor: 1 }), 'outro'),
-      scheme: schemeIdx,
-      seed: J.h(project.seed, 809)
-    });
-    plan.cuts.push(outroCut);
+    // 適切なサブカット数を算出 (1カットあたり約1.8秒〜2.5秒を理想とする)
+    const nOutro = outroGap < 2.5 ? 1 : Math.min(8, Math.max(2, Math.round(outroGap / 2.1)));
+    const bounds = [maxLyricEnd];
+    if (nOutro > 1) {
+      for (let k = 1; k < nOutro; k++) {
+        const rawT = maxLyricEnd + (outroGap * k) / nOutro;
+        bounds.push(snap(rawT));
+      }
+      bounds.push(plan.duration);
+      // 境界の単調増加と最小間隔を保証
+      for (let k = 1; k < bounds.length - 1; k++) {
+        bounds[k] = Math.max(bounds[k - 1] + 0.45, Math.min(bounds[k], bounds[k + 1] - 0.45));
+      }
+    } else {
+      bounds.push(plan.duration);
+    }
+
+    const VARIANTS = ['hex', 'ripple', 'star', 'arrows', 'bracket', 'cross'];
+    const CAMS = ['push', 'pulse', 'shake', 'drift'];
+    for (let i = 0; i < nOutro; i++) {
+      const s = bounds[i], e = bounds[i + 1], dur = e - s;
+      if (dur < 0.2) continue;
+      const rOutro = J.rng(J.h(project.seed, 808, i));
+      const curScheme = nSchemes > 1 ? (schemeIdx + i) % nSchemes : schemeIdx;
+      const outroCut = makeCut({
+        text: title || '',
+        lineText: '',
+        line: -2,
+        part: nOutro > 1 ? `outro_${i + 1}` : 'outro',
+        start: s,
+        end: e,
+        layout: 'outro',
+        enter: i === 0 ? 'blur' : rOutro.pick(['cut', 'zoom', 'wipe', 'pop']),
+        exit: i === nOutro - 1 ? 'blur' : rOutro.pick(['cut', 'shrink', 'blur']),
+        hold: rOutro.pick(['still', 'jitter', 'drift', 'wave']),
+        inDur: Math.min(0.25, dur * 0.35),
+        outDur: Math.min(0.25, dur * 0.35),
+        cam: CAMS[i % CAMS.length],
+        params: {
+          variant: VARIANTS[i % VARIANTS.length],
+          outroIndex: i,
+          outroCount: nOutro,
+          isFinal: i === nOutro - 1
+        },
+        decor: pickDecor(rOutro, st, en, Object.assign({}, fx, { decor: 1 }), 'outro'),
+        scheme: curScheme,
+        seed: J.h(project.seed, 809, i)
+      });
+      plan.cuts.push(outroCut);
+    }
   }
 
   plan.cuts.sort((a, b) => a.start - b.start);

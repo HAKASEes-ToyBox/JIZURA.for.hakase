@@ -819,7 +819,7 @@ J.LAYOUTS = {
       const energy = J.clamp(rawEnergy * 2.8, 0.12, 1.0);
       const beatPulse = typeof env.beatPulse === 'number' ? env.beatPulse : (env.beat?.isOnset ? 1.0 : (0.25 + 0.5 * Math.sin(lb * 4)));
 
-      // スタイル判定と記号パレット
+      // スタイル判定と variant（自動分割サブカットごとの個別形態）
       const styleKey = (st && st.id) || env.plan?.styleKey || 'noir';
       const isWa = !!st.wa || styleKey.includes('wa') || styleKey === 'edo';
       const isCyber = styleKey.includes('cyber') || styleKey.includes('neon') || styleKey === 'glitch';
@@ -828,30 +828,19 @@ J.LAYOUTS = {
       const isHorror = styleKey.includes('horror') || styleKey.includes('dark');
       const isEditorial = styleKey.includes('editorial') || styleKey === 'type';
 
-      let symbols = ['✦', '★', '◆', '●', '▲', '■', '＋', '×'];
-      let coreType = 'circle';
-      if (isWa) {
-        symbols = ['❀', '✿', '❁', '〜', '◉', '⚹', '〰', '◇', '◆'];
-        coreType = 'ripple';
-      } else if (isCyber) {
-        symbols = ['◈', '▣', '⌘', '⏦', '▸', '01', '█', '░', '▲', '▰'];
-        coreType = 'hex';
-      } else if (isPop) {
-        symbols = ['★', '☆', '♪', '♫', '→', '✦', '✴', '♡', '●', '◇'];
-        coreType = 'star';
-      } else if (isKinetic) {
-        symbols = ['→', '↗', '⇒', '▶', '▷', '|', '┃', '◁', '▲'];
-        coreType = 'arrows';
-      } else if (isHorror) {
-        symbols = ['†', '✝', '☠', '▓', '░', '][', 'ϟ', 'ᛥ', '✕'];
-        coreType = 'distort';
-      } else if (isEditorial) {
-        symbols = ['¶', '§', '■', '□', '●', '○', '「', '」', '※', '†'];
-        coreType = 'bracket';
-      } else {
-        symbols = ['+', '×', '│', '─', '┼', '╋', '□', '▫', '▪', '／'];
-        coreType = 'bracket';
-      }
+      // P.variant が指定されている場合はそれを最優先し、未指定ならスタイルから自動判定
+      const coreType = P.variant || (isWa ? 'ripple' : isCyber ? 'hex' : isPop ? 'star' : isKinetic ? 'arrows' : isHorror ? 'cross' : 'bracket');
+
+      const SIGIL_MAP = {
+        hex: ['◈', '▣', '⌘', '⏦', '▸', '01', '█', '░', '▲', '▰'],
+        ripple: ['❀', '✿', '❁', '〜', '◉', '⚹', '〰', '◇', '◆'],
+        star: ['★', '☆', '♪', '♫', '→', '✦', '✴', '♡', '●', '◇'],
+        arrows: ['→', '↗', '⇒', '▶', '▷', '|', '┃', '◁', '▲'],
+        bracket: ['¶', '§', '■', '□', '●', '○', '「', '」', '※', '†'],
+        cross: ['†', '✝', '☠', '▓', '░', '][', 'ϟ', 'ᛥ', '✕'],
+        circle: ['✦', '★', '◆', '●', '▲', '■', '＋', '×']
+      };
+      const symbols = SIGIL_MAP[coreType] || SIGIL_MAP.circle;
 
       ctx.save();
 
@@ -957,6 +946,11 @@ J.LAYOUTS = {
           ctx.restore();
         }
         env.circle(0, 0, coreSize * 0.4, null, sc.accent, 2, fade * 0.9, false);
+      } else if (coreType === 'cross' || coreType === 'distort') { // cross / distort
+        const arm = coreSize * 1.3, thick = coreSize * 0.28;
+        env.rect(-thick, -arm, thick * 2, arm * 2, sc.accent, fade * 0.85, false);
+        env.rect(-arm, -thick, arm * 2, thick * 2, sc.accent, fade * 0.85, false);
+        env.circle(0, 0, thick * 1.6, null, sc.fg, 1.5, fade * 0.9, false);
       } else { // noir / bracket / standard
         const s = coreSize * 1.4, l = s * 0.35;
         env.line([[-s + l, -s], [-s, -s], [-s, -s + l]], sc.fg, 2, fade * 0.85, false);
@@ -968,19 +962,22 @@ J.LAYOUTS = {
       }
       ctx.restore();
 
-      // 4. 曲名または FIN テキスト（控えめな余韻）
-      const finText = env.cut.text ? `— ${env.cut.text} —` : '— FIN —';
-      const finSize = J.clamp(minDim * 0.024, 13, 26);
-      env.draw({
-        text: finText,
-        font: st.fonts?.body?.[0] || 'sans-serif',
-        size: finSize,
-        x: cx, y: H * 0.88,
-        track: 0.32,
-        color: sc.sub,
-        alpha: (0.4 + energy * 0.3) * fade,
-        ghost: false
-      });
+      // 4. 曲名または FIN テキスト（最終カットのみ表示し、中間カットは純粋な幾何学モーショングラフィックスに専念）
+      const isFinal = P.isFinal !== false;
+      if (isFinal) {
+        const finText = env.cut.text ? `— ${env.cut.text} —` : '— FIN —';
+        const finSize = J.clamp(minDim * 0.024, 13, 26);
+        env.draw({
+          text: finText,
+          font: st.fonts?.body?.[0] || 'sans-serif',
+          size: finSize,
+          x: cx, y: H * 0.88,
+          track: 0.32,
+          color: sc.sub,
+          alpha: (0.4 + energy * 0.3) * fade,
+          ghost: false
+        });
+      }
 
       ctx.restore();
       return { x0: W * 0.2, x1: W * 0.8, y0: H * 0.2, y1: H * 0.8, cx, cy, boxes: [] };
