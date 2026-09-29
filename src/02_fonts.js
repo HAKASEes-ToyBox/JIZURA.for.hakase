@@ -142,7 +142,12 @@ function attachFamily(spec) {
   cssJobs.set(spec, job);
   return job;
 }
-/* font keys a plan draws with: style roles, per-cut font params, mono for HUD */
+/* drawing-program nodes of every lyric / media cut (custom favorite effects) */
+const drawingNodes = plan => [plan?.cuts, plan?.media?.cuts, plan?.foreground?.cuts]
+  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []);
+/* literal strings drawn by drawing programs; their glyphs must be loaded like lyrics */
+J.drawingText = plan => drawingNodes(plan).map(n => typeof n.text === 'string' && n.text[0] !== '$' ? n.text : '').join('');
+/* font keys a plan draws with: style roles, per-cut font params, drawing programs, mono for HUD */
 J.fontsOfPlan = (plan) => {
   const set = new Set(['mono']);
   if (!plan) return [...set];
@@ -153,6 +158,7 @@ J.fontsOfPlan = (plan) => {
     if (typeof v === 'string' && J.FONTS[v]) set.add(v);
     else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string' && J.FONTS[x]) set.add(x); });
   }
+  for (const node of drawingNodes(plan)) if (node.font) set.add(node.font);
   for (const key of [...set]) {
     const composite = J.FONTS[key]?.composite;
     if (composite) { set.add(composite.base); Object.values(composite.parts).forEach(part => set.add(part)); }
