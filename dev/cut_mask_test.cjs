@@ -101,7 +101,7 @@ await page.evaluate(()=>{const p=J.ui.project;const c=document.createElement('ca
 await timelineAction(page,'[data-layer="media"]','details');
 const modal=page.locator('#cutDetailsDialog'),section=modal.locator('[data-detail-section="mask"]');
 assert.equal((await section.locator('summary').textContent()),lang?'Mask':'マスク');assert.equal(await section.evaluate(el=>el.open),false);
-await section.locator('summary').click();
+await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();
 assert.equal(await section.locator('[data-mask-field="target"] option').allTextContents().then(x=>x.join('/')),lang?'Source/Cut':'素材/カット');
 await section.locator('[data-mask-field="enabled"]').check();
 // The first circle is round on screen: width × frame aspect = height.
@@ -157,14 +157,14 @@ assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].deta
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
 await page.evaluate(()=>{delete J.ui.project.media.cutOverrides[0].details.mask;J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
-await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
+await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
 await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await page.waitForTimeout(400);await section.locator('[data-mask-motion="entrance"]').selectOption('none');
 assert.equal(await modal.locator('form').evaluate(f=>f.checkValidity()),true);
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();await modal.waitFor({state:'detached'});
 const shown=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=320;c.height=180;const x=c.getContext('2d');new J.Renderer().frame(x,J.ui.plan,3,{scale:320/J.ui.plan.W,noHud:true,noLyrics:true});const d=x.getImageData(0,0,320,180).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>180&&d[i+1]<90&&d[i+2]<90)n++;return {entrance:J.ui.project.media.cutOverrides[0].details.mask.motion.entrance,red:n/(d.length/4)};});
 assert.equal(shown.entrance,'none');assert.ok(shown.red>.05,'source visible after reveal reset '+JSON.stringify(shown));
 // Lyric cut details show the mask section with the display-area hint.
-await page.locator('#lineList .cut-details-open').first().click();await section.locator('summary').click();
+await page.locator('#lineList .cut-details-open').first().click();await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
 await modal.getByRole('button',{name:lang?'Cancel':'キャンセル',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(lang||'ja','cut mask passed');await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

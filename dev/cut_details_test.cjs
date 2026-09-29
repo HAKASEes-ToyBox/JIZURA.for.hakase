@@ -25,16 +25,21 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await modal.locator('[data-detail-field="text"]').fill('編集したカット');
   await modal.locator('[data-detail-field="opacity"]').fill('42');
   await modal.locator('[data-detail-field="blend"]').selectOption('overlay');
+  await modal.locator('[data-detail-tab="motion"]').click();
   await modal.locator('[data-detail-field="hold"]').selectOption('still');
+  await modal.locator('[data-detail-tab="placement"]').click();
   await modal.locator('[data-detail-field="area.w"]').fill('0.6');
   await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();
   const saved=await page.evaluate(()=>{J.uiApi.replan();return J.ui.plan.cuts.filter(c=>c.line>=0&&Number.isInteger(c.part)).map(c=>({text:c.text,opacity:c.opacity,blend:c.blend,area:c.area}));});
   assert.equal(saved[0].text,'編集したカット');assert.equal(saved[0].opacity,42);assert.equal(saved[0].blend,'overlay');assert.equal(saved[0].area.w,.6);assert.notEqual(saved[1].text,saved[0].text);
   for(const layer of ['foreground','media']){
     await timelineAction(page,`[data-layer="${layer}"]`,'details');
-    await modal.locator('[data-detail-field="technique"]').selectOption('beatPulse');
-    await modal.locator('[data-detail-field="bpm"]').fill('90');
-    await modal.locator('[data-detail-field="placement.angle"]').fill('25');
+    await modal.locator('[data-detail-tab="motion"]').click();
+  await modal.locator('[data-detail-field="technique"]').selectOption('beatPulse');
+    await modal.locator('[data-detail-tab="other"]').click();
+  await modal.locator('[data-detail-field="bpm"]').fill('90');
+    await modal.locator('[data-detail-tab="placement"]').click();
+  await modal.locator('[data-detail-field="placement.angle"]').fill('25');
     await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();
     const value=await page.evaluate(layer=>{J.uiApi.replan();return J.ui.plan[layer].cuts[0];},layer);
     assert.equal(value.technique,'beatPulse');assert.equal(value.bpm,90);assert.equal(value.placement.angle,25);

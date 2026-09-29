@@ -808,6 +808,7 @@ function openCutDetails(layer,index,part=0) {
   const disabledChoices=[];
   let removedDetail = null;
   const openDetails = new Map();
+  let activeDetailTab='basic';
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
@@ -1305,6 +1306,49 @@ function openCutDetails(layer,index,part=0) {
       if(value===undefined)continue;
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
+    const categories=[
+      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
+      ['placement',L('配置・サイズ','Position / size'),['area','placement','contentScale']],
+      ['style',L('スタイル','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
+      ['motion',L('モーション','Motion'),['technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
+      ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
+      ['decor',L('装飾','Decorations'),['decor']],
+      ['mask',L('マスク','Mask'),['mask']],
+      ['other',L('その他','Other'),[]],
+    ];
+    const tabs=document.createElement('div');tabs.className='cut-details-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',L('編集項目','Edit categories'));
+    const panels=new Map(),tabButtons=new Map();
+    for(const node of [...grid.children]){
+      const field=(node.dataset.detailSection || node.querySelector('[data-detail-field]')?.dataset.detailField || '').split('.')[0];
+      const category=categories.find(([, ,fields])=>fields.includes(field)) || categories.at(-1);
+      if(!panels.has(category[0])){
+        const panel=document.createElement('div');panel.className='cut-details-grid cut-details-tab-panel';panel.dataset.detailTabPanel=category[0];
+        panel.id=`cut-detail-panel-${category[0]}`;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',`cut-detail-tab-${category[0]}`);panels.set(category[0],panel);
+      }
+      panels.get(category[0]).append(node);
+    }
+    grid.replaceWith(tabs);
+    const selectTab=(id,focus=false)=>{
+      activeDetailTab=id;
+      for(const [key,panel] of panels){panel.hidden=key!==id;const button=tabButtons.get(key);button.setAttribute('aria-selected',String(key===id));button.tabIndex=key===id?0:-1;}
+      if(focus)tabButtons.get(id).focus();
+    };
+    for(const [id,title] of categories){
+      if(!panels.has(id))continue;
+      const button=document.createElement('button');button.type='button';button.id=`cut-detail-tab-${id}`;button.dataset.detailTab=id;button.textContent=title;button.setAttribute('role','tab');button.setAttribute('aria-controls',panels.get(id).id);
+      button.onclick=()=>selectTab(id);tabs.append(button);tabButtons.set(id,button);form.append(panels.get(id));
+    }
+    tabs.addEventListener('keydown',e=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+      e.preventDefault();const keys=[...tabButtons.keys()],i=keys.indexOf(activeDetailTab);
+      selectTab(keys[e.key==='Home'?0:e.key==='End'?keys.length-1:(i+(e.key==='ArrowRight'?1:-1)+keys.length)%keys.length],true);
+    });
+    selectTab(panels.has(activeDetailTab)?activeDetailTab:panels.keys().next().value);
+    // Browser validation must reveal the relevant panel before focusing its input.
+    form.addEventListener('invalid',e=>{
+      const panel=e.target.closest('[data-detail-tab-panel]');if(panel)selectTab(panel.dataset.detailTabPanel);
+      for(let node=e.target.parentElement;node&&node!==form;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+    },true);
     for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape],select[data-mask-field]')){
       const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
       attachDetailRandom(select,path);

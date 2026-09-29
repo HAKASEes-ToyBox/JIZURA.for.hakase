@@ -32,12 +32,12 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await modal.locator('[data-detail-field="opacity"]').fill('42');await modal.locator('[data-detail-field="opacity"]').dispatchEvent('change');
   await page.waitForTimeout(250);
   assert.deepEqual([(await state()).text,(await state()).opacity],['プレビュー反映',42]);
-  await modal.locator('[data-detail-field="hold"]').selectOption('still');assert.equal((await state()).hold,'still');
+  await modal.locator('[data-detail-tab="motion"]').click();await modal.locator('[data-detail-field="hold"]').selectOption('still');assert.equal((await state()).hold,'still');
   assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);
   // Scrolling the settings keeps the preview in the same place, fully in view.
   const before=await pane.locator('canvas').boundingBox();
   await form.evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.waitForTimeout(100);
-  assert.ok(await form.evaluate(el=>el.scrollTop>0),'settings scroll');
+  assert.ok(await form.evaluate(el=>Math.abs(el.scrollTop-Math.max(0,el.scrollHeight-el.clientHeight))<=1),'settings scroll to bottom when the selected tab overflows');
   const after=await pane.locator('canvas').boundingBox();
   assert.deepEqual([Math.round(after.x),Math.round(after.y)],[Math.round(before.x),Math.round(before.y)]);
   assert.ok(after.y>=0&&after.y+after.height<=viewport.height&&after.height>40,'preview visible '+JSON.stringify(after));
@@ -48,7 +48,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   // Foreground / background: technique changes show in the preview, Apply saves them.
   for(const layer of ['foreground','media']){
     await timelineAction(page,`[data-layer="${layer}"]`,'details');
-    await modal.locator('[data-detail-field="technique"]').selectOption('kenBurns');
+    await modal.locator('[data-detail-tab="motion"]').click();await modal.locator('[data-detail-field="technique"]').selectOption('kenBurns');
     assert.equal((await state()).technique,'kenBurns');
     assert.equal(await page.evaluate(()=>{const d=document.querySelector('#cutDetailsDialog');return d.cutPreview.plan!==J.ui.plan;}),true);
     await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();

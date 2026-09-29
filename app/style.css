@@ -465,6 +465,12 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
 .cut-mask-motion h4 { margin: 0 0 4px; font-size: 13px; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
+.cut-details-tabs { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: -24px; z-index: 2; background: #191b20; padding: 10px 0; margin-bottom: 14px; border-bottom: 1px solid #45474e; }
+.cut-details-tabs button { padding: 7px 10px; font-size: 12px; }
+.cut-details-tabs button[aria-selected=true] { color: #ffb000; border-color: #ffb000; background: #302719; }
+.cut-details-tab-panel[hidden] { display: none; }
+@media (max-width: 860px) { .cut-details-tabs { top: -16px; } }
+@media (max-width: 600px) { .cut-details-tabs { top: -12px; gap: 4px; } .cut-details-tabs button { padding: 6px 8px; font-size: 11px; } }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .cut-details-preview { border-right: 0; border-bottom: 1px solid #33353b; padding: 14px 16px; overflow: visible; }
