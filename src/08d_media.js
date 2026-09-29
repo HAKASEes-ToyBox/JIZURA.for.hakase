@@ -67,13 +67,15 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   let placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
   // Foregrounds follow a scene composition (split, corner, inset, hero…) that the lyrics then fit around.
   if (!background && J.pickComposition) {
-    const comp = J.pickComposition(cut, plan, layer, item.croppedEdges);
+    const comp = J.pickComposition(cut, plan, layer, item.croppedEdges, J.backgroundSceneAt ? J.backgroundSceneAt(project, plan, cut.start, cut.end) : null);
     cut.composition = comp.id;
+    if (comp.bg) cut.compositionZone = comp.zone;
     placement = J.compositionPlacement(comp, cut, fit, dynamic);
   }
   // Backgrounds use framing patterns (whole, fill, zooms anchored to sides or corners, detail crops).
-  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit);
   const edges = item.croppedEdges || {}, crop = .2;
+  const cropped = ['left', 'right', 'top', 'bottom'].some(edge => edges[edge] === true);
+  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit, { dynamic: settings.dynamicBackground !== false && !cropped });
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges
   // leave the middle 60% in frame, enlarging proportionally when necessary.
@@ -230,6 +232,10 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       // Old locks without a stored placement retain their original centered framing.
       cut.placement = J.normalizeMediaPlacement(ov.lockedPlacement);
       cut.placementMode = ov.lockedPlacementMode || (cut.placement ? 'auto' : 'default');
+      // A locked dynamic background keeps its window and the scene data lyrics compose against.
+      if (ov.lockedLayout && layer === 'media') {
+        cut.bgLayout = JSON.parse(JSON.stringify(ov.lockedLayout)); cut.mask = JSON.parse(cut.bgLayout.sig); cut.composition = 'layout:' + cut.bgLayout.id;
+      }
     } else if (cut.technique && !['none', 'legacy'].includes(cut.technique) && cut.effectSettings?.autoPlacement !== false) {
       cut.placement = J.autoMediaPlacement(project, cut, (findItem(cut.itemId)?.type==='copy'?{...findItem(cut.itemId),width:lyricPlan.W,height:lyricPlan.H}:findItem(cut.itemId)), lyricPlan, layer);
       cut.placementMode = 'auto';
@@ -546,6 +552,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
 J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = J.mediaAt(plan, t, layer)) => {
   if (!J.mediaSourceAvailable(cut)) return false;
   owner ||= {};
+  owner.maskHandled = null;
   const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
@@ -566,8 +573,16 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
   J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
   const p = J.clamp((t - cut.start) / cut.transDur);
+  // A windowed background (mask) dissolves into the next one with each side keeping its own window;
+  // masking the blended frame with only the new cut's mask would cut the old picture off at once.
+  const masked = layer === 'media' && !previewEdit && J.maskMediaLayer && (J.activeMask(prev) || J.activeMask(cut));
+  if (masked) { J.maskMediaLayer(A, prev, Math.max(prev.start, prev.end - 0.001), plan); J.maskMediaLayer(B, cut, t, plan); owner.maskHandled = cut; }
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
-  if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
+  if (masked) {
+    // Premultiplied dissolve: A·(1−p) + B·p, so the old window fades out where the new one is not.
+    ctx.globalAlpha = 1 - J.smooth(0, 1, p); ctx.drawImage(A, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
+  } else if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
     ctx.drawImage(A, 0, 0); ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else {
     const st = plan.style, sc = st.schemes[0];

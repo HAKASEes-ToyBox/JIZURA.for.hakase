@@ -596,7 +596,7 @@ function timelineMarkers() {
 // planning applies it under the user's own edits, so only direct operations on the cut change it.
 // Direct operations (re-roll, details, position) keep it locked and capture the new look afterwards.
 const LYRIC_UNLOCK = { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined, lockedEffects: undefined, lockedUnits: undefined };
-const MEDIA_UNLOCK = { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined, lockedEffects: undefined };
+const MEDIA_UNLOCK = { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedLayout: undefined, lockedItemId: undefined, lockedEffects: undefined };
 function lyricLockPatch(index, plan = S.plan) {
   const line = plan.lines[index], cuts = plan.cuts.filter(c => c.line === index && Number.isInteger(c.part));
   return { lock: true, lockedSeed: line.seed,
@@ -608,7 +608,7 @@ function lyricLockPatch(index, plan = S.plan) {
 function mediaLockPatch(layer, index, plan = S.plan) {
   const cut = plan[layer].cuts[index];
   return { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure,
-    lockedPlacement: cut.placement, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId, lockedEffects: J.cutLockSnapshot(cut, layer, plan) };
+    lockedPlacement: cut.placement, lockedPlacementMode: cut.placementMode, lockedLayout: cut.bgLayout && JSON.parse(JSON.stringify(cut.bgLayout)), lockedItemId: cut.itemId, lockedEffects: J.cutLockSnapshot(cut, layer, plan) };
 }
 // After a direct operation on a still-locked cut: plan once with the change, then lock that result.
 function relock(layer, index) {
@@ -699,7 +699,7 @@ function mediaCutOptions(layer, index) {
 function rerollMediaCut(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
-  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedItemId: options.lockedItemId } : {}) }, layer);
+  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedLayout: options.lockedLayout, lockedItemId: options.lockedItemId } : {}) }, layer);
   relock(layer, index);
   replan(); seek(cut.start + 0.001);
 }
@@ -1928,7 +1928,10 @@ function applyAreaEditor(following) {
   if (kind !== 'lyric') {
     for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
       if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
-      mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined }, kind);
+      // The placement becomes manual; an automatic layout's window stays with it as the cut's own mask.
+      const auto = S.plan[kind].cuts[i], window = kind === 'media' && auto?.bgLayout && auto.mask && JSON.stringify(auto.mask) === auto.bgLayout.sig ? auto.mask : null;
+      const details = window ? { ...(S.project[kind].cutOverrides[i]?.details || {}), mask: JSON.parse(JSON.stringify(window)) } : null;
+      mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined, ...(details ? { details } : {}) }, kind);
     }
     relock(kind, index);
   } else {
@@ -3107,6 +3110,14 @@ function renderMediaEffects(layer) {
     row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('装飾を有効にする', 'Enable decorations')}<small>${L('「自動」の画像・動画に、下の「装飾」でチェックした装飾を付けます。', 'Adds the decorations checked below to Auto images and videos.')}</small></span>`;
     row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.decor = e.target.checked; S.project[layer].effects = next; replan(); };
     setting('autoPlacement').closest('label').before(row);
+  }
+  if (layer === 'media') {
+    // Dynamic framing: automatic backgrounds may also be masked into windows (circle, half, band…) that
+    // the lyrics and foreground compose around, next to the plain zoom / pan patterns.
+    const dynamic = document.createElement('label'); dynamic.className = 'check';
+    dynamic.innerHTML = `<input type="checkbox" data-media-setting="dynamicBackground" ${settings.dynamicBackground !== false ? 'checked' : ''} ${settings.autoPlacement === false ? 'disabled' : ''}><span>${L('背景をダイナミックに配置', 'Dynamic background framing')}<small>${L('拡大縮小やマスク（円・半分・帯など）で背景を切り取り、歌詞・前景をそれに合わせて配置する候補を、自動配置の抽選に加えます。', 'Adds framings that mask the background into windows (circle, half, band…) with lyrics and foreground composed around them to the automatic placement lottery.')}</small></span>`;
+    dynamic.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.dynamicBackground = e.target.checked; S.project[layer].effects = next; replan(); };
+    setting('autoPlacement').closest('label').after(dynamic);
   }
   if (layer === 'media') {
     const row = document.createElement('label'); row.className = 'check';

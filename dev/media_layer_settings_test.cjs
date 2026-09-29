@@ -33,6 +33,8 @@ const assert = require('node:assert/strict');
       await page.locator('#fileProject').setInputFiles({name:'shared.jizura.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(legacy))});
       await page.waitForFunction(() => J.ui.plan.foreground.cuts.length === 6);
       const snapshot = layer => page.evaluate(layer => ({project:J.ui.project[layer],cuts:J.ui.plan[layer].cuts}), layer);
+      // The foreground composes with the background's dynamic layouts: when the background tab changes, only the foreground's placement may follow.
+      const settingsOnly = (s, layer) => layer === 'media' ? JSON.parse(JSON.stringify(s, (k, v) => ['placement', 'composition', 'compositionZone', 'placementMode'].includes(k) ? undefined : v)) : s;
       for (const layer of ['foreground','media']) {
         const initial = await snapshot(layer);
         // Settings added since then take their defaults; every old shared value survives.
@@ -78,7 +80,8 @@ const assert = require('node:assert/strict');
         }
         await panel.locator('[data-media-setting="autoPlacement"]').check();
         assert.ok((await snapshot(layer)).cuts.every(c => c.placementMode === 'auto'));
-        assert.deepEqual(await snapshot(other), untouched, 'sliders and automatic placement must stay local to the tab');
+        // The foreground composes with the background's dynamic layouts, so its placement follows the background tab's automatic placement.
+        assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'sliders and automatic placement must stay local to the tab');
 
         await panel.locator('[data-media-action="disable"]').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'));
@@ -101,7 +104,7 @@ const assert = require('node:assert/strict');
         const afterShuffle = await snapshot(layer);
         assert.notDeepEqual(afterShuffle.cuts.map(c => c.placement), beforeShuffle.cuts.map(c => c.placement));
         assert.deepEqual(afterShuffle.project.effects, beforeShuffle.project.effects);
-        assert.deepEqual(await snapshot(other), untouched, 'tab shuffle must not change the other layer or its material order');
+        assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'tab shuffle must not change the other layer or its material order');
       }
       const beforeGlobal = {foreground:await snapshot('foreground'),media:await snapshot('media')};
       await page.locator('#btnShuffle').click();

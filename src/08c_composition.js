@@ -131,12 +131,15 @@ J.BACKGROUND_PATTERNS = [
 ];
 // fit: the source fitted to the stage (stage fractions). Never smaller than the whole source, never an
 // exposed edge on an enlarged axis, never cropped on a smaller one.
-J.backgroundPlacement = (cut, plan, fit) => {
+// options.dynamic: the dynamic background layouts (08cb_background_layouts) join the lottery.
+J.backgroundPlacement = (cut, plan, fit, options = {}) => {
   const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
   const last = memo.background?.index === cut.index - 1 ? memo.background : null;
-  const pick = (seed, avoid) => J.rng(J.h(seed, 877)).wpick(J.BACKGROUND_PATTERNS.filter(p => p.id !== avoid).map(p => [p, p.weight]));
+  const pool = [...J.BACKGROUND_PATTERNS, ...(options.dynamic && J.backgroundLayoutPool ? J.backgroundLayoutPool(cut, plan) : [])];
+  const pick = (seed, avoid) => J.rng(J.h(seed, 877)).wpick(pool.filter(p => p.id !== avoid).map(p => [p, p.weight]));
   const base = pick(cut.seed, last?.baseId), pattern = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
   memo.background = { index: cut.index, id: pattern.id, baseId: base.id };
+  if (pattern.layout) return J.layoutPlacement(pattern, cut, plan, fit);
   const rng = J.rng(J.h(J.placementSeed(cut), 879)), fill = Math.max(1 / fit.w, 1 / fit.h);
   // mediaPlacementRect caps a side at 4x the stage, so stay under it or the rect shrinks and exposes an edge.
   const scale = pattern.zoom[1] <= 0 ? 1 : Math.max(1, Math.min(fill * rng.range(...pattern.zoom), 4 / Math.max(fit.w, fit.h)));
@@ -151,7 +154,9 @@ const lastPick = new WeakMap();
 // Deterministic per cut seed; avoids repeating the previous cut's composition in the same plan and layer.
 // The chain runs on each cut's own seed ("base"), so re-laying out one cut (placement seed) never
 // changes its neighbours; that cut alone re-picks, avoiding the previous cut's actual composition.
-J.pickComposition = (cut, plan, layer = 'foreground', edges = null) => {
+// bgScene: the background layout showing with this foreground (08cb); its window-aware compositions
+// (inside the window, or breaking out of its frame) replace the usual ones so lyrics and foreground fit it.
+J.pickComposition = (cut, plan, layer = 'foreground', edges = null, bgScene = null) => {
   const portrait = (plan?.W || 1920) < (plan?.H || 1080);
   const memo = plan && typeof plan === 'object' ? (lastPick.get(plan) || (lastPick.set(plan, {}), lastPick.get(plan))) : {};
   const last = memo[layer]?.index === cut.index - 1 ? memo[layer] : null;
@@ -159,6 +164,9 @@ J.pickComposition = (cut, plan, layer = 'foreground', edges = null) => {
   const pick = (seed, avoid) => { const list = pool.filter(c => c.id !== avoid); return J.rng(J.h(seed, 881)).wpick((list.length ? list : pool).map(c => [c, c.weight[portrait ? 1 : 0]])); };
   const base = pick(cut.seed, last?.baseId);
   let comp = Number.isFinite(cut.placementSeed) ? pick(J.placementSeed(cut), last?.id) : base;
+  // With a background layout the window compositions take over. The chain above stays on the usual
+  // pool, so what a neighbour avoids never depends on the background (re-laying out one cut leaves the rest).
+  if (layer === 'foreground' && !edges && bgScene?.comps?.length) comp = J.rng(J.h(J.placementSeed(cut), 882)).wpick(bgScene.comps.map(c => [c, c.weight[portrait ? 1 : 0]]));
   // A foreground shown with an emphasised lyric sometimes goes large together with it.
   const emphasised = layer === 'foreground' && plan?.cuts?.some(c => c.emphasis && c.line >= 0 && c.start < cut.end && c.end > cut.start);
   if (emphasised && last?.id !== J.EMPHASIS_COMPOSITION.id && J.rng(J.h(J.placementSeed(cut), 885))() < .4) comp = J.EMPHASIS_COMPOSITION;
@@ -169,7 +177,8 @@ J.pickComposition = (cut, plan, layer = 'foreground', edges = null) => {
 J.compositionPlacement = (comp, cut, fit, dynamic) => {
   const rng = J.rng(J.h(J.placementSeed(cut), 883));
   let extent = rng.range(...comp.fg.size) * (dynamic ? .85 : 1);
-  let s = extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
+  // A window slot (fg.box): the foreground is fitted to the box, size being a share of that fit.
+  let s = comp.fg.box ? Math.min(comp.fg.box.w / fit.w, comp.fg.box.h / fit.h) * extent : extent / Math.max(fit.w, fit.h), w = fit.w * s, h = fit.h * s;
   // Keep the base frame inside the safe area (motion may still move it).
   const k = Math.min(1, .95 / w, .95 / h); w *= k; h *= k;
   const inside = (c, e) => J.clamp(c, e / 2 + .026, .974 - e / 2);// just inside the .025 safe edge

@@ -25,7 +25,9 @@ const assert = require('node:assert/strict');
             for(const cut of first) {
               const r=J.mediaPlacementRect(cut.placement,width,height,W,H);
               if(Math.abs(r.w*W/(r.h*H)-width/height)>1e-8)failures.push('aspect ratio changed');
-              if(layer==='media') {
+              if(layer==='media' && cut.bgLayout) {
+                // A dynamic layout fills its mask window (background_layout_test); the whole-stage rules are for plain framings.
+              } else if(layer==='media') {
                 const fit=J.mediaPlacementRect(null,width,height,W,H);
                 if(r.w<fit.w-1e-9||r.h<fit.h-1e-9)failures.push('background smaller than 100% full fit');
                 for(const [start,extent] of [[r.x,r.w],[r.y,r.h]]) {

@@ -119,7 +119,9 @@ class Renderer {
       for (const cut of J.mediaCutsAt(plan, t, 'media').filter(J.mediaSourceAvailable)) {
         mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
         J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit, cut);
-        if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, cut, t, plan);
+        // A transition between windowed cuts has already masked each side (drawMedia).
+        const masked = this.maskHandled === cut; this.maskHandled = null;
+        if (!opt.previewEdit && J.maskMediaLayer && !masked) J.maskMediaLayer(mediaLayer, cut, t, plan);
         ctx.globalAlpha=cut.opacity/100;
         ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[cut.blend] || 'source-over';
         ctx.drawImage(mediaLayer,0,0);
