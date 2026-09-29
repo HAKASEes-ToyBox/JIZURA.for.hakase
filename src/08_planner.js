@@ -238,7 +238,20 @@ J.lyricArea = area => {
     lockAspect: area.lockAspect !== false };
 };
 
-J.plan = (project, audio) => {
+J.plan = (project, audio, chain) => {
+  // Re-rolling one lyric of a 1シーン group changes only that lyric's effects: the plan is first made without those
+  // re-rolls, and the lyrics that follow keep the effects (and the block's shared looks) that plan gave them.
+  if (!chain) {
+    const rerolled = new Set(Object.entries(project.overrides || {}).filter(([k, o]) => (o.seed | 0) && !(o.lock && o.lockedSeed != null)).map(([k]) => +k)
+      .filter(k => J.parseLyrics(project.lyrics).lines[k]?.group != null));
+    if (rerolled.size) {
+      const overrides = { ...project.overrides };
+      for (const k of rerolled) overrides[k] = { ...overrides[k], seed: 0 };
+      const log = { lines: [], blockLooks: null };
+      J.plan({ ...project, overrides }, audio, { record: log });
+      chain = { replay: log, rerolled };
+    }
+  }
   const st = J.resolveStyle(project);
   const fx = Object.assign({}, J.defaultProject().fx, project.fx || {});
   const parsed = J.parseLyrics(project.lyrics);
@@ -277,11 +290,13 @@ J.plan = (project, audio) => {
     return best;
   };
   const history = [], bgHistory = [], fxHistory = [];
+  const rerolled = li => !!chain?.rerolled?.has(li);
   // 統一感重視: lyrics of one block (a 1シーン group, or the lyrics between blank lines) that have the same
   // emphasis share their effects; repeats are favoured and fewer background / colour switches happen.
   const unified = project.themeBalance === 'unified';
   UNITY = unified;
   const blockLooks = new Map(), cutBlock = new Map();
+  if (chain?.replay?.blockLooks) for (const [k, v] of chain.replay.blockLooks) blockLooks.set(k, { ...v });
   let paragraph = 0;
   let schemeIdx = 0;
   const nSchemes = st.schemes.length;
@@ -301,6 +316,7 @@ J.plan = (project, audio) => {
     const area = J.lyricArea(ov.area), layoutW = area ? W * area.w : W, layoutH = area ? H * area.h : H;
     const lineSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, li + 1, ov.seed | 0);
     const rng = J.rng(lineSeed);
+    const chainMark = chain ? { h: history.length, b: bgHistory.length, f: fxHistory.length } : null;
     const n = [...ln.text.replace(/\s+/g, '')].length;
     const cutTimes = (project.timing && project.timing.cutTimes) || {};
     const interludeTime = cutTimes[`${li}:interlude`];
@@ -345,11 +361,11 @@ J.plan = (project, audio) => {
     if (nSchemes > 1 && li > 0 && rng.chance(fx.bgSwitch * (ln.impact ? 1.8 : 1) * (unified ? .4 : 1))) schemeIdx = (schemeIdx + 1 + rng.int(0, nSchemes - 2)) % nSchemes;
     const emphLine = ln.impact || ln.emph.length > 0;
     // background graphic: chosen per line, occasionally re-rolled per cut
-    const blockNum = ln.group != null ? 1000 + ln.group : paragraph, blockBg = unified && !ov.bg ? blockLooks.get('bg|' + blockNum) : null;
+    const blockNum = ln.group != null ? 1000 + ln.group : paragraph, blockBg = unified && !ov.bg && !rerolled(li) ? blockLooks.get('bg|' + blockNum) : null;
     let lineBg = ov.bg && J.BG[ov.bg] ? ov.bg : blockBg ? blockBg.name : pickBg(rng, st, en, fx, bgHistory);
     bgHistory.push(lineBg);
     let lineBgP = blockBg ? blockBg.P : J.BG[lineBg] && J.BG[lineBg].plan ? J.BG[lineBg].plan(rng, st) : {};
-    if (unified && !ov.bg && !blockBg) blockLooks.set('bg|' + blockNum, { name: lineBg, P: lineBgP });
+    if (unified && !ov.bg && !blockBg && !rerolled(li)) blockLooks.set('bg|' + blockNum, { name: lineBg, P: lineBgP });
     let textOffset = 0;
     units.forEach((u, k) => {
       const cs = bounds[k], ce = bounds[k + 1], dur = ce - cs;
@@ -365,7 +381,7 @@ J.plan = (project, audio) => {
       // The effects this block already gave to lyrics of the same emphasis (統一感重視), reused when they still fit.
       const roleIdx = emph ? 1 : suppressed ? 2 : 0, shareKey = blockNum + '|' + roleIdx;
       const share = unified ? (blockLooks.get(shareKey) || (blockLooks.set(shareKey, {}), blockLooks.get(shareKey))) : {};
-      const shareable = unified && !ln.effectsOnly && !txt.includes('\n');
+      const shareable = unified && !ln.effectsOnly && !txt.includes('\n') && !rerolled(li);
       const sharedLayout = shareable && share.layout && J.LAYOUTS[share.layout] && en.layout[share.layout] && J.LAYOUTS[share.layout].fits(nn)
         && !(dur < 0.5 && ['wave', 'ring', 'labels', 'gloss', 'type', 'tile'].includes(share.layout)) ? share.layout : null;
       const layout = ln.effectsOnly || txt.includes('\n') ? 'center' : ov.layout && J.LAYOUTS[ov.layout] ? ov.layout : sharedLayout || pickLayout(rng, st, en, nn, dur, history, emph, u.recap, layoutH > layoutW, ln.note);
@@ -462,10 +478,17 @@ J.plan = (project, audio) => {
       const r2 = J.rng(J.h(lineSeed, 404));
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, part: 'interlude', start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
+    if (chain?.record) chain.record.lines[li] = { h: history.slice(chainMark.h), b: bgHistory.slice(chainMark.b), f: fxHistory.slice(chainMark.f), scheme: schemeIdx };
+    else if (chain?.replay && rerolled(li)) {
+      const r = chain.replay.lines[li];
+      if (r) { history.length = chainMark.h; history.push(...r.h); bgHistory.length = chainMark.b; bgHistory.push(...r.b); fxHistory.length = chainMark.f; fxHistory.push(...r.f); schemeIdx = r.scheme; }
+    }
   });
+  if (chain?.record) chain.record.blockLooks = blockLooks;
+  const looksOf = c => ({ layout: c.layout, params: c.params, decor: c.decor, treat: c.treat, treatP: c.treatP });
   // 統一感重視, last touch: a layout only fits some text lengths, so a block may have had to leave its shared layout
   // for one cut. Give every lyric of the same block and emphasis the one layout (and decor / treatment) that fits them all.
-  if (unified) {
+  if (unified && !chain?.replay) {
     const groups = new Map();
     for (const [cut, info] of cutBlock) (groups.get(info.key) || groups.set(info.key, []).get(info.key)).push(cut);
     for (const [key, cuts] of groups) {
@@ -493,6 +516,12 @@ J.plan = (project, audio) => {
         }
       }
     }
+  }
+  if (chain?.record) chain.record.cuts = new Map(plan.cuts.filter(c => c.line >= 0).map(c => [c.line + ':' + c.part, looksOf(c)])), chain.record.seeds = new Map(plan.cuts.filter(c => c.line >= 0).map(c => [c.line + ':' + c.part, c.seed]));
+  else if (chain?.replay?.cuts) for (const c of plan.cuts) {
+    if (c.group != null && chain.replay.seeds.has(c.line + ':' + c.part)) c.placementBase = chain.replay.seeds.get(c.line + ':' + c.part);
+    const l = c.line >= 0 && !rerolled(c.line) && chain.replay.cuts.get(c.line + ':' + c.part);
+    if (l) Object.assign(c, l);
   }
   for(const [line,end] of tm.insertionEnds.entries())if(end!=null){
     const start=tm.starts[line];

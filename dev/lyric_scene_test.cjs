@@ -75,7 +75,13 @@ const result=await page.evaluate(()=>{
   const p=build(5,{seed:4}),a=JSON.stringify(group(run(p)).map(c=>c.area)),b=JSON.stringify(group(run(p)).map(c=>c.area));check(a===b,'deterministic');
   let changed=0;for(let s=1;s<=12;s++){const q=build(5,{seed:4});q.lyricCutOptions={'0:0':{placementSeed:s}};if(JSON.stringify(group(run(q)).map(c=>c.area))!==a)changed++;}check(changed>=9,'re-roll changes the scene '+changed);}
  // manual areas skip the composition; a locked line keeps its area and the rest keeps clear of it
- {const p=build(4,{seed:2,avoid:true,extra:{overrides:{0:{area:{x:.1,y:.1,w:.5,h:.4,angle:0,lockAspect:true}}}}});check(group(run(p)).every(c=>!c.arrangement),'manual area skips');}
+ // A hand-set area stays exactly as set (the editor and the stage agree); the other lyrics are composed around it.
+ for(const avoid of [true,false]){const manual={x:.08,y:.55,w:.34,h:.22,angle:0,lockAspect:true};
+  for(let seed=1;seed<=6;seed++){const p=build(4,{seed,avoid,extra:{overrides:{1:{area:manual}}}}),G=group(run(p)),fixed=G.filter(c=>c.line===1),rest=G.filter(c=>c.line!==1);
+   check(fixed.length&&fixed.every(c=>JSON.stringify(c.area)===JSON.stringify(manual)&&c.areaMode==='manual'),'manual area kept '+avoid+seed);
+   check(rest.length>=2&&rest.every(c=>c.arrangement),'the rest is composed '+avoid+seed);
+   for(const c of rest.filter(c=>!c.emphasis))check(ov(c.area,manual)<1e-9,'and keeps clear of it '+avoid+seed);}}
+ {const p=build(4,{seed:2,avoid:true,extra:{overrides:{0:{area:{x:.1,y:.1,w:.5,h:.4,angle:0,lockAspect:true}}}}});check(group(run(p)).filter(c=>c.line===0).every(c=>!c.arrangement),'manual area skips');}
  {const base=build(4,{seed:3});const first=group(run(base)),locked=first.filter(c=>c.line===0).map(c=>c.area);
   const p=build(4,{seed:3});p.overrides={0:{lock:true,lockedAreas:Object.fromEntries(first.filter(c=>c.line===0).map(c=>[c.part,c.area])),lockedUnits:{text:TEXT[0],groups:[],recap:false}}};
   const pl=run(p),G=group(pl);check(G.filter(c=>c.line===0).every((c,i)=>JSON.stringify(c.area)===JSON.stringify(locked[i])),'locked area kept');}
