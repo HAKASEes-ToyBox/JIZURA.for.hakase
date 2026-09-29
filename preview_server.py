@@ -1,5 +1,4 @@
-"""Local browser preview: python preview_server.py --port 8766 (no external API).
-To open it from a phone on the same network: python preview_server.py --port 8766 --host 0.0.0.0"""
+"""Local browser preview: python preview_server.py --port 8766 (no external API)."""
 import argparse
 from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -58,8 +57,8 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8765)
-    parser.add_argument('--host', default='127.0.0.1', help='bind address (default: this PC only; 0.0.0.0 = the local network too)')
+    parser.add_argument('--host', default='127.0.0.1', help='Use 0.0.0.0 for LAN preview')
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f'Preview: http://{"127.0.0.1" if args.host == "0.0.0.0" else args.host}:{args.port}/ [{branch_name()}]', flush=True)
+    print(f'Preview: http://{args.host}:{args.port}/ [{branch_name()}]', flush=True)
     server.serve_forever()

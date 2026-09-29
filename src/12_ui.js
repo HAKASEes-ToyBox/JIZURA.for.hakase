@@ -3200,6 +3200,7 @@ function bind() {
   });
   document.addEventListener('click', e => menus.forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
   document.addEventListener('keydown', e => {if(e.key==='Escape')menus.forEach(menu=>{menu.open=false;});});
+  ['fileProject','fileSettings'].forEach(id => J.configurePortableFileInput($(id)));
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
   $('fileProject').addEventListener('change',()=>{$('projectMenu').open=false;});
   document.querySelectorAll('[data-export-dialog]').forEach(button=>button.addEventListener('click',()=>openExportDialog(button.dataset.exportDialog)));
