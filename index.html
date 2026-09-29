@@ -6126,9 +6126,9 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
     // 重ねず1シーン without a foreground: arranged with no overlap; strength blends from the current areas.
-    // Hand-set areas stay as set, unless they collide with each other: a 重ねず group then still packs them apart.
-    const manual=cuts.filter(c=>c.areaMode==='manual'),manualClash=manual.some((c,i)=>manual.slice(i+1).some(d=>overlap(bounds(c.area),bounds(d.area))>1e-8));
-    const result=manualClash?null:arranged(cuts,0);
+    // Hand-set areas always stay as set (even when they overlap each other): the others are composed around them.
+    const manual=cuts.filter(c=>c.areaMode==='manual');
+    const result=arranged(cuts,0);
     if(result){
       result.cuts.forEach((cut,i)=>{
         const a=cut.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true},r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
@@ -6138,7 +6138,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
       continue;
     }
     // Nothing to compose: the hand-set areas are the user's choice, so do not re-pack them.
-    if(manual.length&&!manualClash)continue;
+    if(manual.length)continue;
     if(!boxes.some((box,i)=>boxes.slice(i+1).some(other=>overlap(box,other)>1e-8)))continue;
     const obstacles=foreground?.opacity>0?foreground.cuts.filter(f=>f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
       .map(f=>J.foregroundBounds(project,plan,f)).filter(Boolean).map(b=>{

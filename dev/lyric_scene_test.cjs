@@ -81,6 +81,10 @@ const result=await page.evaluate(()=>{
    check(fixed.length&&fixed.every(c=>JSON.stringify(c.area)===JSON.stringify(manual)&&c.areaMode==='manual'),'manual area kept '+avoid+seed);
    check(rest.length>=2&&rest.every(c=>c.arrangement),'the rest is composed '+avoid+seed);
    for(const c of rest.filter(c=>!c.emphasis))check(ov(c.area,manual)<1e-9,'and keeps clear of it '+avoid+seed);}}
+ // two hand-set areas (even overlapping ones) are both kept, in a 重ねず group too
+ for(const avoid of [true,false])for(let seed=1;seed<=6;seed++){const a1={x:.1,y:.2,w:.4,h:.25,angle:0,lockAspect:true},a2={x:.3,y:.3,w:.4,h:.25,angle:0,lockAspect:true};
+  const G=group(run(build(4,{seed,avoid,extra:{overrides:{1:{area:a1},2:{area:a2}}}})));
+  check(G.filter(c=>c.line===1).every(c=>JSON.stringify(c.area)===JSON.stringify(a1))&&G.filter(c=>c.line===2).every(c=>JSON.stringify(c.area)===JSON.stringify(a2)),'both manual areas kept '+avoid+seed);}
  {const p=build(4,{seed:2,avoid:true,extra:{overrides:{0:{area:{x:.1,y:.1,w:.5,h:.4,angle:0,lockAspect:true}}}}});check(group(run(p)).filter(c=>c.line===0).every(c=>!c.arrangement),'manual area skips');}
  {const base=build(4,{seed:3});const first=group(run(base)),locked=first.filter(c=>c.line===0).map(c=>c.area);
   const p=build(4,{seed:3});p.overrides={0:{lock:true,lockedAreas:Object.fromEntries(first.filter(c=>c.line===0).map(c=>[c.part,c.area])),lockedUnits:{text:TEXT[0],groups:[],recap:false}}};
