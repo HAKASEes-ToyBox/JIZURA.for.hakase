@@ -309,8 +309,15 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   const lockedCut=c=>!!project.overrides?.[c.line]?.lock;
   const arranged=(cuts,maxOverlap)=>{
     if(!J.composeLyricScene)return null;
+    // Locking a line must not move the others: when the scene composed with the locked lines still in it puts them
+    // where they are locked, that composition stands. Otherwise they are fixed obstacles the rest is composed around.
+    const whole=compose(cuts,maxOverlap,c=>c.areaMode==='manual');
+    const near=(a,b)=>a&&b&&['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<.002);
+    if(whole&&whole.cuts.every((c,i)=>!lockedCut(c)||near(whole.rects[i],c.area)))return whole;
+    return compose(cuts,maxOverlap,c=>lockedCut(c)||c.areaMode==='manual');
+  };
+  const compose=(cuts,maxOverlap,fixedCut)=>{
     // A hand-set area (or a locked line) stays exactly where it is; the other lyrics are composed around it.
-    const fixedCut=c=>lockedCut(c)||c.areaMode==='manual';
     const start=cuts[0].start,end=cuts.at(-1).displayEnd,free=cuts.filter(c=>!fixedCut(c));
     if(free.length<2)return null;
     const grown=(b,k)=>{const w=b.w*k,h=b.h*k;return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};};

@@ -4053,11 +4053,11 @@ J.plan = (project, audio, chain) => {
   // Re-rolling one lyric of a 1シーン group changes only that lyric's effects: the plan is first made without those
   // re-rolls, and the lyrics that follow keep the effects (and the block's shared looks) that plan gave them.
   if (!chain) {
-    const rerolled = new Set(Object.entries(project.overrides || {}).filter(([k, o]) => (o.seed | 0) && !(o.lock && o.lockedSeed != null)).map(([k]) => +k)
+    const rerolled = new Set(Object.entries(project.overrides || {}).filter(([k, o]) => o.seed | 0).map(([k]) => +k)
       .filter(k => J.parseLyrics(project.lyrics).lines[k]?.group != null));
     if (rerolled.size) {
       const overrides = { ...project.overrides };
-      for (const k of rerolled) overrides[k] = { ...overrides[k], seed: 0 };
+      for (const k of rerolled) overrides[k] = { ...overrides[k], seed: 0, lock: false };
       const log = { lines: [], blockLooks: null };
       J.plan({ ...project, overrides }, audio, { record: log });
       chain = { replay: log, rerolled };
@@ -4215,7 +4215,8 @@ J.plan = (project, audio, chain) => {
       if (J.EXIT[exit] && J.EXIT[exit].outDur) outDur = J.EXIT[exit].outDur(dur, nn);
       if (inDur + outDur > dur * 0.92) { const f = dur * 0.92 / (inDur + outDur); inDur *= f; outDur *= f; }
       let sch = schemeIdx;
-      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch * (unified ? .3 : 1))) sch = (schemeIdx + 1) % nSchemes;
+      // the palette switch is rolled from its own seed: a hand-set layout / effect skips draws of `rng` and must not shift it
+      if (nSchemes > 1 && k > 0) { const pSwitch = 0.12 * fx.bgSwitch * (unified ? .3 : 1); rng.chance(pSwitch); if (J.rng(J.h(lineSeed, k, 4407)).chance(pSwitch)) sch = (schemeIdx + 1) % nSchemes; }
       const LD = J.LAYOUTS[layout];
       const params = LD.plan(unified ? J.rng(J.h(project.seed | 0, blockNum, roleIdx, 6151)) : rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
       if (txt.includes('\n')) params.sx = 1;
@@ -6081,8 +6082,15 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   const lockedCut=c=>!!project.overrides?.[c.line]?.lock;
   const arranged=(cuts,maxOverlap)=>{
     if(!J.composeLyricScene)return null;
+    // Locking a line must not move the others: when the scene composed with the locked lines still in it puts them
+    // where they are locked, that composition stands. Otherwise they are fixed obstacles the rest is composed around.
+    const whole=compose(cuts,maxOverlap,c=>c.areaMode==='manual');
+    const near=(a,b)=>a&&b&&['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<.002);
+    if(whole&&whole.cuts.every((c,i)=>!lockedCut(c)||near(whole.rects[i],c.area)))return whole;
+    return compose(cuts,maxOverlap,c=>lockedCut(c)||c.areaMode==='manual');
+  };
+  const compose=(cuts,maxOverlap,fixedCut)=>{
     // A hand-set area (or a locked line) stays exactly where it is; the other lyrics are composed around it.
-    const fixedCut=c=>lockedCut(c)||c.areaMode==='manual';
     const start=cuts[0].start,end=cuts.at(-1).displayEnd,free=cuts.filter(c=>!fixedCut(c));
     if(free.length<2)return null;
     const grown=(b,k)=>{const w=b.w*k,h=b.h*k;return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};};
@@ -40458,7 +40466,7 @@ function draw() {
   const edit = S.areaEdit, mediaCut = edit && edit.kind !== 'lyric' && S.plan[edit.kind].cuts[edit.index];
   const previousMedia = mediaCut && { placement: mediaCut.placement, zoom: mediaCut.zoom, hold: mediaCut.hold, enter: mediaCut.enter, exit: mediaCut.exit, trans: mediaCut.trans };
   if (mediaCut) Object.assign(mediaCut, { placement: { cx: edit.draft.x + edit.draft.w / 2, cy: edit.draft.y + edit.draft.h / 2, w: edit.draft.w, h: edit.draft.h, lockAspect: edit.lockAspect, angle: edit.angle }, zoom: 100, hold: 'still', enter: 'cut', exit: 'cut', trans: undefined });
-  try { S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: !!edit || S.playing && S.slow, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit, noForeground: !!edit && edit.kind === 'media' }); }
+  try { S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: !!edit || S.playing && S.slow, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit && edit.kind !== 'lyric', noForeground: !!edit && edit.kind === 'media' }); }
   finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
@@ -41221,6 +41229,8 @@ function openCutDetails(layer,index,part=0) {
       if(lockedField)delete draft[lockedField];
     }
     if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
+    // choosing a palette number replaces a colour set that was captured earlier (lock / pasted effects)
+    if(lyric && !native && field==='scheme') draft.details.palette=null;
     schedulePreview();
   }
   function options(field) {

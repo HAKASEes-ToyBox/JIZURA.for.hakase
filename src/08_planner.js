@@ -242,11 +242,11 @@ J.plan = (project, audio, chain) => {
   // Re-rolling one lyric of a 1シーン group changes only that lyric's effects: the plan is first made without those
   // re-rolls, and the lyrics that follow keep the effects (and the block's shared looks) that plan gave them.
   if (!chain) {
-    const rerolled = new Set(Object.entries(project.overrides || {}).filter(([k, o]) => (o.seed | 0) && !(o.lock && o.lockedSeed != null)).map(([k]) => +k)
+    const rerolled = new Set(Object.entries(project.overrides || {}).filter(([k, o]) => o.seed | 0).map(([k]) => +k)
       .filter(k => J.parseLyrics(project.lyrics).lines[k]?.group != null));
     if (rerolled.size) {
       const overrides = { ...project.overrides };
-      for (const k of rerolled) overrides[k] = { ...overrides[k], seed: 0 };
+      for (const k of rerolled) overrides[k] = { ...overrides[k], seed: 0, lock: false };
       const log = { lines: [], blockLooks: null };
       J.plan({ ...project, overrides }, audio, { record: log });
       chain = { replay: log, rerolled };
@@ -404,7 +404,8 @@ J.plan = (project, audio, chain) => {
       if (J.EXIT[exit] && J.EXIT[exit].outDur) outDur = J.EXIT[exit].outDur(dur, nn);
       if (inDur + outDur > dur * 0.92) { const f = dur * 0.92 / (inDur + outDur); inDur *= f; outDur *= f; }
       let sch = schemeIdx;
-      if (nSchemes > 1 && k > 0 && rng.chance(0.12 * fx.bgSwitch * (unified ? .3 : 1))) sch = (schemeIdx + 1) % nSchemes;
+      // the palette switch is rolled from its own seed: a hand-set layout / effect skips draws of `rng` and must not shift it
+      if (nSchemes > 1 && k > 0) { const pSwitch = 0.12 * fx.bgSwitch * (unified ? .3 : 1); rng.chance(pSwitch); if (J.rng(J.h(lineSeed, k, 4407)).chance(pSwitch)) sch = (schemeIdx + 1) % nSchemes; }
       const LD = J.LAYOUTS[layout];
       const params = LD.plan(unified ? J.rng(J.h(project.seed | 0, blockNum, roleIdx, 6151)) : rng, { text: txt, n: nn, W: layoutW, H: layoutH, dur }, st);
       if (txt.includes('\n')) params.sx = 1;

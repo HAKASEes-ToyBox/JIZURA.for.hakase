@@ -24,6 +24,19 @@ const result=await page.evaluate(()=>{
   check(otherFx===0,name+' '+balance+': other lyrics changed effects '+otherFx);
   check(selfChanged>=total*.7,name+' '+balance+': the lyric itself is re-rolled '+selfChanged+'/'+total);
  }
+ // locking one lyric of a group (also one that was re-rolled) changes neither the placement nor the effects of the others
+ for(const [name,[open,close]] of Object.entries(variants))for(const balance of ['lively','unified']){
+  let moved=0,changed=0;
+  for(const rerolled of [false,true])for(let seed=1;seed<=8;seed++)for(const line of [1,2,3]){
+   const P=J.defaultProject();P.seed=seed;P.themeBalance=balance;P.durationOverride=20;
+   P.lyrics=['[00:00]前の歌詞',open,...texts.map((t,i)=>`[00:${String(3+i*3).padStart(2,'0')}]${t}`),close,'[00:16]後ろの歌詞です'].filter(x=>x!=='').join(T);
+   const sd=rerolled?{seed:1}:{};if(rerolled)P.overrides={[line]:sd};
+   const pl=J.plan(P),a=snap(pl),ln=pl.lines[line],cuts=pl.cuts.filter(c=>c.line===line&&Number.isInteger(c.part));
+   P.overrides={[line]:{...sd,lock:true,lockedSeed:ln.seed,lockedAreas:Object.fromEntries(cuts.map(c=>[c.part,c.area||null])),lockedComposites:Object.fromEntries(cuts.map(c=>[c.part,{blend:c.blend,opacity:c.opacity}])),lockedEffects:Object.fromEntries(cuts.map(c=>[c.part,J.cutLockSnapshot(c,'lyrics',pl)])),lockedUnits:{text:ln.text,groups:cuts.filter(c=>!c.recap).map(c=>c.text),recap:cuts.some(c=>c.recap)}}};
+   const b=snap(J.plan(P));a.forEach((x,i)=>{if(x.line===line)return;if(x.area!==b[i].area)moved++;if(x.fx!==b[i].fx)changed++;});
+  }
+  check(moved===0&&changed===0,'lock '+name+' '+balance+': placement moved '+moved+', effects changed '+changed);
+ }
  // the ordinary (non-group) reroll and unrelated overrides are untouched
  {const P=J.defaultProject();P.seed=4;P.durationOverride=20;P.lyrics=['[00:00]一行目','[00:03]二行目','[00:06]三行目'].join(T);
   const a=snap(J.plan(P));P.overrides={1:{seed:1}};const b=snap(J.plan(P));check(a[1].fx!==b[1].fx||a[1].area!==b[1].area,'a plain line still re-rolls');}
