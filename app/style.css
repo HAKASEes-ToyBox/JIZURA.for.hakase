@@ -768,3 +768,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-transfer-status:empty { display:none; }
 
 #effectFavoritesDialog.favorite-drop-active { outline:3px dashed var(--cyan); outline-offset:-6px; }
+
+/* Read-only playback marker; the textarea remains the sole editable control. */
+.lyrics-editor { position: relative; min-width: 0; }
+.lyrics-editor textarea { display: block; }
+.lyric-playback-highlight { position: absolute; pointer-events: none; overflow: hidden; color: transparent; }
+.lyric-playback-highlight > div { white-space: pre-wrap; overflow-wrap: break-word; }
+.lyric-playback-highlight .lyric-source-row { display: block; min-height: 1em; }
+.lyric-playback-highlight .is-current { background: rgba(245,165,12,.22); box-shadow: inset 3px 0 var(--amber); border-radius: 2px; }

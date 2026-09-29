@@ -339,7 +339,48 @@ function tick(now) {
   }
   if (S.need) { S.need = false; draw(); }
 }
+const lyricPlaybackMarker = { value: null, active: '', rows: [], lines: [] };
+function syncLyricPlaybackHighlight() {
+  const input=$('lyrics'), overlay=$('lyricPlaybackHighlight');
+  if (!input || !overlay) return;
+  const marker=lyricPlaybackMarker, mirror=overlay.firstElementChild;
+  if (document.activeElement===input || !input.clientWidth || input.value!==S.project.lyrics) {
+    overlay.hidden=true; marker.active=''; return;
+  }
+  if (marker.value!==input.value) {
+    marker.value=input.value; marker.active='';
+    marker.lines=J.parseLyrics(input.value).lines;
+    marker.rows=input.value.replace(/\r/g,'').split('\n').map(text=>{
+      const row=document.createElement('span');row.className='lyric-source-row';
+      row.textContent=text || '\u200b';return row;
+    });
+    mirror.replaceChildren(...marker.rows);
+  }
+  const style=getComputedStyle(input);
+  for (const prop of ['font','letterSpacing','lineHeight','textAlign','textIndent','wordSpacing','tabSize','wordBreak','paddingTop','paddingRight','paddingBottom','paddingLeft']) mirror.style[prop]=style[prop];
+  overlay.style.left=input.offsetLeft+input.clientLeft+'px';
+  overlay.style.top=input.offsetTop+input.clientTop+'px';
+  overlay.style.width=input.clientWidth+'px';overlay.style.height=input.clientHeight+'px';
+  const cuts=J.lyricCutsAt(S.plan,S.t).filter(c=>c.line>=0&&Number.isInteger(c.part));
+  const sourceRows=[...new Set(cuts.map(c=>marker.lines[c.line]?.sourceLine).filter(Number.isInteger))];
+  const active=sourceRows.join(',');
+  overlay.hidden=!sourceRows.length;
+  if (marker.active!==active) {
+    marker.rows.forEach((row,i)=>row.classList.toggle('is-current',sourceRows.includes(i)));
+    marker.active=active;
+    // Follow the newest active line while grouped lyrics can retain earlier ones.
+    const latest=cuts.reduce((a,c)=>!a||c.start>a.start?c:a,null);
+    const row=latest && marker.rows[marker.lines[latest.line]?.sourceLine];
+    if (row) {
+      const top=row.offsetTop, bottom=top+row.offsetHeight;
+      if (top<input.scrollTop || bottom>input.scrollTop+input.clientHeight)
+        input.scrollTop=Math.max(0,top-(input.clientHeight-Math.min(row.offsetHeight,input.clientHeight))/2);
+    }
+  }
+  mirror.style.transform=`translate(${-input.scrollLeft}px,${-input.scrollTop}px)`;
+}
 function updateTimeUI() {
+  syncLyricPlaybackHighlight();
   document.querySelectorAll('#layerVisibilityControls button').forEach(button=>button.disabled=!!S.exporting);
   $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
   $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('一時停止','Pause'):J.mediaLabel('再生','Play'));
@@ -3405,6 +3446,8 @@ function bind() {
     if (kind==='empty') input.setSelectionRange(cursor,cursor);
     else input.setSelectionRange(start+before.length,start+before.length+middle.length);
   });
+  for (const event of ['focus','blur','scroll']) $('lyrics').addEventListener(event, syncLyricPlaybackHighlight);
+  new ResizeObserver(syncLyricPlaybackHighlight).observe($('lyrics'));
   $('lyrics').addEventListener('keydown', e => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     if (e.code==='KeyZ' || e.code==='KeyY') {
