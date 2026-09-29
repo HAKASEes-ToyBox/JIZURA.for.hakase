@@ -7310,6 +7310,14 @@ const groups = [
   ['乗算','じょうざん','multiply'],
   ['スクリーン','screen'],
   ['オーバーレイ','overlay'],
+  // Mask pack (詳細 → 背景の演出 → マスク).
+  ['マスク','ますく','マスキング','型抜き','くり抜き','mask','masks','masked','masking'],
+  ['二重露光','多重露光','にじゅうろこう','ダブルエクスポージャー','double exposure','multiple exposure'],
+  ['シネマスコープ','シネスコ','レターボックス','ワイドスクリーン','cinemascope','letterbox','widescreen'],
+  ['パララックス','視差','parallax'],
+  ['ビート','拍子','リズム','beat','beats','rhythm'],
+  ['シャッター','ブラインド','スリット','shutter','shutters','blinds','slit','slits','slat','slats'],
+  ['窓','ウィンドウ','ウインドウ','window','windows'],
 ].map(aliases => [...new Set(aliases.map(normalize))]);
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const aliasGroups = new Map();

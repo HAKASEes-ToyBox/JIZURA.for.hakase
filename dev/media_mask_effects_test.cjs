@@ -2,6 +2,7 @@
 // foreground's), おまかせ and themes can pick them for the background only, and each one draws a masked
 // frame that differs from the plain shot without errors.
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {timelineAction}=require('./ui_helpers.cjs');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const locale of ['', 'en/']){
 const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const url='http://127.0.0.1:8765/'+locale;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'..',locale,'index.html'))}):r.abort());await page.goto(url);
@@ -43,5 +44,14 @@ for(const key of keys)assert.ok(drawn[key]>0,key+' draws a masked frame');
 // The ▶ preview of a mask technique shows it on the background sample.
 const preview=await page.evaluate(()=>{const plan=J.makeEffectPreviewPlan('media','maskRings','media','bg',{motion:1,treatment:1,duration:.45});return (plan.media?.cuts||[]).map(c=>c.technique);});
 assert.ok(preview.includes('maskRings'),'preview plan uses the mask: '+preview);
+// With a theme set, おまかせ turns on that theme's masks for the background and none for the foreground.
+const themedOmakase=await page.evaluate(()=>{const P={...J.ui.project,themes:['ballad']};let bg=0,fg=0;for(let i=0;i<10;i++){const look=J.omakase(P,J.rng(i+7));bg+=J.MEDIA_MASK_KEYS.filter(k=>look.media.effects.enabled[k]).length;fg+=J.MEDIA_MASK_KEYS.filter(k=>look.foreground.effects.enabled[k]).length;}return {bg,fg};});
+assert.ok(themedOmakase.bg>0,'themed おまかせ enables background masks');assert.equal(themedOmakase.fg,0);
+// Fuzzy search in the cut details finds them by category, synonym or English name.
+await timelineAction(page,'[data-layer="media"]','details');await page.locator('#cutDetailsDialog [data-detail-field="technique"]').click();
+const search=page.locator('.detail-search-popup input'),found=async query=>{await search.fill(query);return page.locator('.detail-search-option').evaluateAll(els=>els.map(e=>e.dataset.value));};
+const byCategory=await found(locale?'mask':'マスク');assert.ok(keys.every(k=>byCategory.includes(k)),'category search: '+byCategory);
+for(const [query,key] of [['レターボックス','maskCinemascope'],['letterbox','maskCinemascope'],['多重露光','maskDoubleExposure'],['視差','maskSlashParallax'],['shutter','maskShutterBeat'],['ウィンドウ','maskBeatWindows'],['rings','maskRings']])assert.ok((await found(query)).includes(key),query+' finds '+key);
+await search.press('Escape');await page.locator('#cutDetailsDialog').getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(locale||'ja','mask category, background-only pool, おまかせ, themes and drawing passed');await page.close();}
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
