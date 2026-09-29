@@ -1,4 +1,5 @@
 const {chromium}=require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert=require('node:assert/strict');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -7,7 +8,7 @@ const assert=require('node:assert/strict');
   page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));
   await page.goto('http://127.0.0.1:8765/'+locale);
-  await page.locator('#modePro').click();
+  await proMode(page);
   for(const layer of ['foreground','media']) {
    await page.locator(layer==='foreground'?'#sourceForeground':'#sourceMedia').click();
    await page.locator('#mediaFiles').setInputFiles({name:'phases.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect x="10" y="10" width="90" height="55" fill="red"/><circle cx="65" cy="30" r="20" fill="blue"/></svg>')});

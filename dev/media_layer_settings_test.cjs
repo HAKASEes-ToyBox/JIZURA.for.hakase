@@ -1,4 +1,5 @@
 const {chromium} = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 
 (async () => {
@@ -10,7 +11,7 @@ const assert = require('node:assert/strict');
       await page.route('https://fonts.googleapis.com/**', route => route.fulfill({contentType:'text/css',body:''}));
       await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));
       await page.goto('http://127.0.0.1:8765/' + locale);
-      await page.locator('#modePro').click();
+      await proMode(page);
       for (const layer of ['foreground','media']) {
         await page.locator(layer === 'media' ? '#sourceMedia' : '#sourceForeground').click();
         await page.locator('#mediaFiles').setInputFiles(['cyan','coral','gold'].map(color => ({

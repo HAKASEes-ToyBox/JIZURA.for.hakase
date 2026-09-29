@@ -1,4 +1,5 @@
 const {chromium}=require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert=require('node:assert/strict'), fs=require('node:fs'), path=require('node:path');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -15,8 +16,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   });
   assert.deepEqual(errors,[]);
   const original=await page.evaluate(()=>JSON.stringify(J.ui.project));
-  const detail=page.locator('#timelineLinks [data-action="details"][data-layer="lyrics"]').first();
-  await detail.dispatchEvent('pointerdown', {button:0});
+  await timelineAction(page,'[data-layer="lyrics"]','details');
   const modal=page.locator('#cutDetailsDialog');
   await modal.locator('[data-detail-field="text"]').fill('変更キャンセル');
   await modal.getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
@@ -31,7 +31,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   const saved=await page.evaluate(()=>{J.uiApi.replan();return J.ui.plan.cuts.filter(c=>c.line>=0&&Number.isInteger(c.part)).map(c=>({text:c.text,opacity:c.opacity,blend:c.blend,area:c.area}));});
   assert.equal(saved[0].text,'編集したカット');assert.equal(saved[0].opacity,42);assert.equal(saved[0].blend,'overlay');assert.equal(saved[0].area.w,.6);assert.notEqual(saved[1].text,saved[0].text);
   for(const layer of ['foreground','media']){
-    await page.locator(`#timelineLinks [data-action="details"][data-layer="${layer}"]`).first().dispatchEvent('pointerdown', {button:0});
+    await timelineAction(page,`[data-layer="${layer}"]`,'details');
     await modal.locator('[data-detail-field="technique"]').selectOption('beatPulse');
     await modal.locator('[data-detail-field="bpm"]').fill('90');
     await modal.locator('[data-detail-field="placement.angle"]').fill('25');
@@ -40,7 +40,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
     assert.equal(value.technique,'beatPulse');assert.equal(value.bpm,90);assert.equal(value.placement.angle,25);
   }
   await page.evaluate(()=>{J.ui.project.timelineLinks=[{a:'l:1:0',b:'f:1'}];J.uiApi.replan();});
-  await page.locator('#timelineLinks [data-action="details"][data-layer="foreground"][data-index="1"]').dispatchEvent('pointerdown',{button:0});
+  await timelineAction(page,'[data-layer="foreground"][data-index="1"]','details');
   await modal.locator('[data-detail-field="start"]').fill('4.5');
   await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();
   assert.deepEqual(await page.evaluate(()=>[J.ui.plan.cuts.find(c=>c.line===1&&c.part===0).start,J.ui.plan.foreground.cuts[1].start]),[4.5,4.5]);

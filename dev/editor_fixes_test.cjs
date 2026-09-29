@@ -1,12 +1,13 @@
 // Ctrl+S saves the project; the zoomed timeline follows the playhead while playing; base colours set in the
 // Style tab reach every scheme of the style (opposite-tone schemes take them inverted).
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--autoplay-policy=no-user-gesture-required']});
 try{for(const lang of ['','en/']){
  const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());
- await page.goto(url);await page.locator('#modePro').click();
+ await page.goto(url);await proMode(page);
  // Ctrl+S opens the save dialog, also while typing in the lyrics, and keeps the browser's page save away.
  for(const target of ['body','#lyrics']){
   await page.locator(target).first().focus();

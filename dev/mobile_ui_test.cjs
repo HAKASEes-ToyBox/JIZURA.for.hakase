@@ -1,4 +1,5 @@
 const {chromium}=require('playwright');
+const {proMode,openSource,closeSource,timelineAction}=require('./ui_helpers.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:process.env.EDGE_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -6,7 +7,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
     const mobile=width<1000,page=await browser.newPage({viewport:{width,height:width===844?390:844},isMobile:mobile,hasTouch:mobile});
     page.setDefaultTimeout(8000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.route('**/*',r=>r.request().url()==='http://localhost/'?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'..',lang,'index.html'))}):r.abort());
-    await page.goto('http://localhost/');await page.locator('#modePro')[mobile?'tap':'click']();
+    await page.goto('http://localhost/');await proMode(page);
     const baseline=await page.evaluate(()=>JSON.stringify(J.ui.project));
     const dimensions=await page.evaluate(()=>({width:document.documentElement.scrollWidth,view:document.querySelector('#view').getBoundingClientRect().height}));
     assert(dimensions.width<=width+1,'page overflow '+width);assert(dimensions.view>=120,'preview too small '+width);
@@ -14,14 +15,14 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
     await page.locator('#projectMenu summary')[mobile?'tap':'click']();
     const menu=await page.locator('#projectMenu .header-menu-items').boundingBox();assert(menu.x>=0&&menu.x+menu.width<=width+1,'menu outside screen');
     await page.locator('#projectMenu summary')[mobile?'tap':'click']();
-    await page.locator('#btnThemes')[mobile?'tap':'click']();
+    await openSource(page,'lyrics');await page.locator('#btnThemes')[mobile?'tap':'click']();
     assert(await page.locator('[data-theme=wa]').isVisible());
     const themeOverflow=await page.locator('#themesDlg').evaluate(el=>el.scrollWidth>el.clientWidth+1);assert(!themeOverflow,'theme overflow');
-    await page.locator('#themesDlg button[value=cancel]')[mobile?'tap':'click']();
+    await page.locator('#themesDlg button[value=cancel]')[mobile?'tap':'click']();await closeSource(page);
     await page.locator('#timelineZoomIn')[mobile?'tap':'click']();
     if(mobile){assert(await page.locator('#timelinePan').isEnabled());await page.locator('#timelinePan').fill(await page.locator('#timelinePan').getAttribute('max'));await page.locator('#timelinePan').dispatchEvent('input');assert(await page.locator('#timelineScroll').evaluate(el=>el.scrollLeft>0));}
     await page.locator('#timelineZoomOut')[mobile?'tap':'click']();
-    await page.locator('#timelineLinks [data-action=details][data-layer=lyrics]').first().dispatchEvent('pointerdown',{button:0});
+    await timelineAction(page,'[data-layer="lyrics"]','details');
     const detail=page.locator('#cutDetailsDialog');assert(await detail.isVisible());
     assert(await detail.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'detail overflow');
     await page.locator('[data-detail-field=enter]')[mobile?'tap':'click']();await page.locator('.detail-search-popup input').fill('ぼかし');assert(await page.locator('.detail-search-option').count()>0);

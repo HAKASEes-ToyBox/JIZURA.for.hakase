@@ -1,4 +1,5 @@
 const {chromium}=require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert=require('node:assert/strict'), fs=require('node:fs'), path=require('node:path');
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -19,7 +20,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   const state=()=>page.evaluate(()=>{const c=document.querySelector('#cutDetailsDialog').cutPreview.cut;return {text:c.text,opacity:c.opacity,hold:c.hold,technique:c.technique,start:c.start,end:c.end};});
   const original=await page.evaluate(()=>JSON.stringify(J.ui.project));
   // Lyrics: preview shows this cut, updates before Apply and never touches the project.
-  await page.locator('#timelineLinks [data-action="details"][data-layer="lyrics"]').first().dispatchEvent('pointerdown',{button:0});
+  await timelineAction(page,'[data-layer="lyrics"]','details');
   assert.equal(await pane.isVisible(),true);
   assert.equal(await pane.locator('h2').textContent(),(locale?'Edit cut details — Lyrics':'カットの詳細編集 — 歌詞')+' 1 / 1');
   await page.waitForTimeout(400);
@@ -46,7 +47,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await modal.waitFor({state:'detached'});assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);
   // Foreground / background: technique changes show in the preview, Apply saves them.
   for(const layer of ['foreground','media']){
-    await page.locator(`#timelineLinks [data-action="details"][data-layer="${layer}"]`).first().dispatchEvent('pointerdown',{button:0});
+    await timelineAction(page,`[data-layer="${layer}"]`,'details');
     await modal.locator('[data-detail-field="technique"]').selectOption('kenBurns');
     assert.equal((await state()).technique,'kenBurns');
     assert.equal(await page.evaluate(()=>{const d=document.querySelector('#cutDetailsDialog');return d.cutPreview.plan!==J.ui.plan;}),true);
@@ -55,7 +56,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   }
   // "Show the edited cut only": other layers and lyric cuts disappear; the choice is remembered.
   const colors=()=>pane.locator('canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let green=0,blue=0;for(let i=0;i<d.length;i+=8){if(d[i+1]>150&&d[i]<80&&d[i+2]<80)green++;if(d[i+2]>150&&d[i]<80&&d[i+1]<80)blue++;}return {green,blue};});
-  const open=async layer=>{await page.locator(`#timelineLinks [data-action="details"][data-layer="${layer}"]`).first().dispatchEvent('pointerdown',{button:0});await page.waitForTimeout(350);};
+  const open=async layer=>{await timelineAction(page,`[data-layer="${layer}"]`,'details');await page.waitForTimeout(350);};
   const close=async()=>{await modal.getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();await modal.waitFor({state:'detached'});};
   await open('lyrics');const solo=modal.locator('[data-preview-solo]');
   assert.equal((await modal.locator('.cut-details-solo span').textContent()),locale?'Show the edited cut only':'編集対象単体を表示');

@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 (async () => {
   const browser = await chromium.launch({headless:true, executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -9,7 +10,7 @@ const assert = require('node:assert/strict');
       page.on('console', e => { if(e.type() === 'warning' && e.text().startsWith('media trans')) errors.push(e.text()); });
       await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));
       await page.goto('http://127.0.0.1:8765/' + locale);
-      await page.locator('#modePro').click();
+      await proMode(page);
       const file = {name:'test.svg', mimeType:'image/svg+xml', buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="#ffae42"/><circle cx="35" cy="30" r="22" fill="#185ace"/><path d="M70 10L110 70H50Z" fill="#da185c"/></svg>')};
       for (const layer of ['media','foreground']) {
         await page.locator(layer === 'media' ? '#sourceMedia' : '#sourceForeground').click();

@@ -1,4 +1,5 @@
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));await page.goto(url);
 const result=await page.evaluate(()=>{
@@ -43,7 +44,7 @@ for(let seed=1;seed<=15;seed++){
 return failures;});
 assert.deepEqual(result,[]);
 // Dialog: pick a genre and a theme colour, apply (recolours now), label, palette button, clear, undo.
-await page.locator('#modePro').click();
+await proMode(page);
 const before=await page.evaluate(()=>JSON.stringify(J.ui.project.colors));
 await page.locator('#btnThemes').click();const box=page.locator('#themeChoices .theme-colors');
 assert.equal(await box.locator('legend').textContent(),lang?'Colour':'カラー');

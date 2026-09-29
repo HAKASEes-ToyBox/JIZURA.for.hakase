@@ -1,4 +1,5 @@
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.goto(url);
 const result=await page.evaluate(()=>{
@@ -53,7 +54,7 @@ check(warnings.filter(w=>w.includes('media decor')).length===0,'decor warnings '
 return failures;});
 assert.deepEqual(result,[]);
 // UI: the option sits in Details → Foreground / Background, on by default; manual decor via cut details.
-await page.locator('#modePro').click();
+await proMode(page);
 for(const layer of ['foreground','media']){
  await page.locator(`[data-tab="${layer}Fx"]`).click();const box=page.locator(`#${layer}EffectsPanel [data-media-setting="decor"]`);
  assert.equal(await box.isChecked(),true);assert.ok((await box.locator('xpath=..').textContent()).startsWith(lang?'Enable decorations':'装飾を有効にする'));
@@ -65,7 +66,7 @@ for(const layer of ['foreground','media']){
  await group.locator('[data-media-group-action="off"]').click();assert.equal(await page.locator(`#${layer}EffectsPanel [data-media-group="decor"] .tg-cnt`).textContent(),'0/'+front.length);
 }
 await page.evaluate(()=>{const p=J.ui.project;const img=document.createElement('canvas');img.width=160;img.height=90;J.mediaAssets.set('md',{element:img,type:'image'});p.media={...p.media,items:[{id:'md',name:'md.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'md',technique:'kenBurns'}}};J.uiApi.syncUI();J.uiApi.replan();});
-await page.locator('#timelineLinks [data-action="details"][data-layer="media"]').first().dispatchEvent('pointerdown',{button:0});
+await timelineAction(page,'[data-layer="media"]','details');
 const modal=page.locator('#cutDetailsDialog');const section=modal.locator('[data-detail-section="decor"]');await section.locator('summary').click();
 await section.getByRole('button',{name:lang?'Add decoration':'装飾を追加'}).click();
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();

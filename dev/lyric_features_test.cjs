@@ -1,4 +1,5 @@
 const {chromium} = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 
 (async () => {
@@ -156,7 +157,7 @@ const assert = require('node:assert/strict');
       console.log(locale || 'ja', 'planner, seeking, layering and MP4:', {bytes:result.bytes,cuts:result.cuts});
       await page.locator('#fileProject').setInputFiles({name:'lyrics.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(result.fixture))});
       await page.waitForFunction(()=>J.ui.project.lyrics.includes('Fourth'));
-      await page.locator('#modePro').click();
+      await proMode(page);
       await page.locator('[data-tab="tech"]').click();
       assert.equal(await page.locator('#lyricAutoPlacement').isChecked(),true);
       assert.equal(await page.locator('#lyricAvoidForeground').isChecked(),true);

@@ -1,4 +1,5 @@
 const {chromium} = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -7,7 +8,7 @@ const assert = require('node:assert/strict');
       const page=await browser.newPage({viewport:{width:1500,height:1000}}), errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.goto('http://127.0.0.1:8765/'+locale);
-      await page.locator('#modePro').click();
+      await proMode(page);
       const planning=await page.evaluate(()=>{
         const failures=[], same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
         for(const [width,height,type] of [[1024,1024,'image'],[1920,1080,'image'],[720,1280,'video']]) {

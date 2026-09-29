@@ -1,6 +1,7 @@
 const {chromium}=require('playwright');const assert=require('node:assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
-try{for(const locale of ['', 'en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));await page.goto('http://127.0.0.1:8765/'+locale);await page.locator('#modePro').click();
+try{for(const locale of ['', 'en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://fonts.googleapis.com/**',r=>r.fulfill({contentType:'text/css',body:''}));await page.goto('http://127.0.0.1:8765/'+locale);await proMode(page);
 const result=await page.evaluate(()=>{
  const failures=[],check=(v,msg)=>{if(!v)failures.push(msg)},edges=['left','right','top','bottom'];
  for(const layer of ['media','foreground'])for(const type of ['image','video'])for(const [width,height] of [[1920,1080],[1080,1920],[100,2000],[2000,100]])for(let mask=1;mask<16;mask++)for(let seed=0;seed<8;seed++){

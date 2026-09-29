@@ -153,6 +153,9 @@ function undoMove(direction) {
     S.audio = null; S.audioFile = null; refreshAudioName(); restoreAudioAsset();
   }
   fontKey = ''; syncUI(); replan(); flushSave();
+  // mergeProject normalizes (e.g. favorite payload key order); store the normalized snapshot so the
+  // next undo/redo doesn't see it as a new edit and drop the redo steps.
+  U.list[U.i] = JSON.stringify(S.project);
   U.restoring = false; updateUndoButtons();
 }
 let saveTimer = 0;

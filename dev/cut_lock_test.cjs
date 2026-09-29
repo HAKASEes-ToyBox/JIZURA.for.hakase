@@ -1,6 +1,7 @@
 // Locked cuts change only through direct operations on them (re-roll, details, position); edits elsewhere,
 // inserting or typing lyrics, おまかせ, シャッフル and style changes leave them exactly as they were.
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const root=path.join(__dirname,'..');
 const LOCKED='ねえまだ間に合うかな';
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -9,7 +10,7 @@ try{for(const lang of ['','en/']){
  const scenario=async(name,op,expect)=>{
   const p=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
   const url='http://localhost:8765/'+lang;await p.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());
-  await p.goto(url);await p.locator('#modePro').click();
+  await p.goto(url);await proMode(p);
   await p.evaluate(()=>{const P=J.ui.project;P.lyrics=['夜明けの色を覚えてる','ほどけた声が遠くで鳴った','ねえまだ間に合うかな','透明なままじゃ終われない','この歌で夜をこえてく'].join('\n');
    P.timing.lineTimes={0:1,1:5,2:9,3:13,4:17};P.durationOverride=21;P.lyricEffects={...P.lyricEffects,autoPlacement:true};
    for(const [layer,id,color] of [['foreground','fg','#e33'],['media','bg','#33e']]){const c=document.createElement('canvas');c.width=400;c.height=300;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,400,300);J.mediaAssets.set(id,{element:c,type:'image'});

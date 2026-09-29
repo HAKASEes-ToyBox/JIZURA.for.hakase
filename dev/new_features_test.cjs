@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 
 (async () => {
@@ -11,7 +12,7 @@ const assert = require('node:assert/strict');
         window.queryLocalFonts = async () => [{ family: 'Arial', fullName: 'Arial Regular', postscriptName: 'ArialMT', style: 'Regular' }];
       });
       await page.goto('http://127.0.0.1:8765/' + locale);
-      await page.locator('#modePro').click();
+      await proMode(page);
       await page.locator('[data-tab="out"]').click();
       await page.locator('#outVideoSize').selectOption('1080x1920');
       assert.deepEqual(await page.evaluate(() => J.outputSize(J.ui.project)), [1080, 1920]);

@@ -1,4 +1,5 @@
 const {chromium} = require('playwright');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const assert = require('node:assert/strict');
 
 (async () => {
@@ -124,7 +125,7 @@ const assert = require('node:assert/strict');
       };
       const project=()=>page.evaluate(()=>structuredClone(J.ui.project));
       const cuts=()=>page.evaluate(()=>J.ui.plan.cuts.filter(c=>Number.isInteger(c.part)).map(c=>({line:c.line,part:c.part,blend:c.blend,opacity:c.opacity})));
-      await page.locator('#modePro').click();
+      await proMode(page);
       await load({...report.fixture,lyricEffects:{}});
       assert.equal(await page.locator('#lyricBlend, #lyricOpacity').count(),0,'global lyric controls are removed');
       const first=page.locator('.lyric-cut-option[data-line="0"][data-part="0"]');

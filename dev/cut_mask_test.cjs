@@ -1,4 +1,5 @@
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {openSettings,closeSettings,proMode,timelineAction}=require('./ui_helpers.cjs');
 const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.goto(url);
 const result=await page.evaluate(()=>{
@@ -81,10 +82,10 @@ for(const target of ['cut','source']){
 return failures;});
 assert.deepEqual(result,[]);
 // Editor: enable (adds a circle), add a rectangle, drag it, invert, switch target, apply.
-await page.locator('#modePro').click();
+await proMode(page);
 await page.evaluate(()=>{const p=J.ui.project;const c=document.createElement('canvas');c.width=160;c.height=90;c.getContext('2d').fillStyle='#e33';c.getContext('2d').fillRect(0,0,160,90);J.mediaAssets.set('mk',{element:c,type:'image'});
  p.media={...p.media,items:[{id:'mk',name:'mk.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'mk',technique:'none'}}};J.uiApi.syncUI();J.uiApi.replan();});
-await page.locator('#timelineLinks [data-action="details"][data-layer="media"]').first().dispatchEvent('pointerdown',{button:0});
+await timelineAction(page,'[data-layer="media"]','details');
 const modal=page.locator('#cutDetailsDialog'),section=modal.locator('[data-detail-section="mask"]');
 assert.equal((await section.locator('summary').textContent()),lang?'Mask':'マスク');assert.equal(await section.evaluate(el=>el.open),false);
 await section.locator('summary').click();
@@ -138,7 +139,7 @@ assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.
 assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
 await page.evaluate(()=>{delete J.ui.project.media.cutOverrides[0].details.mask;J.uiApi.replan();});
-await page.locator('#timelineLinks [data-action="details"][data-layer="media"]').first().dispatchEvent('pointerdown',{button:0});
+await timelineAction(page,'[data-layer="media"]','details');
 await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
 await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await page.waitForTimeout(400);await section.locator('[data-mask-motion="entrance"]').selectOption('none');
 assert.equal(await modal.locator('form').evaluate(f=>f.checkValidity()),true);
