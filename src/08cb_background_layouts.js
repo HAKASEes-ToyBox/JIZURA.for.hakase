@@ -36,7 +36,7 @@ J.maskBounds = boundsOf;
 const clip = r => { const x = clamp(r.x, 0, 1), y = clamp(r.y, 0, 1), x2 = clamp(r.x + r.w, 0, 1), y2 = clamp(r.y + r.h, 0, 1); return { x, y, w: x2 - x, h: y2 - y }; };
 const grow = (r, p) => clip({ x: r.x - p, y: r.y - p, w: r.w + 2 * p, h: r.h + 2 * p });
 const union = list => { const x = Math.min(...list.map(r => r.x)), y = Math.min(...list.map(r => r.y)); return { x, y, w: Math.max(...list.map(r => r.x + r.w)) - x, h: Math.max(...list.map(r => r.y + r.h)) - y }; };
-const usable = r => r && r.w >= .08 && r.h >= .08 ? r : null;
+const usable = (r, S = 1) => r && r.w >= .08 && r.h >= .08 && r.w * S >= .16 && r.h >= .16 ? r : null;
 const round = r => r && { x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
 
 // build(r, S) -> { shapes, invert?, zone?, obstacles?, fg?, center? }
@@ -50,17 +50,20 @@ const round = r => r && { x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixe
 const layout = (id, weight, build, mirror = 'xy', keep = false) => ({ layout: true, id, weight, build, mirror, keep });
 const LAYOUTS = [
   // ---- a circle in the middle, lyrics around it
+  // A side strip needs room: on a squarer stage a big circle leaves none, so the lyrics take the strip below it.
   layout('orb', [1.3, 1.1], (r, S) => {
-    const d = r.range(.58, .74), hw = d / S / 2;
-    return { shapes: [disc(S, .5, .5, d)], zone: { x: .03, y: .1, w: .5 - hw - .06, h: .8 } };
+    let d = r.range(.58, .74), hw = d / S / 2;
+    if (.5 - hw - .06 < .24) { d = Math.min(d, r.range(.54, .62)); hw = d / S / 2; }
+    const side = .5 - hw - .06, below = .5 + d / 2 + .04;
+    return { shapes: [disc(S, .5, .5, d)], zone: side >= .24 ? { x: .03, y: .1, w: side, h: .8 } : { x: .08, y: below, w: .84, h: .95 - below } };
   }),
   layout('orbSide', [1.2, 1], (r, S) => {
-    const d = r.range(.62, .8), cx = r.range(.27, .33), hw = d / S / 2, x = cx + hw + .05;
+    const cx = r.range(.27, .33), d = Math.min(r.range(.62, .8), Math.max(.5, 2 * S * (.96 - .05 - cx - .3))), hw = d / S / 2, x = cx + hw + .05;
     return { shapes: [disc(S, cx, .5, d)], zone: { x, y: .14, w: .96 - x, h: .72 } };
   }),
   // a huge circle bleeding off the stage edge: only an arc shows
   layout('orbBleed', [.9, .8], (r, S) => {
-    const d = r.range(1.3, 1.6), hw = d / S / 2, cx = r.range(.02, .14), edge = cx + hw, x = edge + .06;
+    const cx = r.range(.02, .14), d = Math.min(r.range(1.3, 1.6), Math.max(.95, 2 * S * (.62 - cx))), hw = d / S / 2, edge = cx + hw, x = edge + .06;
     return { shapes: [disc(S, cx, .5, d)], zone: { x, y: .12, w: .94 - x, h: .76 } };
   }),
   // a rising dome (sunrise) with the lyrics in the sky
@@ -104,8 +107,11 @@ const LAYOUTS = [
   }),
   // ---- shaped windows
   layout('emblem', [1, .9], (r, S) => {
-    const type = r.wpick([['star', 1], ['heart', 1], ['hexagon', 1.3], ['diamond', 1.3], ['pentagon', .8]]), d = r.range(.66, .84), hw = d / S / 2;
-    return { shapes: [disc(S, .5, .5, d, type)], zone: { x: .03, y: .1, w: .5 - hw - .06, h: .8 } };
+    const type = r.wpick([['star', 1], ['heart', 1], ['hexagon', 1.3], ['diamond', 1.3], ['pentagon', .8]]);
+    let d = r.range(.66, .84), hw = d / S / 2;
+    if (.5 - hw - .06 < .24) { d = Math.min(d, r.range(.54, .62)); hw = d / S / 2; }
+    const side = .5 - hw - .06, below = .5 + d / 2 + .04;
+    return { shapes: [disc(S, .5, .5, d, type)], zone: side >= .24 ? { x: .03, y: .1, w: side, h: .8 } : { x: .08, y: below, w: .84, h: .95 - below } };
   }, 'x'),
   layout('spotlight', [.8, .7], r => {
     const w = r.range(.7, .82), h = r.range(.5, .6);
@@ -199,7 +205,7 @@ J.layoutPlacement = (def, cut, plan, fit) => {
   const window = clip(union(shapes.map(s => boundsOf([s]))));
   // Explicit obstacles are written like the shapes (landscape); the default is the finished window's box.
   const obstacles = (o.obstacles ? o.obstacles.map(r => apply(r, 'rect')) : [grow(window, .01)]).map(round);
-  const zone = usable(round(o.zone && clip(apply(o.zone, 'rect'))));
+  const zone = usable(round(o.zone && clip(apply(o.zone, 'rect'))), S);
   // The foreground sits in the largest window; among equals, the one nearest the middle of them all.
   const boxes = shapes.map(s => clip(boundsOf([s]))), most = Math.max(...boxes.map(b => b.w * b.h)), mid = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
   const largest = boxes.filter(b => b.w * b.h >= most * .95).reduce((a, b) => Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y) < Math.hypot(a.x + a.w / 2 - mid.x, a.y + a.h / 2 - mid.y) ? b : a);

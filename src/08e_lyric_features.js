@@ -89,6 +89,7 @@ function emptyRegions(obstacles) {
   return regions;
 }
 
+J.emptyRegions = emptyRegions;
 // context: { zone, fgCenter } from the scene's foreground composition (optional).
 // The scene around a lyric cut: the composition zone of the foreground it shares the most time with,
 // and the centre of the foregrounds shown with it.
@@ -298,16 +299,30 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     const into=cut.avoidOverlap?groups:shared;
     if(!into.has(cut.group))into.set(cut.group,[]);into.get(cut.group).push(cut);
   }
-  // Scenes with a foreground keep the composition-zone packing; without one, several lyrics get a
-  // designed arrangement. Manual areas are left to the packing below.
-  const anyForeground=project.foreground?.items?.length ? J.planMedia(project,plan,null,'foreground') : null;
+  // Several lyrics shown together are composed as one designed scene (08eb): sized from their text and role,
+  // laid out inside what the foreground and the background window leave free. Manual areas are left alone.
   const bgScenes=settings.autoPlacement&&J.backgroundScenes?J.backgroundScenes(project,plan,null):[];
-  const withoutForeground=cuts=>!anyForeground?.cuts.some(f=>f.itemId&&f.opacity>0&&f.start<cuts.at(-1).displayEnd&&f.end>cuts[0].start)
-    &&!bgScenes.some(b=>(b.boxes.length||b.zone)&&b.start<cuts.at(-1).displayEnd&&b.end>cuts[0].start);
+  const fgPlan=settings.autoPlacement ? J.planMedia(project,plan,null,'foreground') : null;
+  const avoiding=settings.avoidForeground&&settings.avoidanceStrength>0;
+  const foreground=avoiding ? fgPlan : null;
+  const fgBounds=fgPlan?.opacity>0 ? fgPlan.cuts.map(f=>({cut:f,box:J.foregroundBounds(project,plan,f)})) : [];
+  const lockedCut=c=>!!project.overrides?.[c.line]?.lock;
   const arranged=(cuts,maxOverlap)=>{
-    if(!J.arrangeLyricGroup || cuts.some(c=>c.areaMode==='manual') || !withoutForeground(cuts))return null;
-    const boxes=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1});
-    return J.arrangeLyricGroup(cuts,boxes,{seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap,avoid:settings.autoPlacement&&settings.avoidCenter?J.CENTER_AVOID:null});
+    if(!J.composeLyricScene || cuts.some(c=>c.areaMode==='manual'))return null;
+    const start=cuts[0].start,end=cuts.at(-1).displayEnd,free=cuts.filter(c=>!lockedCut(c));
+    if(free.length<2)return null;
+    const grown=(b,k)=>{const w=b.w*k,h=b.h*k;return {x:b.x+b.w/2-w/2,y:b.y+b.h/2-h/2,w,h};};
+    const obstacles=[];
+    if(avoiding){
+      for(const f of fgBounds)if(f.box&&f.cut.start<end&&f.cut.end>start)obstacles.push(grown(f.box,settings.avoidanceStrength));
+      for(const b of bgScenes)if(b.start<end&&b.end>start)for(const box of b.boxes)obstacles.push(grown(box,settings.avoidanceStrength));
+    }
+    // Locked lines keep their areas: everything else keeps clear of them.
+    for(const c of cuts)if(lockedCut(c)&&c.area)obstacles.push(c.area);
+    if(settings.autoPlacement&&settings.avoidCenter&&J.CENTER_AVOID)obstacles.push(J.CENTER_AVOID);
+    const scene=J.lyricScene?J.lyricScene(cuts[0],fgBounds,end,bgScenes):{};
+    const result=J.composeLyricScene(free,{aspect:plan.W/plan.H,seed:J.placementSeed?J.placementSeed(cuts[0]):cuts[0].seed,maxOverlap,obstacles,zone:scene.zone,center:scene.fgCenter});
+    return result&&{...result,cuts:free};
   };
   const assign=(cut,area,mode)=>{
     if(project.overrides?.[cut.line]?.lock)return;// locked lines keep their area
@@ -326,7 +341,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
   if(settings.autoPlacement)for(const cuts of shared.values()){
     if(cuts.length<2)continue;
     const result=arranged(cuts,.33);
-    if(result)cuts.forEach((cut,i)=>{assign(cut,{...(cut.area||{angle:0,lockAspect:true}),...result.rects[i]},'auto');cut.arrangement=result.name;});
+    if(result)result.cuts.forEach((cut,i)=>{assign(cut,{...(cut.area||{angle:0,lockAspect:true}),...result.rects[i]},'auto');cut.arrangement=result.name;});
   }
   if(strength===0)return;
   const bounds=area=>{
@@ -334,18 +349,14 @@ J.applyLyricGroupAvoidance = (project, plan) => {
     const w=area.w*c+area.h*plan.H/plan.W*s,h=area.h*c+area.w*plan.W/plan.H*s;
     return {x:area.x+area.w/2-w/2,y:area.y+area.h/2-h/2,w,h};
   };
-  // The composition zone guides packing whenever lyrics are placed automatically; avoidance adds obstacles.
-  const fgPlan=settings.autoPlacement ? J.planMedia(project,plan,null,'foreground') : null;
-  const foreground=settings.avoidForeground&&settings.avoidanceStrength>0 ? fgPlan : null;
-  const fgBounds=fgPlan?.opacity>0 ? fgPlan.cuts.map(f=>({cut:f,box:J.foregroundBounds(project,plan,f)})) : [];
   for(const cuts of groups.values()){
     if(cuts.length<2)continue;
     const areas=cuts.map(c=>c.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true}),boxes=areas.map(bounds);
     // 重ねず1シーン without a foreground: arranged with no overlap; strength blends from the current areas.
     const result=arranged(cuts,0);
     if(result){
-      cuts.forEach((cut,i)=>{
-        const a=areas[i],r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
+      result.cuts.forEach((cut,i)=>{
+        const a=cut.area||{x:0,y:0,w:1,h:1,angle:0,lockAspect:true},r=result.rects[i],w=J.lerp(a.w,r.w,strength),h=J.lerp(a.h,r.h,strength);
         const cx=J.lerp(a.x+a.w/2,r.x+r.w/2,strength),cy=J.lerp(a.y+a.h/2,r.y+r.h/2,strength);
         assign(cut,{...a,x:cx-w/2,y:cy-h/2,w,h},'group');cut.arrangement=result.name;
       });
