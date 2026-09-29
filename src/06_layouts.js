@@ -25,6 +25,8 @@ J.mainDraw = (env, it) => {
   const ho = J.HOLD[it.hold || cut.hold] || J.HOLD.still;
   // text treatment (outline, extrude, marker...) — layouts that paint their own plates opt out with it.plain
   if (cut.treat && !it.plain && J.TREAT && J.TREAT[cut.treat]) { try { J.TREAT[cut.treat].apply(env, it, cut.treatP || {}); } catch (e) { console.warn('treat', cut.treat, e); } }
+  const motion = cut.motionScale ?? 1;
+  const rest = motion < 1 ? { x: it.x, y: it.y, size: it.size, sx: it.sx ?? 1, sy: it.sy ?? 1, rot: it.rot || 0, skew: it.skew || 0 } : null;
   if (ltI < 0 && en === J.ENTER.cut) return null;
   if (en !== J.ENTER.cut && (pIn < 1 || en.pieces)) { env.lt = ltI; en.apply(env, it, pIn, ctx); env.lt = lt0; }
   if (ltI < 0 && !en.pieces) return null;
@@ -33,6 +35,17 @@ J.mainDraw = (env, it) => {
   if (pOut > 0 && ex !== J.EXIT.cut) ex.apply(env, it, pOut, ctx);
   it.charFn = J.combineChar(it.charFns);
   it.pieceFn = J.combinePiece(it.pieceFns);
+  if (rest) {
+    for (const key of Object.keys(rest)) if (it[key] != null) it[key] = J.lerp(rest[key], it[key], motion);
+    const damp = state => {
+      if (!state || state === J.PID) return state;
+      const next = { ...state };
+      for (const key of ['dx', 'dy', 'rot', 'skew']) if (next[key] != null) next[key] *= motion;
+      for (const key of ['s', 'sx', 'sy', 'st']) if (next[key] != null) next[key] = J.lerp(1, next[key], motion);
+      return next;
+    };
+    for (const key of ['charFn', 'pieceFn']) if (it[key]) { const fn = it[key]; it[key] = (...args) => damp(fn(...args)); }
+  }
   return J.drawFx(env, it);
 };
 
@@ -97,6 +110,7 @@ const unionBB = (a, b) => !a ? b : !b ? a : { x0: Math.min(a.x0, b.x0), y0: Math
 
 /* split long text into balanced lines, preferring script boundaries */
 J.splitLines = (text, maxPer) => {
+  if (text.includes('\n')) return text; // Explicit line breaks define the composition.
   const arr = [...text];
   if (arr.length <= maxPer) return text;
   const nLines = Math.ceil(arr.length / maxPer);
@@ -613,14 +627,14 @@ J.LAYOUTS = {
     },
   },
 
-  /* ------------------------------------------------ special: title cards (ボカロ・アニメ楽曲PV風 大胆レイアウト群) */
+  /* ------------------------------------------------ special: title card */
   title: {
-    name: 'タイトル中央', special: true, fits: () => false,
-    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])), sx: rng.pick([1, 1, 1.15, 0.9]) }),
+    name: 'タイトル', special: true, fits: () => false,
+    plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display', 'serif'])) }),
     render(env) {
       const { W, H, sc } = env, P = env.cut.params;
-      const text = J.splitLines(env.cut.text, W < H ? 6 : 10);
-      const size = Math.min(J.fitSize(text, P.font, W * 0.85, H * 0.45, { track: 0.06, lead: 1.15 }), H * 0.24);
+      const text = J.splitLines(env.cut.text, W < H ? 4 : 7);
+      const size = Math.min(J.fitSize(text, P.font, W * 0.75, H * 0.35, { track: 0.06, lead: 1.15 }), H * 0.22);
       const bb = J.mainDraw(env, { text, font: P.font, size, x: W / 2, y: H / 2 - (env.cut.note ? size * 0.3 : 0), track: 0.06, lead: 1.15, color: sc.fg });
       if (env.cut.note && bb) {
         env.draw({ text: env.cut.note, font: env.st.fonts.body[0], size: J.clamp(H * 0.032, 16, 36), x: W / 2, y: bb.y1 + size * 0.45, track: 0.28, color: sc.sub, alpha: E.outCubic(J.clamp((env.lt - 0.25) / 0.4)) * (1 - env.pOut), ghost: false });
@@ -649,7 +663,7 @@ J.LAYOUTS = {
   },
 
   title_huge: {
-    name: 'タイトル超巨大', special: true, fits: () => false,
+    name: 'タイトル超特大', special: true, fits: () => false,
     plan: (rng, cut, st) => ({ font: rng.pick(fontsOf(st, ['display'])) }),
     render(env) {
       const { W, H, sc } = env, P = env.cut.params;

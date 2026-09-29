@@ -1,0 +1,101 @@
+/* Per-cut render overrides. Keep identity, timing links and generated caches out
+   of the editable payload; project JSON and undo already preserve this data. */
+(() => {
+'use strict';
+J.cutDetailKeys = {
+  lyrics: ['drawing','text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
+  media: ['drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
+};
+// The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
+J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
+J.applyCutDetails = (cut, details, plan, layer) => {
+  if (!details || typeof details !== 'object') return;
+  if(details.drawing){J.validateDrawing(details.drawing);if(layer!=='lyrics'&&cut.technique==='legacy')cut.technique='none';}
+  const copy = value => JSON.parse(JSON.stringify(value));
+  if (layer === 'lyrics' && Number.isFinite(details.seed)) cut.seed=details.seed;
+  if (details.trans && details.trans !== 'none' && details.trans !== cut.trans) {
+    const def=J.TRANS[details.trans];
+    cut.transDur=def?.dur || .35;
+    cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
+  }
+  if (layer === 'lyrics') {
+    const cutStyle = {...(details.effectStyle || plan.style),...(details.fonts ? {fonts:details.fonts} : {})};
+    const area = details.area || cut.area;
+    for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
+      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined || details.params !== undefined);
+      if (!rebuildLayout && (details[key] === undefined || details[key] === cut[key])) continue;
+      const def = registry[details[key] ?? cut[key]], rng = J.rng(cut.seed);
+      cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
+        text: details.text ?? cut.text, n: [...(details.text ?? cut.text).replace(/\s/g,'')].length,
+        W: plan.W * (area?.w ?? 1), H: plan.H * (area?.h ?? 1), dur: cut.dur,
+      }, cutStyle) : def.plan(rng, cutStyle)) : {};
+    }
+  }
+  for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
+    if (Object.prototype.hasOwnProperty.call(details,key)) {
+      if (layer === 'lyrics' && key === 'params') cut.params = {...cut.params,...copy(details.params)};
+      else cut[key] = copy(details[key]);
+    }
+  }
+  if (layer === 'lyrics' && Array.isArray(details.fontParams)) {
+    for (const entry of details.fontParams) {
+      if (!Array.isArray(entry.path) || !J.FONTS[entry.font] || entry.path.some(k=>['__proto__','constructor','prototype'].includes(k))) continue;
+      let parent=cut.params;
+      for (const key of entry.path.slice(0,-1)) parent=parent?.[key];
+      const key=entry.path.at(-1);
+      if (parent && Object.hasOwn(parent,key) && typeof parent[key]==='string') parent[key]=entry.font;
+    }
+  }
+  if (cut.trans === 'none') cut.trans = null;
+  if (layer === 'lyrics' && details.area) cut.areaMode = 'manual';
+  if (layer === 'lyrics' && typeof details.text === 'string') cut.words = J.chunkText(cut.text);
+  for (const key of ['inDur','outDur','transDur']) if (Number.isFinite(cut[key])) cut[key] = J.clamp(cut[key],0,(cut.end-cut.start)*.45);
+};
+const planLyrics = J.plan;
+J.plan = function(project, ...args) {
+  const plan = planLyrics(project,...args);
+  // A locked cut keeps the look captured when it was locked (J.cutLockSnapshot); the user's own
+  // detail edits still apply on top of it.
+  for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
+    const details=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details;
+    const locked=project.overrides?.[cut.line]?.lock ? project.overrides[cut.line].lockedEffects?.[cut.part] : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(details || {})} : details,plan,'lyrics');
+  }
+  // Events belong to their originating cut, including accents before its boundary.
+  for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
+    const owner=`${cut.line}:${cut.part}`;
+    plan.events=plan.events.filter(event=>event.cutOwner!==owner);
+    for (const {offset,...event} of cut.effectEvents) {
+      const t=cut.start+offset;
+      if (t<cut.end && t<plan.duration) plan.events.push({...event,t,cutOwner:owner});
+    }
+  }
+  plan.events.sort((a,b)=>a.t-b.t);
+  // Retained groups use the final cut's edited departure.
+  const last = new Map();
+  for (const cut of plan.cuts) if (cut.group != null && Number.isInteger(cut.part)) last.set(cut.group,cut);
+  for (const cut of plan.cuts) if (last.has(cut.group)) {
+    cut.groupExit = last.get(cut.group).exit; cut.groupOutDur = last.get(cut.group).outDur;
+  }
+  J.applyLyricGroupAvoidance(project,plan);
+  // The lyric directive owns area size even when saved detail overrides or
+  // retained-group avoidance have supplied an area. Preserve position/rotation.
+  for(const cut of plan.cuts)if(cut.lyricSize!=null && cut.line>=0 && Number.isInteger(cut.part)){
+    const a=cut.area || {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
+    const size=Math.max(.04,cut.lyricSize/100);
+    const area={...a,x:a.x+(a.w-size)/2,y:a.y+(a.h-size)/2,w:size,h:size};
+    J.applyCutDetails(cut,{area},plan,'lyrics');
+    cut.areaMode='notation';
+  }
+  return plan;
+};
+const planMedia = J.planMedia;
+J.planMedia = function(project, plan, audioDuration, layer='media') {
+  const result = planMedia(project,plan,audioDuration,layer);
+  for (const cut of result.cuts) {
+    const options=project[layer]?.cutOverrides?.[cut.index],locked=options?.lock ? options.lockedEffects : null;
+    J.applyCutDetails(cut,locked ? {...locked,...(options.details || {})} : options?.details,plan,layer);
+  }
+  return result;
+};
+})();

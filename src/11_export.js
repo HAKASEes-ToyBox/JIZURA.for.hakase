@@ -6,6 +6,13 @@
 'use strict';
 
 /* ---------- saving ---------- */
+J.exportFilename = (value, extension, fallback = 'jizura') => {
+  let name = String(value || '').trim().replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g, '_').replace(/[. ]+$/g, '');
+  if (name.toLowerCase().endsWith(extension.toLowerCase())) name = name.slice(0, -extension.length);
+  name = name.replace(/[. ]+$/g, '').slice(0, 160) || fallback;
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = '_' + name;
+  return name + extension;
+};
 J.saveFile = async (filename, data) => {
   const blob = data instanceof Blob ? data : new Blob([data]);
   try {
@@ -25,50 +32,21 @@ J.saveFile = async (filename, data) => {
 };
 
 /* ---------- codec negotiation ---------- */
-const VIDEO_CANDS = [
-  { codec: 'avc1.640034', mux: 'avc', label: 'H.264 High' },
-  { codec: 'avc1.640033', mux: 'avc', label: 'H.264 High' },
-  { codec: 'avc1.4d0033', mux: 'avc', label: 'H.264 Main' },
-  { codec: 'avc1.42003e', mux: 'avc', label: 'H.264 Baseline' },
-  { codec: 'vp09.00.51.08', mux: 'vp9', label: 'VP9' },
-  { codec: 'av01.0.12M.08', mux: 'av1', label: 'AV1' },
-];
-// hardware encoders often refuse very high bitrates (52 Mbps+ for 1080p60 at 最高) — keep them in a range they accept
-J.videoBitrate = (w, h, fps, quality) => {
-  const want = w * h * fps * (quality === 'max' ? 0.42 : quality === 'high' ? 0.28 : 0.16);
-  const px = w * h, cap = px <= 2.2e6 ? 40e6 : px <= 3.8e6 ? 60e6 : 90e6;
-  return Math.round(Math.min(want, cap));
-};
-const vcfg = (c, w, h, fps, bitrate, hw) => {
-  const cfg = { codec: c.codec, width: w, height: h, bitrate, framerate: fps };
-  if (hw) cfg.hardwareAcceleration = hw;
-  if (c.mux === 'avc') cfg.avc = { format: 'avc' };
-  return cfg;
-};
-async function supported(cfg) { try { const s = await VideoEncoder.isConfigSupported(cfg); return !!(s && s.supported); } catch (e) { return false; } }
 J.pickVideoCodec = async (w, h, fps, bitrate) => {
   if (typeof VideoEncoder === 'undefined') return null;
-  for (const c of VIDEO_CANDS) { const cfg = vcfg(c, w, h, fps, bitrate); if (await supported(cfg)) return Object.assign({}, c, { cfg }); }
+  const cands = [
+    { codec: 'avc1.640033', mux: 'avc', label: 'H.264 High' },
+    { codec: 'avc1.4d0033', mux: 'avc', label: 'H.264 Main' },
+    { codec: 'avc1.42003e', mux: 'avc', label: 'H.264 Baseline' },
+    { codec: 'vp09.00.51.08', mux: 'vp9', label: 'VP9' },
+    { codec: 'av01.0.12M.08', mux: 'av1', label: 'AV1' },
+  ];
+  for (const c of cands) {
+    const cfg = { codec: c.codec, width: w, height: h, bitrate, framerate: fps };
+    if (c.mux === 'avc') cfg.avc = { format: 'avc' };
+    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) return Object.assign({}, c, { cfg }); } catch (e) {}
+  }
   return null;
-};
-/* the encoders to try, best first: the browser's choice, then the same codec in software (GPU encoders are the usual
-   reason an export fails every time on one PC), then a simpler profile / lower bitrate in software, then VP9 */
-J.videoAttempts = async (w, h, fps, bitrate) => {
-  if (typeof VideoEncoder === 'undefined') return [];
-  const out = [], seen = new Set();
-  const add = async (c, hw, br) => {
-    const key = c.codec + '|' + (hw || '') + '|' + br;
-    if (seen.has(key) || out.length >= 5) return;
-    const cfg = vcfg(c, w, h, fps, br, hw);
-    if (await supported(cfg)) { seen.add(key); out.push(Object.assign({}, c, { cfg, hw: hw || 'auto' })); }
-  };
-  let first = null;
-  for (const c of VIDEO_CANDS) { const cfg = vcfg(c, w, h, fps, bitrate); if (await supported(cfg)) { first = c; break; } }
-  if (first) { await add(first, null, bitrate); await add(first, 'prefer-software', bitrate); }
-  const avc = VIDEO_CANDS.filter(c => c.mux === 'avc' && c !== first);
-  for (const c of avc) { await add(c, 'prefer-software', Math.round(bitrate * 0.7)); if (out.length >= 3) break; }
-  for (const c of VIDEO_CANDS.filter(c => c.mux !== 'avc')) await add(c, 'prefer-software', Math.round(bitrate * 0.7));
-  return out;
 };
 J.pickAudioCodec = async (sr, chn) => {
   if (typeof AudioEncoder === 'undefined') return null;
@@ -78,195 +56,62 @@ J.pickAudioCodec = async (sr, chn) => {
   return null;
 };
 
-async function resample(buffer, sr, duration, offset = 0) {
+async function resample(buffer, sr, duration) {
   const chn = Math.min(2, buffer.numberOfChannels);
   const len = Math.ceil(duration * sr);
   const oc = new OfflineAudioContext(chn, len, sr);
-  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); src.start(0, Math.max(0, offset));
+  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); src.start(0);
   return oc.startRendering();
 }
-/* part of the song to export: range = { t0, t1 } in seconds (選んだ行だけ), default the whole plan */
-J.exportSpan = (plan, range) => {
-  const t0 = range ? Math.max(0, range.t0) : 0, t1 = range ? Math.min(plan.duration, range.t1) : plan.duration;
-  return { t0, dur: Math.max(1 / plan.fps, t1 - t0) };
-};
 
 /* ---------- MP4 ---------- */
-/* The MP4 is written as it is encoded (mp4-muxer, moov at the end) instead of being assembled in one huge
-   ArrayBuffer: into many small memory blocks (file: null), or straight into a file the user picked
-   (file: a FileSystemWritableFileStream, the "large video" button). A long 1080p / 1440p song used to need one contiguous
-   buffer of several hundred MB, doubled on finalize, which is what made those exports fail. */
-class BlockStore {                    // positioned writes into a list of blocks → Blob (no single giant buffer)
-  constructor() { this.blocks = []; this.end = 0; }
-  write(data, pos) {
-    let u = data instanceof Uint8Array ? data : new Uint8Array(data);
-    if (pos > this.end) { this.blocks.push({ pos: this.end, u: new Uint8Array(pos - this.end) }); this.end = pos; }
-    // overwrite what already exists (mp4-muxer patches the mdat size at finalize)
-    for (const b of this.blocks) {
-      if (pos >= this.end || !u.length) break;
-      const s0 = Math.max(pos, b.pos), s1 = Math.min(pos + u.length, b.pos + b.u.length);
-      if (s1 > s0) b.u.set(u.subarray(s0 - pos, s1 - pos), s0 - b.pos);
-    }
-    if (pos + u.length > this.end) { const from = Math.max(0, this.end - pos); this.blocks.push({ pos: this.end, u: u.slice(from) }); this.end = pos + u.length; }
-  }
-  blob(type) { return new Blob(this.blocks.map(b => b.u), { type }); }
-}
-
-function seekVideoElement(video, targetSec) {
-  return new Promise(resolve => {
-    const dur = video.duration;
-    if (!isFinite(dur) || dur <= 0) return resolve();
-    // ended 状態への突入を防ぐため、動画末尾の0.04秒前で安全にクランプ
-    const safeSec = Math.max(0, Math.min(targetSec, Math.max(0, dur - 0.04)));
-    if (Math.abs(video.currentTime - safeSec) <= 0.015 && !video.ended && !video.seeking) {
-      return resolve();
-    }
-    // ended 状態に入ってしまっていた場合は強制的に先頭へ戻す
-    if (video.ended) {
-      try { video.currentTime = 0; } catch (e) {}
-    }
-    let done = false;
-    let timer = null;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (timer) clearTimeout(timer);
-      video.removeEventListener('seeked', finish);
-      video.removeEventListener('error', finish);
-      resolve();
-    };
-    video.addEventListener('seeked', finish, { once: true });
-    video.addEventListener('error', finish, { once: true });
-    timer = setTimeout(finish, 200);
-    try {
-      video.currentTime = safeSec;
-    } catch (e) {
-      finish();
-    }
-  });
-}
-
-function pauseAllVideos(plan, project) {
-  const tr = (plan && plan.tracks) || (project && project.tracks) || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
-  if (tr && tr.videos) {
-    tr.videos.forEach(b => {
-      if (b.element && b.element.pause && !b.element.paused) {
-        try { b.element.pause(); } catch (e) {}
-      }
-    });
-  }
-  const bgm = (plan && plan.bgMedia) || (project && project.bgMedia) || (typeof J !== 'undefined' ? J.bgMedia : null);
-  if (bgm && bgm.type === 'video' && bgm.element && bgm.element.pause && !bgm.element.paused) {
-    try { bgm.element.pause(); } catch (e) {}
-  }
-}
-
-async function syncVideosForFrame(t, plan, project) {
-  const promises = [];
-  // 1. タイムライン上の動画トラック（tracks.videos）
-  const tr = (plan && plan.tracks) || (project && project.tracks) || ((typeof S !== 'undefined' && S.project) ? S.project.tracks : null);
-  if (tr && tr.videos) {
-    for (const b of tr.videos) {
-      if (b.element && isFinite(b.element.duration) && b.element.duration > 0) {
-        if (t >= b.start && t < b.end) {
-          const targetTime = (t - b.start) % b.element.duration;
-          promises.push(seekVideoElement(b.element, targetTime));
-        }
-      }
-    }
-  }
-  // 2. 単一背景動画（J.bgMedia）
-  const bgm = (plan && plan.bgMedia) || (project && project.bgMedia) || (typeof J !== 'undefined' ? J.bgMedia : null);
-  if (bgm && bgm.type === 'video' && bgm.element && isFinite(bgm.element.duration) && bgm.element.duration > 0) {
-    const targetTime = t % bgm.element.duration;
-    promises.push(seekVideoElement(bgm.element, targetTime));
-  }
-  if (promises.length > 0) {
-    await Promise.all(promises);
-  }
-}
-J.seekVideoElement = seekVideoElement;
-J.pauseAllVideos = pauseAllVideos;
-J.syncVideosForFrame = syncVideosForFrame;
-
-J.exportMP4 = async (o) => {
-  const { plan, project, audio, quality = 'high', onProgress, signal, range, file = null } = o;
+J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signal }) => {
+  if (J.pauseAllVideos) J.pauseAllVideos();
+  J.mediaTransitionFrame = null;
+  J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
-  const fps = plan.fps, bitrate = J.videoBitrate(w, h, fps, quality);
-  const attempts = await J.videoAttempts(w, h, fps, bitrate);
-  if (!attempts.length) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
-  const tried = [];
-  for (let k = 0; k < attempts.length; k++) {
-    const vc = attempts[k];
-    try {
-      if (file && k > 0) { await file.seek(0); await file.truncate(0); }
-      const r = await encodeMP4(Object.assign({}, o, { w, h, vc, note: k > 0 ? `（${vc.label}・ソフトウェアで再試行 ${k}）` : '' }));
-      r.tried = tried; return r;
-    } catch (e) {
-      if (signal && signal.aborted) throw new Error('キャンセルしました');
-      if (e && e.jzFatal) throw e;
-      tried.push(`${vc.label}/${vc.hw}: ${e && e.message ? e.message : e}`);
-      console.warn('MP4 export attempt failed', vc.codec, vc.hw, e);
-    }
-  }
-  const err = new Error('MP4 を書き出せませんでした。' + (file ? '' : '「大きな動画用（ファイルに直接保存）」か、') + '解像度・fps・画質を下げて試してください。詳細：' + tried.join(' ／ '));
-  err.detail = tried; throw err;
-};
-async function encodeMP4({ plan, project, audio, onProgress, signal, range, file, w, h, vc, note }) {
-  const span = J.exportSpan(plan, range);
   const fps = plan.fps;
+  const px = w * h * fps;
+  const bitrate = Math.round(px * (quality === 'max' ? 0.42 : quality === 'high' ? 0.28 : 0.16));
+  const vc = await J.pickVideoCodec(w, h, fps, bitrate);
+  if (!vc) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
   let ac = null;
   if (audio && audio.buffer && project.includeAudio !== false) ac = await J.pickAudioCodec(48000, Math.min(2, audio.buffer.numberOfChannels));
-  const store = file ? null : new BlockStore();
-  const target = file ? new Mp4Muxer.FileSystemWritableFileStreamTarget(file, { chunkSize: 8 * 1048576 })
-    : new Mp4Muxer.StreamTarget({ onData: (data, pos) => store.write(data, pos), chunked: true, chunkSize: 8 * 1048576 });
-  const muxOpts = { target, video: { codec: vc.mux, width: w, height: h, frameRate: fps }, fastStart: false, firstTimestampBehavior: 'offset' };
+  const target = new Mp4Muxer.ArrayBufferTarget();
+  const muxOpts = { target, video: { codec: vc.mux, width: w, height: h, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
   if (ac) muxOpts.audio = { codec: ac.mux, numberOfChannels: Math.min(2, audio.buffer.numberOfChannels), sampleRate: ac.sr };
   const muxer = new Mp4Muxer.Muxer(muxOpts);
-  let err = null, outFrames = 0;
-  const venc = new VideoEncoder({ output: (chunk, meta) => { outFrames++; try { muxer.addVideoChunk(chunk, meta); } catch (e) { err = e; } }, error: e => { err = e; } });
+  let err = null;
+  const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { err = e; } });
   venc.configure(Object.assign({}, vc.cfg, { latencyMode: 'quality' }));
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d', { alpha: false });
   const R = new J.Renderer();
-  const total = Math.max(1, Math.round(span.dur * fps));
+  const total = Math.max(1, Math.round(plan.duration * fps));
   const scale = w / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
-  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
-  const closeEnc = () => { try { if (venc.state !== 'closed') venc.close(); } catch (e) {} };
-  pauseAllVideos(plan, project);
   try {
-    for (let i = 0; i < total; i++) {
-      if (signal && signal.aborted) { closeEnc(); throw new Error('キャンセルしました'); }
-      if (err) throw err;
-      if (venc.state === 'closed') throw new Error('エンコーダーが停止しました');
-      const curT = span.t0 + i / fps;
-      await syncVideosForFrame(curT, plan, project);
-      R.frame(ctx, plan, curT, { scale });
-      const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
-      try { venc.encode(vf, { keyFrame: i % (fps * 2) === 0 }); } finally { vf.close(); }
-      let spins = 0;
-      while (venc.encodeQueueSize > 4 && !err) { await new Promise(r => setTimeout(r, 2)); if (++spins > 15000) throw new Error('エンコーダーが応答しません'); }
-      // an encoder that accepts frames but never returns any has failed silently (seen with some GPU drivers)
-      if (i === Math.min(total - 1, fps * 3) && outFrames === 0) { await venc.flush(); if (!outFrames) throw new Error('エンコーダーが出力を返しません'); }
-      if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}${note || ''}`); await new Promise(r => setTimeout(r, 0)); }
-    }
-    await venc.flush();
+  for (let i = 0; i < total; i++) {
+    if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
-  } catch (e) { closeEnc(); throw e; }
-  finally { J.glyphs.maxRes = prevRes; }
-  closeEnc();
-  if (outFrames < total * 0.98) throw new Error(`動画のフレームが足りません（${outFrames}/${total}）`);
+    await J.prepareMediaFrame(plan, i / fps, signal);
+    R.frame(ctx, plan, i / fps, { scale });
+    const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+    venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+    vf.close();
+    while (venc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2));
+    if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}`); await new Promise(r => setTimeout(r, 0)); }
+  }
+  } finally { J.glyphs.maxRes = prevRes; }
+  await venc.flush(); venc.close();
   if (ac) {
     onProgress && onProgress(0.99, '音声をエンコード中');
-    const rs = await resample(audio.buffer, ac.sr, span.dur, span.t0);
+    const rs = await resample(audio.buffer, ac.sr, plan.duration);
     const chn = rs.numberOfChannels;
-    let aChunks = 0, aEnd = 0, aErr = null;
-    const aenc = new AudioEncoder({ output: (chunk, meta) => { aChunks++; aEnd = Math.max(aEnd, chunk.timestamp + (chunk.duration || 0)); muxer.addAudioChunk(chunk, meta); }, error: e => { aErr = e; } });
+    const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: e => { err = e; } });
     aenc.configure({ codec: ac.codec, sampleRate: ac.sr, numberOfChannels: chn, bitrate: 192000 });
     const frames = rs.length, block = 4800;
     for (let off = 0; off < frames; off += block) {
-      if (aErr) break;
       const n = Math.min(block, frames - off);
       const data = new Float32Array(n * chn);
       for (let c = 0; c < chn; c++) data.set(rs.getChannelData(c).subarray(off, off + n), c * n);
@@ -275,18 +120,12 @@ async function encodeMP4({ plan, project, audio, onProgress, signal, range, file
       if (aenc.encodeQueueSize > 16) await new Promise(r => setTimeout(r, 1));
     }
     await aenc.flush(); aenc.close();
-    const fatal = m => { const e = new Error(m); e.jzFatal = true; return e; };    // audio problems: another video encoder won't help
-    if (aErr) throw fatal('音声のエンコードに失敗しました: ' + (aErr.message || aErr));
-    // the encoder must have produced the whole soundtrack — otherwise report it instead of writing a silent file
-    if (!aChunks || aEnd < (Math.min(span.dur, audio.buffer.duration - span.t0) - 0.5) * 1e6) throw fatal('音声のエンコードが途中で止まりました（' + aChunks + '）。もう一度書き出してください');
+    if (err) throw err;
   }
-  onProgress && onProgress(0.995, 'ファイルを仕上げ中');
   muxer.finalize();
-  if (file) await file.close();
   onProgress && onProgress(1, '完了');
-  const size = file ? null : store.end;
-  return { blob: file ? null : store.blob('video/mp4'), size, codec: vc.label + (vc.hw === 'prefer-software' ? '（ソフトウェア）' : ''), audio: ac ? ac.mux : null, audioWanted: !!(audio && audio.buffer && project.includeAudio !== false), width: w, height: h, toFile: !!file };
-}
+  return { blob: new Blob([target.buffer], { type: 'video/mp4' }), codec: vc.label, audio: ac ? ac.mux : null, width: w, height: h };
+};
 
 /* ---------- PNG sequence as ZIP (store, no compression) ---------- */
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -315,29 +154,23 @@ class ZipWriter {
     return new Blob([...this.parts, ...this.central, end.buffer], { type: 'application/zip' });
   }
 }
-/* layers: transparent PNGs in two folders — back/ (background graphic + decorations behind the lyrics) and front/
-   (lyrics, their decorations, ghosts, HUD). Screen effects are applied to both, so stacking front over back matches. */
-J.exportPNGZip = async ({ plan, project, transparent, layers, onProgress, signal, every = 1, range }) => {
-  const span = J.exportSpan(plan, range);
+J.exportPNGZip = async ({ plan, project, transparent, onProgress, signal, every = 1 }) => {
+  if (J.pauseAllVideos) J.pauseAllVideos();
+  J.mediaTransitionFrame = null;
+  J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
   const R = new J.Renderer();
-  const fps = plan.fps, total = Math.max(1, Math.round(span.dur * fps));
+  const fps = plan.fps, total = Math.max(1, Math.round(plan.duration * fps));
   const zip = new ZipWriter();
   const scale = w / plan.W;
-  const bgm = plan.bgMedia || (typeof J !== 'undefined' ? J.bgMedia : null);
-  pauseAllVideos(plan, project);
   for (let i = 0; i < total; i += every) {
     if (signal && signal.aborted) throw new Error('キャンセルしました');
-    const curT = span.t0 + i / fps;
-    await syncVideosForFrame(curT, plan, project);
-    const name = `jizura_${String(i).padStart(5, '0')}.png`;
-    for (const layer of layers ? ['back', 'front'] : [null]) {
-      R.frame(ctx, plan, curT, { scale, transparent: transparent || !!layers, layer });
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      zip.add((layer ? layer + '/' : '') + name, new Uint8Array(await blob.arrayBuffer()));
-    }
+    await J.prepareMediaFrame(plan, i / fps, signal);
+    R.frame(ctx, plan, i / fps, { scale, transparent });
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    zip.add(`jizura_${String(i).padStart(5, '0')}.png`, new Uint8Array(await blob.arrayBuffer()));
     onProgress && onProgress(i / total, `PNG ${i + 1}/${total}`);
   }
   onProgress && onProgress(1, '完了');
@@ -358,8 +191,10 @@ J.AE_MAP = {
 };
 // The plan goes to the After Effects panel as-is (version 2): the panel builds every key it implements and
 // picks the closest counterpart itself (from the exported metadata / J.AE_MAP) for anything it lacks.
-J.planForAE = (plan, project, range) => {
+J.planForAE = (plan, project) => {
   const clean = JSON.parse(JSON.stringify(plan, (k, v) => (k === 'energy' || k === 'buffer' || k === 'peaks' ? undefined : v)));
+  if(plan.layerVisibility?.lyrics===false){clean.cuts=[];clean.lines=[];clean.events=[];clean.retainedCutIndices=[];clean.hud=false;}
+  for(const layer of ['foreground','media'])if(plan.layerVisibility?.[layer]===false && clean[layer])clean[layer].cuts=[];
   clean.version = 2;
   clean.width = J.outputSize(project)[0]; clean.height = J.outputSize(project)[1];
   clean.extra = project.extra === true; clean.wa = project.wa !== false;
@@ -371,18 +206,6 @@ J.planForAE = (plan, project, range) => {
   if (J.setLang && J.faceOf && clean.lang !== 'ja') {
     J.setLang(clean.lang);
     for (const k of Object.keys(clean.fontTable)) { const f = J.faceOf(k); clean.fontTable[k].langFamily = f.family.replace(/"/g, ''); clean.fontTable[k].langWeight = f.weight; }
-  }
-  // モーフ has no After Effects counterpart yet: build it as the closest transition (an ink-blob dissolve)
-  for (const c of clean.cuts || []) if (c.morph && !c.trans) { c.trans = 'inkBlob'; c.transDur = c.morph.dur; c.transP = {}; c.webMorph = true; }
-  // 行の範囲だけ: keep the cuts / events inside [t0, t1] and move them to start at 0.
-  // audioOffset tells the AE panel to slide the song layer left by t0 so it stays in sync.
-  if (range) {
-    const sp = J.exportSpan(plan, range), t0 = sp.t0, t1 = t0 + sp.dur, eps = 1e-3;
-    const sh = o => { o.start -= t0; o.end -= t0; return o; };
-    clean.cuts = clean.cuts.filter(c => c.end > t0 + eps && c.start < t1 - eps).map(c => { if (c.companion) sh(c.companion); return sh(c); });
-    clean.events = (clean.events || []).filter(e => e.t >= t0 - 1 && e.t < t1).map(e => Object.assign(e, { t: e.t - t0 }));
-    for (const l of clean.lines || []) { sh(l); if (l.visEnd != null) l.visEnd -= t0; }   // all lines stay (cut.line indexes them)
-    clean.duration = sp.dur; clean.audioOffset = t0; clean.range = { t0, t1 };
   }
   return clean;
 };

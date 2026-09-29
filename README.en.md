@@ -1,76 +1,100 @@
-# JIZURA — Hakase Edition (for hakase)
+# 字面一 JIZURA ONE STOP EDITION
 
-> **Automatic Lyric Motion Video Maker — Extended Edition**  
-> This project is a respectful, extended fork of [JIZURA](https://github.com/852wa/JIZURA) (MIT License), created by **hakoniwa (@852wa)**.  
-> We express our deepest gratitude and respect to **hakoniwa** for creating such an inspiring and innovative lyric motion engine.
-
----
-
-### 🙏 Respect & Tribute to the Original Author
-Original JIZURA is an extraordinary web application that turns lyrics into beautiful kinetic typography and lyric videos with over 700 procedural components.
-- **Original JIZURA**: <https://852wa.github.io/JIZURA/>
-- **Original GitHub Repository**: <https://github.com/852wa/JIZURA>
-- **Original Author**: hakoniwa ([@852wa](https://twitter.com/852wa))
-- **Original License**: MIT License (Copyright (c) 2026 hakoniwa)
-
----
-
-### ✨ Features Added in Hakase Edition
-- **Multi-Track Timeline**: Dedicated Image and Video tracks alongside the Text track. Overlay visual assets freely on the timeline.
-- **Enhanced Timeline Controls**: Cut trimming, reordering, safe split, and individual cut deletion.
-- **Undo / Redo Safety Protection**: Full integrity protection for media links and design attributes during undo/redo operations.
-- **"Tap to Sync from Here"**: Instantly resume or adjust beat syncing starting from any line mid-song.
-- **Line Cache Protection & Independent Reroll**: Reroll individual lines without resetting or altering unaffected lines.
-- **Title Cut (L-cut) Custom Motion**: Independent keyframes and design preservation for title cards.
-- **Loop Sync & Stall Prevention**: Seamless multi-cycle looping for short background video assets during export.
-
----
-
-### ⬇️ Download & Offline Usage
-- **Web App**: <https://hakasees-toybox.github.io/JIZURA.for.hakase/en/>
-- **Offline / Local Run**: Click **Code** → **Download ZIP**, unpack it, and open **`index.html`** in Chrome or Edge. No installation or server required.
-
----
-
-# Original JIZURA Documentation & Guide
+**Agent-driven production:** [Local MCP setup and tool guide (Japanese)](mcp/README.md). Supports theme-guided editing, frame/audio previews, portable project files and exports.
 
 Turn lyrics into animated lyric videos in your browser. JIZURA combines layouts, entrances, holds, exits, decorations, text treatments, backgrounds, camera moves, effects and transitions. Change the seed or press **Create a variation** to explore another arrangement.
 
-**[Open the English app](https://852wa.github.io/JIZURA/en/)** · [Bahasa Indonesia](https://852wa.github.io/JIZURA/id/) · [日本語版](https://852wa.github.io/JIZURA/) · [繁體中文](https://852wa.github.io/JIZURA/zh-hant/) · [简体中文](https://852wa.github.io/JIZURA/zh-hans/) · [한국어](https://852wa.github.io/JIZURA/ko/) · [Korean guide](README.ko.md) · [Japanese guide](README.md)
+**[Open the English fork app](https://hirazisora.github.io/JIZURA/en/)** · [日本語版](https://hirazisora.github.io/JIZURA/) · [Japanese guide](README.md)
 
-The Japanese, English, Indonesian, Traditional Chinese, Simplified Chinese and Korean browser editions share the same project format and saved browser data. Use the language links at the top of the editor to switch editions without changing your lyrics or settings. English After Effects panels are available as [ScriptUI](https://852wa.github.io/JIZURA/JIZURA_AE_en.jsx) and [CEP](https://852wa.github.io/JIZURA/JIZURA_CEP_en.zip) downloads. The AE JSON format is the same in both languages.
+The English and Japanese browser editions share the same project format and saved browser data. Use the language links at the top of the editor to switch editions without changing your lyrics or settings. English After Effects panels are available as [ScriptUI](https://hirazisora.github.io/JIZURA/JIZURA_AE_en.jsx) and [CEP](https://hirazisora.github.io/JIZURA/JIZURA_CEP_en.zip) downloads. The AE JSON format is the same in both languages.
+
+## Features added in this fork
+
+The **Foreground**, **Lyrics**, and **Background** tabs let you place uploaded images and videos above or below lyrics. Drop files into the media area, then click a file name in **Lines and cuts** to choose the file for that cut. Add a blank cut before, between, or after existing cuts; its initial file is **No image**. Automatic cut sequences still support random order and looping. Use **Tap to sync** or drag timeline boundaries to set cut times. Each media cut supports entrance, hold, exit, treatment, transition, and position and size controls. Videos can loop or use a chroma key. Foreground media can be blended with the layers below it; lyrics have their own blend mode and opacity controls. You can set a display area for each lyric line.
+
+
 
 ## Quick start
 
 1. Paste lyrics into the left panel, one phrase per line. The built-in English sample is shown on a fresh install.
-2. Optionally import audio. JIZURA detects beats and can snap cut boundaries to them. Use **Tap to sync** to mark the start of each line by pressing Space during playback.
+2. Optionally import audio. JIZURA detects beats and can snap cut boundaries to them. Use **Tap to sync** to mark the start of each line by pressing Space during playback. **Insert → Lyrics** under **Edit at playhead** adds a new line that runs from the playhead to the next line (or empty lyric cut); the line playing before it ends at the playhead and fits its words into the shorter span. Inserting exactly at a line's start uses the first half of that line's slot.
 3. Press **Create a variation** (or `R`) to randomize the style, mood, motion, palette and arrangement. **Previous** and **Next** navigate variations; **Change one thing** rerolls just one part.
 4. Set aspect ratio, resolution and frame rate, then export MP4. Advanced mode adds a PNG sequence, transparent PNGs, color key backgrounds and individual technique controls.
 
-**Lyrics language.** The styles are designed around Japanese fonts. For Chinese (Traditional / Simplified) and Korean lyrics, set **Lyrics language** below the lyrics box (Auto-detect is the default: kana → Japanese, Hangul → Korean, Chinese only → Traditional or Simplified by characters such as 們/们 and 說/说). Each font is then replaced with a face in that language with a similar feel — e.g. Noto Sans JP → Noto Sans TC / SC / KR, Noto Serif JP → Noto Serif TC / SC / KR, Dela Gothic One → WDXL Lubrifont TC / ZCOOL QingKe HuangYou / Black Han Sans — so a line never mixes fonts. Lyrics written almost entirely in Latin letters (English or romaji) are detected as **English** and cut into short phrases rather than single words. The AE panels have the same setting, the AE JSON carries the language, and AE falls back to the OS fonts (PingFang, Microsoft JhengHei / YaHei, Apple SD Gothic Neo, Malgun Gothic) when those faces are not installed.
+Every cut has an end time. By default **Until the next cut** is on and the cut lasts until the next one starts (as before). Turn it off in the cut details to set **Cut end**, or drag the handle at the cut's end on the timeline; it may pass the next cut's start. Overlapping cuts are drawn in separate translucent lanes on the timeline so both starts and ends stay draggable, and overlapping foreground/background cuts composite with their own opacity and blend. In 1シーン and 重ねず1シーン groups every cut ends with the group's last lyric. **Edit at playhead** is a two-level menu: pick the action (Insert, Split, Play until here, Play until the next cut, Shuffle layout), then Foreground, Lyrics or Background; unavailable buttons are greyed out. **Play until here** ends the latest cut that started before the playhead at the playhead, and **Play until the next cut** restores the default. Blank lyric cuts are retired; blank cuts in older projects load as end times that stop the lyric at that point.
 
-A volume slider next to the play button sets the preview volume (click **Vol** to mute); exported videos keep the original level. **Transparent PNG layers** exports two transparent PNGs per frame into back/ (background graphic and decorations behind the lyrics) and front/ (lyrics, their decorations, ghosts and HUD); screen effects are applied to both, so front over back matches the normal look. Transparent PNG exports keep the background empty even when full-screen effects (invert, flash, strobe, hue shift, split screen, CRT off, black frames…) are active.
+A cut lock (the padlock button) keeps the cut exactly as it looked when locked: effects, colours, fonts, line division and area. Edits to other cuts, typing or inserting lyrics, Randomize, Shuffle and style changes leave it unchanged; direct operations on that cut (its own re-roll, detail edits, position and size) apply and it stays locked. **Apply to following** skips other locked cuts. During playback the zoomed timeline scrolls to keep the playhead in view (briefly paused after you scroll it by hand). On a PC, Ctrl+S (⌘S on Mac) saves the project. Background and text colours set under the style colours apply to every colour scheme of the style (opposite-tone schemes use them swapped).
 
-**Editing tools.** Edit a line's lyrics in place (✎ or double-click), set the number of cuts per line (auto / 1–6), redo tap sync from any line (◎; Backspace undoes a tap), and drag line markers on the timeline (zoom with + / − or the wheel; hold Shift to ignore beats). Ctrl+Z undoes lyric and timing edits. **Export range** exports only the lines you pick (⇥ in the line list). The song you load is kept in this browser, so a reload does not drop it from exports; when the browser cannot encode AAC audio, a WAV of the soundtrack is saved next to the MP4. A short guided tour opens on the first visit in Simple mode (? to replay). On wide windows the page no longer scrolls as a whole: the preview and timeline stay in view while the lyrics / line list and the settings scroll inside their own columns, and the line list follows playback. **Unified look** (Effects tab / Simple mode) builds with lyric-video conventions: each part keeps one set of layouts and motions, a returning line is shown the same way, directions alternate, the line ending in `!` becomes a big hit, lines can morph into the next and grow from thin to bold. **Typesetting** tightens kana, makes particles smaller and first characters larger, sizes Latin letters up with a small gap, shows lyrics 0.2 s before the voice and keeps effects from piling up. Both are optional; switched off, JIZURA works as before. MP4 export now streams the file as it encodes and retries with a software encoder when the GPU encoder fails; on Chrome / Edge, **For large videos** writes straight to a file you pick. **Keep the centre free** (Export settings) splits each lyric in two and places the halves in the side bands — left / right on wide frames, top / bottom on tall ones ("flowers" | "bloomed") — on tall frames you can choose top / bottom or left / right — as one scene with the same layout, motion and decorations, so only the character's spot in the middle stays free; backgrounds and screen effects still cover the frame, the preview outlines the free area, and the AE panels build the same layout. **Clear lyrics** removes the lyrics with their line timings, per-line settings and export range (Undo / Ctrl+Z brings them back); **Reset** in the header clears lyrics, the song (including the copy kept in the browser), settings and both histories after a confirmation.
+**Lyrics language.** The styles are designed around Japanese fonts. For Chinese (Traditional / Simplified) and Korean lyrics, set **Lyrics language** below the lyrics box (Auto-detect is the default: kana → Japanese, Hangul → Korean, Chinese only → Traditional or Simplified by characters such as 們/们 and 說/说). Each font is then replaced with a face in that language with a similar feel — e.g. Noto Sans JP → Noto Sans TC / SC / KR, Noto Serif JP → Noto Serif TC / SC / KR, Dela Gothic One → WDXL Lubrifont TC / ZCOOL QingKe HuangYou / Black Han Sans — so a line never mixes fonts. The AE panels have the same setting, the AE JSON carries the language, and AE falls back to the OS fonts (PingFang, Microsoft JhengHei / YaHei, Apple SD Gothic Neo, Malgun Gothic) when those faces are not installed.
 
-Lyric syntax: `[interlude 8]` adds an 8-second instrumental part with background and decorations only (4 seconds without a number); `I remember/the dawn` makes a manual cut; `*word*` emphasizes a word; a final `!` adds a flash and shake; `lyric|note` adds small annotation text; `[01:23.45]lyric` imports an LRC timestamp; `# comment` is ignored.
+Lyric syntax: `I remember/the dawn` makes a manual cut; `*word*` emphasizes a word; a final `!` adds a flash and shake; `lyric|note` adds small annotation text; `[01:23.45]lyric` imports an LRC timestamp; `# comment` is ignored.
 
-Use **Save** and **Open** for `.jizura.json` projects. **Export for AE** creates arrangement data to import into the After Effects panel. Generated videos and images belong to their creators; rights to music and lyrics remain with their respective rights holders. Project files, lyrics and audio are handled in the browser. Google Fonts are loaded as needed.
+Use **Save** and **Open** for portable `.jizuraichi` projects containing settings, lyrics, imported images, videos, audio and font files. They restore assets in another browser or computer. Installed PC fonts selected by name still need to be installed separately. The Open dialog selects `.jizuraichi` files. Saving reports missing assets instead of producing an incomplete portable project. Browser autosave also restores the song. **New** lets you select an aspect ratio and start with empty lyrics, assets, audio and titles, default settings, and cleared undo/variation history. Save your current work before creating a new project. **Export for AE** creates arrangement data to import into the After Effects panel. Generated videos and images belong to their creators; rights to music and lyrics remain with their respective rights holders. Project files, lyrics and audio are handled in the browser. Google Fonts are loaded as needed. The tool is MIT licensed; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## License
+The **Project name** next to the song title and artist is set to the saved file name (without its extension or an added date) when you save a project, and becomes the default name for the next save; you can also edit it directly. **Add date and time to the file name** in the save dialog appends `_yyyyMMddHHmm` (the time of saving), e.g. `my-project_202609281150.jizuraichi`; the choice is remembered in this browser.
 
-This project is licensed under the [MIT License](LICENSE).
-- **Original Work Copyright (c) 2026 hakoniwa** ([https://github.com/852wa/JIZURA](https://github.com/852wa/JIZURA))
-- **Hakase Edition Modifications Copyright (c) 2026 HAKASEes-ToyBox**
+## Stacking lyrics, line breaks and automatic areas
 
-See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for full details.
+Wrap multiple input lines in `{` and `}` to stack their cuts until the last lyric cut in the group disappears. Timeline boundaries and links retain their original timing.
+
+```text
+{
+Colors of the dawn
+*Today\nI remember*
+~A quiet voice~
+}
+```
+
+Write `\n` within one input line to add a horizontal line break inside one cut. It can be combined with `/` to put multiple rows inside each manually separated cut. Use `\\n` for a literal `\n`, and `\{`, `\}`, or `\~` for literal control characters.
+
+In **Advanced → Techniques**, enable **Vary lyric position and size automatically** to vary the area for each lyric cut. This defaults to off, using the full stage. Manual areas and locks are preserved. In the area editor, **Reset automatic placement** clears a manual area; **Reset to full frame** saves an explicit full-stage area.
+
+**Avoid overlapping the foreground** considers foreground position, size and rotation during each cut's original time slot. Lyrics retained with `{}` receive individual areas using the same rules as ordinary cuts. If there is no free region, it chooses a position with the least overlap. `*Emphasis*` creates a larger automatic area, enables **Show in front**, and ignores foreground avoidance. You can override the frontmost setting using the cut checkbox or timeline icon. `~Suppression~` makes the area and text smaller and reduces movement, rotation, camera motion and effects.
+
+**Avoid the centre of the stage** (Details → Techniques, below the automatic position and size option; off by default) keeps automatically placed lyrics out of the middle of the stage. It is the same setting as **Keep lyrics out of the centre** in Easy mode, and the two stay in sync (turning it on in Easy mode also turns on automatic placement). Single lyrics use the top and bottom bands and the side columns; 1シーン and 重ねず1シーン groups use arrangements that leave the centre clear (bands, side columns, corners, an L shape and more). *Emphasised* lyrics are exempt and may still use the centre. A size notation such as `30:` too large for the bands keeps its size and moves off the centre point.
+
+## Lyric cut blend modes and opacity
+
+Each cut in **Lines and cuts** has its own blend mode (Normal, Multiply, Screen or Overlay) and opacity (0–100%). New cuts default to Normal and 100%. Lyrics stacked with `{}` are composited individually.
+
+In **Advanced → Techniques**, **Randomize lyric blend modes** and **Randomize lyric opacity** can be enabled independently. Random opacity exposes minimum and maximum values, initially 0–100%. `*Emphasis*` selects from the upper third of that range; `~Suppression~` selects from the lower third. Shuffle or reroll generates new values; the same seed reproduces them.
+
+Manual values and locks take priority. A cut's **Reset to auto** clears its manual settings. With randomization off, automatic values are Normal and 100%. Global lyric settings from older projects are transferred to their existing cuts when opened.
 
 ## Build and publish
 
-Run `python3 build.py` at the repository root. It creates `index.html`, `en/`, `zh-hant/`, `zh-hans/`, `ko/` and `id/` editions (translations in `app/english.py` and `app/i18n_*.py`), all standalone pages for GitHub Pages. Run `python3 build_ae.py --lang en` to rebuild `JIZURA_AE_en.jsx`, and `python3 build_cep.py --lang en --out dist` to build `dist/JIZURA_CEP_en.zip` (copy the ZIP to the repository root for Pages downloads). Commit the built pages, panels and translation sources together. Publish from the repository root on GitHub Pages; the English edition is then served at `/JIZURA/en/` and the Indonesian edition at `/JIZURA/id/`. Open either HTML file locally for offline use, with installed fonts as a fallback.
+Run `python3 build.py` at the repository root. It creates `index.html` and `en/index.html`, both standalone pages for GitHub Pages. Run `python3 build_ae.py --lang en` to rebuild `JIZURA_AE_en.jsx`, and `python3 build_cep.py --lang en --out dist` to build `dist/JIZURA_CEP_en.zip` (copy the ZIP to the repository root for Pages downloads). Commit the built pages, panels and translation sources together. Publish from the repository root on GitHub Pages; the English edition is then served at `/JIZURA/en/`. Open either HTML file locally for offline use, with installed fonts as a fallback.
 
-Install `JIZURA_AE_en.jsx` in After Effects' `Scripts/ScriptUI Panels` folder, restart AE, then open it from the Window menu. The English CEP package has a distinct extension ID, so it can coexist with the Japanese CEP panel. Extract the ZIP and use its Windows or macOS installer. **Lightweight** leaves out the colour-shift copies, paper texture, bloom, grain and picture-duplicating effects (about 40% fewer layers) for faster playback in AE. Both panels build long songs in small steps, so After Effects stays responsive: the panel shows progress and **Stop** finishes the composition with the cuts built so far. With an **Export range** selected, the CEP panel (and **Export for AE**) builds only those lines, with the song layer shifted to match. These panels require After Effects to verify motion and export behavior; automated checks use a mock AE environment.
+Install `JIZURA_AE_en.jsx` in After Effects' `Scripts/ScriptUI Panels` folder, restart AE, then open it from the Window menu. The English CEP package has a distinct extension ID, so it can coexist with the Japanese CEP panel. Extract the ZIP and use its Windows or macOS installer. These panels require After Effects to verify motion and export behavior; automated checks use a mock AE environment.
 
-## Contributors
+### Cropped assets and lyric avoidance strength
 
-Traditional Chinese UI and technique names, Simplified Chinese technique names, font and language detection fixes: [Zaious](https://github.com/Zaious) (#5, #6, #7, #11). Korean UI and technique names: [andongmin94](https://github.com/andongmin94) (#8). Indonesian UI: [auliaramadhann](https://github.com/auliaramadhann) and [enka25](https://github.com/enka25) (#12).
+Select Left, Right, Top and/or Bottom under **Cropped edges (auto placement)** in each foreground/background asset card. Automatic placement puts about 20% of the source width/height outside the frame at each selected edge; opposite edges may require proportional enlargement. Manual and locked placements take priority. The setting belongs to the asset and is saved with the project. It controls the chosen display rectangle, not subsequent animation movement or rotation.
+
+**Details → Techniques → Foreground avoidance strength** ranges from 0 to 1 (default 1). At 1, automatic lyric areas avoid the foreground bounds. Lower values allow overlap around the foreground perimeter; 0 disables avoidance. Both automatic placement and foreground avoidance must be enabled. Emphasis, manual areas and locks retain their priority. If no free region exists, the least overlapping placement is used.
+
+### Theme settings
+
+Below Import audio, open **Theme settings**, select multiple themes and apply. Labels appear below the song. Genres: Pop, Ballad, Rock, Dance/EDM, Hip-hop, Jazz and Acoustic. Tastes: Cool, Cute, Elegant, Dreamy and Retro.
+
+Each **Randomize** chooses one selected theme and uses only its curated styles, lyric techniques and foreground/background motion and entrance/exit candidates. Palettes and fonts follow the selected style. Choosing themes alone leaves the current arrangement unchanged. No themes means unrestricted randomization. Manual media choices, manual areas and locked cuts keep their existing priority. Extra/Japanese-style permission switches are respected. Themes support project files, local save and Undo/Redo. Selection runs in your browser with no API key.
+
+For local preview run `python preview_server.py` and open `http://127.0.0.1:8765/`.
+
+### Header menus
+
+**Project** contains New, Open and Save. **Export** contains MP4, PNG sequence ZIP, transparent PNG ZIP, and AE arrangement data. MP4/PNG open a settings dialog sharing the settings in Advanced → Export. MP4 includes quality and audio settings; PNG shows the applicable image settings. Start export, monitor progress and cancel from the dialog.
+
+Set **File name** in the export dialog for MP4, PNG sequence ZIP and transparent PNG ZIP. Project Save and Export for AE also ask for a name. Extensions are added automatically without duplication. Blank names fall back to the song title; unsupported filename characters are replaced.
+
+### Effects-only lyrics and offscreen areas
+
+Enter `｜   ｜` (spaces between full-width vertical bars) to create a timed lyric line with effects but no text. Standard timing and boundary linking remain available. Lyric display areas can extend beyond the canvas and reach 400% in width and height. Advanced → Background → Apply lyric background effects is on by default and also draws lyric background graphics over uploaded background media.
+
+### Retained lyrics without overlap
+
+Wrap lines in `{-` and `-}` to retain them like `{ … }` while avoiding overlap between their display areas. Adjust **Detailed → Techniques → Lyric overlap avoidance strength** from 0 (ordinary retained layering) to 1 (non-overlapping areas, default). Works with automatic placement off; positions are fixed for seeking. Areas shrink proportionally when necessary. Escape the braces (`\{` and `\}`) to display the delimiters literally.
+
+### Copy and paste cut effects
+
+Use the copy/paste icons in each cut's controls, timeline, or preview frame. Effects can be pasted between lyric cuts, or between foreground/background cuts. The destination's text, source asset, timing, and display area/placement are preserved. Layout geometry is rebuilt for the destination text. Pasting supports Undo/Redo. If clipboard access is unavailable, explicit copies can still be pasted within the same page.

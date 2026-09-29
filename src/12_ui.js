@@ -6,75 +6,188 @@
 if (!document.getElementById('app')) return;          // engine-only pages (tests)
 const $ = id => document.getElementById(id);
 const LS_KEY = 'jizura.project.v1';
+const MEDIA_DELETE_KEY = 'jizura.media.pendingDelete.v1';
 const HUD_CHARS = '0123456789:./-_()【】・No.LYRICRECUNTITLEDXYlinebpminterlude—─／ ';
 const ICON = {
-  dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1" fill="currentColor"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor"/><circle cx="5.5" cy="10.5" r="1" fill="currentColor"/></svg>',
+  copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m8 1 2.1 4.5 4.9.7-3.5 3.5.8 4.9L8 12.3l-4.3 2.3.8-4.9L1 6.2l4.9-.7Z"/></svg>',
+  paste: '<svg viewBox="0 0 24 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 8H1m3-3L1 8l3 3m12-10 2.1 4.5 4.9.7-3.5 3.5.8 4.9-4.3-2.3-4.3 2.3.8-4.9L9 6.2l4.9-.7Z"/></svg>',
+
+  details: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/><path d="M5 2v4M11 6v4M7 10v4" stroke-width="3"/></svg>',
+  area: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10"/><path d="M2 6h12M5 3v10"/></svg>',
+  remove: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m4 4 8 8m0-8-8 8"/></svg>',
+
+  dice: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 5.3A5.3 5.3 0 1 0 13.2 10M12.8 1.8v3.8H9"/></svg>',
+  disableReroll: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.3A5 5 0 1 0 12.7 9M10 1v3.5H6.5"/><path d="M11.5 2h3.5" stroke="#ff5364" stroke-width="2.2"/></svg>',
   lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>',
-  pen: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 13l1-3.5L11 2.5l2.5 2.5L6.5 12z"/><path d="M9.5 4l2.5 2.5"/></svg>',
-  tap: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2" fill="currentColor"/><circle cx="8" cy="8" r="5.5"/></svg>',
-  range: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3v10M13 3v10"/><path d="M5.5 8h5M8.5 5.5L11 8l-2.5 2.5"/></svg>',
+  frontmost: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="5" width="10" height="8" rx="1"/><path d="M5 2h9v8M8 4l2 2 2-2"/></svg>',
 };
 
-const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, slow: false, lineEls: [], curLine: -2, timelineZoom: 1.0, timelineScroll: 0, tlDrag: null, selectedBlock: null };
-window.S = S;
+const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), playing: false, t: 0, t0: 0, loop: true, need: true, exporting: null, tap: null, linkDrag: null, slow: false, lineEls: [], mediaLineEls: [], sourceTab: 'lyrics', curLine: -2, timelineZoom: 1 };
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
-  ctx: null, src: null, startAt: 0, gain: null, vol: 0.8, muted: false,
+  ctx: null, src: null, startAt: 0,
   play(buffer, offset) {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.stop();
-    if (!this.gain) { this.gain = this.ctx.createGain(); this.gain.connect(this.ctx.destination); this.applyVol(); }
-    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.gain);
+    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.ctx.destination);
     const off = Math.max(0, Math.min(offset, buffer.duration - 0.01));
     s.start(0, off); this.src = s; this.startAt = this.ctx.currentTime - off;
   },
   stop() { if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} this.src = null; } },
   time() { return this.ctx ? this.ctx.currentTime - this.startAt : 0; },
-  /* preview volume only (exports keep the original level) */
-  setVol(v, muted) { if (v != null) this.vol = Math.max(0, Math.min(1, v)); if (muted != null) this.muted = !!muted; this.applyVol(); },
-  applyVol() { if (!this.gain) return; const v = this.muted ? 0 : this.vol * this.vol; try { this.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.015); } catch (e) { this.gain.gain.value = v; } },
 };
-/* プレビュー音量: remembered per browser */
-function initVolume() {
-  const el = $('vol'), mb = $('btnMute'); if (!el || !mb) return;
-  let v = 0.8, m = false;
-  try { const o = JSON.parse(localStorage.getItem('jizura.previewVolume') || 'null'); if (o) { v = +o.v; m = !!o.m; } } catch (e) {}
-  if (!(v >= 0 && v <= 1)) v = 0.8;
-  const show = () => { el.value = Math.round(AP.vol * 100); mb.textContent = AP.muted || AP.vol === 0 ? '消音' : '音量'; mb.setAttribute('aria-pressed', String(AP.muted)); el.title = '音量 ' + Math.round(AP.vol * 100) + '%'; };
-  const save = () => { try { localStorage.setItem('jizura.previewVolume', JSON.stringify({ v: AP.vol, m: AP.muted })); } catch (e) {} };
-  AP.setVol(v, m); show();
-  el.addEventListener('input', () => { AP.setVol(el.value / 100, false); show(); save(); });
-  mb.addEventListener('click', () => { AP.setVol(null, !AP.muted); show(); save(); });
+const NO_AUDIO_LABEL = '曲なし（読み込むと拍を検出してカットを合わせます）';
+function removeAudio() {
+  if (!S.audio) return;
+  S.audioLoad = (S.audioLoad || 0) + 1;
+  pause(); S.audio = null; S.audioFile = null; delete S.project.audioAsset;
+  S.audioAssetId = null;
+  $('audioFile').value = '';
+  $('audioName').textContent = NO_AUDIO_LABEL;
+  $('btnRemoveAudio').hidden = true;
+  syncUI(); replan();
 }
 
 /* ---------------- project persistence ---------------- */
+// 無表示カット (retired): the lyric showing when a blank began now ends there (カットの終了時間).
+function migrateLyricBlankCuts(project) {
+  const blanks = (Array.isArray(project.lyricBlankCuts) ? project.lyricBlankCuts : []).filter(b => b && Number.isFinite(+b.start)).sort((a, b) => a.start - b.start);
+  delete project.lyricBlankCuts;
+  if (!blanks.length) return;
+  const plan = J.plan(project), done = new Set();
+  for (const blank of blanks) for (const cut of plan.cuts) {
+    const key = `${cut.line}:${cut.part}`;
+    if (cut.line < 0 || !Number.isInteger(cut.part) || done.has(key) || !(cut.start < +blank.start && cut.end > +blank.start)) continue;
+    project.lyricCutOptions[key] = { ...project.lyricCutOptions[key], untilNext: false, endTime: +(+blank.start).toFixed(3) };
+    done.add(key);
+  }
+}
 function mergeProject(p) {
   const d = J.defaultProject();
   const o = Object.assign(d, p || {});
+  if (o.videoSize) { const [w, h] = J.outputSize(o); o.videoSize = { w, h }; }
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
-  o.bgMedia = Object.assign(J.defaultProject().bgMedia || {}, (p && p.bgMedia) || {});
+  o.timing.cutTimes = o.timing.cutTimes || {};
   const en = J.defaultProject().enabled;
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
   o.overrides = (p && p.overrides) || {};
-  o.rowCache = (p && p.rowCache) || {};
+  o.lyricCutOptions = (p && p.lyricCutOptions) || {};
+  o.lyricEffects = J.lyricEffectSettings(o);
+  o.themes = J.themeIds(o);
+  delete o.jevPrompt;
+  migrateLyricBlankCuts(o);
+  o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
+  o.favoriteSequence = Math.max(o.effectFavorites.length,Math.floor(+o.favoriteSequence)||0);
+  o.timelineLinks = Array.isArray(p && p.timelineLinks) ? p.timelineLinks : [];
+  o.media = J.normalizeMedia(p && p.media);
+  o.foreground = J.normalizeMedia(p && p.foreground);
+  for (const layer of ['media', 'foreground']) o[layer].effects = J.mediaEffectSettings(o, layer);
+  delete o.mediaEffects;
   o.colors = Object.assign({ enabled: false }, (p && p.colors) || {});
+  o.colorTheme = J.normalizeColorTheme(p && p.colorTheme);
   o.fonts = (p && p.fonts) || {};
   o.userFonts = (p && p.userFonts) || [];
   for (const uf of o.userFonts) if (!J.FONTS[uf.key]) J.addUserFont(uf.key, uf.label, uf.family, uf.weight || 400);
+  o.compositeFonts = Array.isArray(p && p.compositeFonts) ? p.compositeFonts : [];
+  J.setCompositeFonts(o.compositeFonts);
+  J.migrateLyricCompositing(o);
   return o;
 }
 function setBadges(d) {
   return (d && d.extra ? '<span class="set-badge ex" title="最初の公開版のあとに追加">追加</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
+function pendingMediaDeletes() { try { const ids = JSON.parse(localStorage.getItem(MEDIA_DELETE_KEY) || '[]'); return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : []; } catch (e) { return []; } }
+function queueMediaDeletion(id) { try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify([...new Set([...pendingMediaDeletes(), id])])); } catch (e) {} }
+async function cleanupDeletedMedia() {
+  const active = new Set([...S.project.media.items, ...S.project.foreground.items].map(item => item.id));
+  const pending = pendingMediaDeletes(), failed = [];
+  for (const id of pending) {
+    if (active.has(id)) continue;
+    try {
+      const asset = J.mediaAssets.get(id);
+      if (asset) { J.releaseMediaAsset(asset); J.mediaAssets.delete(id); }
+      await J.removeMedia(id);
+    } catch (e) { failed.push(id); }
+  }
+  try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify(pendingMediaDeletes().filter(id => !pending.includes(id) || failed.includes(id)))); } catch (e) {}
+}
+const U = { list: [], i: -1, restoring: false, pendingGroup: null, lastGroup: null, lastAt: 0 };
+const MediaElementCache = new Map();
+
+function cacheMediaElement(id, asset) {
+  if (!id || !asset) return;
+  MediaElementCache.set(id, { url: asset.url, element: asset.element, type: asset.type, poster: asset.poster, posterElement: asset.posterElement, file: asset.file });
+}
+
+function restoreMediaElements(proj) {
+  if (!proj || !J.mediaAssets) return;
+  for (const layer of ['media', 'foreground']) {
+    const m = proj[layer];
+    if (m && m.items) {
+      for (const item of m.items) {
+        if (!J.mediaAssets.has(item.id)) {
+          const cached = MediaElementCache.get(item.id);
+          if (cached) {
+            J.mediaAssets.set(item.id, cached);
+          }
+        }
+      }
+    }
+  }
+}
+
+function initUndo() { U.list = [JSON.stringify(S.project)]; U.i = 0; updateUndoButtons(); }
+function markUndoGroup(group) { U.pendingGroup = group; }
+function updateUndoButtons() {
+  if ($('btnUndo')) $('btnUndo').disabled = U.i <= 0;
+  if ($('btnRedo')) $('btnRedo').disabled = U.i >= U.list.length - 1;
+}
+function recordUndoState() {
+  if (U.restoring || !S.project) return;
+  if (J.mediaAssets) {
+    for (const [id, asset] of J.mediaAssets) cacheMediaElement(id, asset);
+  }
+  const snap = JSON.stringify(S.project), group = U.pendingGroup, now = Date.now();
+  U.pendingGroup = null;
+  if (U.i < 0) { U.list = [snap]; U.i = 0; updateUndoButtons(); return; }
+  if (snap === U.list[U.i]) return;
+  const atTip = U.i === U.list.length - 1;
+  U.list = U.list.slice(0, U.i + 1);
+  if (group && atTip && group === U.lastGroup && now - U.lastAt < 1200 && U.i > 0) U.list[U.i] = snap;
+  else { U.list.push(snap); U.i++; }
+  if (U.list.length > 100) { U.list.shift(); U.i--; }
+  U.lastGroup = group; U.lastAt = now;
+  updateUndoButtons();
+}
+function undoMove(direction) {
+  if (S.exporting) return;
+  recordUndoState();
+  const next = U.i + direction;
+  if (next < 0 || next >= U.list.length) return;
+  pause(); clearTimeout(replanTimer);
+  if (S.areaEdit) cancelAreaEditor();
+  S.tap = null; S.timelineDrag = null; S.linkDrag = null;
+  $('tapPanel').hidden = true; syncTapButtons();
+  U.restoring = true; U.i = next; U.pendingGroup = null; U.lastGroup = null;
+  S.project = mergeProject(JSON.parse(U.list[next]));
+  restoreMediaElements(S.project);
+  if (S.project.audioAsset?.id !== S.audioAssetId) {
+    S.audioLoad = (S.audioLoad || 0) + 1;
+    S.audio = null; S.audioFile = null; refreshAudioName(); restoreAudioAsset();
+  }
+  fontKey = ''; syncUI(); replan(); flushSave();
+  U.list[U.i] = JSON.stringify(S.project);
+  U.restoring = false; updateUndoButtons();
+}
 let saveTimer = 0;
-function autosave() { clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 700); }
-function flushSave() { clearTimeout(saveTimer); try { localStorage.setItem(LS_KEY, JSON.stringify(S.project)); } catch (e) {} }
-window.addEventListener('pagehide', () => { if (S.project) flushSave(); });
+function autosave() { recordUndoState(); clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 700); }
+function flushSave() { recordUndoState(); clearTimeout(saveTimer); try { localStorage.setItem(LS_KEY, JSON.stringify(S.project)); } catch (e) {} }
+window.addEventListener('pagehide', () => { if (S.project && !U.restoring) { flushSave(); cleanupDeletedMedia(); } });
 
 /* ---------------- planning ---------------- */
 function audioLike() {
@@ -94,35 +207,41 @@ function langNote() {
   if (langNote.last !== undefined && langNote.last !== J.lang) { try { renderFontRoles(); } catch (e) {} }   // font menus show the language's faces
   langNote.last = J.lang;
 }
-function replan() {
-  S.plan = J.plan(S.project, audioLike());
-  if (S.project.timing && Array.isArray(S.project.timing.cutTimes) && S.project.timing.cutTimes.length > 0) {
-    const ct = S.project.timing.cutTimes;
-    S.plan.cuts.forEach((cut, i) => {
-      if (ct[i] && typeof ct[i].start === 'number' && typeof ct[i].end === 'number') {
-        cut.start = ct[i].start;
-        cut.end = ct[i].end;
-        cut.dur = Math.max(0.01, cut.end - cut.start);
-      }
-    });
-    if (S.plan.lines) {
-      S.plan.lines.forEach(ln => {
-        const lnCuts = S.plan.cuts.filter(c => c.line === ln.index);
-        if (lnCuts.length) {
-          ln.start = lnCuts[0].start;
-          ln.end = lnCuts[lnCuts.length - 1].end;
-          ln.visEnd = ln.end;
-        }
-      });
-    }
-    if (S.plan.titleLine && S.plan.cuts.length && S.plan.cuts[0].line === -1) {
-      S.plan.titleLine.start = S.plan.cuts[0].start;
-      S.plan.titleLine.end = S.plan.cuts[0].end;
+// The full plan (lyrics + media layers) for a project; also used by the cut details preview.
+function composePlan(project) {
+  const plan = J.plan(project, audioLike());
+  plan.media = J.planMedia(project, plan, S.audio && S.audio.duration);
+  plan.foreground = J.planMedia(project, plan, S.audio && S.audio.duration, 'foreground');
+  plan.duration = Math.max(plan.media.duration, plan.foreground.duration);
+  // An explicit output length also caps existing cuts extending past the song.
+  if(Number.isFinite(+project.durationOverride)&&+project.durationOverride>0){
+    plan.duration=+project.durationOverride;
+    plan.cuts=plan.cuts.filter(c=>c.start<plan.duration);
+    for(const cut of plan.cuts){cut.end=Math.min(cut.end,plan.duration);cut.dur=cut.end-cut.start;}
+    plan.events=plan.events.filter(event=>event.t<plan.duration);
+    for(const layer of ['media','foreground']){
+      plan[layer].cuts=plan[layer].cuts.filter(c=>c.start<plan.duration);
+      for(const cut of plan[layer].cuts)cut.end=Math.min(cut.end,plan.duration);
     }
   }
+  for (const layer of ['media', 'foreground']) {
+    plan[layer].duration = plan.duration;
+    const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
+  }
+  return plan;
+}
+function replan() {
+  closeTimelineCutMenu();
+  S.plan = composePlan(S.project);
+  if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
-  if (S.t > S.plan.duration) S.t = 0;
-  renderLines(); sizeViewport(); drawTimeline(); updateTimeUI(); updateCutInfo();
+  if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
+  const temporarilyHidden = ref => S.project.durationOverride != null && (
+    /^l:\d+:\d+$/.test(ref) && +ref.split(':')[1] < S.plan.lines.length ||
+    /^[fm]:\d+$/.test(ref) && +ref.slice(2) < S.project[ref[0]==='f'?'foreground':'media'].cutCount);
+  S.project.timelineLinks = S.project.timelineLinks.filter(link => link && link.a !== link.b && (boundaryCut(link.a) || temporarilyHidden(link.a)) && (boundaryCut(link.b) || temporarilyHidden(link.b)));
+  lastCutIdx = null;
+  renderLines(); renderMediaList(); renderMediaLines(); sizeViewport(); drawTimeline(); drawTimelineLinks(); updateTimeUI();
   S.need = true; autosave(); ensureFonts(); drawSwatch(); showNow();
   clearTimeout(warmTimer); warmTimer = setTimeout(warm, 450);
 }
@@ -154,9 +273,9 @@ const replanSoon = (ms = 220) => { clearTimeout(replanTimer); replanTimer = setT
 let fontKey = '';
 let thumbFonts = null;
 async function ensureFonts() {
-  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS;
+  const txt = S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan);
   const keys = J.fontsOfPlan(S.plan);                       // only the faces this plan draws with
-  const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length + '|' + J.lang;   // the lyric language changes the faces
+  const key = txt + '|' + keys.join(',') + '|' + Object.keys(J.FONTS).length;
   if (key === fontKey) return;
   fontKey = key;
   showMsg('フォントを読み込み中…');
@@ -171,40 +290,63 @@ function loadThumbFonts() {
 function showMsg(m) { const el = $('viewMsg'); if (!m) { el.hidden = true; return; } el.textContent = m; el.hidden = false; }
 
 /* ---------------- viewport & drawing ---------------- */
-// 固定表示: on wide & tall windows the page itself doesn't scroll (see style.css html.fixed-ok)
-const FIXED_MQ = window.matchMedia ? window.matchMedia('(min-width: 1181px) and (min-height: 620px)') : null;
-document.documentElement.classList.add('fixed-ok');
-function fixedLayout() { return !!(FIXED_MQ && FIXED_MQ.matches) && document.documentElement.classList.contains('fixed-ok'); }
 function sizeViewport() {
   const vp = $('viewport'), c = $('view');
   const ar = S.plan.W / S.plan.H;
-  let cssW = vp.clientWidth || 800, cssH = cssW / ar;
-  // fixed workspace: the viewport gets whatever height is left under the header / above the transport and timeline
-  const maxH = fixedLayout() ? Math.max(160, vp.clientHeight - 2) : Math.max(220, window.innerHeight * 0.68);
+  const app=$('app'),stage=vp.closest('.col-stage');
+  const full=document.fullscreenElement===vp||vp.classList.contains('preview-fullscreen');
+  // Measure the desktop layout, not the expanded compact layout, to avoid breakpoint oscillation.
+  const wasCompact=app.classList.contains('compact-ui');
+  const screenW=document.documentElement.clientWidth, screenH=document.documentElement.clientHeight;
+  const phone=screenW<=760;
+  // Do not briefly restore desktop columns on phones: mobile layout viewports can
+  // expand to accommodate their intrinsic width before the next resize callback.
+  if(!full)app.classList.toggle('compact-ui',screenW<=1180||!!S.tap);
+  const style=getComputedStyle(stage),children=[...stage.children].filter(el=>el!==vp && el.id!=='tapPanel' && getComputedStyle(el).display!=='none');
+  const controls=children.reduce((sum,el)=>{const css=getComputedStyle(el);return sum+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+  const desktopH=Math.max(0,innerHeight-Math.max(0,stage.getBoundingClientRect().top)-controls-(parseFloat(style.rowGap)||0)*children.length-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)-4);
+  const desktopW=vp.clientWidth||800,fitH=Math.min(desktopW/ar,desktopH);
+  const compact=full?wasCompact:!!S.tap||screenW<=1180||Math.min(fitH,fitH*ar)<270;
+  app.classList.toggle('compact-ui',compact);
+  if(compact!==wasCompact){S.sourceOpen=false;syncSourceDrawer();}
+  const viewportStyle=getComputedStyle(vp);
+  const availableW=vp.clientWidth-(parseFloat(viewportStyle.paddingLeft)||0)-(parseFloat(viewportStyle.paddingRight)||0);
+  let cssW=Math.max(1,Math.min(availableW,screenW)),cssH=cssW/ar;
+  // Preserve a 270px short edge where screen width permits; scroll controls below the preview.
+  const maxH=full?screenH:phone?Math.max(1,screenH*.5):compact?Math.max(270/Math.min(1,ar),screenH*.5):Math.max(60,desktopH);
   if (cssH > maxH) { cssH = maxH; cssW = cssH * ar; }
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(Math.min(S.plan.W, cssW * dpr)), ph = Math.round(pw / ar);
   if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
   c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+  positionAreaEditor();
+  if(S.tap)$('tapPanel').style.top=(vp.offsetTop+vp.offsetHeight+6)+'px';
   S.need = true;
-}
-// preview only: dotted outline of the centre that 中央を空ける keeps free (never in exports)
-function drawCenterGuide(ctx, k) {
-  const P = S.plan, z = P.zones; if (!z) return;
-  const r = z[0].side === 'left' ? [z[0].w, 0, P.W - z[0].w - z[1].w, P.H] : [0, z[0].h, P.W, P.H - z[0].h - z[1].h];
-  ctx.save(); ctx.setTransform(k, 0, 0, k, 0, 0);
-  ctx.setLineDash([14, 10]); ctx.lineWidth = 2 / k * 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.strokeRect(r[0] + 4, r[1] + 4, r[2] - 8, r[3] - 8);
-  ctx.setLineDash([]); ctx.restore();
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
+  if(!S.playPreparing)J.syncMediaPreview(S.plan, S.t, S.playing);
   const t0 = performance.now();
-  S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: S.playing && S.slow });
-  if (S.plan.centerFree) drawCenterGuide(ctx, c.width / S.plan.W);
+  const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
+  const previousAreas = previewCuts.map(cut => cut.area);
+  previewCuts.forEach(cut => { cut.area = { ...S.areaEdit.draft, angle: S.areaEdit.angle }; });
+  const edit = S.areaEdit, mediaCut = edit && edit.kind !== 'lyric' && S.plan[edit.kind].cuts[edit.index];
+  const previousMedia = mediaCut && { placement: mediaCut.placement, zoom: mediaCut.zoom, hold: mediaCut.hold, enter: mediaCut.enter, exit: mediaCut.exit, trans: mediaCut.trans };
+  if (mediaCut) Object.assign(mediaCut, { placement: { cx: edit.draft.x + edit.draft.w / 2, cy: edit.draft.y + edit.draft.h / 2, w: edit.draft.w, h: edit.draft.h, lockAspect: edit.lockAspect, angle: edit.angle }, zoom: 100, hold: 'still', enter: 'cut', exit: 'cut', trans: undefined });
+  try { S.renderer.frame(ctx, S.plan, S.t, { scale: c.width / S.plan.W, fast: !!edit || S.playing && S.slow, noTrans: !!edit, noPost: !!edit, previewEdit: !!edit, noForeground: !!edit && edit.kind === 'media' }); }
+  finally { previewCuts.forEach((cut, i) => { cut.area = previousAreas[i]; }); if (mediaCut) Object.assign(mediaCut, previousMedia); }
   const dt = performance.now() - t0;
   S.slow = S.playing ? (dt > 30 ? true : dt < 14 ? false : S.slow) : false;
-  updateTimeUI(); drawTimeline(); updateCutInfo(); syncBlockInspector();
+  updateTimeUI(); drawTimeline(); followTimelinePlayhead(); updateCutInfo(); drawItemFrames();
+}
+// While playing, page the zoomed timeline so the playhead stays in view (paused briefly after the user
+// scrolls it by hand).
+let timelineUserScroll = 0;
+function followTimelinePlayhead() {
+  if (!S.playing || S.timelineZoom <= 1 || performance.now() - timelineUserScroll < 1500) return;
+  const scroll = $('timelineScroll'), box = scroll.getBoundingClientRect(), line = $('timeline').getBoundingClientRect();
+  const x = line.left + line.width * J.clamp(S.t / Math.max(.001, S.plan.duration), 0, 1);
+  if (x < box.left + box.width * .05 || x > box.right - box.width * .08) scroll.scrollLeft += x - (box.left + box.width * .15);
 }
 function tick(now) {
   requestAnimationFrame(tick);
@@ -212,499 +354,1473 @@ function tick(now) {
   if (S.playing) {
     // rAF timestamps can precede the moment play()/seek() stamped t0 → clamp so t never goes negative
     let t = Math.max(0, S.audio ? AP.time() : (now - S.t0) / 1000);
-    if (t >= S.plan.duration - 1e-3) {
+    if (S.tap && S.tap.append && !S.audio && t >= S.plan.duration - 2) extendTapPreview(t);
+    const stopAt = S.tap && S.tap.append && S.audio ? Math.min(S.plan.duration, S.audio.duration) : S.plan.duration;
+    if (t >= stopAt - 1e-3) {
       if (S.loop && !S.tap) { seek(0); t = 0; }
-      else { pause(); t = S.plan.duration - 1e-3; if (S.tap) stopTap(); }
+      else { pause(); t = stopAt - 1e-3; if (S.tap) stopTap(); }
     }
     S.t = t; S.need = true;
   }
-  if (S.playing) {
-    if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.type === 'video') S.need = true;
-    const tr = S.project && S.project.tracks;
-    if (tr && tr.videos && tr.videos.length > 0) S.need = true;
-  }
-  syncTrackVideos(S.t, S.playing);
   if (S.need) { S.need = false; draw(); }
 }
-function syncTrackVideos(t, isPlaying) {
-  const tr = S.project && S.project.tracks;
-  if (!tr || !tr.videos) return;
-  for (const b of tr.videos) {
-    if (b.element && isFinite(b.element.duration) && b.element.duration > 0) {
-      const active = t >= b.start && t < b.end;
-      const targetTime = (t - b.start) % b.element.duration;
-      if (active) {
-        if (Math.abs(b.element.currentTime - targetTime) > 0.08) {
-          b.element.currentTime = targetTime;
-        }
-        if (isPlaying && b.element.paused) {
-          b.element.play().catch(() => {});
-        } else if (!isPlaying && !b.element.paused) {
-          b.element.pause();
-        }
-      } else {
-        if (!b.element.paused) {
-          b.element.pause();
-        }
-      }
-    }
-  }
-}
 function updateTimeUI() {
+  document.querySelectorAll('#layerVisibilityControls button').forEach(button=>button.disabled=!!S.exporting);
+  $('fullscreenPlay').textContent=S.playing?'❚❚':'▶';
+  $('fullscreenPlay').setAttribute('aria-label',S.playing?J.mediaLabel('一時停止','Pause'):J.mediaLabel('再生','Play'));
+  $('fullscreenTime').textContent=J.fmtTime(S.t)+' / '+J.fmtTime(S.plan.duration);
+  if(!S.scrubbing)$('fullscreenScrub').value=String(Math.round(S.t/Math.max(.001,S.plan.duration)*10000));
+  syncPlayheadMenu();
   $('timeNow').textContent = J.fmtTime(S.t);
-  $('timeDur').textContent = J.fmtTime(S.plan.duration);
+  $('timeDur').textContent = J.fmtTime(S.durationDrag ? S.durationDrag.preview : S.plan.duration);
+  $('timeDur').classList.toggle('manual', S.project.durationOverride != null || !!S.durationDrag);
   if (!S.scrubbing) $('scrub').value = String(Math.round(S.t / Math.max(0.001, S.plan.duration) * 10000));
 }
-function play() {
+function minimumProjectDuration() {
+  let minimum = 0.1;
+  for (const line of S.plan.lines) minimum = Math.max(minimum, line.start + 0.04);
+  for (const layer of ['media', 'foreground']) {
+    minimum = Math.max(minimum, S.plan[layer].cuts.length * 0.04);
+    for (const [index, time] of Object.entries(S.project[layer].timing.lineTimes)) {
+      if (+index < S.plan[layer].cuts.length && Number.isFinite(+time)) minimum = Math.max(minimum, +time + (S.plan[layer].cuts.length - +index) * 0.04);
+    }
+  }
+  return Math.ceil(minimum * 100) / 100;
+}
+function parseProjectDuration(raw) {
+  const parts = String(raw).trim().split(':');
+  if (parts.length > 3 || !parts.every(p => /^\d+(?:\.\d{1,2})?$/.test(p))) return NaN;
+  if (parts.slice(0, -1).some(p => p.includes('.'))) return NaN;
+  if (parts.length > 1 && +parts.at(-1) >= 60) return NaN;
+  if (parts.length === 3 && +parts[1] >= 60) return NaN;
+  return parts.reduce((seconds, part) => seconds * 60 + +part, 0);
+}
+function setProjectDuration(seconds) {
+  if (S.exporting || S.tap) return false;
+  const minimum = minimumProjectDuration();
+  if (seconds != null && (!Number.isFinite(seconds) || seconds < minimum - 1e-6 || seconds > 21600)) {
+    toast(`動画全体の長さは ${J.fmtTime(minimum)} ～ 06:00:00 の範囲で入力してください`);
+    return false;
+  }
+  if (S.areaEdit) cancelAreaEditor();
+  pause();
+  S.project.durationOverride = seconds == null ? null : Math.round(seconds * 100) / 100;
+  replan();
+  return true;
+}
+async function play() {
+  if(S.tap?.countingDown)return;
+  if(S.playPreparing){pause();return;}
+  const videos=['media','foreground'].some(layer=>S.plan.layerVisibility?.[layer]!==false&&J.mediaAt(S.plan,S.t,layer)?.type==='video');
+  if(videos){
+    const controller=new AbortController();S.playPreparing=controller;
+    $('btnPlay').textContent='…';$('btnPlay').setAttribute('aria-label',J.mediaLabel('動画を準備中（押すと中止）','Preparing video (press to cancel)'));
+    // Unlock audio during the original tap before awaiting the video decoder.
+    if(S.audio){if(!AP.ctx)AP.ctx=new (window.AudioContext||window.webkitAudioContext)();if(AP.ctx.state==='suspended')AP.ctx.resume();}
+    try{await J.prepareMediaFrame(S.plan,S.t,controller.signal);}
+    catch(error){if(!controller.signal.aborted)toast(error.message);if(S.playPreparing===controller)pause();return;}
+    if(S.playPreparing!==controller||controller.signal.aborted)return;
+    S.playPreparing=null;
+  }
   if (S.audio) AP.play(S.audio.buffer, S.t);
   else S.t0 = performance.now() - S.t * 1000;
-  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.play) {
-    const v = J.bgMedia.element;
-    if (isFinite(v.duration) && v.duration > 0) v.currentTime = S.t % v.duration;
-    v.play().catch(() => {});
-  }
-  syncTrackVideos(S.t, true);
   S.playing = true; $('btnPlay').textContent = '❚❚'; $('btnPlay').setAttribute('aria-label', '一時停止');
 }
 function pause() {
+  S.playPreparing?.abort();S.playPreparing=null;
   S.playing = false; AP.stop();
-  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && J.bgMedia.element.pause) {
-    J.bgMedia.element.pause();
-  }
-  syncTrackVideos(S.t, false);
+  J.syncMediaPreview(S.plan, S.t, false);
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
+  if(S.playPreparing)pause();
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
-  if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element && isFinite(J.bgMedia.element.duration) && J.bgMedia.element.duration > 0) {
-    J.bgMedia.element.currentTime = S.t % J.bgMedia.element.duration;
-  }
-  syncTrackVideos(S.t, S.playing);
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
+  J.syncMediaPreview(S.plan, S.t, S.playing);
   S.need = true;
 }
 
 /* ---------------- timeline ---------------- */
-// zoomable view: [TL.off, TL.off + D / TL.z] seconds; line starts are draggable handles in the top band
 const layoutHue = k => (J.LAYOUT_ORDER.indexOf(k) * 37 + 30) % 360;
-const tlVisSec = () => Math.max(0.1, (S.plan ? S.plan.duration : 10) / Math.max(1, S.timelineZoom || 1));
-const tlTimeFromPx = (px, w) => {
-  const vis = tlVisSec();
-  return Math.max(0, Math.min(S.plan ? S.plan.duration : 0, (px / w) * vis + S.timelineScroll));
-};
-const tlPxFromTime = (t, w) => {
-  const vis = tlVisSec();
-  return ((t - S.timelineScroll) / vis) * w;
-};
-function snapStep(vis) {
-  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120];
-  for (const s of steps) if (vis / s <= 14) return s;
-  return 60;
+function sizeTimelineStack() {
+  const scroll = $('timelineScroll'), stack = $('timelineStack');
+  const width = Math.max(10, Math.round(scroll.clientWidth * S.timelineZoom));
+  if (stack.style.width !== `${width}px`) stack.style.width = `${width}px`;
+  syncTimelinePan();
 }
-function fmtTime(t) {
-  const m = Math.floor(t / 60);
-  const s = t % 60;
-  return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+function syncTimelinePan(){
+  const input=$('timelinePan');if(!input)return;
+  const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
+  input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
-
-function tlZoom(f) {
-  const oldZoom = S.timelineZoom || 1;
-  setTlZoom(Math.max(1, Math.min(10, oldZoom * f)));
+function setTimelineZoom(zoom) {
+  const scroll = $('timelineScroll'), stack = $('timelineStack');
+  const center = scroll.scrollLeft + scroll.clientWidth / 2;
+  const fraction = center / Math.max(1, stack.clientWidth);
+  S.timelineZoom = J.clamp(zoom, 1, 8);
+  sizeTimelineStack();
+  scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
+  $('timelineZoomValue').textContent = `${Math.round(S.timelineZoom * 100)}%`;
+  $('timelineZoomOut').disabled = S.timelineZoom <= 1;
+  $('timelineZoomIn').disabled = S.timelineZoom >= 8;
+  drawTimeline(); drawTimelineLinks();
 }
-
-function getTrackLayout(h, dpr) {
-  const rulerH = 16 * dpr;
-  const t0Top = 18 * dpr, t0H = 42 * dpr, t0Bot = t0Top + t0H;
-  const t1Top = 62 * dpr, t1H = 40 * dpr, t1Bot = t1Top + t1H;
-  const t2Top = 104 * dpr, t2H = 40 * dpr, t2Bot = t2Top + t2H;
-  return { rulerH, t0Top, t0Bot, t1Top, t1Bot, t2Top, t2Bot };
-}
-
-function hitTestTimeline(px, py, w, h, dpr) {
-  if (!S.plan) return null;
-  const L = getTrackLayout(h, dpr);
-  const handleW = 6 * dpr;
-
-  // Track 0: 文字PV cuts
-  if (py >= L.t0Top && py <= L.t0Bot && S.plan.cuts) {
-    for (let i = S.plan.cuts.length - 1; i >= 0; i--) {
-      const cut = S.plan.cuts[i];
-      const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
-      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'cut', cut, index: i, x: x0 };
-      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'cut', cut, index: i, x: x1 };
-      if (px >= x0 && px <= x1) return { type: 'move', target: 'cut', cut, index: i };
-    }
+// Overlapping cuts (own end times, 1シーン groups) are drawn in stacked lanes, translucent, so every start
+// and end stays reachable. Lanes are assigned greedily by start time; layers grow taller with more lanes.
+function timelineCuts(layer) { return layer === 'lyrics' ? S.plan.cuts.filter(c => !c.blank) : S.plan[layer].cuts; }
+function timelineLanes(layer) {
+  const ends = [], lanes = new Map();
+  for (const cut of [...timelineCuts(layer)].sort((a, b) => a.start - b.start || a.index - b.index)) {
+    let lane = ends.findIndex(end => end <= cut.start + 1e-6);
+    if (lane < 0) { lane = ends.length; ends.push(0); }
+    ends[lane] = cut.end; lanes.set(cut, lane);
   }
-
-  // Track 1: 背景画像
-  const images = (S.project && S.project.tracks && S.project.tracks.images) || [];
-  if (py >= L.t1Top && py <= L.t1Bot) {
-    for (let i = images.length - 1; i >= 0; i--) {
-      const b = images[i];
-      const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
-      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'block', track: 'images', block: b, index: i, x: x0 };
-      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'block', track: 'images', block: b, index: i, x: x1 };
-      if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'images', block: b, index: i };
-    }
-  }
-
-  // Track 2: 背景動画
-  const videos = (S.project && S.project.tracks && S.project.tracks.videos) || [];
-  if (py >= L.t2Top && py <= L.t2Bot) {
-    for (let i = videos.length - 1; i >= 0; i--) {
-      const b = videos[i];
-      const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
-      if (Math.abs(px - x0) <= handleW) return { type: 'trim-start', target: 'block', track: 'videos', block: b, index: i, x: x0 };
-      if (Math.abs(px - x1) <= handleW) return { type: 'trim-end', target: 'block', track: 'videos', block: b, index: i, x: x1 };
-      if (px >= x0 && px <= x1) return { type: 'move', target: 'block', track: 'videos', block: b, index: i };
-    }
-  }
-
-  return { type: 'seek' };
+  return { lanes, count: Math.max(1, ends.length) };
+}
+function timelineCanvas(layer) { return $(layer === 'lyrics' ? 'timeline' : layer === 'media' ? 'mediaTimeline' : 'foregroundTimeline'); }
+function fitTimelineHeight(canvas, count, step, free = 2) {
+  const extra = Math.max(0, count - free) * step;
+  if (+canvas.dataset.extra === extra) return;
+  canvas.dataset.extra = String(extra); canvas.style.height = '';
+  if (extra) canvas.style.height = canvas.clientHeight + extra + 'px';
+}
+// Bar band of a layer's canvas in CSS pixels, and a cut's lane within it.
+function timelineBand(layer, canvas = timelineCanvas(layer)) {
+  const h = canvas.clientHeight;
+  return layer === 'lyrics' ? { top: h * 0.3, bottom: h - 8 } : { top: 17, bottom: h - 3 };
+}
+function laneBox(layer, lane, count, canvas) {
+  const band = timelineBand(layer, canvas), height = (band.bottom - band.top) / count;
+  return { top: band.top + lane * height, height };
 }
 function drawTimeline() {
-  const c = $('timeline');
-  if (!c || !S.plan) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  sizeTimelineStack();
+  const lanesInfo = timelineLanes('lyrics');
+  fitTimelineHeight($('timeline'), lanesInfo.count, 22);
+  const c = $('timeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration);
-  const vis = tlVisSec();
-  // clamp scroll
-  S.timelineScroll = Math.max(0, Math.min(S.timelineScroll, Math.max(0, D - vis)));
-
-  const L = getTrackLayout(h, dpr);
-
-  // 背景全体
+  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration), X = t => t / D * w;
   x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
-
-  // トラック背景
-  x.fillStyle = '#17171d'; x.fillRect(0, L.t0Top, w, L.t0Bot - L.t0Top);
-  x.fillStyle = '#14181c'; x.fillRect(0, L.t1Top, w, L.t1Bot - L.t1Top);
-  x.fillStyle = '#191522'; x.fillRect(0, L.t2Top, w, L.t2Bot - L.t2Top);
-
-  // 範囲エクスポートハイライト（全トラック縦断）
-  const R = typeof exportRange === 'function' ? exportRange() : null;
-  if (R) {
-    const rx0 = tlPxFromTime(R.t0, w), rx1 = tlPxFromTime(R.t1, w);
-    x.fillStyle = 'rgba(245, 165, 12, 0.12)';
-    x.fillRect(rx0, 0, Math.max(2, rx1 - rx0), h);
-    x.strokeStyle = 'rgba(245, 165, 12, 0.4)';
-    x.lineWidth = 1;
-    x.strokeRect(rx0, 0, Math.max(2, rx1 - rx0), h);
-  }
-
-  // トラック境界線
-  x.strokeStyle = '#272733'; x.lineWidth = 1;
-  [L.rulerH, L.t0Bot, L.t1Bot, L.t2Bot].forEach(y => {
-    x.beginPath(); x.moveTo(0, y + 0.5); x.lineTo(w, y + 0.5); x.stroke();
-  });
-
-  // グリッド＆時間目盛り
-  const step = snapStep(vis);
-  const tStart = Math.floor(S.timelineScroll / step) * step;
-  x.strokeStyle = '#22222a'; x.lineWidth = 1;
-  x.fillStyle = '#6e6a74'; x.font = `${9 * dpr}px monospace`;
-  for (let t = tStart; t <= S.timelineScroll + vis + step; t += step) {
-    const px = Math.round(tlPxFromTime(t, w));
-    if (px < 0 || px > w) continue;
-    x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h); x.stroke();
-    x.fillText(fmtTime(t), px + 2 * dpr, 10 * dpr);
-  }
-
-  // Track 0 (文字PV) 内の音声波形
   if (S.audio && S.audio.peaks) {
     const pk = S.audio.peaks, n = pk.length, sd = S.audio.duration;
-    const t0Mid = (L.t0Top + L.t0Bot) / 2;
-    const maxH = (L.t0Bot - L.t0Top) * 0.7;
-    x.fillStyle = '#2b2b36';
-    for (let i = 0; i < w; i += 2) {
-      const t = tlTimeFromPx(i, w);
-      if (t > sd) break;
-      const v = pk[Math.min(n - 1, Math.floor(t / sd * n))];
-      const hh = v * maxH;
-      x.fillRect(i, t0Mid - hh / 2, 1.5, hh);
-    }
+    x.fillStyle = '#2b2b33';
+    for (let i = 0; i < w; i += 2) { const t = i / w * D; if (t > sd) break; const v = pk[Math.min(n - 1, Math.floor(t / sd * n))]; const hh = v * h * 0.8; x.fillRect(i, h * 0.6 - hh / 2, 1.5, hh); }
   }
-
-  // Track 0 内のビート
   const beats = S.plan.beats || [];
-  x.fillStyle = '#3a3a48';
-  for (const b of beats) {
-    const px = Math.round(tlPxFromTime(b, w));
-    if (px >= 0 && px <= w) x.fillRect(px, L.t0Bot - 5 * dpr, 1, 5 * dpr);
-  }
-
-  // Track 0: 文字PVカット
-  for (const cut of (S.plan.cuts || [])) {
-    const x0 = tlPxFromTime(cut.start, w), x1 = tlPxFromTime(cut.end, w);
-    if (x1 < 0 || x0 > w) continue;
+  x.fillStyle = '#3a3a44';
+  for (const b of beats) { if (b > D) break; x.fillRect(Math.round(X(b)), h - 6 * dpr, 1, 6 * dpr); }
+  const top = h * 0.3, overlapping = lanesInfo.count > 1, mono = getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace';
+  for (const cut of timelineCuts('lyrics')) {
+    const x0 = X(cut.start), x1 = X(cut.end), lane = laneBox('lyrics', lanesInfo.lanes.get(cut), lanesInfo.count, c);
+    const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0));
     const hue = layoutHue(cut.layout);
-    x.fillStyle = `hsla(${hue},70%,58%,0.32)`; x.fillRect(x0, L.t0Top, Math.max(1, x1 - x0 - 1), L.t0Bot - L.t0Top);
-    x.fillStyle = `hsla(${hue},80%,62%,0.95)`; x.fillRect(x0, L.t0Top, Math.max(1, 2 * dpr), L.t0Bot - L.t0Top);
-    // handles
-    x.fillStyle = 'rgba(255,255,255,0.7)';
-    x.fillRect(x0, L.t0Top, 2 * dpr, L.t0Bot - L.t0Top);
-    x.fillRect(Math.max(x0, x1 - 2 * dpr), L.t0Top, 2 * dpr, L.t0Bot - L.t0Top);
-
+    x.fillStyle = `hsla(${hue},70%,58%,${overlapping ? 0.2 : 0.28})`; x.fillRect(x0, y0, Math.max(1, x1 - x0 - 1), lh);
+    if (overlapping) { x.strokeStyle = `hsla(${hue},80%,62%,0.55)`; x.lineWidth = dpr; x.strokeRect(x0 + .5, y0 + .5, Math.max(1, x1 - x0 - 1), lh - 1); }
+    x.fillStyle = `hsla(${hue},80%,62%,${overlapping ? 0.8 : 0.95})`; x.fillRect(x0, y0, Math.max(1, 2 * dpr), lh);
+    x.fillRect(x0 - 2 * dpr, top - 3 * dpr, 6 * dpr, 6 * dpr);
+    if (cut.manualEnd) drawTimelineEndHandle(x, x1, y0, lh, dpr);
     if (x1 - x0 > 34 * dpr) {
-      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px monospace`;
-      x.save(); x.beginPath(); x.rect(x0 + 2 * dpr, L.t0Top, Math.max(0, x1 - x0 - 4 * dpr), L.t0Bot - L.t0Top); x.clip();
-      const cutLabel = (J.LAYOUTS[cut.layout] || {}).name || cut.layout;
-      x.fillText(`${cutLabel} ${cut.text || ''}`, x0 + 5 * dpr, L.t0Top + 13 * dpr); x.restore();
+      x.fillStyle = 'rgba(236,231,225,0.85)'; x.font = `${10 * dpr}px ${mono}`;
+      x.save(); x.beginPath(); x.rect(x0, y0, x1 - x0 - 3, lh); x.clip();
+      x.fillText(cut.text || cut.lineText || '', x0 + 5 * dpr, y0 + Math.min(13 * dpr, lh - 3 * dpr)); x.restore();
     }
   }
-
-  const drawKeyframeMarkers = (kfs, top, bot, isSel) => {
-    if (!kfs || !kfs.length) return;
-    const midY = (top + bot) / 2;
-    for (const kf of kfs) {
-      const kx = Math.round(tlPxFromTime(kf.t, w));
-      if (kx < 0 || kx > w) continue;
-      const isCur = Math.abs(S.t - kf.t) <= 0.06;
-      x.save();
-      x.fillStyle = isCur ? '#ffffff' : (isSel ? '#16f4d4' : '#ffcf40');
-      x.strokeStyle = '#101014';
-      x.lineWidth = 1;
-      x.beginPath();
-      x.moveTo(kx, midY - 4 * dpr);
-      x.lineTo(kx + 4 * dpr, midY);
-      x.lineTo(kx, midY + 4 * dpr);
-      x.lineTo(kx - 4 * dpr, midY);
-      x.closePath();
-      x.fill();
-      x.stroke();
-      x.restore();
-    }
-  };
-
-  // Track 1: 背景画像ブロック
-  const imgBlocks = (S.project && S.project.tracks && S.project.tracks.images) || [];
-  for (let i = 0; i < imgBlocks.length; i++) {
-    const b = imgBlocks[i];
-    const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
-    if (x1 < 0 || x0 > w) continue;
-    const isSel = S.selectedBlock && S.selectedBlock.track === 'images' && S.selectedBlock.block === b;
-    x.fillStyle = isSel ? 'rgba(22, 244, 212, 0.25)' : 'rgba(20, 150, 180, 0.35)';
-    x.fillRect(x0, L.t1Top + 2 * dpr, Math.max(1, x1 - x0 - 1), L.t1Bot - L.t1Top - 4 * dpr);
-    x.strokeStyle = isSel ? '#16f4d4' : 'rgba(22, 210, 244, 0.8)';
-    x.lineWidth = isSel ? 2 * dpr : 1;
-    x.strokeRect(x0 + 0.5, L.t1Top + 2 * dpr + 0.5, Math.max(1, x1 - x0 - 1), L.t1Bot - L.t1Top - 4 * dpr);
-
-    // handles
-    x.fillStyle = isSel ? '#16f4d4' : 'rgba(255,255,255,0.6)';
-    x.fillRect(x0, L.t1Top + 2 * dpr, 2.5 * dpr, L.t1Bot - L.t1Top - 4 * dpr);
-    x.fillRect(Math.max(x0, x1 - 2.5 * dpr), L.t1Top + 2 * dpr, 2.5 * dpr, L.t1Bot - L.t1Top - 4 * dpr);
-
-    if (x1 - x0 > 24 * dpr) {
-      x.fillStyle = isSel ? '#ffffff' : 'rgba(210, 245, 255, 0.9)';
-      x.font = `${9.5 * dpr}px monospace`;
-      x.save(); x.beginPath(); x.rect(x0 + 3 * dpr, L.t1Top, Math.max(0, x1 - x0 - 6 * dpr), L.t1Bot - L.t1Top); x.clip();
-      x.fillText(`🖼️ ${b.name || '画像'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t1Top + 14 * dpr);
-      x.restore();
-    }
-    drawKeyframeMarkers(b.keyframes, L.t1Top, L.t1Bot, isSel);
-  }
-
-  // Track 2: 背景動画ブロック
-  const vidBlocks = (S.project && S.project.tracks && S.project.tracks.videos) || [];
-  for (let i = 0; i < vidBlocks.length; i++) {
-    const b = vidBlocks[i];
-    const x0 = tlPxFromTime(b.start, w), x1 = tlPxFromTime(b.end, w);
-    if (x1 < 0 || x0 > w) continue;
-    const isSel = S.selectedBlock && S.selectedBlock.track === 'videos' && S.selectedBlock.block === b;
-    x.fillStyle = isSel ? 'rgba(22, 244, 212, 0.25)' : 'rgba(160, 60, 220, 0.35)';
-    x.fillRect(x0, L.t2Top + 2 * dpr, Math.max(1, x1 - x0 - 1), L.t2Bot - L.t2Top - 4 * dpr);
-    x.strokeStyle = isSel ? '#16f4d4' : 'rgba(190, 90, 255, 0.8)';
-    x.lineWidth = isSel ? 2 * dpr : 1;
-    x.strokeRect(x0 + 0.5, L.t2Top + 2 * dpr + 0.5, Math.max(1, x1 - x0 - 1), L.t2Bot - L.t2Top - 4 * dpr);
-
-    // handles
-    x.fillStyle = isSel ? '#16f4d4' : 'rgba(255,255,255,0.6)';
-    x.fillRect(x0, L.t2Top + 2 * dpr, 2.5 * dpr, L.t2Bot - L.t2Top - 4 * dpr);
-    x.fillRect(Math.max(x0, x1 - 2.5 * dpr), L.t2Top + 2 * dpr, 2.5 * dpr, L.t2Bot - L.t2Top - 4 * dpr);
-
-    if (x1 - x0 > 24 * dpr) {
-      x.fillStyle = isSel ? '#ffffff' : 'rgba(240, 215, 255, 0.9)';
-      x.font = `${9.5 * dpr}px monospace`;
-      x.save(); x.beginPath(); x.rect(x0 + 3 * dpr, L.t2Top, Math.max(0, x1 - x0 - 6 * dpr), L.t2Bot - L.t2Top); x.clip();
-      x.fillText(`🎬 ${b.name || '動画'} [${b.blendMode || 'normal'}]`, x0 + 5 * dpr, L.t2Top + 14 * dpr);
-      x.restore();
-    }
-    drawKeyframeMarkers(b.keyframes, L.t2Top, L.t2Bot, isSel);
-  }
-
-  // トラック名バッジ（左端オーバーレイ）
-  const drawTrackBadge = (label, top, bot, color) => {
-    x.fillStyle = 'rgba(10, 10, 14, 0.75)';
-    x.fillRect(0, top + 1, 56 * dpr, bot - top - 2);
-    x.fillStyle = color;
-    x.font = `bold ${9 * dpr}px sans-serif`;
-    x.fillText(label, 6 * dpr, top + 13 * dpr);
-  };
-  drawTrackBadge('文字PV', L.t0Top, L.t0Bot, '#e6a030');
-  drawTrackBadge('背景画像', L.t1Top, L.t1Bot, '#16c4e0');
-  drawTrackBadge('背景動画', L.t2Top, L.t2Bot, '#c060ee');
-
-  // line markers
   x.font = `${10 * dpr}px monospace`;
-  for (const ln of (S.plan.lines || [])) {
-    const lx = Math.round(tlPxFromTime(ln.start, w));
-    if (lx >= 0 && lx <= w) {
-      x.fillStyle = '#ffb52a'; x.fillRect(lx, 0, 1.5 * dpr, L.t0Top);
-      x.fillStyle = '#ffb52a'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 10 * dpr);
-    }
+  for (const ln of S.plan.lines) {
+    const lx = X(ln.start);
+    x.fillStyle = '#5d5a63'; x.fillRect(lx, 0, 1, top);
+    x.fillStyle = '#8e8a94'; x.fillText(String(ln.index + 1).padStart(2, '0'), lx + 3 * dpr, 12 * dpr);
   }
-
-  // playhead (全トラック縦断)
-  const px = Math.round(tlPxFromTime(S.t, w));
-  if (px >= 0 && px <= w) {
-    x.fillStyle = '#16f4d4'; x.fillRect(px - dpr, 0, 2 * dpr, h);
-    x.beginPath(); x.moveTo(px - 4 * dpr, 0); x.lineTo(px + 4 * dpr, 0); x.lineTo(px, 6 * dpr); x.fill();
-  }
-
-  // ドラッグ操作中のビジュアルオーバーレイ（入れ替えハイライト & 削除ゾーン表示）
-  if (S.tlDrag) {
-    if (S.tlDrag.isDeleting) {
-      // 削除ゾーン警告バー（タイムライン上部）
-      x.fillStyle = 'rgba(235, 45, 70, 0.92)';
-      x.fillRect(0, 0, w, 22 * dpr);
-      x.fillStyle = '#ffffff';
-      x.font = `bold ${11 * dpr}px sans-serif`;
-      x.fillText('🗑️ 離して削除（直前の要素を延長して尺を自動補間）', 12 * dpr, 15 * dpr);
-
-      // 削除対象要素の赤オーバーレイ
-      let rx0 = 0, rx1 = 0, ry0 = 0, ry1 = 0;
-      if (S.tlDrag.target === 'cut' && S.tlDrag.cut) {
-        rx0 = tlPxFromTime(S.tlDrag.cut.start, w); rx1 = tlPxFromTime(S.tlDrag.cut.end, w);
-        ry0 = L.t0Top; ry1 = L.t0Bot;
-      } else if (S.tlDrag.target === 'block' && S.tlDrag.block) {
-        rx0 = tlPxFromTime(S.tlDrag.block.start, w); rx1 = tlPxFromTime(S.tlDrag.block.end, w);
-        ry0 = S.tlDrag.track === 'images' ? L.t1Top : L.t2Top;
-        ry1 = S.tlDrag.track === 'images' ? L.t1Bot : L.t2Bot;
-      }
-      x.fillStyle = 'rgba(255, 50, 70, 0.45)';
-      x.fillRect(rx0, ry0, Math.max(2, rx1 - rx0), ry1 - ry0);
-      x.strokeStyle = '#ff334b';
-      x.lineWidth = 2 * dpr;
-      x.strokeRect(rx0 + 1, ry0 + 1, Math.max(2, rx1 - rx0 - 2), ry1 - ry0 - 2);
-    } else if (S.tlDrag.swapCandidate) {
-      // スワップ対象のハイライト
-      const sc = S.tlDrag.swapCandidate;
-      let sx0 = 0, sx1 = 0, sy0 = 0, sy1 = 0;
-      if (sc.type === 'cut' && sc.cut) {
-        sx0 = tlPxFromTime(sc.cut.start, w); sx1 = tlPxFromTime(sc.cut.end, w);
-        sy0 = L.t0Top; sy1 = L.t0Bot;
-      } else if (sc.type === 'block' && sc.block) {
-        sx0 = tlPxFromTime(sc.block.start, w); sx1 = tlPxFromTime(sc.block.end, w);
-        sy0 = S.tlDrag.track === 'images' ? L.t1Top : L.t2Top;
-        sy1 = S.tlDrag.track === 'images' ? L.t1Bot : L.t2Bot;
-      }
-      x.save();
-      x.strokeStyle = '#f5a50c';
-      x.lineWidth = 2.5 * dpr;
-      x.setLineDash([4 * dpr, 3 * dpr]);
-      x.strokeRect(sx0 + 1, sy0 + 1, Math.max(4, sx1 - sx0 - 2), sy1 - sy0 - 2);
-      x.fillStyle = 'rgba(245, 165, 12, 0.2)';
-      x.fillRect(sx0, sy0, Math.max(2, sx1 - sx0), sy1 - sy0);
-      x.fillStyle = '#f5a50c';
-      x.font = `bold ${10 * dpr}px sans-serif`;
-      x.fillText('⇄ 入れ替え', sx0 + 6 * dpr, sy0 + 14 * dpr);
-      x.restore();
-    }
-  }
-
-  syncBlockInspector();
+  const px = X(S.t);
+  x.fillStyle = '#f5a50c'; x.fillRect(Math.round(px) - dpr, 0, 2 * dpr, h);
+  drawTimelineDragGuide(x, w, h, dpr, 'lyrics');
+  drawMediaTimeline();
+  drawMediaTimeline('foreground');
 }
-window.drawTimeline = drawTimeline;
-window.syncBlockInspector = syncBlockInspector;
-
-function focusLineInList(lineIdx, smooth = true) {
-  let targetEl = null;
-  if (lineIdx === -1 && S.titleLineEl) {
-    targetEl = S.titleLineEl;
-  } else if (lineIdx >= 0 && S.lineEls && S.lineEls[lineIdx]) {
-    targetEl = S.lineEls[lineIdx];
-  }
-  if (targetEl) {
-    if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', lineIdx === -1);
-    S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === lineIdx));
-    S.curLine = lineIdx;
-    try {
-      targetEl.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' });
-    } catch (e) {
-      targetEl.scrollIntoView(false);
-    }
+function extendTapPreview(t) {
+  const end = Math.max(S.plan.duration, t + 10);
+  S.plan.duration = end;
+  for (const layer of ['media', 'foreground']) {
+    S.plan[layer].duration = end;
+    const last = S.plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = end;
   }
 }
-
+// End handle of a cut with its own end time (「次カット再生まで」 off): drag it to change the end.
+function drawTimelineEndHandle(x, px, y0, height, dpr) {
+  x.fillStyle = '#ece7e1'; x.fillRect(px - 2 * dpr, y0, 2 * dpr, height);
+  x.beginPath(); x.moveTo(px - 2 * dpr, y0); x.lineTo(px - 8 * dpr, y0); x.lineTo(px - 2 * dpr, y0 + 6 * dpr); x.closePath(); x.fill();
+}
+function drawMediaTimeline(layer = 'media') {
+  const c = $(layer === 'media' ? 'mediaTimeline' : 'foregroundTimeline'), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const lanesInfo = timelineLanes(layer), overlapping = lanesInfo.count > 1;
+  fitTimelineHeight(c, lanesInfo.count, 24, 1);
+  const w = Math.max(10, Math.round(c.clientWidth * dpr)), h = Math.max(10, Math.round(c.clientHeight * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const x = c.getContext('2d'), D = Math.max(0.001, S.plan.duration), X = t => t / D * w;
+  x.fillStyle = '#131316'; x.fillRect(0, 0, w, h);
+  x.fillStyle = '#8e8a94'; x.font = `${10 * dpr}px monospace`; x.fillText(layer === 'media' ? '背景' : '前景', 6 * dpr, 12 * dpr);
+  for (const cut of S.plan[layer].cuts) {
+    const a = X(cut.start), b = X(cut.end), lane = laneBox(layer, lanesInfo.lanes.get(cut), lanesInfo.count, c);
+    const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0)), rgb = cut.type === 'video' ? '22,244,212' : '245,165,12';
+    x.fillStyle = `rgba(${rgb},${overlapping ? 0.2 : 0.28})`; x.fillRect(a, y0, Math.max(1, b - a - 1), lh);
+    if (overlapping) { x.strokeStyle = `rgba(${rgb},0.55)`; x.lineWidth = dpr; x.strokeRect(a + .5, y0 + .5, Math.max(1, b - a - 1), lh - 1); }
+    x.fillStyle = `rgba(${rgb},${overlapping ? 0.8 : 1})`; x.fillRect(a, y0, 2 * dpr, lh);
+    x.fillRect(a - 2 * dpr, 14 * dpr, 6 * dpr, 6 * dpr);
+    if (cut.manualEnd) drawTimelineEndHandle(x, b, y0, lh, dpr);
+  }
+  x.fillStyle = '#f5a50c'; x.fillRect(Math.round(X(S.t)) - dpr, 0, 2 * dpr, h);
+  drawTimelineDragGuide(x, w, h, dpr, layer);
+}
+function drawTimelineDragGuide(ctx, width, height, dpr, layer) {
+  const drag = S.timelineDrag;
+  if (!drag || !drag.moved || (drag.mode === 'end' ? drag.layer !== layer : !linkedRefs(drag.ref).some(ref => boundaryLayer(ref) === layer))) return;
+  const px = drag.preview / Math.max(0.001, S.plan.duration) * width;
+  ctx.fillStyle = '#16f4d4'; ctx.fillRect(Math.round(px) - 2 * dpr, 0, 4 * dpr, height);
+  ctx.fillStyle = '#101318'; ctx.fillRect(J.clamp(px + 5 * dpr, 0, width - 47 * dpr), 1 * dpr, 47 * dpr, 15 * dpr);
+  ctx.fillStyle = '#16f4d4'; ctx.font = `${11 * dpr}px monospace`;
+  ctx.fillText(`${drag.preview.toFixed(2)}s`, J.clamp(px + 8 * dpr, 3 * dpr, width - 44 * dpr), 12 * dpr);
+}
 function timelineSeek(ev) {
-  const c = $('timeline');
-  const r = c.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const px = (ev.clientX - r.left) * dpr;
-  const w = c.width || (c.clientWidth * dpr);
-  const t = tlTimeFromPx(px, w);
-  seek(t);
-  if (S.plan) {
-    const cut = J.cutAt(S.plan, t);
-    if (cut) focusLineInList(cut.line);
+  const r = ev.currentTarget.getBoundingClientRect();
+  seek((ev.clientX - r.left) / r.width * S.plan.duration);
+}
+function boundaryRef(layer, cut) {
+  if (layer === 'foreground') return `f:${cut.index}`;
+  if (layer === 'media') return `m:${cut.index}`;
+  return `l:${cut.line}:${cut.part}`;
+}
+function boundaryLayer(ref) { return ref[0] === 'f' ? 'foreground' : ref[0] === 'm' ? 'media' : 'lyrics'; }
+function boundaryCut(ref) {
+  if (typeof ref !== 'string' || !S.plan) return null;
+  const layer = boundaryLayer(ref);
+  if (layer !== 'lyrics') {
+    const index = +ref.slice(2);
+    return Number.isInteger(index) && index >= 0 && ref === `${ref[0]}:${index}` ? S.plan[layer].cuts[index] || null : null;
+  }
+  return S.plan.cuts.find(c => c.line >= 0 && boundaryRef('lyrics', c) === ref) || null;
+}
+function linkedRefs(ref) {
+  const seen = new Set([ref]), queue = [ref];
+  for (const cur of queue) for (const link of S.project.timelineLinks) {
+    const next = link.a === cur ? link.b : link.b === cur ? link.a : null;
+    if (next && !seen.has(next)) { seen.add(next); queue.push(next); }
+  }
+  return queue;
+}
+function timelineMarkers() {
+  const stack = $('timelineStack'), D = Math.max(0.001, S.plan.duration), markers = [];
+  for (const [layer, id] of [['foreground', 'foregroundTimeline'], ['lyrics', 'timeline'], ['media', 'mediaTimeline']]) {
+    const canvas = $(id), cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0) : S.plan[layer].cuts;
+    const y = canvas.offsetTop + 11;
+    for (const cut of cuts) markers.push({ ref: boundaryRef(layer, cut), layer, x: canvas.offsetLeft + cut.start / D * canvas.clientWidth, y });
+  }
+  return markers;
+}
+// Lock: a locked cut keeps the look it had when locked (effects, colours, fonts, division, area/placement);
+// planning applies it under the user's own edits, so only direct operations on the cut change it.
+// Direct operations (re-roll, details, position) keep it locked and capture the new look afterwards.
+const LYRIC_UNLOCK = { lock: false, lockedSeed: undefined, lockedAreas: undefined, lockedComposites: undefined, lockedEffects: undefined, lockedUnits: undefined };
+const MEDIA_UNLOCK = { lock: false, lockedSeed: undefined, lockedTechnique: undefined, lockedEntrance: undefined, lockedDeparture: undefined, lockedPlacement: undefined, lockedPlacementMode: undefined, lockedItemId: undefined, lockedEffects: undefined };
+function lyricLockPatch(index, plan = S.plan) {
+  const line = plan.lines[index], cuts = plan.cuts.filter(c => c.line === index && Number.isInteger(c.part));
+  return { lock: true, lockedSeed: line.seed,
+    lockedAreas: Object.fromEntries(cuts.map(c => [c.part, c.area || null])),
+    lockedComposites: Object.fromEntries(cuts.map(c => [c.part, { blend: c.blend, opacity: c.opacity }])),
+    lockedEffects: Object.fromEntries(cuts.map(c => [c.part, J.cutLockSnapshot(c, 'lyrics', plan)])),
+    lockedUnits: { text: line.text, groups: cuts.filter(c => !c.recap).map(c => c.text), recap: cuts.some(c => c.recap) } };
+}
+function mediaLockPatch(layer, index, plan = S.plan) {
+  const cut = plan[layer].cuts[index];
+  return { lock: true, lockedSeed: cut.seed, lockedTechnique: cut.technique, lockedEntrance: cut.entrance, lockedDeparture: cut.departure,
+    lockedPlacement: cut.placement, lockedPlacementMode: cut.placementMode, lockedItemId: cut.itemId, lockedEffects: J.cutLockSnapshot(cut, layer, plan) };
+}
+// After a direct operation on a still-locked cut: plan once with the change, then lock that result.
+function relock(layer, index) {
+  const locked = layer === 'lyrics' ? S.project.overrides[index]?.lock : S.project[layer].cutOverrides[index]?.lock;
+  if (!locked) return;
+  const plan = composePlan(S.project);
+  if (layer === 'lyrics') { if (plan.lines[index]) setOv(index, lyricLockPatch(index, plan)); }
+  else if (plan[layer].cuts[index]) mediaOv(index, mediaLockPatch(layer, index, plan), layer);
+}
+function rerollLyricLine(index) {
+  const line = S.plan.lines[index]; if (!line) return;
+  const current = S.project.overrides[index] || {};
+  J.clearPastedLyricEffects(S.project,index);
+  // A locked line re-rolls its effects but keeps its place (re-layout is 再配置's job).
+  setOv(index, { seed: (current.seed | 0) + 1, ...LYRIC_UNLOCK, ...(current.lock ? { lock: true, lockedAreas: current.lockedAreas } : {}) });
+  relock('lyrics', index);
+  replan(); seek(line.start + 0.001);
+}
+function disableAndReroll(layer,index,part=null) {
+  const project=S.project;
+  if(layer==='lyrics'){
+    const cuts=S.plan.cuts.filter(c=>c.line===index && Number.isInteger(c.part) && (part==null || c.part===part));
+    if(!cuts.length)return;
+    for(const cut of cuts){
+      for(const group of ['layout','enter','hold','exit','treat','bg','cam','trans']){
+        const key=cut[group];if(key && Object.hasOwn(J.registry(group),key))(project.enabled[group] ||= {})[key]=false;
+      }
+      for(const decor of cut.decor || [])(project.enabled.decor ||= {})[decor.id]=false;
+      for(const event of S.plan.events.filter(e=>e.cutOwner===`${cut.line}:${cut.part}`))(project.enabled.fx ||= {})[event.type]=false;
+    }
+    // Line-wide reroll must not retain explicit choices that override the pool.
+    const ov=project.overrides[index] ||= {};
+    for(const key of ['layout','enter','hold','exit','treat','bg','cam','trans','decor'])delete ov[key];
+    for(const [key,options] of Object.entries(project.lyricCutOptions || {}))if(key.startsWith(`${index}:`) && options.details){
+      options.details=Object.fromEntries(Object.entries(options.details).filter(([field])=>['text','area'].includes(field)));
+      delete options.pastedEffects;
+    }
+    rerollLyricLine(index);renderTech();
+  }else{
+    const cut=S.plan[layer]?.cuts[index];if(!cut)return;
+    const settings=J.mediaEffectSettings(project,layer);
+    for(const key of [cut.technique,cut.entrance,cut.departure])if(J.MEDIA_TECH[key])settings.enabled[key]=false;
+    project[layer].effects=settings;
+    const options=mediaCutOptions(layer,index);
+    const patch={technique:null,entrance:null,departure:null,details:undefined};
+    for(const key of ['layout','enter','hold','exit','treat','trans','effectSettings'])patch[key]=undefined;
+    // Override any asset-wide legacy choices for this cut without changing its placement.
+    project[layer].cutOverrides[index]={...options,...patch};
+    rerollMediaCut(layer,index);renderMediaEffects(layer);
   }
 }
-
-/* ---------------- keep the playing line in view (the list scrolls inside its column) ---------------- */
-let listTouched = 0;
-function followLine(li) {
-  if (!S.playing || li < 0 || !fixedLayout()) return;
-  if (performance.now() - listTouched < 2500) return;                       // the user is scrolling the list
-  const el = S.lineEls[li], col = el && el.closest('.col-left');
-  if (!el || !col || col.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-  const r = el.getBoundingClientRect(), c = col.getBoundingClientRect();
-  if (r.top >= c.top + 8 && r.bottom <= c.bottom - 8) return;
-  col.scrollTo({ top: col.scrollTop + (r.top - c.top) - c.height * 0.3, behavior: 'smooth' });
+function disableRerollButton(layer,index,part=null){
+  const button=document.createElement('button');button.type='button';button.className='icon ghost disable-reroll';
+  button.title=J.mediaLabel('この演出をOFFにして再抽選','Disable current effects and randomize');button.setAttribute('aria-label',button.title);button.innerHTML=ICON.disableReroll;
+  button.addEventListener('click',()=>disableAndReroll(layer,index,part));return button;
 }
-function bindFollow() {
-  const col = document.querySelector('.col-left'); if (!col) return;
-  const touch = () => { listTouched = performance.now(); };
-  col.addEventListener('wheel', touch, { passive: true }); col.addEventListener('touchmove', touch, { passive: true }); col.addEventListener('pointerdown', touch);
+function toggleLyricLineLock(index) {
+  const line = S.plan.lines[index]; if (!line) return;
+  const current = S.project.overrides[index] || {};
+  setOv(index, current.lock ? LYRIC_UNLOCK : lyricLockPatch(index));
+  replan();
+}
+function emphasisFrontmostHint() {
+  return J.mediaLabel('*強調*した歌詞は常に最前表示です。解除するには歌詞の * を外してください。', 'Emphasized lyrics always appear in front. Remove the * markers to turn this off.');
+}
+function toggleLyricCutFrontmost(line, part) {
+  const key = `${line}:${part}`, options = S.project.lyricCutOptions;
+  const cut = S.plan.cuts.find(c => c.line === line && c.part === part);
+  if (cut?.emphasis) { toast(emphasisFrontmostHint()); return; }
+  options[key] = { ...options[key], frontmost: !cut?.frontmost };
+  replan();
+}
+function setLyricCutComposite(line, part, patch) {
+  const key = `${line}:${part}`, options = S.project.lyricCutOptions;
+  options[key] = { ...options[key], ...patch };
+  for (const field of ['blend', 'opacity']) if (options[key][field] === undefined) delete options[key][field];
+  if (!Object.keys(options[key]).length) delete options[key];
+  const override = S.project.overrides[line];
+  const locked = override?.lockedComposites?.[part];
+  if (locked) for (const [field, value] of Object.entries(patch)) if (value === undefined) delete locked[field];
+  replan();
+}
+function mediaCutOptions(layer, index) {
+  const cut = S.plan[layer].cuts[index]; if (!cut) return null;
+  const media = S.project[layer];
+  return Object.assign({}, media.overrides[cut.itemId] || {}, media.cutOverrides[index] || {});
+}
+function rerollMediaCut(layer, index) {
+  const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
+  if (!cut || !options) return;
+  mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedItemId: options.lockedItemId } : {}) }, layer);
+  relock(layer, index);
+  replan(); seek(cut.start + 0.001);
+}
+function toggleMediaCutLock(layer, index) {
+  const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
+  if (!cut || !options) return;
+  mediaOv(index, options.lock ? MEDIA_UNLOCK : mediaLockPatch(layer, index), layer);
+  replan();
+}
+async function effectFavoriteAction(action,layer,index,part=0){
+  const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer]?.cuts[index];
+  if(!cut)return;
+  pause();
+  if(action==='copy'){
+    const list=S.project.effectFavorites ||= [];
+    const number=(S.project.favoriteSequence||0)+1;
+    const project=S.project;
+    const payload=J.cutEffectsPayload(cut,layer,S.plan);
+    const name=await J.requestFavoriteName(J.mediaLabel('お気に入り','Favorite ')+number);
+    if(project!==S.project)return;
+    if(name===null)return;
+    remember();S.project.favoriteSequence=number;
+    list.push({id:J.favoriteId(),name:name.trim()||J.mediaLabel('お気に入り','Favorite ')+number,payload});
+    autosave();toast(J.mediaLabel('演出をお気に入りに追加しました','Effects added to favorites'));
+  }else openEffectFavorites({layer,index,part,cut});
+}
+function openEffectFavorites(target=null){
+  pause();const project=S.project;
+  J.openEffectFavorites({project,target,compose:composePlan,
+    changed:()=>{autosave();},
+    configure:()=>{syncUI();renderTech();renderMediaEffects('foreground');renderMediaEffects('media');replan();},
+    apply:payload=>{
+      if(project!==S.project)return false;
+      const cut=target.layer==='lyrics'?S.plan.cuts.find(c=>c.line===target.index&&c.part===target.part):S.plan[target.layer]?.cuts[target.index];
+      if(cut!==target.cut)return false;
+      remember();J.pasteCutEffects(S.project,S.plan,target.layer,cut,payload);replan();
+      toast(J.mediaLabel('お気に入りの演出を適用しました','Favorite effects applied'));return true;
+    },
+    closed:()=>{J.syncMediaPreview(S.plan,S.t,false);S.need=true;}
+  });
+}
+function effectFavoriteButtons(layer,index,part=0){
+  return ['copy','paste'].map(action=>{
+    const button=document.createElement('button');button.type='button';button.className='icon ghost effect-'+action;
+    button.title=action==='copy'?J.mediaLabel('演出をお気に入りに追加','Add effects to favorites'):J.mediaLabel('お気に入りから演出を適用','Apply favorite effects');button.setAttribute('aria-label',button.title);
+    button.innerHTML=ICON[action];button.onclick=()=>effectFavoriteAction(action,layer,index,part);return button;
+  });
+}
+function detailButton(onClick) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'icon ghost cut-details-open';
+  button.title = J.mediaLabel('カットの詳細編集','Edit cut details'); button.setAttribute('aria-label',button.title);
+  button.innerHTML = ICON.details; button.addEventListener('click',onClick); return button;
+}
+let cutPreviewSolo=false,cutPreviewFocus=false;// remembered while the page is open
+function openCutDetails(layer,index,part=0) {
+  const lyric = layer === 'lyrics', L = J.mediaLabel, clone = value => JSON.parse(JSON.stringify(value));
+  const cut = lyric ? S.plan.cuts.find(c=>c.line===index && c.part===part) : S.plan[layer]?.cuts[index];
+  if (!cut) return;
+  pause();
+  const key = `${index}:${part}`, original = clone(lyric ? S.project.lyricCutOptions[key] || {} : S.project[layer].cutOverrides[index] || {});
+  let draft = clone(original), current = clone(cut), start = cut.start;
+  let locked = !!(lyric ? S.project.overrides[index]?.lock : original.lock);
+  const initialLock = locked;
+  const disabledChoices=[];
+  let removedDetail = null;
+  const openDetails = new Map();
+  const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
+  dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));
+  // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
+  const pane=document.createElement('aside');pane.className='cut-details-preview';
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label><p class="hint"></p>`;
+  pane.querySelector('h2').textContent=L('カットの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('前景','Foreground'):L('背景','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;
+  pane.querySelector('.progress').setAttribute('aria-label',L('再生位置','Playback position'));
+  pane.querySelector('.hint').textContent=L('このカットの区間をループ再生します。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
+  const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
+  solo.addEventListener('change',()=>{cutPreviewSolo=solo.checked;});
+  const focus=pane.querySelector('[data-preview-focus]');focus.checked=cutPreviewFocus;focus.nextElementSibling.textContent=L('編集対象にフォーカス','Focus on the edited cut');
+  focus.addEventListener('change',()=>{cutPreviewFocus=focus.checked;});
+  const formHost=document.createElement('div');formHost.className='cut-details-form';
+  dialog.append(pane,formHost);
+  document.body.appendChild(dialog);
+  const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
+  let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
+  const findCut=plan=>lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
+  const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);{if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
+  function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
+  Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
+  // Number and text edits only rebuild the preview; the form is left as it is.
+  const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
+  // "Show the edited cut only": other layers are switched off and other lyric cuts are left out
+  // of a shallow plan copy (the cut keeps its own background effect and transition).
+  const soloOptions=lyric?{noForeground:true,noMedia:true}:layer==='foreground'?{noMedia:true,noLyrics:true}:{noForeground:true,noLyrics:true};
+  let soloSource=null,soloShown=null;
+  const soloPlan=(plan,c)=>{
+    if(soloSource!==plan){soloSource=plan;soloShown=lyric?{...plan,retainedCutIndices:(plan.retainedCutIndices||[]).filter(i=>i===c.index)}:{...plan,cuts:[],retainedCutIndices:[],events:[]};}
+    return soloShown;
+  };
+  // "Focus on the edited cut": the union of the cut's drawn pixels over its duration (stage
+  // fractions), found by drawing only the cut, transparently and small, at ten times.
+  const probe=document.createElement('canvas'),probeRenderer=new J.Renderer();
+  let focusSource=null,focusRect=null;
+  function focusOf(plan,c){
+    if(focusSource===plan)return focusRect;
+    focusSource=plan;focusRect=null;
+    const pw=240,ph=Math.max(1,Math.round(pw*plan.H/plan.W));probe.width=pw;probe.height=ph;
+    const px=probe.getContext('2d',{willReadFrequently:true}),end=Math.min(c.end,plan.duration);
+    // Sample the settled part: entrance/exit motion may travel far and would shrink the focus.
+    const phase=lyric?null:Math.min(c.effectSettings?.duration||.45,(c.end-c.start)*.3);
+    const settleIn=lyric?(c.inDur||0)+(c.stagger||0)*Math.max(0,[...(c.text||'')].length-1):phase,settleOut=lyric?c.outDur||0:phase;
+    let from=c.start+settleIn,to=end-settleOut;if(to-from<.05){from=c.start;to=end;}
+    const length=Math.max(.05,to-from);
+    let x0=Infinity,y0=Infinity,x1=-1,y1=-1;
+    for(let k=0;k<10;k++){
+      const t=from+length*(k+.5)/10;
+      px.setTransform(1,0,0,1,0,0);px.globalAlpha=1;px.globalCompositeOperation='source-over';px.filter='none';px.clearRect(0,0,pw,ph);
+      try{
+        if(lyric)probeRenderer.frame(px,soloPlan(plan,c),t,{scale:pw/plan.W,noHud:true,noPost:true,transparent:true,...soloOptions});
+        else J.drawMediaCut(px,c,t,{source:J.isMediaCopy(c.itemId)?J.mediaCopySource(plan,c,t,probeRenderer,pw,ph):null});
+      }catch(e){continue;}
+      const d=px.getImageData(0,0,pw,ph).data;
+      for(let y=0;y<ph;y++)for(let x=0;x<pw;x++)if(d[(y*pw+x)*4+3]>8){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+    }
+    if(x1>=0)focusRect={x:x0/pw,y:y0/ph,w:(x1-x0+1)/pw,h:(y1-y0+1)/ph};
+    return focusRect;
+  }
+  // The stage window shown when focusing: the cut plus a margin, kept inside the stage.
+  function focusWindow(r){
+    if(!r)return null;
+    const size=Math.min(1,Math.max(r.w,r.h,.04)*1.12),clampTo=(center)=>J.clamp(center-size/2,0,1-size);
+    return size>=1?null:{x:clampTo(r.x+r.w/2),y:clampTo(r.y+r.h/2),size};
+  }
+  const zoomCanvas=document.createElement('canvas');
+  // ---- Mask editor: circles / rectangles placed on a reference image of the mask's frame ----
+  const maskRef=document.createElement('canvas'),maskRefRenderer=new J.Renderer();
+  let maskRefKey=null,maskRefInfo=null,maskSelected=0;
+  function maskReference(target){
+    const plan=previewPlan,c=previewCut;
+    if(maskRefKey&&maskRefKey.plan===plan&&maskRefKey.target===target)return maskRefInfo;
+    maskRefKey={plan,target};
+    const element=!lyric&&target==='source'&&J.mediaAssets.get(c.itemId)?.element;
+    const sw=element&&(element.videoWidth||element.naturalWidth||element.width),sh=element&&(element.videoHeight||element.naturalHeight||element.height);
+    if(sw&&sh)return maskRefInfo={image:element,sx:0,sy:0,sw,sh,aspect:sw/sh};
+    // Otherwise the cut alone at mid-cut, drawn without masks.
+    const rw=480,rh=Math.round(rw*plan.H/plan.W);maskRef.width=rw;maskRef.height=rh;
+    const rx=maskRef.getContext('2d');rx.setTransform(1,0,0,1,0,0);rx.clearRect(0,0,rw,rh);
+    J.masksSuspended=true;
+    try{maskRefRenderer.frame(rx,soloPlan(plan,c),(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
+    finally{J.masksSuspended=false;}
+    if(lyric&&target==='source'){const a=c.area||{x:0,y:0,w:1,h:1};return maskRefInfo={image:maskRef,sx:a.x*rw,sy:a.y*rh,sw:a.w*rw,sh:a.h*rh,aspect:a.w*plan.W/(a.h*plan.H)};}
+    return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
+  }
+  function maskEditor(parent){
+    const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
+    maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
+    const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
+    section.open=openDetails.get('mask') ?? mask.enabled;
+    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
+    section.querySelector('summary').textContent=L('マスク','Mask');
+    const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
+    useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
+    const target=section.querySelector('[data-mask-field="target"]');
+    target.add(new Option(L('素材','Source'),'source'));target.add(new Option(L('カット','Cut'),'cut'));
+    section.querySelector('[data-mask-field="enabled"]').checked=mask.enabled;target.value=mask.target;section.querySelector('[data-mask-field="invert"]').checked=mask.invert;
+    const hint=section.querySelector('.cut-mask-hint');
+    const setHint=()=>{hint.textContent=mask.target==='source'
+      ?(lyric?L('素材：表示範囲を基準に文字をマスクします。マスク後の文字にカメラなどの演出がかかります。','Source: masks the lyric within its display area; camera and other effects apply to the masked lyric.')
+             :L('素材：素材画像を基準にマスクします。マスク後の素材に演出・エフェクトがかかります。','Source: masks the source image itself; techniques and effects apply to the masked source.'))
+      :L('カット：画面全体を基準に、演出・エフェクト適用後のカットをマスクします。','Cut: masks the finished cut, after its effects, relative to the whole stage.');};
+    const tools={add:section.querySelector('[data-mask-add]'),remove:section.querySelector('[data-mask-remove]')};
+    const shapeNames={ellipse:['円','Circle'],rect:['四角','Rectangle'],roundRect:['角丸四角','Rounded rectangle'],triangle:['三角','Triangle'],diamond:['ひし形','Diamond'],pentagon:['五角形','Pentagon'],hexagon:['六角形','Hexagon'],star:['星','Star'],heart:['ハート','Heart']};
+    // "Add shape…" menu: picking a type adds that shape; the selected shape's type is edited below.
+    tools.add.add(new Option(L('図形を追加…','Add shape…'),''));
+    for(const type of J.MASK_SHAPES)tools.add.add(new Option(L(...shapeNames[type]),type));
+    tools.add.setAttribute('aria-label',L('図形を追加','Add shape'));tools.remove.textContent=L('選択中の図形を削除','Remove selected shape');
+    const canvas=section.querySelector('canvas'),shapeBox=section.querySelector('.cut-mask-shape');
+    const save=()=>{write('mask',clone(mask),false);draw();};
+    function draw(){
+      const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
+      if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
+      const x=canvas.getContext('2d');x.setTransform(1,0,0,1,0,0);x.globalCompositeOperation='source-over';x.fillStyle='#000';x.fillRect(0,0,w,ch);
+      try{x.drawImage(ref.image,ref.sx,ref.sy,ref.sw,ref.sh,0,0,w,ch);}catch(e){}
+      // Darken what the mask hides.
+      const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
+      sx.fillStyle='rgba(0,0,0,.62)';
+      if(mask.invert){for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
+      else{sx.fillRect(0,0,w,ch);sx.globalCompositeOperation='destination-out';for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
+      if(mask.enabled)x.drawImage(shade,0,0);
+      mask.shapes.forEach((s,i)=>{
+        x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
+        if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}
+      });
+    }
+    const handle=(s,w,h)=>{const a=s.angle*J.DEG,rx=s.w*w/2,ry=s.h*h/2;return [s.cx*w+rx*Math.cos(a)-ry*Math.sin(a),s.cy*h+rx*Math.sin(a)+ry*Math.cos(a)];};
+    const local=(s,px,py,w,h)=>{const a=-s.angle*J.DEG,dx=px-s.cx*w,dy=py-s.cy*h;return [dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)];};
+    const inside=(s,px,py,w,h)=>{const p=new Path2D();J.maskShapePath(p,[s],w,h);return canvas.getContext('2d').isPointInPath(p,px,py);};
+    // New shapes are square on screen (a circle stays round on a wide frame).
+    const newShape=(type,size)=>{const aspect=canvas.width/Math.max(1,canvas.height);let w=size,h=size*aspect;if(h>.9){w*=.9/h;h=.9;}return {type,cx:.5,cy:.5,w,h,angle:0,lockAspect:true};};
+    function fields(){
+      shapeBox.replaceChildren();const s=mask.shapes[maskSelected];tools.remove.disabled=!s;if(!s)return;
+      const kind=document.createElement('label');kind.className='cut-detail-field';kind.innerHTML=`<span>${L('形','Shape')}</span><select data-mask-shape="type"></select>`;
+      const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
+      kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);attachDetailRandom(kindSelect,'mask.shape.type');
+      for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
+        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="any" min="${min}" max="${max}" data-mask-shape="${key}">`;
+        const input=row.querySelector('input');input.value=+s[key].toFixed(4);
+        input.addEventListener('change',()=>{
+          const v=Number(input.value);if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
+          // Locked aspect: width and height scale together.
+          if(s.lockAspect&&(key==='w'||key==='h')&&s[key]>0){const other=key==='w'?'h':'w';s[other]=J.clamp(s[other]*next/s[key],.01,4);}
+          s[key]=next;fields();save();
+        });shapeBox.append(row);
+      }
+      const lock=document.createElement('label');lock.className='cut-detail-field';lock.innerHTML=`<span>${L('アスペクト比を固定','Lock aspect ratio')}</span><input type="checkbox" data-mask-shape="lockAspect">`;
+      lock.querySelector('input').checked=s.lockAspect!==false;lock.querySelector('input').addEventListener('change',e=>{s.lockAspect=e.target.checked;save();});shapeBox.append(lock);
+    }
+    section.querySelector('[data-mask-field="enabled"]').addEventListener('change',e=>{
+      mask.enabled=e.target.checked;
+      if(mask.enabled&&!mask.shapes.length){mask.shapes.push(newShape('ellipse',.6));maskSelected=0;fields();}
+      save();
+    });
+    target.addEventListener('change',()=>{mask.target=target.value;setHint();save();});
+    section.querySelector('[data-mask-field="invert"]').addEventListener('change',e=>{mask.invert=e.target.checked;save();});
+    tools.add.addEventListener('change',()=>{const type=tools.add.value;tools.add.value='';if(!type)return;mask.shapes.push(newShape(type,.4));maskSelected=mask.shapes.length-1;fields();save();});
+    tools.remove.addEventListener('click',()=>{if(!mask.shapes[maskSelected])return;mask.shapes.splice(maskSelected,1);maskSelected=Math.max(0,maskSelected-1);fields();save();});
+    // Corner handle: resize. Inside a shape: move. Around the selected shape: rotate.
+    const ROTATE_BAND=26;
+    const point=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];};
+    function hit(px,py){
+      const w=canvas.width,h=canvas.height,sel=mask.shapes[maskSelected];
+      if(sel){const hp=handle(sel,w,h);if(Math.hypot(px-hp[0],py-hp[1])<=10)return {mode:'size',index:maskSelected};}
+      for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h))return {mode:'move',index:i};
+      if(sel){const [lx,ly]=local(sel,px,py,w,h);if(Math.abs(lx)<=sel.w*w/2+ROTATE_BAND&&Math.abs(ly)<=sel.h*h/2+ROTATE_BAND)return {mode:'rotate',index:maskSelected};}
+      return null;
+    }
+    let drag=null;
+    canvas.addEventListener('pointerdown',e=>{
+      const [px,py]=point(e),w=canvas.width,h=canvas.height,found=hit(px,py);if(!found)return;
+      maskSelected=found.index;const s=mask.shapes[found.index];
+      drag={mode:found.mode,shape:s,px,py,cx:s.cx,cy:s.cy,w:s.w,h:s.h,angle:s.angle,start:Math.atan2(py-s.cy*h,px-s.cx*w)};
+      canvas.setPointerCapture(e.pointerId);fields();draw();
+    });
+    canvas.addEventListener('pointermove',e=>{
+      const [px,py]=point(e),w=canvas.width,h=canvas.height;
+      if(!drag){const found=hit(px,py);canvas.style.cursor=!found?'default':found.mode==='size'?'nwse-resize':found.mode==='rotate'?'var(--rotate-cursor)':'move';return;}
+      const s=drag.shape;
+      if(drag.mode==='move'){s.cx=J.clamp(drag.cx+(px-drag.px)/w,-1,2);s.cy=J.clamp(drag.cy+(py-drag.py)/h,-1,2);}
+      else if(drag.mode==='rotate'){
+        let a=drag.angle+(Math.atan2(py-s.cy*h,px-s.cx*w)-drag.start)*180/Math.PI;
+        if(e.shiftKey)a=Math.round(a/15)*15;
+        s.angle=Math.round(((a+540)%360-180)*10)/10;
+      }else{
+        const [lx,ly]=local(s,px,py,w,h);
+        if(s.lockAspect!==false){const k=Math.max(Math.abs(lx)/(drag.w*w/2),Math.abs(ly)/(drag.h*h/2));s.w=J.clamp(drag.w*k,.01,4);s.h=J.clamp(drag.h*k,.01,4);}
+        else{s.w=J.clamp(Math.abs(lx)*2/w,.01,4);s.h=J.clamp(Math.abs(ly)*2/h,.01,4);}
+      }
+      draw();
+    });
+    const end=()=>{if(!drag)return;drag=null;fields();save();};
+    canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+    // Motion: the moving / revealing media techniques, applied to the mask over this cut (all off by default).
+    function motionFields(){
+      const box=section.querySelector('.cut-mask-motion'),grid=box.querySelector('.cut-details-grid'),m=mask.motion;
+      box.querySelector('h4').textContent=L('マスクのモーション','Mask motion');
+      box.querySelector('.hint').textContent=L('マスクの図形に、前景・背景と同じ登場・退場・動きを付けます。','Moves the mask shapes with the same entrances, exits and motions as foreground / background.');
+      grid.replaceChildren();
+      const row=(label,control)=>{const r=document.createElement('label');r.className='cut-detail-field';const s=document.createElement('span');s.textContent=label;r.append(s,control);grid.append(r);return control;};
+      const select=(key,groups)=>{const el=document.createElement('select');el.dataset.maskMotion=key;el.add(new Option(L('なし','None'),'none'));
+        for(const [name,items] of groups){const g=document.createElement('optgroup');g.label=name;for(const [id,def] of items)g.append(new Option(def.name,id));el.append(g);}
+        el.value=m[key];el.addEventListener('change',()=>{m[key]=el.value;save();});return el;};
+      row(L('手法','Technique'),select('technique',J.MASK_MOTION_GROUPS.map(group=>[MEDIA_EFFECT_GROUPS[group],Object.entries(J.MEDIA_TECH).filter(([,d])=>!d.stage&&d.group===group)])));
+      row(L('登場','Entrance'),select('entrance',[[MEDIA_EFFECT_GROUPS.enter,J.mediaPhaseOptions('enter')]]));
+      row(L('退場','Exit'),select('departure',[[MEDIA_EFFECT_GROUPS.exit,J.mediaPhaseOptions('exit')]]));
+      for(const [key,ja,en,min,max] of [['amount','動きの強さ','Motion intensity',0,2],['duration','登場・退場時間（秒）','Entrance / exit (s)',.05,1.5]]){
+        const input=document.createElement('input');input.type='number';input.step='any';input.min=min;input.max=max;input.value=m[key];input.dataset.maskMotion=key;
+        input.addEventListener('change',()=>{const v=Number(input.value);if(!Number.isFinite(v))return;m[key]=J.clamp(v,min,max);input.value=m[key];save();});row(L(ja,en),input);
+      }
+    }
+    setHint();fields();motionFields();parent.append(section);draw();
+  }
+  function drawPreview(now){
+    previewFrame=requestAnimationFrame(drawPreview);
+    const plan=previewPlan,c=previewCut;if(!plan||!c)return;
+    const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
+    if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
+    const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
+    const shown=cutPreviewSolo?soloPlan(plan,c):plan;
+    const view=cutPreviewFocus?focusWindow(focusOf(plan,c)):null,options={noHud:true,...(cutPreviewSolo?soloOptions:{})};
+    try{
+      J.syncMediaPreview(shown,t,true);
+      if(!view)previewRenderer.frame(previewCanvas.getContext('2d'),shown,t,{...options,scale:w/plan.W});
+      else{
+        // Render large enough that the window fills the preview sharply (at most full stage resolution).
+        const zw=Math.round(Math.min(plan.W,w/view.size)),zh=Math.round(zw*plan.H/plan.W);
+        if(zoomCanvas.width!==zw||zoomCanvas.height!==zh){zoomCanvas.width=zw;zoomCanvas.height=zh;}
+        previewRenderer.frame(zoomCanvas.getContext('2d'),shown,t,{...options,scale:zw/plan.W});
+        const pc=previewCanvas.getContext('2d');pc.setTransform(1,0,0,1,0,0);pc.globalAlpha=1;pc.globalCompositeOperation='copy';pc.imageSmoothingEnabled=true;
+        pc.drawImage(zoomCanvas,view.x*zw,view.y*zh,view.size*zw,view.size*zh,0,0,w,h);pc.globalCompositeOperation='source-over';
+      }
+    }catch(e){}
+    const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
+    pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
+  }
+  const names = {
+    text:['歌詞','Lyrics'],layout:['レイアウト','Layout'],enter:['登場','Entrance'],hold:['保持・モーション','Hold / motion'],exit:['退場','Exit'],
+    inDur:['登場時間（秒）','Entrance duration (s)'],outDur:['退場時間（秒）','Exit duration (s)'],stagger:['文字の時間差（秒）','Character delay (s)'],
+    decor:['装飾','Decoration'],scheme:['配色','Palette'],params:['レイアウト詳細','Layout parameters'],treat:['加工','Treatment'],treatP:['加工の詳細','Treatment parameters'],
+    bg:['背景演出','Background effect'],bgP:['背景演出の詳細','Background parameters'],cam:['カメラ','Camera'],camP:['カメラ詳細','Camera parameters'],
+    trans:['カット間のつなぎ','Transition'],transP:['つなぎの詳細','Transition parameters'],transDur:['つなぎ時間（秒）','Transition duration (s)'],
+    area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置・サイズ（画面比率）','Placement / size (stage ratios)'],
+    motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
+    motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
+    untilNext:['次カット再生まで','Until the next cut'],endTime:['カット終了時間（秒）','Cut end (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
+  };
+  const label = key => names[key] ? L(...names[key]) : key;
+  const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
+  function preview() {
+    clearTimeout(previewTimer);
+    current=refreshPreview();
+    render();
+  }
+  function write(field,value,native) {
+    // Editing a locked media cut's technique / phases / asset is a direct operation: it stays locked
+    // with the new choice.
+    if (!lyric && native && draft.lock) {
+      const lockedField={technique:'lockedTechnique',entrance:'lockedEntrance',departure:'lockedDeparture',itemId:'lockedItemId'}[field];
+      if(lockedField)delete draft[lockedField];
+    }
+    if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
+    schedulePreview();
+  }
+  function options(field) {
+    if(field==='blend') return ['normal','multiply','screen','overlay'].map((v,i)=>[v,[L('通常','Normal'),L('乗算','Multiply'),L('スクリーン','Screen'),L('オーバーレイ','Overlay')][i]]);
+    if(field==='itemId') return [['',L('画像無し','No image')],...J.mediaCopyItems(layer).map(a=>[a.id,a.name]),...S.project[layer].items.map(a=>[a.id,a.name])];
+    if(field==='scheme') return S.plan.style.schemes.map((_,i)=>[String(i),String(i+1)]);
+    if(field==='technique') return [['',L('自動','Auto')],['none',L('演出無し','No effects')],...Object.entries(J.MEDIA_TECH).filter(([,d])=>!d.stage).map(([id,d])=>[id,d.name])];
+    if(field==='entrance'||field==='departure') return [['',L('自動','Auto')],['none',L('即時（なし）','Instant (none)')],...J.mediaPhaseOptions(field==='entrance'?'enter':'exit').map(([id,d])=>[id,d.name])];
+    if(!lyric && ['layout','hold','treat'].includes(field)) {
+      const registry=J['MEDIA_'+field.toUpperCase()] || {}, entries=Object.entries(registry).map(([id,d])=>[id,typeof d==='string'?d:d.name||id]);
+      for(const def of Object.values(J.MEDIA_TECH)) if(def[field]&&!entries.some(([id])=>id===def[field])) entries.push([def[field],def.name+' / '+def[field]]);
+      return entries;
+    }
+    const reg={layout:J.LAYOUTS,enter:J.ENTER,hold:J.HOLD,exit:J.EXIT,treat:J.TREAT,bg:J.BG,cam:J.CAMERA,trans:J.TRANS,font:J.FONTS,id:J.DECOR}[field];
+    return reg ? [...(field==='trans'?[['none',L('なし','None')]]:[]),...Object.entries(reg).map(([id,d])=>[id,d.name||id])] : null;
+  }
+  function choicePool(path){
+    if(/^decor\.\d+\.id$/.test(path))return {kind:lyric?'lyric':'decor',group:'decor'};
+    if(lyric && ['layout','enter','hold','exit','treat','bg','cam','trans'].includes(path))return {kind:'lyric',group:path};
+    if((!lyric && ['technique','entrance','departure'].includes(path)) || path.startsWith('mask.motion.'))return {kind:'media',group:layer==='lyrics'?'media':layer};
+    return {kind:'local',group:layer+':'+path};
+  }
+  function applyDisabledChoices(project){
+    for(const {pool,value} of disabledChoices){
+      if(pool.kind==='lyric')((project.enabled ||= {})[pool.group] ||= {})[value]=false;
+      else if(pool.kind==='media'||pool.kind==='decor'){
+        const target=pool.kind==='decor'?layer:pool.group,settings=J.mediaEffectSettings(project,target);
+        (settings[pool.kind==='decor'?'decorEnabled':'enabled'] ||= {})[value]=false;project[target].effects=settings;
+      }else ((project.detailRandomExclusions ||= {})[pool.group] ||= {})[value]=true;
+    }
+  }
+  let detailSearchPopup=null;
+  function closeDetailSearch(){detailSearchPopup?.remove();detailSearchPopup=null;}
+  function attachDetailSearch(select){
+    if(select.dataset.searchAttached)return;select.dataset.searchAttached='true';
+    const open=(initial='')=>{
+      if(select.disabled)return;
+      closeDetailSearch();
+      const popup=document.createElement('div');popup.className='detail-search-popup';popup.setAttribute('popover','auto');
+      const search=document.createElement('input');search.type='search';search.placeholder=L('あいまい検索','Fuzzy search');search.setAttribute('aria-label',search.placeholder);search.autocomplete='off';search.value=initial;
+      const list=document.createElement('div');list.className='detail-search-options';list.setAttribute('role','listbox');
+      list.setAttribute('aria-label',select.closest('label')?.querySelector('span')?.textContent||search.placeholder);
+      popup.append(search,list);dialog.append(popup);detailSearchPopup=popup;
+      let items=[],active=-1;
+      const highlight=index=>{
+        active=index;items.forEach((item,i)=>{item.classList.toggle('active',i===active);item.setAttribute('aria-selected',String(i===active));});
+        if(items[active]){search.setAttribute('aria-activedescendant',items[active].id);items[active].scrollIntoView({block:'nearest'});}
+        else search.removeAttribute('aria-activedescendant');
+      };
+      search.setAttribute('role','combobox');search.setAttribute('aria-expanded','true');search.setAttribute('aria-autocomplete','list');
+      list.id='cutDetailSearchOptions';search.setAttribute('aria-controls',list.id);
+      const choose=option=>{
+        closeDetailSearch();select.focus();select.value=option.value;
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      };
+      const filter=()=>{
+        list.replaceChildren();items=[];const matches=J.detailSearchQuery(search.value);let group=null;
+        for(const option of select.options){
+          const parent=option.parentElement,groupName=parent.tagName==='OPTGROUP'?parent.label:'';
+          if(option.disabled||parent.disabled||!matches(option.textContent+' '+option.value+' '+groupName))continue;
+          if(groupName&&group!==groupName){const heading=document.createElement('div');heading.className='detail-search-group';heading.textContent=groupName;list.append(heading);}group=groupName;
+          const item=document.createElement('div');item.setAttribute('role','option');item.id='cutDetailSearchOption'+items.length;item.textContent=option.textContent;
+          item.className='detail-search-option';item.dataset.value=option.value;item.onclick=()=>choose(option);list.append(item);items.push(item);
+        }
+        if(!items.length){const empty=document.createElement('div');empty.className='detail-search-empty';empty.textContent=L('該当する項目がありません','No matching options');empty.setAttribute('role','status');list.append(empty);}
+        highlight(Math.max(0,items.findIndex(item=>item.dataset.value===select.value)));
+      };
+      search.addEventListener('input',filter);
+      search.addEventListener('keydown',e=>{
+        if(e.isComposing)return;
+        if(['ArrowDown','ArrowUp','Enter','Escape','Tab'].includes(e.key)){
+          if(e.key!=='Tab')e.preventDefault();e.stopPropagation();
+          if(e.key==='Escape'||e.key==='Tab'){closeDetailSearch();select.focus();}
+          else if(e.key==='Enter')items[active]?.click();
+          else if(items.length)highlight((active+(e.key==='ArrowDown'?1:-1)+items.length)%items.length);
+        }
+      });
+      popup.addEventListener('click',e=>e.stopPropagation());
+      popup.addEventListener('toggle',e=>{if(e.newState==='closed'){popup.remove();if(detailSearchPopup===popup)detailSearchPopup=null;}});
+      const rect=select.getBoundingClientRect(),width=Math.min(Math.max(rect.width,240),innerWidth-16);
+      popup.style.width=width+'px';popup.style.left=Math.max(8,Math.min(rect.left,innerWidth-width-8))+'px';
+      const below=innerHeight-rect.bottom-8,above=rect.top-8,down=below>=Math.min(280,above),room=Math.max(100,down?below:above);
+      popup.style.maxHeight=Math.min(340,room)+'px';
+      if(down)popup.style.top=rect.bottom+'px';else popup.style.bottom=(innerHeight-rect.top)+'px';
+      popup.showPopover();filter();search.focus();
+    };
+    select.addEventListener('pointerdown',e=>{if(e.button===0)e.preventDefault();});
+    select.addEventListener('click',e=>{e.preventDefault();open();});
+    select.addEventListener('keydown',e=>{
+      if(['Enter',' ','ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();open();}
+      else if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();open(e.key);}
+    });
+  }
+  function attachDetailRandom(select,path){
+    attachDetailSearch(select);
+    if(select.dataset.randomAttached)return;select.dataset.randomAttached='true';
+    const row=select.closest('label');if(!row)return;
+    const title=row.querySelector('span');if(!title)return;
+    const pool=choicePool(path),project=draftProject();
+    const allowed=value=>{
+      if(disabledChoices.some(entry=>entry.pool.kind===pool.kind&&entry.pool.group===pool.group&&entry.value===value))return false;
+      if(pool.kind==='lyric')return project.enabled?.[pool.group]?.[value]!==false;
+      if(pool.kind==='media')return J.mediaEffectSettings(project,pool.group).enabled?.[value]!==false;
+      if(pool.kind==='decor')return J.mediaDecorOn(J.mediaEffectSettings(project,layer),value);
+      return !project.detailRandomExclusions?.[pool.group]?.[value];
+    };
+    const candidates=()=>[...select.options].filter(option=>!option.disabled && option.value!==select.value && option.value!=='' && option.value!=='legacy' && allowed(option.value));
+    const controls=document.createElement('span');controls.className='detail-random-actions';
+    for(const off of pool.kind==='local'?[false]:[false,true]){
+      const button=document.createElement('button');button.type='button';button.className='icon ghost';button.dataset.detailRandom=path;button.dataset.disableCurrent=String(off);
+      button.title=off?L('この演出をOFFにして再抽選','Disable current effects and randomize'):L('この項目だけ再抽選','Randomize this setting only');button.setAttribute('aria-label',button.title);
+      button.innerHTML=off?ICON.disableReroll:ICON.dice;
+      button.disabled=select.disabled || !candidates().length;
+      button.onclick=e=>{
+        e.preventDefault();e.stopPropagation();const options=candidates();if(!options.length)return;
+        // Preserve all other resolved effect values while changing this field.
+        const snapshot=J.cutEffectsPayload(current,layer,previewPlan);
+        draft.details={...snapshot.details,...draft.details};
+        if(!lyric){for(const [key,value] of Object.entries(snapshot.native))if(!Object.hasOwn(draft,key))draft[key]=clone(value);if(!Object.hasOwn(draft,'placement'))draft.placement=clone(current.placement);}
+        if(off)disabledChoices.push({pool,value:select.value});
+        select.value=options[Math.floor(Math.random()*options.length)].value;
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+        // Nested controls update values without rebuilding the generic form.
+        if(select.isConnected)preview();
+      };
+      controls.append(button);
+    }
+    title.classList.add('detail-field-title');title.append(controls);
+  }
+  function fieldEditor(parent,field,value,onChange,path=field) {
+    if(value && typeof value==='object') {
+      const section=document.createElement('details'); section.dataset.detailSection=path;
+      section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
+      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); section.append(title);
+      const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
+      for(const [child,v] of Object.entries(value)) {
+        // Random candidate pools belong to the layer; this editor changes the resolved cut.
+        if(['enabled','randomize','autoPlacement','sizeMin','sizeMax','decor'].includes(child)) continue;
+        fieldEditor(grid,child,v,next=>{
+          if (value.lockAspect && ['w','h'].includes(child) && value[child]>0) {
+            const other=child==='w'?'h':'w'; value[other]*=next/value[child];
+            const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=value[other];
+          }
+          value[child]=next;onChange(clone(value));
+        },`${path}.${child}`);
+      }
+      if(field==='decor') {
+        const add=document.createElement('button');add.type='button';add.textContent=L('装飾を追加','Add decoration');
+        add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};section.append(add);
+      }
+      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1} を削除`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
+      return;
+    }
+    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field);row.append(text);
+    const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
+    if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
+    else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
+    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
+    else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
+    if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
+    input.addEventListener('change',()=>{
+      const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value):input.value;
+      if(typeof v==='number'&&!Number.isFinite(v))return;
+      onChange(v);
+      if(/^decor\.\d+\.id$/.test(path))preview();
+      if(choices && !path.includes('.')) {
+        const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
+        if(param&&draft.details)delete draft.details[param];
+        if(field==='technique'&&draft.details)for(const key of ['hold','treat','trans','transP'])delete draft.details[key];
+        preview();
+      }
+    });
+    row.append(input);parent.append(row);
+    if(choices)attachDetailRandom(input,path);
+  }
+  function render() {
+    closeDetailSearch();
+    openDetails.clear();
+    for(const section of dialog.querySelectorAll('details[data-detail-section]')){
+      let path=section.dataset.detailSection;
+      if(removedDetail && path.startsWith(removedDetail.path+'.')){
+        const tail=path.slice(removedDetail.path.length+1).split('.'),i=Number(tail[0]);
+        if(i===removedDetail.index)continue;
+        if(i>removedDetail.index){tail[0]=String(i-1);path=removedDetail.path+'.'+tail.join('.');}
+      }
+      openDetails.set(path,section.open);
+    }
+    removedDetail=null;
+    const scrollTop=formHost.scrollTop;
+    formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
+    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
+    const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
+    const group=boundaryGroupLimits(boundaryRef(layer,cut));
+    fieldEditor(grid,'start',start,v=>{start=v;});
+    const time=grid.querySelector('input');time.previousSibling.textContent=L('開始位置（秒・リンク先も移動）','Start (s; linked cuts move together)');time.min=group?.min??0;time.max=group?.max??S.plan.duration;time.disabled=!group;
+    // カット終了時間: editable only with 「次カット再生まで」 off (then it may pass the next cut's start).
+    if(!lyric || Number.isInteger(cut.part)) {
+      const auto=draft.untilNext!==false;let endInput=null;
+      fieldEditor(grid,'untilNext',auto,v=>{
+        if(v){delete draft.untilNext;delete draft.endTime;} else {draft.untilNext=false;if(!Number.isFinite(+draft.endTime))draft.endTime=+current.end.toFixed(3);}
+        endInput.disabled=v;endInput.value=String(v?+current.end.toFixed(3):draft.endTime);schedulePreview();
+      });
+      fieldEditor(grid,'endTime',+(auto||!Number.isFinite(+draft.endTime)?current.end:+draft.endTime).toFixed(3),v=>{draft.endTime=+Math.max(start+.04,v).toFixed(3);schedulePreview();});
+      endInput=grid.lastChild.querySelector('input');endInput.disabled=auto;endInput.min=String(+(start+.04).toFixed(3));endInput.max=String(+S.plan.duration.toFixed(3));
+    }
+    {
+      fieldEditor(grid,'lock',locked,v=>{locked=v;});
+      grid.lastChild.querySelector('span').textContent=lyric?L('行の構成をロック','Lock line composition'):L('カットをロック','Lock cut');
+    }
+    for(const field of nativeKeys) {
+      if(['videoLoop','videoStart','videoDuration','chromaKey','chromaColor'].includes(field)&&current.type!=='video')continue;
+      let value=draft[field]??current[field];
+      if(['technique','entrance','departure'].includes(field)&&Object.hasOwn(draft,field))value=draft[field]??'';
+      if(field==='placement')value ||= {cx:.5,cy:.5,w:1,h:1,angle:0,lockAspect:true};
+      if(field==='videoDuration')value=Number(value)||current.end-current.start;
+      fieldEditor(grid,field,clone(value??(field==='opacity'?100:'')),v=>write(field,['itemId','technique','entrance','departure'].includes(field)&&v===''?null:v,true));
+    }
+    maskEditor(grid);
+    for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
+      if(field==='mask') continue;// edited by maskEditor
+      let value=current[field];
+      if(field==='area')value ||= {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
+      if(field==='trans')value ||= 'none';
+      if(value===undefined)continue;
+      fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
+    }
+    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape],select[data-mask-field]')){
+      const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
+      attachDetailRandom(select,path);
+    }
+    for(const select of form.querySelectorAll('select'))attachDetailSearch(select);
+    const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
+    const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
+    const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
+    formHost.scrollTop=scrollTop;
+    form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
+      applyDisabledChoices(S.project);
+      if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft;
+      {
+        // Locking here captures the edited result; an unchanged lock is re-captured with the edits.
+        if(lyric){ if(!locked) { if(initialLock) setOv(index,LYRIC_UNLOCK); } else { if(!initialLock) setOv(index,{lock:true}); relock('lyrics',index); } }
+        else if(!locked) mediaOv(index,MEDIA_UNLOCK,layer);
+        else { mediaOv(index,{lock:true},layer); relock(layer,index); }
+      }
+      if(group&&start!==cut.start) for(const member of group.members)setTimelineBoundaryTime(member,J.clamp(start,group.min,group.max));
+      replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
+    };
+  }
+  dialog.addEventListener('close',()=>{
+    cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
+    // Hand shared video elements back to the editor's own time.
+    J.syncMediaPreview(S.plan,S.t,false);S.need=true;
+  });
+  refreshPreview();render();dialog.showModal();previewStart=performance.now();previewFrame=requestAnimationFrame(drawPreview);
+}
+// Preview controls are DOM overlays, so they never enter exported frames.
+let itemFrameSignature = '';
+function drawItemFrames() {
+  const overlay=$('itemFrames'), view=$('view').getBoundingClientRect(), host=$('viewport').getBoundingClientRect();
+  overlay.hidden=!$('showItemFrames').checked || !!S.areaEdit || !!S.exporting;
+  if(overlay.hidden) { itemFrameSignature=''; return; }
+  Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
+  const items=[];
+  for(const layer of ['foreground','lyrics','media']) {
+    if(S.plan.layerVisibility?.[layer]===false)continue;
+    if(layer==='lyrics') {
+      for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
+    } else {
+      const cut=J.mediaAt(S.plan,S.t,layer),dimensions=J.mediaSourceDimensions(S.plan,cut,S.t);
+      if(!dimensions)continue;
+      const sw=dimensions.width,sh=dimensions.height;
+      let area=J.mediaPlacementRect(cut.placement,sw,sh,S.plan.W,S.plan.H);
+      if(!area)continue;
+      if(!cut.placement && cut.layout==='cover') {const scale=Math.max(S.plan.W/sw,S.plan.H/sh);area={x:(1-sw*scale/S.plan.W)/2,y:(1-sh*scale/S.plan.H)/2,w:sw*scale/S.plan.W,h:sh*scale/S.plan.H};}
+      items.push({layer,cut,index:cut.index,area:{...area,angle:cut.placement?.angle||0}});
+    }
+  }
+  const L=J.mediaLabel,labels={copy:L('演出をお気に入りに追加','Add effects to favorites'),paste:L('お気に入りから演出を適用','Apply favorite effects'),dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
+  const occupied=[];
+  const html=items.map(({layer,cut,index,area})=>{
+    const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
+    const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
+    const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
+    const actions=['dice','disableReroll','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('画像無し','No image'));
+    const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
+    const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
+    let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
+    while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
+    occupied.push({x,y,w:width});
+    const controls=actions.map(action=>{
+      const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
+      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
+    }).join('');
+    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><span title="${escapeHtml(frameName)}">${escapeHtml(frameName)}</span>${controls}</div>`;
+  }).join('');
+  if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
+}
+function removeLyricCut(line,part) {
+  remember();
+  const key=`${line}:${part}`;
+  S.project.lyricCutOptions[key]={...S.project.lyricCutOptions[key],removed:true};
+  replan();
+}
+function setMediaCutAsset(layer,index,itemId) {
+  if(S.exporting || S.tap)return;
+  const m=S.project[layer];
+  // Freeze the displayed order before switching from shuffled to manual selection.
+  if(m.randomOrder){
+    for(const cut of S.plan[layer].cuts)mediaOv(cut.index,{itemId:cut.itemId || null},layer);
+    m.randomOrder=false;
+  }
+  const ov=mediaCutOptions(layer,index);
+  mediaOv(index,{itemId,...(ov?.lock?{lockedItemId:itemId}:{})},layer);
+  replan();
+}
+function drawTimelineAssetSelects() {
+  const stack=$('timelineStack');
+  let overlay=$('timelineAssets');
+  if(!overlay){overlay=document.createElement('div');overlay.id='timelineAssets';stack.append(overlay);}
+  const retained=new Set();
+  for(const layer of ['foreground','media']){
+    const m=S.project[layer],canvas=$(layer==='foreground'?'foregroundTimeline':'mediaTimeline'),lanes=timelineLanes(layer);
+    const options=`<option value="">${J.mediaLabel('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...m.items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
+    for(const cut of S.plan[layer].cuts){
+      const key=`${layer}-${cut.index}`,duration=Math.max(.001,S.plan.duration);
+      const width=(cut.end-cut.start)/duration*canvas.clientWidth-38;
+      if(width<=0)continue;
+      retained.add(key);
+      let select=overlay.querySelector(`[data-key="${key}"]`);
+      if(!select){
+        select=document.createElement('select');select.className='timeline-asset-select';select.dataset.key=key;
+        select.dataset.layer=layer;select.dataset.index=cut.index;
+        select.addEventListener('pointerdown',e=>{e.stopPropagation();pause();});
+        select.addEventListener('keydown',e=>e.stopPropagation());
+        select.addEventListener('change',()=>{
+          setMediaCutAsset(layer,+select.dataset.index,select.value || null);
+        });
+        overlay.append(select);
+      }
+      // Preserve native dropdown state and focus across timeline redraws.
+      if(select._options!==options){select.innerHTML=options;select._options=options;}
+      if(select.value!==(cut.itemId || ''))select.value=cut.itemId || '';
+      select.disabled=!!(S.exporting || S.tap);
+      select.title=m.randomOrder?J.mediaLabel('素材を変更すると現在の並びでランダム順をオフにします','Changing the asset turns off random order and keeps the current order'):cut.name;
+      select.setAttribute('aria-label',`${J.mediaLabel(layer==='foreground'?'前景':'背景',layer==='foreground'?'Foreground':'Background')} ${cut.index+1}: ${J.mediaLabel('素材を変更','Change asset')}`);
+      select.style.left=`${canvas.offsetLeft+cut.start/duration*canvas.clientWidth+33}px`;
+      // Each select sits on its cut's lane.
+      const lane=laneBox(layer,lanes.lanes.get(cut),lanes.count,canvas);
+      select.style.top=`${canvas.offsetTop+(lanes.count>1?lane.top+Math.max(0,(lane.height-20)/2):22)}px`;select.style.width=`${width}px`;
+    }
+  }
+  for(const select of Array.from(overlay.children))if(!retained.has(select.dataset.key))select.remove();
+}
+let timelineCutMenu = null;
+function closeTimelineCutMenu(restoreFocus=false) {
+  if(!timelineCutMenu)return;
+  const {menu,controller,trigger}=timelineCutMenu;
+  timelineCutMenu=null;controller.abort();menu.remove();trigger.setAttribute('aria-expanded','false');
+  if(restoreFocus && trigger.isConnected)trigger.focus();
+}
+function openTimelineCutMenu(trigger) {
+  if(S.exporting || S.tap)return;
+  if(timelineCutMenu?.trigger===trigger){closeTimelineCutMenu(true);return;}
+  closeTimelineCutMenu();S.playheadMenu=null;syncPlayheadMenu();pause();
+  const layer=trigger.dataset.layer,index=+trigger.dataset.index,part=+trigger.dataset.part||0;
+  const cut=layer==='lyrics'?S.plan.cuts.find(c=>c.line===index&&c.part===part):S.plan[layer].cuts[index];
+  if(!cut)return;
+  const L=J.mediaLabel,locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
+  const labels={dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L(locked?'ロック解除':'ロック',locked?'Unlock':'Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),copy:L('演出をお気に入りに追加','Add effects to favorites'),paste:L('お気に入りから演出を適用','Apply favorite effects'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
+  const actions=['dice','disableReroll','lock',...(layer==='lyrics'||J.mediaSourceAvailable(cut)?['area']:[]),'details','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'remove'];
+  const menu=document.createElement('div'),controller=new AbortController(),signal=controller.signal;
+  menu.id='timelineCutMenu';menu.className='timeline-cut-menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label',L('カットの操作','Cut actions'));
+  menu.innerHTML=actions.map(action=>{
+    const toggle=['lock','frontmost'].includes(action),active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
+    return `<button type="button" role="${toggle?'menuitemcheckbox':'menuitem'}" ${toggle?`aria-checked="${active}"`:''} data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${part}">${ICON[action]}<span>${labels[action]}</span>${active?'<span class="menu-check" aria-hidden="true">✓</span>':''}</button>`;
+  }).join('');
+  document.body.append(menu);timelineCutMenu={menu,controller,trigger};trigger.setAttribute('aria-expanded','true');
+  const r=trigger.getBoundingClientRect(),box=menu.getBoundingClientRect();
+  menu.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';
+  menu.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';
+  menu.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;e.stopPropagation();closeTimelineCutMenu();if(!S.exporting&&!S.tap)performTimelineAction(button);},{signal});
+  menu.addEventListener('keydown',e=>{
+    e.stopPropagation();
+    const buttons=[...menu.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);
+    if(e.key==='Escape'){e.preventDefault();closeTimelineCutMenu(true);}
+    else if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length].focus();}
+    else if(e.key==='Tab')closeTimelineCutMenu();
+  },{signal});
+  document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!trigger.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  window.addEventListener('resize',()=>closeTimelineCutMenu(),{signal});
+  document.addEventListener('scroll',e=>{if(!menu.contains(e.target))closeTimelineCutMenu();},{capture:true,signal});
+  menu.querySelector('button').focus();
+}
+function performTimelineAction(control) {
+  if(control.dataset.action==='menu'){openTimelineCutMenu(control);return;}
+  if (control.classList.contains('item-frame-action') && S.playing) return;
+  const layer = control.dataset.layer, index = +control.dataset.index;
+  if (!Number.isInteger(index) || index < 0) return;
+  if(control.dataset.action==='disableReroll'){disableAndReroll(layer,index,control.dataset.part==null?null:+control.dataset.part);return;}
+  if (['copy','paste'].includes(control.dataset.action)) { effectFavoriteAction(control.dataset.action,layer,index,+control.dataset.part||0); return; }
+  if (control.dataset.action === 'details') { openCutDetails(layer,index,+control.dataset.part || 0); return; }
+  if (control.dataset.action === 'area') {
+    if (layer === 'lyrics') openAreaEditor(index);
+    else if (layer === 'foreground' || layer === 'media') openMediaEditor(index, layer);
+    return;
+  }
+  if (control.dataset.action === 'frontmost' && layer === 'lyrics') {
+    toggleLyricCutFrontmost(index, +control.dataset.part);
+    return;
+  }
+  if (layer === 'lyrics') {
+    if (control.dataset.action === 'remove') removeLyricCut(index,+control.dataset.part||0);
+    else if (control.dataset.action === 'dice') rerollLyricLine(index);
+    else toggleLyricLineLock(index);
+  } else if (layer === 'foreground' || layer === 'media') {
+    if (control.dataset.action === 'dice') rerollMediaCut(layer, index);
+    else if (control.dataset.action === 'remove') removeMediaCut(index, layer);
+    else toggleMediaCutLock(layer, index);
+  }
+}
+function drawTimelineLinks() {
+  const svg = $('timelineLinks'), stack = $('timelineStack');
+  if (!svg || !S.plan) return;
+  for(const [layer,id] of [['foreground','foregroundTimeline'],['lyrics','timeline'],['media','mediaTimeline']]){
+    const canvas=$(id),button=$('layerVisibilityControls').querySelector(`[data-layer="${layer}"]`);
+    if(!button)continue;
+    const visible=S.project.layerVisibility?.[layer]!==false;
+    button.style.top=(canvas.offsetTop+(canvas.clientHeight-30)/2)+'px';
+    button.setAttribute('aria-pressed',String(visible));
+    button.querySelector('.eye-slash').style.display=visible?'none':'';
+    button.title=J.mediaLabel({foreground:'前景',lyrics:'歌詞',media:'背景'}[layer],{foreground:'Foreground',lyrics:'Lyrics',media:'Background'}[layer])+': '+J.mediaLabel(visible?'非表示にする':'表示する',visible?'Hide':'Show');
+    button.setAttribute('aria-label',button.title);
+  }
+  const width = stack.clientWidth, height = stack.clientHeight;
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const markers = timelineMarkers();
+  if (S.timelineDrag && S.timelineDrag.moved) {
+    const moving = new Set(linkedRefs(S.timelineDrag.ref));
+    for (const marker of markers) if (moving.has(marker.ref)) {
+      const canvas = $(marker.layer === 'lyrics' ? 'timeline' : marker.layer === 'media' ? 'mediaTimeline' : 'foregroundTimeline');
+      marker.x = canvas.offsetLeft + S.timelineDrag.preview / Math.max(0.001, S.plan.duration) * canvas.clientWidth;
+    }
+  }
+  const byRef = new Map(markers.map(m => [m.ref, m]));
+  const links = S.project.timelineLinks.map((link, index) => {
+    const a = byRef.get(link.a), b = byRef.get(link.b);
+    if (!a || !b) return '';
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    return `<line class="link-wire" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><g class="link-remove" data-edge="${index}" role="button" aria-label="リンクを解除"><circle cx="${mx}" cy="${my}" r="9"/><text x="${mx}" y="${my + 0.5}">×</text></g>`;
+  }).join('');
+  const preview = S.linkDrag ? `<line class="link-preview" x1="${S.linkDrag.sourceX}" y1="${S.linkDrag.sourceY}" x2="${S.linkDrag.x}" y2="${S.linkDrag.y}"/>` : '';
+  const handles = markers.map(m => `<g class="link-handle ${linkedRefs(m.ref).length > 1 ? 'linked' : ''}" data-ref="${escapeHtml(m.ref)}" role="button" aria-label="境界をリンク"><circle cx="${m.x}" cy="${m.y}" r="9"/><text x="${m.x}" y="${m.y + 0.5}">🔗</text></g>`).join('');
+  const menus = ['foreground','lyrics','media'].map(layer => {
+    const canvas=timelineCanvas(layer), lanes=timelineLanes(layer);
+    const list=layer==='lyrics'?S.plan.cuts.filter(c=>c.line>=0&&Number.isInteger(c.part)):S.plan[layer].cuts;
+    return list.map(cut=>{
+      const index=layer==='lyrics'?cut.line:cut.index, lane=laneBox(layer,lanes.lanes.get(cut),lanes.count,canvas);
+      const x=J.clamp(canvas.offsetLeft+cut.start/Math.max(.001,S.plan.duration)*canvas.clientWidth+16,canvas.offsetLeft+12,canvas.offsetLeft+canvas.clientWidth-12);
+      const y=canvas.offsetTop+lane.top+lane.height/2;
+      const label=J.mediaLabel('カットのメニュー','Cut menu');
+      return `<g class="timeline-action" data-action="menu" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" role="button" tabindex="0" aria-label="${label}" aria-haspopup="menu" aria-expanded="false" transform="translate(${x} ${y})"><title>${label}</title><rect x="-12" y="-12" width="24" height="24" rx="4"/><path d="M-6 -4h12M-6 0h12M-6 4h12" fill="none" stroke="currentColor" stroke-width="1.5" pointer-events="none"/></g>`;
+    }).join('');
+  }).join('');
+  drawTimelineAssetSelects();
+  svg.innerHTML = links + preview + handles + menus;
+}
+function markerNear(clientX, clientY, sourceLayer) {
+  const rect = $('timelineStack').getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
+  let best = null, distance = 18;
+  for (const marker of timelineMarkers()) {
+    if (marker.layer === sourceLayer) continue;
+    const d = Math.hypot(marker.x - x, marker.y - y);
+    if (d < distance) { best = marker; distance = d; }
+  }
+  return best;
+}
+// The start boundary or end handle under the pointer; with stacked lanes the pointer's lane wins.
+function timelineBoundaryAt(ev, layer) {
+  const canvas = ev.currentTarget, rect = canvas.getBoundingClientRect(), duration = S.plan.duration;
+  const info = timelineLanes(layer), band = timelineBand(layer, canvas), y = ev.clientY - rect.top;
+  const laneAt = info.count > 1 && y >= band.top && y <= band.bottom ? Math.min(info.count - 1, Math.floor((y - band.top) / ((band.bottom - band.top) / info.count))) : null;
+  const cuts = layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0) : S.plan[layer].cuts;
+  let best = null;
+  for (const cut of cuts) {
+    if (laneAt != null && info.lanes.get(cut) !== laneAt) continue;
+    const start = Math.abs(ev.clientX - (rect.left + cut.start / duration * rect.width));
+    if (start < 9 && (!best || start < best.distance) && timelineBoundaryForCut(cut, layer)) best = { cut, distance: start, end: false };
+    if (!cut.manualEnd || layer === 'lyrics' && !Number.isInteger(cut.part)) continue;
+    const end = Math.abs(ev.clientX - (rect.left + cut.end / duration * rect.width));
+    if (end < 9 && (!best || end < best.distance)) best = { cut, distance: end, end: true };
+  }
+  if (!best) return null;
+  return best.end ? { mode: 'end', layer, key: layer === 'lyrics' ? `${best.cut.line}:${best.cut.part}` : best.cut.index, start: best.cut.end, min: best.cut.start + 0.04, max: duration }
+    : timelineBoundaryForCut(best.cut, layer);
+}
+// カットの終了時間 (turns 「次カット再生まで」 off); null restores it.
+function setCutEnd(layer, key, time) {
+  const patch = time == null ? { untilNext: undefined, endTime: undefined } : { untilNext: false, endTime: +time.toFixed(3) };
+  if (layer === 'lyrics') {
+    const options = S.project.lyricCutOptions, next = { ...options[key], ...patch };
+    for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
+    if (Object.keys(next).length) options[key] = next; else delete options[key];
+  } else mediaOv(key, patch, layer);
+}
+function timelineBoundaryForCut(chosen, layer) {
+  const duration = S.plan.duration;
+  let min, max, target;
+  if (layer !== 'lyrics') {
+    const cutsForLayer = S.plan[layer].cuts, index = chosen.index;
+    min = index ? cutsForLayer[index - 1].start + 0.04 : 0;
+    max = index + 1 < cutsForLayer.length ? cutsForLayer[index + 1].start - 0.04 : duration - 0.04;
+    target = { index };
+  } else if (chosen.part === 'interlude') {
+    const previous = S.plan.cuts.find(c => c.line === chosen.line && typeof c.part === 'number' && c.end === chosen.start);
+    min = previous ? previous.start + 0.22 : S.plan.lines[chosen.line].start + 0.5;
+    max = chosen.end - 1.31;
+    target = { line: chosen.line, part: 'interlude' };
+  } else if (chosen.part === 0) {
+    const line = chosen.line, lines = S.plan.lines;
+    // Saved/inserted lines can be out of source order. Use their actual timeline order.
+    const before = lines.filter((l, i) => i !== line && l.start < chosen.start);
+    const after = lines.filter((l, i) => i !== line && l.start > chosen.start);
+    min = before.length ? Math.max(...before.map(l => l.start)) + 0.04 : 0;
+    max = after.length ? Math.min(...after.map(l => l.start)) - 0.04 : duration - 0.04;
+    const firstInner = S.project.timing.cutTimes && S.project.timing.cutTimes[`${line}:1`];
+    if (firstInner != null && Number.isFinite(+firstInner)) max = Math.min(max, +firstInner - 0.22);
+    target = { line, part: 0, nextLineStart: lines[line + 1] && lines[line + 1].start };
+  } else {
+    const previous = S.plan.cuts.find(c => c.line === chosen.line && c.part === chosen.part - 1);
+    const following = S.plan.cuts.find(c => c.line === chosen.line && c.part === chosen.part + 1);
+    min = previous ? previous.start + 0.22 : S.plan.lines[chosen.line].start + 0.22;
+    max = (following ? following.start : S.plan.lines[chosen.line].visEnd ?? chosen.end) - 0.22;
+    target = { line: chosen.line, part: chosen.part };
+  }
+  // A previously saved short cut must remain draggable away from a tight boundary.
+  min = Math.min(min, chosen.start); max = Math.max(max, chosen.start);
+  return max > min ? { layer, ref: boundaryRef(layer, chosen), start: chosen.start, min, max, ...target } : null;
+}
+function setTimelineBoundaryTime(drag, t) {
+  if (drag.layer === 'lyrics') {
+    const timing = S.project.timing;
+    if (drag.part === 0) {
+      timing.lineTimes[drag.line] = t;
+      if (drag.nextLineStart != null && timing.lineTimes[drag.line + 1] == null) timing.lineTimes[drag.line + 1] = +drag.nextLineStart.toFixed(3);
+    } else {
+      if (!timing.cutTimes) timing.cutTimes = {};
+      timing.cutTimes[`${drag.line}:${drag.part}`] = t;
+    }
+  } else S.project[drag.layer].timing.lineTimes[drag.index] = t;
+}
+function boundaryGroupLimits(ref) {
+  const members = linkedRefs(ref).map(id => {
+    const cut = boundaryCut(id);
+    return cut && timelineBoundaryForCut(cut, boundaryLayer(id));
+  });
+  if (members.some(x => !x)) return null;
+  return { members, min: Math.max(...members.map(x => x.min)), max: Math.min(...members.map(x => x.max)) };
+}
+function commitTimelineBoundary(drag) {
+  const t = +drag.preview.toFixed(3);
+  const group = boundaryGroupLimits(drag.ref);
+  if (!group || group.max < group.min) return;
+  for (const member of group.members) setTimelineBoundaryTime(member, t);
+  replan();
+}
+function connectTimelineBoundaries(source, target) {
+  const from = linkedRefs(source), to = linkedRefs(target);
+  if (from.includes(target)) return;
+  const layers = from.map(boundaryLayer);
+  if (to.some(ref => layers.includes(boundaryLayer(ref)))) { toast('同じレイヤーの境界は同時にリンクできません'); return; }
+  const limits = [source, target].map(boundaryGroupLimits);
+  if (limits.some(x => !x)) return;
+  const min = Math.max(...limits.map(x => x.min)), max = Math.min(...limits.map(x => x.max));
+  const targetTime = boundaryCut(target).start;
+  if (targetTime < min - 0.001 || targetTime > max + 0.001) { toast('この開始位置にはリンクできません'); return; }
+  for (const ref of [...from, ...to]) setTimelineBoundaryTime(timelineBoundaryForCut(boundaryCut(ref), boundaryLayer(ref)), targetTime);
+  S.project.timelineLinks.push({ a: source, b: target });
+  replan();
 }
 
 /* ---------------- cut info ---------------- */
 let lastCutIdx = -2;
 function updateCutInfo() {
   const cut = J.cutAt(S.plan, S.t);
-  const idx = cut ? cut.index : -1;
-  const li = cut ? cut.line : -2;
-  if (li !== S.curLine) {
-    if (S.titleLineEl) S.titleLineEl.classList.toggle('cur', li === -1);
-    S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li));
-    S.curLine = li;
-    followLine(li);
-  }
+  const mc = J.mediaAt(S.plan, S.t);
+  const fc = J.mediaAt(S.plan, S.t, 'foreground');
+  const idx = `${cut ? cut.index : -1}/${mc ? mc.index : -1}/${fc ? fc.index : -1}`;
+  const li = cut ? cut.line : -1;
+  if (li !== S.curLine) { S.lineEls.forEach((el, i) => el.classList.toggle('cur', i === li)); S.curLine = li; }
+  const active = S.sourceTab === 'foreground' ? fc : mc;
+  S.mediaLineEls.forEach((el, i) => el.classList.toggle('cur', !!active && i === active.index));
   if (idx === lastCutIdx) return;
   lastCutIdx = idx;
-  const el = $('cutInfo');
-  if (!cut) { el.innerHTML = '<span class="hint">この位置にカットはありません</span>'; return; }
-  const chip = (cls, k, v) => `<span class="chip ${cls}"><b>${k}</b>${v}</span>`;
-  const n = (tbl, k) => (tbl[k] ? tbl[k].name : k);
-  el.innerHTML = [
-    `<span class="chip mono">${cut.line === -1 ? '#00 (タイトル)' : '#' + String(cut.index + 1).padStart(2, '0')}</span>`,
-    chip('l', 'レイアウト', n(J.LAYOUTS, cut.layout)), chip('e', '登場', n(J.ENTER, cut.enter)), chip('h', '保持', n(J.HOLD, cut.hold)), chip('x', '退場', n(J.EXIT, cut.exit)),
-    cut.decor && cut.decor.length ? chip('', '装飾', cut.decor.map(d => n(J.DECOR, d.id)).join('・')) : '',
-    cut.treat && cut.treat !== 'none' ? chip('t', '加工', n(J.TREAT, cut.treat)) : '',
-    cut.bg && cut.bg !== 'none' ? chip('b', '背景', n(J.BG, cut.bg)) : '',
-    cut.cam && cut.cam !== 'push' ? chip('c', 'カメラ', n(J.CAMERA, cut.cam)) : '',
-    cut.trans ? chip('c', 'つなぎ', n(J.TRANS, cut.trans)) : '',
-  ].join('');
+
 }
 
 /* ---------------- line list ---------------- */
+// The inserted line becomes an ordinary line starting at the playhead: it runs until the next line
+// (or empty cut) and the line playing before it ends there, re-fitting its words into the shorter span.
+// At a line's own start it takes the first half of that line's slot, so no cut collapses to nothing.
+function lyricInsertRange(start) {
+  const at=S.plan.lines.find(line=>Math.abs(line.start-start)<.05);
+  const lineEnd=line=>S.plan.lines.find(l=>l.index>line.index && l.start>line.start+1e-6)?.start ?? S.plan.duration;
+  if(at)return {at,end:start+(lineEnd(at)-start)/2};
+  return {at:null,end:S.plan.lines.find(line=>line.start>start+1e-6)?.start ?? S.plan.duration};
+}
+function insertLyricAtPlayhead(text) {
+  if(S.exporting || S.tap || !S.plan || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,previous=S.project.lyrics,parsed=J.parseLyrics(previous),range=lyricInsertRange(start);
+  const next=range.at || S.plan.lines.find(line=>line.start>=start-1e-6);
+  const rows=previous.replace(/\r/g,'').split('\n');
+  const sourceLine=next ? parsed.lines[next.index].sourceLine : rows.length;
+  const allTimed=parsed.lines.length && parsed.lines.every(line=>line.lrc!=null);
+  const timestamp=allTimed ? `[${Math.floor(start/60)}:${(start%60).toFixed(3)}]` : '';
+  rows.splice(sourceLine,0,timestamp+text);
+  const lyrics=rows.join('\n');
+  // Keep existing line starts stable while adding a new line at the playhead.
+  for(const line of S.plan.lines)S.project.timing.lineTimes[line.index]=line.start;
+  reconcileLyricLines(previous,lyrics);
+  const index=J.parseLyrics(lyrics).lines.findIndex(line=>line.sourceLine===sourceLine);
+  S.project.timing.lineTimes[index]=start;
+  delete S.project.overrides[index];
+  if(range.at)S.project.timing.lineTimes[index+1]=+range.end.toFixed(3);
+  S.project.durationOverride=S.plan.duration;
+  S.project.lyrics=lyrics;$('lyrics').value=lyrics;
+  replan();seek(start);
+}
+function openInsertAtPlayhead(layer) {
+  if(S.exporting || S.tap || S.t>=S.plan.duration-.04)return;
+  pause();
+  const start=S.t,lyric=layer==='lyrics',cuts=lyric?S.plan.cuts:S.plan[layer].cuts;
+  const end=lyric?lyricInsertRange(start).end:cuts.filter(c=>c.start>start+1e-6).reduce((end,c)=>Math.min(end,c.start),S.plan.duration);
+  if(end-start<.04)return;
+  const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.className='insert-cut-dialog';dialog.id='insertCutDialog';
+  const name=lyric?L('歌詞を挿入','Insert lyrics'):layer==='foreground'?L('前景を挿入','Insert foreground'):L('背景を挿入','Insert background');
+  dialog.innerHTML=`<form><h2>${name}</h2><label>${lyric?L('歌詞','Lyrics'):L('素材','Asset')}${lyric?'<textarea rows="3" required></textarea>':`<select><option value="">${L('画像無し','No image')}</option>${[...J.mediaCopyItems(layer),...S.project[layer].items].map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}</select>`}</label><p class="hint">${J.fmtTime(start)} ～ ${J.fmtTime(end)}</p><div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('挿入','Insert')}</button></div></form>`;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{
+    e.preventDefault();const input=dialog.querySelector('textarea,select');
+    if(lyric){
+      const text=input.value.trim().replace(/\r/g,'').replace(/\n/g,'\\n');
+      if(J.parseLyrics(text).lines.length!==1){input.setCustomValidity(L('歌詞を1行分入力してください','Enter one lyric line'));input.reportValidity();return;}
+      S.t=start;insertLyricAtPlayhead(text);
+    }else{
+      const m=S.project[layer],index=cuts.filter(c=>c.start<start-1e-6).length,overrides={},times={};
+      cuts.forEach((cut,i)=>{const n=i>=index?i+1:i;overrides[n]={...m.cutOverrides[i],itemId:cut.itemId};times[n]=cut.start;});
+      // Replace a boundary at the exact playhead instead of making a zero-length cut.
+      if(cuts[index] && Math.abs(cuts[index].start-start)<1e-6){delete overrides[index+1];delete times[index+1];for(let i=index+2;i<=cuts.length;i++){overrides[i-1]=overrides[i];times[i-1]=times[i];delete overrides[i];delete times[i];}}
+      overrides[index]={itemId:input.value||null,technique:null};times[index]=start;
+      const replacing=cuts[index] && Math.abs(cuts[index].start-start)<1e-6;
+      m.manualCuts=true;m.cutCount=cuts.length+(replacing?0:1);m.cutOverrides=overrides;m.timing.lineTimes=times;m.randomOrder=false;
+      if(!replacing){const prefix=layer==='foreground'?'f:':'m:';for(const link of S.project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith(prefix)&&+link[side].slice(2)>=index)link[side]=prefix+(+link[side].slice(2)+1);}
+      S.project.durationOverride=S.plan.duration;replan();seek(start);
+    }
+    dialog.close();
+  };
+  dialog.querySelector('textarea')?.addEventListener('input',e=>e.target.setCustomValidity(''));
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();dialog.querySelector('textarea,select').focus();
+}
+function reconcileLyricLines(previous, next) {
+  const oldLines = J.parseLyrics(previous).lines, newLines = J.parseLyrics(next).lines;
+  if (oldLines.length === newLines.length) return false;
+  const same = (a, b) => a.text === b.text && a.lrc === b.lrc;
+  let prefix = 0, suffix = 0;
+  while (prefix < Math.min(oldLines.length, newLines.length) && same(oldLines[prefix], newLines[prefix])) prefix++;
+  while (suffix < Math.min(oldLines.length, newLines.length) - prefix && same(oldLines[oldLines.length - 1 - suffix], newLines[newLines.length - 1 - suffix])) suffix++;
+  const oldMiddle = oldLines.length - prefix - suffix, newMiddle = newLines.length - prefix - suffix;
+  const oldToNew = new Map();
+  for (let i = 0; i < prefix; i++) oldToNew.set(i, i);
+  for (let i = 0; i < suffix; i++) oldToNew.set(oldLines.length - suffix + i, newLines.length - suffix + i);
+  if (oldMiddle * newMiddle <= 250000) {
+    const dp = Array.from({ length: oldMiddle + 1 }, () => new Uint16Array(newMiddle + 1));
+    for (let i = oldMiddle - 1; i >= 0; i--) for (let j = newMiddle - 1; j >= 0; j--) {
+      dp[i][j] = same(oldLines[prefix + i], newLines[prefix + j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+    for (let i = 0, j = 0; i < oldMiddle && j < newMiddle;) {
+      if (same(oldLines[prefix + i], newLines[prefix + j])) { oldToNew.set(prefix + i, prefix + j); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+      else j++;
+    }
+  }
+  const anchors = [[-1, -1], ...[...oldToNew].sort((a, b) => a[0] - b[0]), [oldLines.length, newLines.length]];
+  // Shared characters at either end: typing before a line and pressing Enter splits "new + old" in two,
+  // and the old line (with its time, lock and settings) belongs to the half that keeps its text.
+  const overlap = (a, b) => {
+    let p = 0, s = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+    return Math.max(p, s);
+  };
+  for (let a = 1; a < anchors.length; a++) {
+    const [oldBefore, newBefore] = anchors[a - 1], [oldAfter, newAfter] = anchors[a];
+    const oldGap = oldAfter - oldBefore - 1, newGap = newAfter - newBefore - 1;
+    if (oldGap === 1 && newGap > 1) {
+      const text = oldLines[oldBefore + 1].text;
+      let best = 1;
+      for (let k = 2; k <= newGap; k++) if (overlap(text, newLines[newBefore + k].text) > overlap(text, newLines[newBefore + best].text)) best = k;
+      oldToNew.set(oldBefore + 1, newBefore + best);
+      continue;
+    }
+    for (let k = 1; k <= Math.min(oldGap, newGap); k++) oldToNew.set(oldBefore + k, newBefore + k);
+  }
+  const oldStarts = J.computeTiming(S.project, { lines: oldLines }, audioLike()).starts;
+  const oldTimes = S.project.timing.lineTimes || {};
+  const newTimes = {};
+  for (const [key, value] of Object.entries(oldTimes)) {
+    const mapped = oldToNew.get(+key);
+    if (mapped != null) newTimes[mapped] = value;
+  }
+  // Preserve following lines, and preserve every LRC time if a new plain line disables all-LRC timing.
+  const preserveAll = oldLines.length > 0 && oldLines.every(line => line.lrc != null) && newLines.some(line => line.lrc == null);
+  for (let i = preserveAll ? 0 : oldLines.length - suffix; i < oldLines.length; i++) {
+    const mapped = oldToNew.get(i);
+    if (mapped != null && newTimes[mapped] == null) newTimes[mapped] = +oldStarts[i].toFixed(3);
+  }
+  const newToOld = new Map([...oldToNew].map(([oldIndex, newIndex]) => [newIndex, oldIndex]));
+  for (let i = 0; i < newLines.length;) {
+    if (newToOld.has(i)) { i++; continue; }
+    let end = i; while (end < newLines.length && !newToOld.has(end)) end++;
+    if (end < newLines.length) {
+      const before = newToOld.get(i - 1), after = newToOld.get(end);
+      const left = before == null ? 0 : oldStarts[before], right = oldStarts[after];
+      for (let j = i; j < end; j++) newTimes[j] = +(left + (right - left) * (j - i + 1) / (end - i + 1)).toFixed(3);
+    }
+    i = end;
+  }
+  S.project.timing.lineTimes = newTimes;
+  const remap = source => {
+    const result = {};
+    for (const [key, value] of Object.entries(source || {})) {
+      const mapped = oldToNew.get(+key);
+      if (mapped != null) result[mapped] = value;
+    }
+    return result;
+  };
+  S.project.overrides = remap(S.project.overrides);
+  const newCutTimes = {};
+  for (const [key, value] of Object.entries(S.project.timing.cutTimes || {})) {
+    const match = key.match(/^(\d+):(.*)$/), mapped = match && oldToNew.get(+match[1]);
+    if (mapped != null) newCutTimes[`${mapped}:${match[2]}`] = value;
+  }
+  S.project.timing.cutTimes = newCutTimes;
+  const newCutOptions = {};
+  for (const [key, value] of Object.entries(S.project.lyricCutOptions || {})) {
+    const match = key.match(/^(\d+):(.*)$/), mapped = match && oldToNew.get(+match[1]);
+    if (mapped != null) newCutOptions[`${mapped}:${match[2]}`] = value;
+  }
+  S.project.lyricCutOptions = newCutOptions;
+  const mapRef = ref => {
+    const match = /^l:(\d+):(.*)$/.exec(ref);
+    if (!match) return ref;
+    const mapped = oldToNew.get(+match[1]);
+    return mapped == null ? null : `l:${mapped}:${match[2]}`;
+  };
+  S.project.timelineLinks = S.project.timelineLinks.flatMap(link => {
+    const a = mapRef(link.a), b = mapRef(link.b);
+    return a && b ? [{ a, b }] : [];
+  });
+  return true;
+}
 function renderLines() {
-  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2; S.titleLineEl = null;
-  const ov = S.project.overrides, R = typeof exportRangeLines === 'function' ? exportRangeLines() : null;
-  const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
-  const cutOpts = '<option value="">カット 自動</option>' + [1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">カット ${n}</option>`).join('');
+  const ol = $('lineList'); ol.innerHTML = ''; S.lineEls = []; S.curLine = -2;
+  const ov = S.project.overrides;
 
   // 先頭の曲タイトル行 (#00)
   if (S.plan && S.plan.titleLine) {
@@ -713,7 +1829,7 @@ function renderLines() {
     const titleLayoutKeys = J.TITLE_LAYOUT_ORDER || ['title', 'title_l', 'title_huge', 'title_vsplit', 'title_cinema', 'title_stack', 'title_slash', 'title_corner'];
     const titleLayoutOpts = '<option value="">自動（サイコロで抽選）</option>' + titleLayoutKeys.map(k => `<option value="${k}">${(J.LAYOUTS[k] && J.LAYOUTS[k].name) || k}</option>`).join('');
     const tli = document.createElement('li');
-    tli.className = 'ln ln-title';
+    tli.className = 'ln lyric-ln ln-title';
     tli.innerHTML = `<span class="no">#00</span>
       <input class="time mono" type="text" value="0.00" disabled title="曲タイトル表示カード" aria-label="タイトル開始秒" style="opacity:0.6;cursor:default">
       <span class="txt" title="${escapeHtml(tln.text)}"><b>[タイトル]</b> ${escapeHtml(tln.text)}</span>
@@ -729,11 +1845,9 @@ function renderLines() {
     tli.querySelector('.dice').addEventListener('click', () => {
       const cur = ov[-1] || {};
       if (cur.lock) return;
-      remember();
-      if (S.project.rowCache) delete S.project.rowCache[-1];
+      recordUndoState();
       setOv(-1, { seed: (cur.seed | 0) + 1, lock: false });
       replan();
-      commit('タイトル再抽選');
       seek(0.001);
     });
     tli.querySelector('.lock').addEventListener('click', () => {
@@ -745,212 +1859,695 @@ function renderLines() {
     const tcutsEl = tli.querySelector('.cuts');
     S.plan.cuts.filter(c => c.line === -1).forEach(c => {
       const sp = document.createElement('span');
+      sp.className = 'lyric-cut-option';
       const layName = (J.LAYOUTS[c.layout] && J.LAYOUTS[c.layout].name) || c.layout;
       const decorNames = (c.decor && c.decor.length) ? c.decor.map(d => (J.DECOR[d.id] ? J.DECOR[d.id].name : d.id)).join('・') : '装飾なし';
       sp.textContent = `${layName} [${decorNames}]`;
       sp.title = `レイアウト: ${layName}｜装飾: ${decorNames}`;
       sp.style.borderColor = `hsla(180,70%,58%,0.7)`;
+      sp.style.cursor = 'pointer';
       sp.addEventListener('click', () => seek(0.001));
       tcutsEl.appendChild(sp);
     });
     ol.appendChild(tli);
     S.titleLineEl = tli;
   }
-  S.plan.lines.forEach((ln, i) => {
+
+  const layoutOpts = '<option value="">自動</option>' + J.LAYOUT_ORDER.map(k => `<option value="${k}">${J.LAYOUTS[k].name}</option>`).join('');
+  const rows = S.plan.lines.map(ln => ({ line: ln.index, start: ln.start }));
+  rows.forEach(row => {
+    const i = row.line, ln = S.plan.lines[i];
     const o = ov[i] || {};
-    const li = document.createElement('li'); li.className = 'ln' + (ln.interlude ? ' is-inter' : '') + (R && i >= R.from && i <= R.to ? ' in-range' : '');
+    const li = document.createElement('li'); li.className = 'ln lyric-ln';
     const manual = S.project.timing.lineTimes && S.project.timing.lineTimes[i] != null;
-    const label = ln.interlude ? `〔間奏${ln.secs ? ' ' + ln.secs + '秒' : ''}〕` : ln.text;
+    const area = J.lyricArea(o.area) || S.plan.cuts.find(c => c.line === i && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1 };
     li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span>
       <input class="time mono" type="number" step="0.01" min="0" value="${ln.start.toFixed(2)}" title="開始（秒）${manual ? '・手動' : '・自動'}" aria-label="${i + 1}行目の開始秒" style="${manual ? 'border-color:var(--cyan)' : ''}">
-      <span class="txt" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span class="txt" title="${escapeHtml(ln.text)}">${escapeHtml(ln.text)}</span>
+      <button class="lyric-area-thumb" title="${i + 1}行目の歌詞表示エリアを編集" aria-label="${i + 1}行目の歌詞表示エリアを編集"><i style="left:${area.x * 100}%;top:${area.y * 100}%;width:${area.w * 100}%;height:${area.h * 100}%;transform:rotate(${area.angle || 0}deg)"></i></button>
       <div class="meta"><span class="cuts"></span>
       <span class="tools">
-        <button class="icon ghost edit" title="この行の歌詞を直す" aria-label="${i + 1}行目の歌詞を直す">${ICON.pen}</button>
-        ${ln.interlude ? '' : `<select class="ncut" aria-label="${i + 1}行目のカット数">${cutOpts}</select>`}
-        ${ln.interlude ? '' : `<select class="lay pro-only" aria-label="レイアウト指定">${layoutOpts}</select>`}
-        <button class="icon ghost tapfrom tap-from-here" title="この行からタップで同期し直す" aria-label="${i + 1}行目からタップ">${ICON.tap || '⏱️'}</button>
-        <button class="icon ghost rng" title="書き出す範囲にする（Shift+クリックで範囲を広げる）" aria-pressed="${R && i >= R.from && i <= R.to ? 'true' : 'false'}" aria-label="${i + 1}行目を書き出す範囲に">${ICON.range}</button>
-        ${ln.interlude ? '' : `<button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>`}
-        ${ln.interlude ? '' : `<button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>`}
+        <select aria-label="レイアウト指定">${layoutOpts}</select>
+        <button class="icon ghost tap-from" title="この行からタップ同期（Spaceキーで曲合わせ）" aria-label="${i + 1}行目からタップ同期">◎</button>
+        <button class="icon ghost dice" title="この行を再抽選">${ICON.dice}</button>
+        <button class="icon ghost lock" title="この行の構成をロック" aria-pressed="${o.lock ? 'true' : 'false'}">${ICON.lock}</button>
       </span></div>`;
-    const q = sel => li.querySelector(sel);
-    if (q('.lay')) q('.lay').value = o.layout || '';
-    if (q('.ncut')) q('.ncut').value = o.cuts ? String(o.cuts) : '';
-    q('.time').addEventListener('change', e => {
+    li.querySelector('select').value = o.layout || '';
+    li.querySelector('.time').addEventListener('change', e => {
       const v = parseFloat(e.target.value);
-      pushEdit();
       if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
       if (isFinite(v)) S.project.timing.lineTimes[i] = Math.max(0, v); else delete S.project.timing.lineTimes[i];
       replan();
     });
-    q('.txt').addEventListener('click', () => { S.curLine = i; seek(ln.start + 0.001); });
-    q('.txt').addEventListener('dblclick', () => editLine(li, ln));
-    if (q('.edit')) q('.edit').addEventListener('click', () => editLine(li, ln));
-    if (q('.lay')) q('.lay').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
-    if (q('.ncut')) q('.ncut').addEventListener('change', e => {
-      remember();
-      if (S.project.rowCache) delete S.project.rowCache[i];
-      setOv(i, { cuts: +e.target.value || undefined, single: undefined });
-      replan();
-      commit('行' + (i + 1) + 'カット数変更');
-      seek(ln.start + 0.001);
-    });
-    const tapBtn = q('.tapfrom') || q('.tap-from-here');
-    if (tapBtn) tapBtn.addEventListener('click', (e) => { e.stopPropagation(); startTap(i); });
-    if (q('.rng')) q('.rng').addEventListener('click', e => setExportRange(i, e.shiftKey));
-    if (q('.dice')) q('.dice').addEventListener('click', () => {
-      const cur = ov[i] || {};
-      if (cur.lock) return;
-      remember();
-      if (S.project.rowCache) delete S.project.rowCache[i];
-      setOv(i, { seed: (cur.seed | 0) + 1, lock: false });
-      replan();
-      commit('行' + (i + 1) + '再抽選');
-      seek(ln.start + 0.001);
-    });
-    if (q('.lock')) q('.lock').addEventListener('click', () => {
-      const cur = ov[i] || {};
-      if (cur.lock) setOv(i, { lock: false, lockedSeed: undefined });
-      else setOv(i, { lock: true, lockedSeed: ln.seed });
-      replan();
-    });
-    const cutsEl = q('.cuts');
+    li.querySelector('.tap-from').addEventListener('click', () => startTap(i));
+    li.querySelector('.txt').addEventListener('click', () => seek(ln.start + 0.001));
+    li.querySelector('.lyric-area-thumb').addEventListener('click', () => openAreaEditor(i));
+    li.querySelector('select').addEventListener('change', e => { setOv(i, { layout: e.target.value || undefined }); replan(); });
+    li.querySelector('.dice').addEventListener('click', () => rerollLyricLine(i));
+    li.querySelector('.dice').after(disableRerollButton('lyrics',i));
+    li.querySelector('.lock').addEventListener('click', () => toggleLyricLineLock(i));
+    const cutsEl = li.querySelector('.cuts');
     S.plan.cuts.filter(c => c.line === i && J.LAYOUTS[c.layout] && !J.LAYOUTS[c.layout].special).forEach(c => {
-      const sp = document.createElement('span'); sp.textContent = J.LAYOUTS[c.layout].name; sp.title = `${c.text}｜${J.ENTER[c.enter].name} → ${J.EXIT[c.exit].name}`;
-      sp.style.borderColor = `hsla(${layoutHue(c.layout)},70%,58%,0.7)`;
-      sp.addEventListener('click', () => seek(c.start + Math.min(c.dur * 0.5, c.inDur + 0.05)));
-      cutsEl.appendChild(sp);
+      const cutOption = document.createElement('span'); cutOption.className = 'lyric-cut-option';
+      cutOption.dataset.line = i; cutOption.dataset.part = c.part;
+      cutOption.style.borderColor = `hsla(${layoutHue(c.layout)},70%,58%,0.7)`;
+      const name = document.createElement('button'); name.type = 'button'; name.className = 'lyric-cut-name';
+      name.textContent = `${c.part + 1}: ${J.LAYOUTS[c.layout].name}`;
+      name.title = `${c.text}｜${J.ENTER[c.enter].name} → ${J.EXIT[c.exit].name}`;
+      name.addEventListener('click', () => seek(c.start + Math.min(c.dur * 0.5, c.inDur + 0.05)));
+      const label = document.createElement('label'); label.className = 'lyric-frontmost';
+      const input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!c.frontmost;
+      input.disabled = !!c.emphasis;
+      if (c.emphasis) label.title = emphasisFrontmostHint();
+      input.setAttribute('aria-label', `${i + 1}行目${c.part + 1}カット目を最前に表示`);
+      input.addEventListener('change', () => toggleLyricCutFrontmost(i, c.part));
+      label.append(input, document.createTextNode('最前に表示'));
+      const L = J.mediaLabel, settings = J.lyricEffectSettings(S.project);
+      const options = S.project.lyricCutOptions[`${i}:${c.part}`] || {};
+      const modes = { normal: L('通常', 'Normal'), multiply: L('乗算', 'Multiply'), screen: L('スクリーン', 'Screen'), overlay: L('オーバーレイ', 'Overlay') };
+      const controls = document.createElement('div'); controls.className = 'lyric-cut-compositing';
+      controls.innerHTML = `<label>${L('合成方法', 'Blend')}<select class="lyric-cut-blend" aria-label="${L('このカットの合成方法', 'This cut blend mode')}"><option value="">${L('自動', 'Auto')} (${modes[c.blend]})</option>${Object.entries(modes).map(([key, text]) => `<option value="${key}">${text}</option>`).join('')}</select></label><label>${L('不透明度（％）', 'Opacity (%)')}<input class="lyric-cut-opacity" type="number" min="0" max="100" step="1" aria-label="${L('このカットの不透明度（％）', 'This cut opacity (%)')}" value="${c.opacity}"></label><button type="button" class="ghost small lyric-composite-auto" title="${L('このカットの合成方法・不透明度を自動に戻す', 'Reset this cut blend and opacity to automatic')}">${L('自動に戻す', 'Reset to auto')}</button>`;
+      const blend = controls.querySelector('select'), opacity = controls.querySelector('input'), reset = controls.querySelector('button');
+      blend.value = options.blend || (settings.randomBlend ? '' : c.blend);
+      opacity.title = settings.randomOpacity && options.opacity == null ? L('自動で選ばれた不透明度。入力すると手動指定になります。', 'Random opacity. Enter a value to set it manually.') : '';
+      opacity.classList.toggle('automatic', settings.randomOpacity && options.opacity == null);
+      reset.hidden = options.blend == null && options.opacity == null;
+      blend.addEventListener('change', e => setLyricCutComposite(i, c.part, { blend: e.target.value || undefined }));
+      opacity.addEventListener('change', e => setLyricCutComposite(i, c.part, { opacity: e.target.value === '' ? undefined : J.clamp(+e.target.value || 0, 0, 100) }));
+      reset.addEventListener('click', () => setLyricCutComposite(i, c.part, { blend: undefined, opacity: undefined }));
+      cutOption.append(name, detailButton(() => openCutDetails('lyrics',i,c.part)), ...effectFavoriteButtons('lyrics',i,c.part), label, controls); cutsEl.appendChild(cutOption);
     });
     ol.appendChild(li); S.lineEls.push(li);
   });
   $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
-  updateCutInfo();
-  if (typeof syncRangeUI === 'function') syncRangeUI();
+  syncSourceTab();
 }
-
-/* ---------------- 行から歌詞を直す ---------------- */
-// the lyrics text is the source: a plan line knows the row it came from (ln.src); LRC time tags on that row are kept
-const LRC_PREFIX = /^\s*(?:\[\d+:\d+(?:[.:]\d+)?\])*/;
-function editLine(li, ln) {
-  if (ln.src == null || li.querySelector('.txt-edit')) return;
-  const rows = S.project.lyrics.replace(/\r/g, '').split('\n'), row = rows[ln.src] || '';
-  const pre = (row.match(LRC_PREFIX) || [''])[0], body = row.slice(pre.length).trim();
-  const txt = li.querySelector('.txt'), inp = document.createElement('input');
-  inp.type = 'text'; inp.className = 'txt-edit'; inp.value = body; inp.setAttribute('aria-label', `${ln.index + 1}行目の歌詞`);
-  inp.title = '記法（/ 区切り・*強調*・行末の ! ・| 注釈・[間奏 8]）もそのまま使えます。Enter で確定、Esc で取り消し';
-  txt.replaceWith(inp); inp.focus(); inp.select();
-  let done = false;
-  const finish = ok => {
-    if (done) return; done = true;
-    const v = inp.value.trim();
-    if (ok && v && v !== body) {
-      pushEdit();
-      rows[ln.src] = pre + v;
-      S.project.lyrics = rows.join('\n'); $('lyrics').value = S.project.lyrics;
-      if (S.project.rowCache) delete S.project.rowCache[ln.index];
-      if (S.project.timing && S.project.timing.cutTimes) {
-        S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== ln.index);
-      }
-      replan(); flushSave(); toast(`${ln.index + 1}行目の歌詞を直しました`);
-    } else renderLines();
-  };
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
-  inp.addEventListener('blur', () => finish(true));
+function positionAreaEditor() {
+  if (!S.areaEdit) return;
+  const view = $('view').getBoundingClientRect(), viewport = $('viewport').getBoundingClientRect(), overlay = $('areaEditOverlay');
+  Object.assign(overlay.style, { left: `${view.left - viewport.left}px`, top: `${view.top - viewport.top}px`, width: `${view.width}px`, height: `${view.height}px` });
 }
-
-/* ---------------- 歌詞・タイミングの取り消し（Ctrl+Z / Ctrl+Y） ---------------- */
-function pushEdit(desc = '歌詞・タイミング編集') {
-  if (typeof UndoRedo !== 'undefined' && UndoRedo.commit) {
-    UndoRedo.commit(desc);
-  }
-  updateEditBtns();
+function showAreaDraft() {
+  const edit = S.areaEdit, area = edit && edit.draft, rect = $('areaEditRect'), media = !!edit && edit.kind !== 'lyric';
+  rect.hidden = !area;
+  if (area) Object.assign(rect.style, { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%`, transform: `rotate(${edit.angle}deg)` });
+  $('areaEditOverlay').classList.toggle('media-edit', !!edit);
+  $('areaEditOverlay').querySelector('.area-edit-hint').textContent = '内側をドラッグして移動・四隅でサイズ変更・枠の周囲をドラッグして回転';
+  $('mediaAreaSizeControls').hidden = !edit;
+  if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
+  $('mediaAreaAngleField').hidden = !edit;
+  if (edit) $('mediaAreaAngle').value = String(edit.angle);
+  $('areaResetFull').hidden = !edit || media;
+  $('areaResetAuto').hidden = !edit || media;
+  $('areaApplyOne').textContent = media ? 'このカットだけに適用' : 'この行だけに適用';
+  $('areaApplyOne').disabled = !area;
+  $('areaApplyFollowing').disabled = !area;
+  S.need = true;
 }
-function edGo(d) {
-  if (typeof UndoRedo !== 'undefined') {
-    if (d < 0) UndoRedo.undo();
-    else UndoRedo.redo();
-  }
-  updateEditBtns();
+function openAreaEditor(index) {
+  if (S.exporting || S.tap) return;
+  if (S.areaEdit) cancelAreaEditor();
+  const line = S.plan.lines[index]; if (!line) return;
+  pause();
+  clearTimeout(warmTimer); ++warmJob;
+  const saved = J.lyricArea((S.project.overrides[index] || {}).area) || S.plan.cuts.find(c => c.line === index && c.part === 0)?.area;
+  S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
+  const cut = S.plan.cuts.find(c => c.line === index);
+  seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
+  $('areaEditTitle').textContent = `${index + 1}行目「${line.text}」の表示エリア`;
+  $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
+  positionAreaEditor(); showAreaDraft();
 }
-// 歌詞を消す: lyrics + everything tied to line numbers (times, per-line settings, export range); undoable
-function clearLyrics() {
-  if (S.tap || S.exporting) return;
-  const P = S.project;
-  if (!P.lyrics.trim() && !Object.keys(P.timing.lineTimes || {}).length) { $('lyrics').focus(); return; }
+function openMediaEditor(index, layer) {
+  if (S.exporting || S.tap) return;
+  if (S.areaEdit) cancelAreaEditor();
+  const cut = S.plan[layer].cuts[index], dimensions = J.mediaSourceDimensions(S.plan,cut,S.t);
+  if (!dimensions) return;
+  const sw = dimensions.width, sh = dimensions.height;
+  const draft = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
+  if (!draft) return;
+  pause();
+  clearTimeout(warmTimer); ++warmJob;
+  S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
+  seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
+  $('areaEditTitle').textContent = `${index + 1}カット目「${cut.name}」の配置・サイズ`;
+  $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
+  positionAreaEditor(); showAreaDraft();
+}
+function cancelAreaEditor() {
+  if (!S.areaEdit) return;
+  const oldTime = S.areaEdit.oldTime;
+  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  seek(oldTime);
+}
+function applyAreaEditor(following) {
+  if (!S.areaEdit || !S.areaEdit.draft) return;
+  const { kind, index, draft } = S.areaEdit;
   remember();
-  pause();
-  P.lyrics = ''; P.timing.lineTimes = {}; P.overrides = {}; P.exportRange = null; $('lyrics').value = '';
-  replan(); flushSave(); commit('歌詞削除'); updateEditBtns(); seek(0);
-  toast('歌詞を消しました（「元に戻す」か Ctrl+Z で戻せます）');
+  // 「以降にも適用」 leaves other locked cuts alone; the edited cut itself stays locked with its new place.
+  if (kind !== 'lyric') {
+    for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
+      if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
+      mediaOv(i, { placement: { cx: draft.x + draft.w / 2, cy: draft.y + draft.h / 2, w: draft.w, h: draft.h, lockAspect: S.areaEdit.lockAspect, angle: S.areaEdit.angle }, zoom: undefined, focus: undefined }, kind);
+    }
+    relock(kind, index);
+  } else {
+    const area = J.lyricArea({ ...draft, angle: S.areaEdit.angle, lockAspect: S.areaEdit.lockAspect });
+    const automatic = S.areaEdit.autoDraft === JSON.stringify(area);
+    for (let i = index; i < (following ? S.plan.lines.length : index + 1); i++) {
+      if (i !== index && S.project.overrides[i]?.lock) continue;
+      setOv(i, { area: automatic ? undefined : area, lockedAreas: undefined });
+    }
+    relock('lyrics', index);
+  }
+  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  replan(); commit();
 }
-// 初期化: back to a blank project — song (also the copy kept in this browser), settings and both histories go
-let audioNameDefault = '';
-async function resetAll() {
-  if (S.exporting) return;
+function areaPointer(ev) {
+  const box = $('areaEditOverlay').getBoundingClientRect();
+  return { x: J.clamp((ev.clientX - box.left) / box.width), y: J.clamp((ev.clientY - box.top) / box.height) };
+}
+function mediaPointer(ev) {
+  const box = $('areaEditOverlay').getBoundingClientRect();
+  return { x: (ev.clientX - box.left) / box.width, y: (ev.clientY - box.top) / box.height };
+}
+function mediaHit(ev) {
+  const edit = S.areaEdit, area = edit.draft, box = $('areaEditOverlay').getBoundingClientRect();
+  const cx = box.left + (area.x + area.w / 2) * box.width, cy = box.top + (area.y + area.h / 2) * box.height;
+  const dx = ev.clientX - cx, dy = ev.clientY - cy, radians = edit.angle * Math.PI / 180;
+  const x = Math.abs(dx * Math.cos(radians) + dy * Math.sin(radians));
+  const y = Math.abs(-dx * Math.sin(radians) + dy * Math.cos(radians));
+  const halfW = area.w * box.width / 2, halfH = area.h * box.height / 2;
+  const band = Math.min(18, Math.min(halfW, halfH) * 0.35);
+  if (x <= halfW + 18 && y <= halfH + 18 && (x >= halfW - band || y >= halfH - band)) return 'rotate';
+  return x <= halfW && y <= halfH ? 'move' : null;
+}
+function mediaPointerAngle(ev, area) {
+  const box = $('areaEditOverlay').getBoundingClientRect();
+  const cx = box.left + (area.x + area.w / 2) * box.width, cy = box.top + (area.y + area.h / 2) * box.height;
+  return Math.atan2(ev.clientY - cy, ev.clientX - cx);
+}
+function wrapMediaAngle(angle) { return ((angle + 180) % 360 + 360) % 360 - 180; }
+function setMediaDraftSize(width, height) {
+  const edit = S.areaEdit, draft = edit.draft, cx = draft.x + draft.w / 2, cy = draft.y + draft.h / 2;
+  const min = edit.kind === 'lyric' ? 0.04 : 0.005, max = 4;
+  let w = J.clamp(width, min, max), h = J.clamp(height, min, max);
+  if (edit.lockAspect) { w = Math.min(w, max / edit.ratio); h = w * edit.ratio; }
+  edit.draft = { x: (edit.kind === 'lyric' ? cx : J.clamp(cx, 0, 1)) - w / 2, y: (edit.kind === 'lyric' ? cy : J.clamp(cy, 0, 1)) - h / 2, w, h };
+  showAreaDraft();
+}
+function moveMediaDraft(ev) {
+  const edit = S.areaEdit, drag = edit.drag, point = mediaPointer(ev), dx = point.x - drag.start.x, dy = point.y - drag.start.y, a = drag.previous;
+  const lyric = edit.kind === 'lyric', min = lyric ? 0.04 : 0.005, max = 4;
+  if (drag.handle === 'rotate') {
+    const difference = mediaPointerAngle(ev, a) - drag.pointerAngle;
+    edit.angle = Math.round(wrapMediaAngle(drag.previousAngle + Math.atan2(Math.sin(difference), Math.cos(difference)) * 180 / Math.PI) * 10) / 10;
+  } else if (drag.handle === 'move') {
+    edit.draft = { x: (lyric ? a.x + dx : J.clamp(a.x + dx, -a.w / 2, 1 - a.w / 2)), y: (lyric ? a.y + dy : J.clamp(a.y + dy, -a.h / 2, 1 - a.h / 2)), w: a.w, h: a.h };
+  } else {
+    const east = drag.handle.includes('e'), south = drag.handle.includes('s');
+    const radians = edit.angle * Math.PI / 180, box = $('areaEditOverlay').getBoundingClientRect();
+    const localX = (dx * box.width * Math.cos(radians) + dy * box.height * Math.sin(radians)) / box.width;
+    const localY = (-dx * box.width * Math.sin(radians) + dy * box.height * Math.cos(radians)) / box.height;
+    const deltaX = localX * (east ? 1 : -1), deltaY = localY * (south ? 1 : -1);
+    const w = edit.lockAspect ? J.clamp(a.w + (Math.abs(deltaX) > Math.abs(deltaY / edit.ratio) ? deltaX : deltaY / edit.ratio), min, Math.min(max, max / edit.ratio)) : J.clamp(a.w + deltaX, min, max);
+    const h = edit.lockAspect ? w * edit.ratio : J.clamp(a.h + deltaY, min, max);
+    const x = east ? a.x : a.x + a.w - w, y = south ? a.y : a.y + a.h - h;
+    edit.draft = { x: (lyric ? x + w / 2 : J.clamp(x + w / 2, 0, 1)) - w / 2, y: (lyric ? y + h / 2 : J.clamp(y + h / 2, 0, 1)) - h / 2, w, h };
+  }
+  showAreaDraft();
+}
+function syncSourceTab() {
+  const layer = activeMediaLayer(), media = !!layer, m = media && S.project[layer];
+  $('sourceLyrics').setAttribute('aria-selected', String(!media)); $('sourceMedia').setAttribute('aria-selected', String(layer === 'media'));
+  $('sourceForeground').setAttribute('aria-selected', String(layer === 'foreground'));
+  $('lyricsPane').hidden = media; $('mediaPane').hidden = !media;
+  $('lineList').hidden = media; $('mediaLineList').hidden = !media;
+  $('cutsHeading').textContent = media ? J.mediaLabel('カット', 'Cuts') : J.mediaLabel('行とカット', 'Lines and cuts');
+  $('mediaPaneTitle').textContent = layer === 'foreground' ? '前景' : '背景';
+  $('linesInfo').textContent = media ? `${m.items.length}素材 / ${S.plan[layer].cuts.length}カット` : `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
+  $('mediaRandom').disabled = !media || (m.items.length < 2 && !m.randomOrder);
+  $('mediaRandom').title = media && m.items.length < 2 && !m.randomOrder ? J.mediaLabel('素材を2つ以上追加すると選択できます', 'Add at least two files to enable random order') : '';
+  $('mediaLoop').disabled = !media || (m.items.length === 0 && S.plan[layer].cuts.length === 0);
+  $('mediaGroupLyrics').checked = !media || m.groupLyricsAsOneCut !== false;
+  $('audioTimingSection').hidden = media;
+  const targets = mediaLyricTargets(layer);
+  $('mediaLyricInsertMode').value = media && m.lyricInsertMode === 'cut' ? 'cut' : 'line';
+  const sourceBox=$('backgroundInsertSources');sourceBox.hidden=layer!=='media';
+  if(layer==='media'){
+    const selected=m.insertSources || {files:true};
+    sourceBox.querySelectorAll('label').forEach(label=>label.remove());
+    for(const item of [{id:'files',name:J.mediaLabel('画像・動画','Images / videos')},...J.mediaCopyItems('media')]){
+      const label=document.createElement('label');label.className='check';
+      const input=document.createElement('input');input.type='checkbox';input.dataset.insertSource=item.id;input.checked=!!selected[item.id];
+      input.addEventListener('change',()=>{m.insertSources={...selected,[item.id]:input.checked};replan();});
+      label.append(input,document.createTextNode(item.name));sourceBox.append(label);
+    }
+  }
+  $('btnMediaFromLyrics').disabled = !targets.length;
+  $('btnTapMedia').disabled = !S.tap && (!media || !J.mediaInsertChoices(S.project,layer).length);
+  $('mediaLyricInsertHint').textContent = !media || !J.mediaInsertChoices(S.project,layer).length
+    ? J.mediaLabel('挿入する項目を選択してください。画像・動画の場合は素材を追加してください。', 'Select items to insert. Add assets to insert images or videos.')
+    : !targets.length
+      ? J.mediaLabel('対象となる歌詞の行・カットがありません。', 'There are no lyric lines or cuts to align to.')
+      : '';
+}
+function activeMediaLayer() { return S.sourceTab === 'foreground' ? 'foreground' : S.sourceTab === 'media' ? 'media' : null; }
+function mediaLyricTargets(layer) {
+  const m = layer && S.project[layer];
+  const choices=J.mediaInsertChoices(S.project,layer);
+  if (!m || !choices.length) return [];
+  // Cut mode includes every linkable lyric boundary, including interludes.
+  let targets = S.plan.cuts.filter(cut => m.lyricInsertMode === 'cut' ? cut.line >= 0 : cut.line >= 0 && cut.part === 0);
+  if (m.groupLyricsAsOneCut !== false) {
+    const seen = new Set();
+    targets = targets.filter(cut => {
+      const group = cut.line >= 0 ? S.plan.lines[cut.line]?.group : null;
+      if (group == null) return true;
+      if (seen.has(group)) return false;
+      seen.add(group); return true;
+    });
+  }
+  return targets.slice(0, m.loop || choices.some(id=>id!=='files') ? 1000 : Math.min(1000, m.items.length));
+}
+function insertMediaFromLyrics() {
+  const layer = activeMediaLayer();
+  if (!layer || S.exporting || S.tap) return;
+  pause(); cancelAreaEditor();
+  clearTimeout(replanTimer); replan();
+  const targets = mediaLyricTargets(layer), m = S.project[layer];
+  if (!targets.length) return;
+  const prefix = layer === 'foreground' ? 'f:' : 'm:';
+  // Replace this layer's cuts and links as one undoable edit.
+  m.manualCuts = true;
+  m.cutCount = targets.length;
+  m.cutOverrides = {};
+  m.timing.lineTimes = {};
+  S.project.timelineLinks = S.project.timelineLinks.filter(link => !link.a.startsWith(prefix) && !link.b.startsWith(prefix));
+  const choices=J.mediaInsertChoices(S.project,layer);let fileIndex=0;
+  targets.forEach((cut, index) => {
+    const available=choices.filter(id=>id!=='files'||m.loop||fileIndex<m.items.length);
+    const choice=available[Math.floor(Math.random()*available.length)];
+    const itemId=choice==='files'?m.items[fileIndex++ % m.items.length].id:choice;
+    m.cutOverrides[index] = { itemId, technique: null };
+    m.timing.lineTimes[index] = cut.start;
+    // Keep linked inner boundaries fixed when the line start is moved later.
+    if (m.lyricInsertMode === 'cut' && cut.line >= 0 && cut.part !== 0) S.project.timing.cutTimes[`${cut.line}:${cut.part}`] = cut.start;
+    S.project.timelineLinks.push({ a: prefix + index, b: boundaryRef('lyrics', cut) });
+  });
+  replan(); seek(targets[0].start);
+  toast(J.mediaLabel(`${targets.length}カットを歌詞に合わせて挿入しました`, `Inserted ${targets.length} cuts aligned to lyrics`));
+}
+function mediaThumb(item, cls = '') {
+  if (!item) return `<span class="missing media-ln-thumb" aria-hidden="true">—</span>`;
+  if (J.isMediaCopy(item.id)) return `<span class="missing ${cls}" title="${escapeHtml(item.name)}" aria-label="${escapeHtml(item.name)}">↻</span>`;
+  const asset = J.mediaAssets.get(item.id);
+  if (!asset) return `<span class="missing">素材なし</span>`;
+  return `<img class="${cls}" src="${asset.poster || asset.url}" alt="">`;
+}
+function renderMediaList() {
+  const layer = activeMediaLayer() || 'media', m = S.project[layer];
+  const box = $('mediaList'); box.innerHTML = '';
+  m.items.forEach((item, i) => {
+    const row = document.createElement('div'); row.className = 'media-item'; row.dataset.id = item.id;
+    row.innerHTML = `${mediaThumb(item)}<span class="name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span><button class="ghost small" aria-label="${escapeHtml(item.name)}を削除">×</button>`;
+    const edges = document.createElement('fieldset'); edges.className = 'media-cropped-edges';
+    edges.innerHTML = `<legend>${J.mediaLabel('見切れている辺（自動配置）','Cropped edges (auto placement)')}</legend>` + [['left','左','Left'],['right','右','Right'],['top','上','Top'],['bottom','下','Bottom']].map(([key,ja,en]) => `<label><input type="checkbox" data-cropped-edge="${key}" ${item.croppedEdges?.[key] ? 'checked' : ''}>${J.mediaLabel(ja,en)}</label>`).join('');
+    edges.addEventListener('change', e => {
+      const edge = e.target.dataset.croppedEdge; if (!edge) return;
+      item.croppedEdges = { ...item.croppedEdges, [edge]: e.target.checked }; replan();
+    });
+    row.appendChild(edges);
+    row.querySelector('button').addEventListener('click', () => {
+      freezeMediaCuts(layer);
+      m.items.splice(i, 1);
+      for (const cut of S.plan[layer].cuts) if (cut.sourceItemId === item.id || m.cutOverrides[cut.index]?.lockedItemId === item.id) mediaOv(cut.index, { itemId: null, lockedItemId: undefined }, layer);
+      delete m.overrides[item.id];
+      // Keep the file until this session's undo history is no longer available.
+      queueMediaDeletion(item.id);
+      replan();
+    });
+    box.appendChild(row);
+  });
+  $('mediaRandom').checked = !!m.randomOrder;
+  $('mediaLoop').checked = !!m.loop;
+}
+function mediaOv(index, patch, layer = activeMediaLayer() || 'media') {
+  const m = S.project[layer];
+  const o = Object.assign({}, m.cutOverrides[index] || {}, patch);
+  for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === '') delete o[k];
+  if (Object.keys(o).length) m.cutOverrides[index] = o; else delete m.cutOverrides[index];
+}
+function freezeMediaCuts(layer) {
+  const m = S.project[layer], cuts = S.plan[layer].cuts;
+  cuts.forEach((cut, i) => { m.cutOverrides[i] = Object.assign({}, m.cutOverrides[i] || {}, { itemId: cut.sourceItemId }); });
+  m.manualCuts = true;
+  m.cutCount = cuts.length;
+}
+function mediaSplitTarget(layer) {
+  if(!S.plan || S.exporting || S.tap || S.plan[layer].cuts.length>=1000)return null;
+  const cut=J.mediaAt(S.plan,S.t,layer);
+  return cut && S.t-cut.start>=0.04-1e-7 && cut.end-S.t>=0.04-1e-7 ? cut : null;
+}
+// 再配置: the unlocked lyric / foreground / background cuts at the playhead get automatic placement again,
+// with a fresh placement seed (techniques and other settings keep theirs).
+function relayoutTargets() {
+  if (!S.plan) return [];
+  const targets = [];
+  for (const cut of J.lyricCutsAt(S.plan, S.t)) if (cut.line >= 0 && Number.isInteger(cut.part) && !S.project.overrides?.[cut.line]?.lock) targets.push({ layer: 'lyrics', cut });
+  for (const layer of ['foreground', 'media']) {
+    if (S.project.layerVisibility?.[layer] === false) continue;
+    const cut = J.mediaAt(S.plan, S.t, layer);
+    if (cut && cut.itemId && !mediaCutOptions(layer, cut.index).lock) targets.push({ layer, cut });
+  }
+  return targets;
+}
+// 「再生位置で編集」: the first row picks the action, the second row the layer. Buttons that cannot act at the
+// playhead are greyed out, and an action whose layers all are is too.
+const PLAYHEAD_LABELS = {
+  insert: ['挿入', 'Insert'], split: ['分割', 'Split'], endHere: ['ここまで再生', 'Play until here'], untilNext: ['次カットまで再生', 'Play until the next cut'],
+};
+const LAYER_LABELS = { foreground: ['前景', 'Foreground'], lyrics: ['歌詞', 'Lyrics'], media: ['背景', 'Background'] };
+const PLAYHEAD_TITLES = {
+  insert: ['を再生位置に挿入', ': insert at the playhead'], split: ['を再生位置で分割', ': split at the playhead'],
+  endHere: ['のカットを再生位置で終わらせる', ': end the cut at the playhead'], untilNext: ['のカットを次のカットの開始まで表示', ': show the cut until the next cut starts'],
+};
+function initPlayheadMenu() {
+  const L = J.mediaLabel;
+  const popup=document.querySelector('.playhead-secondary');
+  popup.id='playheadPopup';popup.classList.add('timeline-cut-menu');popup.setAttribute('role','menu');
+  document.body.append(popup);
+  const close=()=>{S.playheadMenu=null;syncPlayheadMenu();};
+  document.addEventListener('pointerdown',e=>{if(S.playheadMenu&&!popup.contains(e.target)&&!e.target.closest('[data-playhead-menu]'))close();},{capture:true});
+  window.addEventListener('resize',close);
+  document.addEventListener('scroll',e=>{if(S.playheadMenu&&!popup.contains(e.target))close();},{capture:true});
+  popup.addEventListener('keydown',e=>{
+    e.stopPropagation();const buttons=[...popup.querySelectorAll('button:not([hidden]):not(:disabled)')],index=buttons.indexOf(document.activeElement);
+    if(e.key==='Escape'){e.preventDefault();const trigger=document.querySelector(`[data-playhead-menu="${S.playheadMenu}"]`);close();trigger?.focus({preventScroll:true});}
+    else if(buttons.length&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:(index+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length].focus({preventScroll:true});}
+    else if(e.key==='Tab')close();
+  });
+  for (const button of document.querySelectorAll('[data-playhead-menu]')) {
+    button.textContent = L(...PLAYHEAD_LABELS[button.dataset.playheadMenu]);
+    button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-controls','playheadPopup');
+    button.addEventListener('click', () => { closeTimelineCutMenu();S.playheadMenu = S.playheadMenu === button.dataset.playheadMenu ? null : button.dataset.playheadMenu; syncPlayheadMenu();if(S.playheadMenu)popup.querySelector('button:not([hidden]):not(:disabled)')?.focus({preventScroll:true}); });
+  }
+  for (const button of document.querySelectorAll('[data-playhead-action]')) {
+    const [layerJa, layerEn] = LAYER_LABELS[button.dataset.layer], [ja, en] = PLAYHEAD_TITLES[button.dataset.playheadAction];
+    const y={foreground:2,lyrics:6,media:10}[button.dataset.layer];
+    button.innerHTML=`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12" opacity=".35"/><rect x="2" y="${y}" width="12" height="4" rx="1" fill="currentColor"/></svg><span>${L(layerJa, layerEn)}</span>`;button.setAttribute('role','menuitem'); button.title = L(layerJa + ja, layerEn + en); button.setAttribute('aria-label', button.title);
+  }
+  $('relayoutAtPlayhead').textContent = L('配置をシャッフル', 'Shuffle layout');
+  $('relayoutAtPlayhead').title = L('再生位置のカットの配置を組み直す', 'Re-lay out the cuts at the playhead');
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.playheadMenu) { S.playheadMenu = null; syncPlayheadMenu(); } });
+}
+// The cut 「ここまで再生」 / 「次カットまで再生」 acts on: the latest-starting cut before the playhead
+// (the one showing, or the last one to have ended); 次カットまで再生 only for a cut with its own end.
+function playheadEndTarget(layer, manualOnly) {
+  if (S.exporting || S.tap || !S.plan) return null;
+  const cuts = (layer === 'lyrics' ? S.plan.cuts.filter(c => c.line >= 0 && Number.isInteger(c.part)) : S.plan[layer].cuts)
+    .filter(c => c.start < S.t - 0.04 && (!manualOnly || c.manualEnd));
+  const pick = list => list.reduce((best, c) => !best || c.start > best.start ? c : best, null);
+  const target = pick(cuts.filter(c => S.t < c.end)) || pick(cuts);
+  if (!target || !manualOnly && Math.abs(target.end - S.t) < 0.01) return null;
+  return { cut: target, key: layer === 'lyrics' ? `${target.line}:${target.part}` : target.index };
+}
+function playheadActionEnabled(action, layer) {
+  const busy = S.exporting || S.tap || !S.plan;
+  if (action === 'insert') return !busy && S.t < S.plan.duration - .04;
+  if (action === 'split') return !!mediaSplitTarget(layer);
+  return !!playheadEndTarget(layer, action === 'untilNext');
+}
+function syncPlayheadMenu() {
+  if(S.exporting||S.tap)S.playheadMenu=null;
+  const menu = S.playheadMenu;
+  for (const button of document.querySelectorAll('[data-playhead-action]')) {
+    button.hidden = button.dataset.playheadAction !== menu;
+    button.disabled = !playheadActionEnabled(button.dataset.playheadAction, button.dataset.layer);
+  }
+  for (const button of document.querySelectorAll('[data-playhead-menu]')) {
+    const action = button.dataset.playheadMenu;
+    button.disabled = ![...document.querySelectorAll(`[data-playhead-action="${action}"]`)].some(b => !b.disabled);
+    button.setAttribute('aria-expanded', String(menu === action));
+  }
+  const popup=document.querySelector('.playhead-secondary');popup.hidden = !menu;
+  if(menu){
+    const trigger=document.querySelector(`[data-playhead-menu="${menu}"]`);
+    if(trigger.disabled){S.playheadMenu=null;popup.hidden=true;trigger.setAttribute('aria-expanded','false');}
+    else{popup.setAttribute('aria-label',trigger.textContent);const r=trigger.getBoundingClientRect(),box=popup.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(r.left,innerWidth-box.width-8))+'px';popup.style.top=Math.max(8,Math.min(r.bottom+4,innerHeight-box.height-8))+'px';}
+  }
+  $('relayoutAtPlayhead').disabled = !!(S.exporting || S.tap) || !relayoutTargets().length;
+}
+function playheadEnd(layer, untilNext) {
+  const target = playheadEndTarget(layer, untilNext); if (!target) return;
+  pause();
+  setCutEnd(layer, target.key, untilNext ? null : S.t);
+  replan();
+}
+function relayoutAtPlayhead() {
+  const targets = relayoutTargets(); if (!targets.length) return;
+  pause();
+  const L = J.mediaLabel, fresh = () => 1 + Math.floor(Math.random() * 1e9);
+  const lyricAuto = J.lyricEffectSettings(S.project).autoPlacement;
+  for (const { layer, cut } of targets) {
+    if (layer === 'lyrics') {
+      // Manual areas give way to automatic placement for this cut (and its line's shared area).
+      const options = S.project.lyricCutOptions[`${cut.line}:${cut.part}`] ||= {};
+      if (options.details) { delete options.details.area; if (!Object.keys(options.details).length) delete options.details; }
+      if (S.project.overrides?.[cut.line]?.area) delete S.project.overrides[cut.line].area;
+      options.placementSeed = fresh();
+    } else mediaOv(cut.index, { placement: undefined, placementSeed: fresh() }, layer);
+  }
+  replan();
+  const note = !lyricAuto && targets.some(t => t.layer === 'lyrics') ? L('（歌詞の自動配置がOFFのため、歌詞は全域のままです）', ' (automatic lyric placement is off, so lyrics keep the full stage)') : '';
+  toast(L(`再生位置の${targets.length}件のカットを再配置しました`, `Re-laid out ${targets.length} cut(s) at the playhead`) + note);
+}
+function openSplitMediaCut(layer) {
+  if(!mediaSplitTarget(layer))return;
+  pause();
+  const time=S.t,L=J.mediaLabel,dialog=document.createElement('dialog');
+  dialog.id='splitMediaCutDialog';dialog.className='insert-cut-dialog';
+  dialog.innerHTML=`<form><h2>${layer==='foreground'?L('前景を分割','Split foreground'):L('背景を分割','Split background')}</h2><div class="split-effect-options"><label><input type="checkbox" name="left">${L('左をランダム演出にする','Randomize left effects')}</label><label><input type="checkbox" name="right">${L('右をランダム演出にする','Randomize right effects')}</label></div><p class="hint">${L('OFFの場合は現在の演出設定を引き継ぎます。','Unchecked sides inherit the current effects.')}</p><div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('分割','Split')}</button></div></form>`;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{
+    e.preventDefault();S.t=time;
+    splitMediaCut(layer,dialog.querySelector('[name=left]').checked,dialog.querySelector('[name=right]').checked);
+    dialog.close();
+  };
+  dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+}
+function splitMediaCut(layer,randomLeft=false,randomRight=false) {
+  const cut=mediaSplitTarget(layer);if(!cut)return;
+  pause();
+  const time=S.t,m=S.project[layer],cuts=S.plan[layer].cuts,index=cut.index;
+  const clone=v=>JSON.parse(JSON.stringify(v)),overrides={},times={};
+  const resolved={...clone(mediaCutOptions(layer,index)),itemId:cut.itemId,
+    technique:cut.technique,entrance:cut.entrance,departure:cut.departure,
+    placement:clone(cut.placement),blend:cut.blend,opacity:cut.opacity,
+    details:Object.fromEntries(J.cutDetailKeys.media.filter(k=>cut[k]!==undefined).map(k=>[k,clone(cut[k])]))};
+  const first=clone(resolved),second=clone(resolved);
+  for(const [side,random] of [[first,randomLeft],[second,randomRight]]){
+    if(!random)continue;
+    // Clear resolved effects, including copied detail overrides, while keeping
+    // the asset, placement, compositing, mask and source playback settings.
+    side.details=side.details.mask?{mask:side.details.mask}:{};
+    for(const key of ['technique','entrance','departure','layout','enter','hold','exit','treat','trans'])side[key]=null;
+    side.lock=false;side.seed=(side.seed|0)+1;
+    for(const key of Object.keys(side))if(key.startsWith('locked'))delete side[key];
+  }
+  if(cut.type==='video'){
+    const asset=J.mediaAssets.get(cut.itemId),item=m.items.find(x=>x.id===cut.itemId);
+    const duration=asset?.element?.duration || item?.duration;
+    first.videoStart=cut.videoStart;first.videoDuration=time-cut.start;
+    second.videoStart=Number.isFinite(duration)&&duration>0 ? J.mediaVideoTime(cut,time,duration) : cut.videoStart+time-cut.start;
+    second.videoDuration=cut.end-time;
+    first.videoLoop=second.videoLoop=cut.videoLoop;
+  }
+  cuts.forEach((c,i)=>{
+    const next=i>index?i+1:i;
+    overrides[next]=i===index?first:{...clone(m.cutOverrides[i] || {}),itemId:c.itemId};
+    times[next]=c.start;
+  });
+  overrides[index+1]=second;times[index+1]=time;
+  m.randomOrder=false;m.manualCuts=true;m.cutCount=cuts.length+1;m.cutOverrides=overrides;m.timing.lineTimes=times;
+  S.project.durationOverride=S.plan.duration;
+  const prefix=layer==='foreground'?'f:':'m:';
+  for(const link of S.project.timelineLinks)for(const end of ['a','b']){
+    if(link[end].startsWith(prefix) && +link[end].slice(2)>index)link[end]=prefix+(+link[end].slice(2)+1);
+  }
+  replan();seek(time);
+}
+function insertMediaCut(index, layer = activeMediaLayer() || 'media') {
+  const m = S.project[layer], cuts = S.plan[layer].cuts;
+  if (cuts.length >= 1000) { toast('カット数の上限に達しました'); return; }
+  const starts = cuts.map(cut => cut.start);
+  const overrides = {};
+  cuts.forEach((cut, i) => {
+    overrides[i >= index ? i + 1 : i] = Object.assign({}, m.cutOverrides[i] || {}, { itemId: cut.sourceItemId });
+  });
+  overrides[index] = { itemId: null, technique: null };
+  let start;
+  if (!cuts.length) start = 0;
+  else if (index === 0) {
+    start = 0;
+    starts[0] = Math.max(starts[0], Math.min(cuts[0].end, starts[0] + Math.max(0.04, (cuts[0].end - starts[0]) / 2)));
+  } else if (index === cuts.length) {
+    start = Math.max(cuts[index - 1].start + 0.04, (cuts[index - 1].start + S.plan.duration) / 2);
+  } else start = (cuts[index - 1].start + cuts[index].start) / 2;
+  const times = {};
+  starts.forEach((time, i) => { times[i >= index ? i + 1 : i] = +time.toFixed(3); });
+  times[index] = +start.toFixed(3);
+  m.manualCuts = true;
+  m.cutCount = cuts.length + 1;
+  m.cutOverrides = overrides;
+  m.timing.lineTimes = times;
+  const prefix = layer === 'foreground' ? 'f:' : 'm:';
+  for (const link of S.project.timelineLinks) for (const end of ['a', 'b']) {
+    if (link[end].startsWith(prefix) && +link[end].slice(2) >= index) link[end] = prefix + (+link[end].slice(2) + 1);
+  }
+  replan(); seek(start);
+}
+function removeMediaCut(index, layer = activeMediaLayer() || 'media') {
+  const m = S.project[layer], cuts = S.plan[layer].cuts;
+  if (!Number.isInteger(index) || index < 0 || index >= cuts.length) return;
+  cancelAreaEditor();
   if (S.tap) stopTap();
-  pause();
-  S.project = mergeProject(null); S.project.lyrics = '';
-  S.audio = null; if ($('audioFile')) $('audioFile').value = '';
-  if (J.forgetSong) await J.forgetSong();
-  $('audioName').textContent = audioNameDefault;
-  if (typeof UndoRedo !== 'undefined') UndoRedo.init(S.project);
-  H.list = []; H.i = -1;
-  TL.z = 1; TL.off = 0;
-  $('lyrics').value = ''; fontKey = '';
-  syncUI(); replan(); commit('初期化'); updateEditBtns(); flushSave(); seek(0);
-  toast('初期化しました');
+  const overrides = {}, times = {};
+  cuts.forEach((cut, oldIndex) => {
+    if (oldIndex === index) return;
+    const newIndex = oldIndex > index ? oldIndex - 1 : oldIndex;
+    overrides[newIndex] = Object.assign({}, m.cutOverrides[oldIndex] || {}, { itemId: cut.sourceItemId });
+    times[newIndex] = +cut.start.toFixed(3);
+  });
+  m.manualCuts = true;
+  m.cutCount = cuts.length - 1;
+  m.cutOverrides = overrides;
+  m.timing.lineTimes = times;
+  const prefix = layer === 'foreground' ? 'f:' : 'm:';
+  const remapRef = ref => {
+    if (typeof ref !== 'string' || !ref.startsWith(prefix)) return ref;
+    const oldIndex = +ref.slice(prefix.length);
+    if (!Number.isInteger(oldIndex)) return ref;
+    return oldIndex === index ? null : prefix + (oldIndex > index ? oldIndex - 1 : oldIndex);
+  };
+  S.project.timelineLinks = S.project.timelineLinks.flatMap(link => {
+    const a = remapRef(link.a), b = remapRef(link.b);
+    return a && b ? [{ a, b }] : [];
+  });
+  replan();
 }
-function updateEditBtns() {
-  const u = $('btnUndoEdit');
-  if (u) u.disabled = typeof UndoRedo !== 'undefined' ? !UndoRedo.canUndo() : true;
+async function addMediaFiles(files, layer) {
+  const m = S.project[layer];
+  for (const file of files) {
+    const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
+    if (!type) continue;
+    const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
+    const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
+    try {
+      const el = await J.attachMedia(item, file);
+      el.addEventListener('seeked', () => { S.need = true; });
+      if (type === 'video') item.duration = el.duration || 0;
+      if (!existing) {
+        m.items.push(item);
+        m.overrides[item.id] = { ...(m.overrides[item.id] || {}), technique: null };
+      }
+      await J.storeMedia(item.id, file);
+    } catch (err) { toast(`${file.name}: 読み込めませんでした`); }
+  }
+  replan();
 }
+const MEDIA_EFFECT_GROUPS = {
+  enter: J.mediaLabel('登場', 'Entrance'), exit: J.mediaLabel('退場', 'Exit'),
+  cinema: J.mediaLabel('カメラ', 'Camera'), dynamic: J.mediaLabel('ダイナミックモーション', 'Dynamic motion'),
+  bpm: J.mediaLabel('BPM同期', 'BPM sync'), texture: J.mediaLabel('色・質感', 'Color / texture'),
+  graphic: J.mediaLabel('分割・残像・グリッチ', 'Panels / echoes / glitch'), transition: J.mediaLabel('カット間のつなぎ', 'Cut transitions'),
+};
+function renderMediaLines() {
+  const layer = activeMediaLayer() || 'media', m = S.project[layer];
+  const ol = $('mediaLineList'); ol.innerHTML = ''; S.mediaLineEls = [];
+  const selectTechnique = (ov, cut) => `<select class="media-technique" aria-label="${J.mediaLabel('画像・動画の手法', 'Media technique')}"><option value="none" ${(ov.technique === 'none' || ov.technique === undefined && cut.technique === 'none') ? 'selected' : ''}>${J.mediaLabel('演出無し', 'No effects')}</option><option value="" ${ov.technique === null ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option>${cut.technique === 'legacy' ? `<option value="legacy" selected>${J.mediaLabel('従来の設定', 'Legacy settings')}</option>` : ''}${J.MEDIA_TECH[cut.technique]?.stage ? `<option value="${cut.technique}" selected>${J.mediaTechniqueName(cut)} (${J.mediaLabel('従来の設定', 'Legacy settings')})</option>` : ''}${Object.entries(MEDIA_EFFECT_GROUPS).filter(([group]) => !['enter', 'exit'].includes(group)).map(([group, name]) => `<optgroup label="${name}">${Object.entries(J.MEDIA_TECH).filter(([, def]) => def.group === group && !def.stage).map(([key, def]) => `<option value="${key}" ${ov.technique === key ? 'selected' : ''}>${def.name}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const selectPhase = (ov, cut, stage, field) => {
+    const value = ov[field] ?? '', title = MEDIA_EFFECT_GROUPS[stage];
+    return `<label>${title}<select class="media-phase" data-media-phase="${field}" aria-label="${title}"><option value="" ${!value ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option><option value="none" ${value === 'none' ? 'selected' : ''}>${J.mediaLabel('即時（なし）', 'Instant (none)')}</option>${J.mediaPhaseOptions(stage).map(([key, def]) => `<option value="${key}" ${value === key ? 'selected' : ''}>${def.name}</option>`).join('')}</select></label>`;
 
-/* ---------------- 書き出す範囲（選んだ行だけ） ---------------- */
-function exportRangeLines() {
-  const r = S.project.exportRange, n = S.plan ? S.plan.lines.length : 0;
-  if (!r || !n || !(r.from >= 0)) return null;
-  const from = Math.min(n - 1, r.from | 0), to = Math.min(n - 1, Math.max(from, r.to | 0));
-  return { from, to };
+  };
+  const addButton = index => {
+    const row = document.createElement('li'); row.className = 'media-cut-insert';
+    row.innerHTML = `<button class="ghost small" type="button" aria-label="${index + 1}番目にカットを追加">＋ カットを追加</button>`;
+    row.querySelector('button').addEventListener('click', () => insertMediaCut(index, layer));
+    ol.appendChild(row);
+  };
+  S.plan[layer].cuts.forEach((cut, i) => {
+    addButton(i);
+    const item = [...m.items,...J.mediaCopyItems(layer)].find(x => x.id === cut.itemId), ov = Object.assign({}, m.overrides[cut.itemId] || {}, m.cutOverrides[i] || {});
+    const fileSelect = `<select class="media-cut-file" ${m.randomOrder ? `title="${J.mediaLabel('素材を変更すると現在の並びでランダム順をオフにします', 'Changing the asset turns off random order and keeps the current order')}"` : ''} aria-label="${i + 1}カット目の素材"><option value="">画像無し</option>${[...J.mediaCopyItems(layer),...m.items].map(asset => `<option value="${escapeHtml(asset.id)}" ${cut.itemId === asset.id ? 'selected' : ''}>${escapeHtml(asset.name)}</option>`).join('')}</select>`;
+    if (ov.layout === 'stretch') ov.layout = 'cover';
+    for (const key of ['layout', 'enter', 'hold', 'exit', 'treat']) if (ov[key] === undefined) ov[key] = cut[key];
+    const asset = J.mediaAssets.get(cut.itemId), source = asset && asset.element;
+    const dimensions=J.mediaSourceDimensions(S.plan,cut,cut.start);
+    const sw=dimensions?.width,sh=dimensions?.height;
+    const placement = J.mediaPlacementRect(cut.placement, sw, sh, S.plan.W, S.plan.H);
+    const placementControl = `<span class="foreground-placement-controls"><button class="foreground-placement-open ghost" type="button" ${placement ? '' : 'disabled'} aria-label="${i + 1}カット目の配置とサイズを編集"><span class="foreground-placement-thumb"><i style="left:${(placement ? placement.x : 0) * 100}%;top:${(placement ? placement.y : 0) * 100}%;width:${(placement ? placement.w : 1) * 100}%;height:${(placement ? placement.h : 1) * 100}%;transform:rotate(${cut.placement ? cut.placement.angle || 0 : 0}deg)"></i></span>配置・サイズを編集</button>${cut.placementMode === 'auto' ? `<span class="tagl">${J.mediaLabel('自動配置', 'Auto placement')}</span>` : ''}${cut.placementMode === 'manual' ? '<button class="foreground-placement-reset ghost" type="button">自動配置に戻す</button>' : ''}</span>`;
+    const li = document.createElement('li'); li.className = 'ln media-ln';
+    li.innerHTML = `<span class="no">${String(i + 1).padStart(2, '0')}</span><input class="time mono" type="number" step="0.01" min="0" value="${cut.start.toFixed(2)}" aria-label="${i + 1}カット目の開始秒">${fileSelect}${mediaThumb(item, 'media-ln-thumb')}<div class="meta"><span class="cuts"><span>${J.mediaTechniqueName(cut)}</span></span><span class="tools">${selectTechnique(ov, cut)}<button class="icon ghost dice" title="このカットを再抽選">${ICON.dice}</button><button class="icon ghost lock" title="このカットをロック" aria-pressed="${ov.lock ? 'true' : 'false'}">${ICON.lock}</button><button class="ghost small remove-media-cut" type="button" aria-label="${i + 1}カット目を削除">削除</button></span>${placementControl}${cut.type === 'video' ? `<label class="media-video-loop"><input type="checkbox" ${cut.videoLoop ? 'checked' : ''}>動画をループ再生</label><label class="media-video-start-field">${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}<input class="media-video-start" type="number" min="0" step="0.01" value="${cut.videoStart}" aria-label="${J.mediaLabel('素材の再生開始位置（秒）','Source start time (s)')}"></label><label class="media-video-duration">動画の長さ（秒）<input type="number" min="0.04" max="3600" step="0.01" placeholder="自動" value="${ov.videoDuration ?? ''}" aria-label="${i + 1}カット目の動画の長さ（秒）"></label>` : ''}</div>`;
+    if (cut.type === 'video') li.querySelector('.meta').insertAdjacentHTML('beforeend', `<span class="media-chroma"><label><input class="media-chroma-toggle" type="checkbox" ${cut.chromaKey ? 'checked' : ''}>クロマキー合成</label><label>色<input class="media-chroma-color" type="color" value="${cut.chromaColor}" aria-label="${i + 1}カット目のクロマキー色" ${cut.chromaKey ? '' : 'disabled'}></label></span>`);
+    li.querySelector('.foreground-placement-controls').insertAdjacentHTML('beforebegin', `<div class="media-phase-controls">${selectPhase(ov, cut, 'enter', 'entrance')}${selectPhase(ov, cut, 'exit', 'departure')}</div>`);
+    li.querySelectorAll('[data-media-phase]').forEach(select => select.addEventListener('change', e => {
+      mediaOv(i, { [select.dataset.mediaPhase]: e.target.value || null, lock: false }, layer); replan();
+    }));
+    const compositing=document.createElement('div');compositing.className='lyric-cut-compositing media-cut-compositing';
+    const L=J.mediaLabel,modes={normal:L('通常','Normal'),multiply:L('乗算','Multiply'),screen:L('スクリーン','Screen'),overlay:L('オーバーレイ','Overlay')};
+    compositing.innerHTML=`<label>${L('合成方法','Blend')}<select class="media-cut-blend" aria-label="${L('このカットの合成方法','This cut blend mode')}">${Object.entries(modes).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label><label>${L('不透明度（％）','Opacity (%)')}<input class="media-cut-opacity" type="number" min="0" max="100" step="1" value="${cut.opacity}" aria-label="${L('このカットの不透明度（％）','This cut opacity (%)')}"></label>`;
+    compositing.querySelector('select').value=cut.blend;
+    compositing.querySelector('select').addEventListener('change',e=>{mediaOv(i,{blend:e.target.value},layer);replan();});
+    compositing.querySelector('input').addEventListener('change',e=>{mediaOv(i,{opacity:J.clamp(+e.target.value||0,0,100)},layer);replan();});
+    li.querySelector('.meta').append(compositing);
+    li.querySelector('.time').addEventListener('change', e => { m.timing.lineTimes[i] = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
+    li.querySelector('.media-cut-file').addEventListener('change', e => setMediaCutAsset(layer,i,e.target.value || null));
+    li.querySelector('.media-technique').addEventListener('change', e => { if (e.target.value !== 'legacy') { mediaOv(i, { technique: e.target.value || null, lock: false, lockedTechnique: undefined }, layer); replan(); } });
+    const videoLoop = li.querySelector('.media-video-loop input');
+    if (videoLoop) videoLoop.addEventListener('change', e => { mediaOv(i, { videoLoop: e.target.checked }); replan(); });
+    const videoStart = li.querySelector('.media-video-start');
+    if (videoStart) videoStart.addEventListener('change', e => { const value=Number(e.target.value); mediaOv(i,{videoStart:Number.isFinite(value)?Math.max(0,value):0},layer); replan(); });
+    const videoDuration = li.querySelector('.media-video-duration input:not(.media-video-start)');
+    if (videoDuration) videoDuration.addEventListener('change', e => { const v = +e.target.value; mediaOv(i, { videoDuration: e.target.value && Number.isFinite(v) && v > 0 ? J.clamp(v, 0.04, 3600) : undefined }, layer); replan(); });
+    const placementOpen = li.querySelector('.foreground-placement-open');
+    if (placementOpen) placementOpen.addEventListener('click', () => openMediaEditor(i, layer));
+    const placementReset = li.querySelector('.foreground-placement-reset');
+    if (placementReset) placementReset.addEventListener('click', () => { mediaOv(i, { placement: null, lock: false, lockedPlacement: undefined, lockedPlacementMode: undefined }); replan(); });
+    const chroma = li.querySelector('.media-chroma-toggle');
+    if (chroma) {
+      chroma.addEventListener('change', e => { mediaOv(i, { chromaKey: e.target.checked }); replan(); });
+      li.querySelector('.media-chroma-color').addEventListener('change', e => { mediaOv(i, { chromaColor: e.target.value }); replan(); });
+    }
+    li.querySelector('.dice').addEventListener('click', () => rerollMediaCut(layer, i));
+    li.querySelector('.dice').after(disableRerollButton(layer,i));
+    li.querySelector('.tools').insertBefore(detailButton(() => openCutDetails(layer,i)), li.querySelector('.remove-media-cut'));
+    li.querySelector('.tools').append(...effectFavoriteButtons(layer,i));
+    li.querySelector('.lock').addEventListener('click', () => toggleMediaCutLock(layer, i));
+    li.querySelector('.remove-media-cut').addEventListener('click', () => removeMediaCut(i, layer));
+    ol.appendChild(li); S.mediaLineEls.push(li);
+  });
+  addButton(S.plan[layer].cuts.length);
+  syncSourceTab();
 }
-function exportRange() {
-  const R = exportRangeLines(); if (!R) return null;
-  const L = S.plan.lines, a = L[R.from], b = L[R.to], last = R.to === L.length - 1;
-  const t0 = Math.max(0, a.start - 0.25);
-  const t1 = last ? S.plan.duration : Math.min(L[R.to + 1].start, (b.interlude ? b.end : b.visEnd) + 0.35);
-  return { t0, t1 };
-}
-function rangeSuffix() { const R = exportRangeLines(); if (!R) return ''; const f = n => String(n + 1).padStart(2, '0'); return '_L' + f(R.from) + (R.to > R.from ? '-' + f(R.to) : ''); }
-function setExportRange(i, extend) {
-  const R = exportRangeLines();
-  if (extend && R) S.project.exportRange = { from: Math.min(R.from, i), to: Math.max(R.to, i) };
-  else if (R && R.from === i && R.to === i) S.project.exportRange = null;          // click again: back to the whole song
-  else S.project.exportRange = { from: i, to: i };
-  flushSave(); renderLines();
-  const R2 = exportRangeLines();
-  toast(R2 ? `書き出す範囲：${R2.from + 1}${R2.to > R2.from ? '〜' + (R2.to + 1) : ''}行目` : '書き出す範囲：全体');
-}
-function syncRangeUI() {
-  const R = exportRangeLines(), n = S.plan.lines.length;
-  const opts = (sel, first) => `<option value="-1">${first}</option>` + S.plan.lines.map((ln, i) => `<option value="${i}">${String(i + 1).padStart(2, '0')} ${escapeHtml((ln.interlude ? '〔間奏〕' : ln.text).slice(0, 14))}</option>`).join('');
-  document.querySelectorAll('.rngFrom').forEach(el => { el.innerHTML = opts(el, '全体'); el.value = R ? String(R.from) : '-1'; });
-  document.querySelectorAll('.rngTo').forEach(el => { el.innerHTML = opts(el, '—'); el.value = R ? String(R.to) : '-1'; el.disabled = !R; });
-  const r = exportRange();
-  document.querySelectorAll('.rngInfo').forEach(el => { el.textContent = r ? `${J.fmtTime(r.t0)} 〜 ${J.fmtTime(r.t1)}（${(r.t1 - r.t0).toFixed(1)}秒）` : `全体（${S.plan.duration.toFixed(1)}秒）`; });
-}
-function bindRangeUI() {
-  document.querySelectorAll('.rngFrom').forEach(el => el.addEventListener('change', () => {
-    const v = +el.value, R = exportRangeLines();
-    S.project.exportRange = v < 0 ? null : { from: v, to: R ? Math.max(v, R.to) : v };
-    flushSave(); renderLines();
-  }));
-  document.querySelectorAll('.rngTo').forEach(el => el.addEventListener('change', () => {
-    const v = +el.value, R = exportRangeLines(); if (!R) return;
-    S.project.exportRange = v < 0 ? { from: R.from, to: R.from } : { from: Math.min(R.from, v), to: Math.max(R.from, v) };
-    flushSave(); renderLines();
-  }));
+async function restoreMediaAssets() {
+  for (const item of [...S.project.media.items, ...S.project.foreground.items]) {
+    if (J.mediaAssets.has(item.id)) continue;
+    try { const blob = await J.loadMedia(item.id); if (blob) { const el = await J.attachMedia(item, blob); el.addEventListener('seeked', () => { S.need = true; }); } } catch (e) {}
+  }
+  replan();
 }
 function setOv(i, patch) {
+  // A later line-wide selection supersedes the corresponding per-cut edit.
+  for (const [key, options] of Object.entries(S.project.lyricCutOptions || {})) if (key.startsWith(`${i}:`) && options.details) {
+    for (const field of Object.keys(patch)) if (J.cutDetailKeys.lyrics.includes(field)) {
+      delete options.details[field];
+      const params={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
+      if(params)delete options.details[params];
+    }
+  }
   const cur = Object.assign({}, S.project.overrides[i] || {}, patch);
   for (const k of Object.keys(cur)) if (cur[k] === undefined || cur[k] === false || cur[k] === '') delete cur[k];
   if (Object.keys(cur).length) S.project.overrides[i] = cur; else delete S.project.overrides[i];
@@ -965,7 +2562,7 @@ function drawStyleGrid() {
       const b = document.createElement('button'); b.className = 'stile'; b.dataset.k = k;
       b.title = J.STYLES[k].desc;
       b.innerHTML = `<canvas width="192" height="108"></canvas><span>${J.STYLES[k].name}</span><span class="badges">${setBadges(J.STYLES[k])}</span>`;
-      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; S.project.rowCache = {}; syncUI(); replan(); commit(); });
+      b.addEventListener('click', () => { remember(); S.project.style = k; S.project.colors.enabled = false; syncUI(); replan(); commit(); });
       g.appendChild(b);
     });
   }
@@ -974,7 +2571,7 @@ function drawStyleGrid() {
     b.setAttribute('aria-pressed', S.project.style === k ? 'true' : 'false');
     const off = !J.randomOk(S.project, 'style', k);
     b.classList.toggle('set-off', off);
-    b.title = st.desc + (off ? (st.extra && S.project.extra !== true ? '（追加分がオフのため、おまかせでは選ばれません）' : '（和風の演出がオフのため、おまかせでは選ばれません）') : '');
+    b.title = st.desc + (off ? (st.set ? J.mediaLabel('（演出セットがオフ）',' (Part set is off)') : st.extra && S.project.extra !== true ? '（追加分がオフのため、おまかせでは選ばれません）' : '（和風の演出がオフのため、おまかせでは選ばれません）') : '');
     x.fillStyle = sc.bg; x.fillRect(0, 0, 192, 108);
     st.schemes.slice(1, 4).forEach((s2, i) => { x.fillStyle = s2.bg; x.fillRect(192 - 14 * (i + 1), 0, 14, 10); });
     const f = st.fonts.display[0];
@@ -989,7 +2586,7 @@ function drawStyleGrid() {
 function fontSelectOptions(sel) {
   return '<option value="">スタイルの既定</option>' + Object.entries(J.FONTS).map(([k, f]) => {
     const g = J.faceOf ? J.faceOf(k) : f, alt = g.label && g.label !== f.label ? ' → ' + g.label : '';   // the face actually used for the lyric language
-    return `<option value="${k}" ${sel === k ? 'selected' : ''}>${escapeHtml(f.label + alt)}</option>`;
+    return `<option value="${escapeHtml(k)}" style="font-family:${escapeHtml(g.family)},sans-serif;font-weight:${g.weight}" ${sel === k ? 'selected' : ''}>${escapeHtml(f.label + alt)}</option>`;
   }).join('');
 }
 function renderFontRoles() {
@@ -1000,6 +2597,18 @@ function renderFontRoles() {
     row.querySelector('select').addEventListener('change', e => { if (e.target.value) S.project.fonts[role] = e.target.value; else delete S.project.fonts[role]; fontKey = ''; replan(); });
     box.appendChild(row);
   });
+  renderCompositeFonts();
+}
+function renderCompositeFonts() {
+  const choices = Object.entries(J.FONTS).filter(([, f]) => !f.composite).map(([key, f]) => `<option value="${escapeHtml(key)}" style="font-family:${escapeHtml((J.faceOf ? J.faceOf(key) : f).family)},sans-serif">${escapeHtml(f.label)}</option>`).join('');
+  const base = $('compositeBase');
+  if (!base) return;
+  const selected = base.value; base.innerHTML = choices;
+  if (selected && J.FONTS[selected]) base.value = selected;
+  const parts = $('compositeParts'), existing = Object.fromEntries([...parts.querySelectorAll('select')].map(el => [el.dataset.part, el.value]));
+  parts.innerHTML = Object.entries(J.COMPOSITE_PARTS).map(([key, label]) => `<label>${label}<select data-part="${key}"><option value="">ベースを使用</option>${choices}</select></label>`).join('');
+  for (const select of parts.querySelectorAll('select')) if (existing[select.dataset.part]) select.value = existing[select.dataset.part];
+  $('compositeList').innerHTML = (S.project.compositeFonts || []).map(def => `<div class="composite-saved"><span>${escapeHtml(def.name)}</span><button type="button" data-key="${escapeHtml(def.key)}" aria-label="${escapeHtml(def.name)}を削除">×</button></div>`).join('');
 }
 const BASE_KEYS = [['bg', '背景'], ['fg', '文字'], ['sub', '補助']];
 const ACCENT_KEYS = [['accent', 'アクセント'], ['ghostA', 'ズレ色A'], ['ghostB', 'ズレ色B']];
@@ -1017,7 +2626,7 @@ function renderColors() {
       l.querySelector('input').addEventListener('input', e => {
         c[k] = e.target.value.toUpperCase();
         if (!c[flag]) { c[flag] = true; $(flag === 'enabled' ? 'colorOn' : 'accentOn').checked = true; }
-        replanSoon(60); drawSwatch();
+        markUndoGroup(`color:${k}`); replanSoon(60); drawSwatch();
       });
       row.appendChild(l);
     });
@@ -1037,6 +2646,14 @@ function randomPalette() {
   const c = S.project.colors;
   const sc0 = J.STYLES[S.project.style].schemes[0];
   const bg = c.enabled && c.bg ? c.bg : sc0.bg;
+  // A colour theme (genre / theme colour) decides the palette, base colours included when its genre sets them.
+  if (J.colorThemeActive(S.project)) {
+    S.project.colors = J.themedColors(S.project, S.project.style, Math.random, c);
+    const n = S.project.colors;
+    renderColors(); replan(); commit();
+    toast(J.mediaLabel('配色：テーマのカラーに合わせて変更', 'Colours: changed to match the colour theme'), [n.accent, n.ghostA, n.ghostB]);
+    return;
+  }
   let p, guard = 0;
   do { p = J.randomPalette(bg); } while (guard++ < 6 && p.ghostA === c.ghostA && p.ghostB === c.ghostB);
   Object.assign(c, { accent: p.accent, ghostA: p.ghostA, ghostB: p.ghostB, accentOn: true });
@@ -1048,25 +2665,36 @@ function randomPalette() {
 // only the "look" is tracked — lyrics, timing and output settings are never rolled back
 const HKEYS = ['style', 'mood', 'seed', 'fx', 'enabled', 'fonts', 'colors', 'overrides'];
 const H = { list: [], i: -1 };
-const lookSnap = () => JSON.stringify(Object.fromEntries(HKEYS.map(k => [k, S.project[k] ?? null])));
+const lookSnap = () => {
+  // Undo/import fills in missing enabled keys. Normalize them here too so that
+  // restoring a look does not create a duplicate history stop on the next click.
+  const enabled = J.defaultProject().enabled;
+  for (const group of J.GROUP_KEYS) Object.assign(enabled[group], S.project.enabled[group] || {});
+  return JSON.stringify({
+    ...Object.fromEntries(HKEYS.map(k => [k, S.project[k] ?? null])), enabled,
+    lyricEffects: J.lyricEffectSettings(S.project),
+    mediaEffects: Object.fromEntries(['foreground', 'media'].map(layer => [layer, J.mediaEffectSettings(S.project, layer)])),
+  });
+};
 function remember() {            // call before changing the look: makes sure the current look is on the stack
   const s = lookSnap();
   if (H.i >= 0 && H.list[H.i] === s) return;
   H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1;
 }
-function commit(desc) {              // call after changing the look
+function commit() {              // call after changing the look
   const s = lookSnap();
   if (H.list[H.i] !== s) { H.list = H.list.slice(0, H.i + 1); H.list.push(s); H.i = H.list.length - 1; }
   if (H.list.length > 80) { H.list.splice(0, H.list.length - 80); H.i = H.list.length - 1; }
   updateHist();
-  if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc || '設定・デザイン変更');
 }
 function histGo(d) {
   if (S.exporting) return;
   remember();                    // hand edits made since the last step become a stop of their own
   const j = H.i + d; if (j < 0 || j >= H.list.length) return;
   H.i = j;
-  Object.assign(S.project, JSON.parse(H.list[j]));
+  const { mediaEffects, ...look } = JSON.parse(H.list[j]);
+  Object.assign(S.project, look);
+  for (const layer of ['foreground', 'media']) S.project[layer].effects = mediaEffects[layer];
   fontKey = ''; syncUI(); replan(); updateHist();
   toast(`${j + 1} / ${H.list.length} 案目`);
   restartPreview();
@@ -1078,147 +2706,14 @@ function updateHist() {
   $('histPos').textContent = H.list.length > 1 ? `${H.i + 1} / ${H.list.length}` : '';
 }
 
-/* ---------------- メディア要素キャッシュ＆復元マネージャー ---------------- */
-const MediaElementCache = new Map();
-
-function cacheMediaElement(url, element, isVideo, name) {
-  if (!url || !element) return;
-  MediaElementCache.set(url, { element, isVideo, name, ready: true });
-}
-
-function restoreMediaElements(proj) {
-  if (!proj) return;
-  if (proj.tracks) {
-    ['images', 'videos'].forEach(trackName => {
-      const list = proj.tracks[trackName] || [];
-      list.forEach(b => {
-        if (!b.url) return;
-        const cached = MediaElementCache.get(b.url);
-        if (cached && cached.element) {
-          b.element = cached.element;
-          b.ready = true;
-        } else {
-          const isVideo = trackName === 'videos' || b.type === 'video' || /\.(mp4|webm|mov)$/i.test(b.name || '');
-          if (isVideo) {
-            const v = document.createElement('video');
-            v.src = b.url; v.loop = true; v.muted = true; v.playsInline = true;
-            v.play().then(() => { b.ready = true; drawTimeline(); }).catch(() => {});
-            b.element = v;
-            b.ready = true;
-            cacheMediaElement(b.url, v, true, b.name);
-          } else {
-            const img = new Image();
-            img.src = b.url;
-            img.onload = () => { b.ready = true; drawTimeline(); };
-            img.onerror = () => { b.ready = false; };
-            b.element = img;
-            b.ready = true;
-            cacheMediaElement(b.url, img, false, b.name);
-          }
-        }
-      });
-    });
-  }
-  // 単一背景メディアの復元
-  if (proj.bgMedia && proj.bgMedia.enabled) {
-    if (proj.bgMedia.url) {
-      const cached = MediaElementCache.get(proj.bgMedia.url);
-      if (cached && cached.element) {
-        J.bgMedia = { type: cached.isVideo ? 'video' : 'image', element: cached.element, ready: true, name: proj.bgMedia.name, url: proj.bgMedia.url };
-      }
-    } else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) {
-      proj.bgMedia.url = J.bgMedia.url;
-    }
-  }
-}
-
-/* ---------------- undo / redo (Ctrl+Z / Ctrl+Y) ---------------- */
-const UndoRedo = {
-  stack: [],
-  index: -1,
-  max: 50,
-  isApplying: false,
-
-  init(proj) {
-    if (!proj) return;
-    this.stack = [{ project: JSON.parse(JSON.stringify(proj)), desc: '初期状態' }];
-    this.index = 0;
-  },
-
-  commit(desc = '変更') {
-    if (this.isApplying || !S.project) return;
-    const snap = JSON.parse(JSON.stringify(S.project));
-    if (this.index >= 0 && this.stack[this.index]) {
-      if (JSON.stringify(this.stack[this.index].project) === JSON.stringify(snap)) {
-        return;
-      }
-    }
-    if (this.index < this.stack.length - 1) {
-      this.stack = this.stack.slice(0, this.index + 1);
-    }
-    this.stack.push({ project: snap, desc, timestamp: Date.now() });
-    if (this.stack.length > this.max) {
-      this.stack.shift();
-    } else {
-      this.index++;
-    }
-    if (typeof updateEditBtns === 'function') updateEditBtns();
-  },
-
-  undo() {
-    if (!this.canUndo()) {
-      toast('これ以上戻せません');
-      return;
-    }
-    const curDesc = this.stack[this.index]?.desc || '操作';
-    this.index--;
-    this.apply(this.stack[this.index]);
-    toast(`元に戻しました: ${curDesc}（残り ${this.index} 件）`);
-  },
-
-  redo() {
-    if (!this.canRedo()) {
-      toast('これ以上やり直せません');
-      return;
-    }
-    this.index++;
-    const nextDesc = this.stack[this.index]?.desc || '操作';
-    this.apply(this.stack[this.index]);
-    toast(`やり直しました: ${nextDesc}`);
-  },
-
-  canUndo() { return this.index > 0; },
-  canRedo() { return this.index < this.stack.length - 1; },
-
-  apply(entry) {
-    if (!entry || !entry.project) return;
-    this.isApplying = true;
-    try {
-      S.project = JSON.parse(JSON.stringify(entry.project));
-      restoreMediaElements(S.project);
-      fontKey = '';
-      syncUI();
-      replan();
-      drawTimeline();
-      if (typeof updateEditBtns === 'function') updateEditBtns();
-    } finally {
-      this.isApplying = false;
-    }
-  }
-};
-window.UndoRedo = UndoRedo;
-window.replan = replan;
-window.seek = seek;
-
 /* ---------------- おまかせ ---------------- */
 function restartPreview() { seek(0); if (!S.playing && S.mode === 'easy') play(); }
 function omakase() {
   if (S.exporting || S.tap) return;
   remember();
+  J.clearPastedLyricEffects(S.project);
   const r = J.omakase(S.project);
   Object.assign(S.project, r);
-  S.project.rowCache = {};
-  if (S.project.timing) S.project.timing.cutTimes = null;
   fontKey = ''; syncUI(); replan(); commit();
   toast(`おまかせ：${J.STYLES[r.style].name} × ${J.MOODS[r.mood].name}`, r.colors.accentOn ? [r.colors.accent, r.colors.ghostA, r.colors.ghostB] : null);
   restartPreview();
@@ -1234,17 +2729,15 @@ function rerollPart(part) {
     if (!pool.length) pool = J.STYLE_ORDER.filter(k => k !== P.style);
     P.style = pool[Math.floor(Math.random() * pool.length)];
     P.colors.enabled = false;
-    P.rowCache = {};
     msg = `スタイル：${J.STYLES[P.style].name}`;
   } else if (part === 'mood') {
     const r = J.omakase(P);
     Object.assign(P, { mood: r.mood, fx: r.fx, enabled: r.enabled });
-    P.rowCache = {};
     msg = `雰囲気：${J.MOODS[r.mood].name}`;
   } else if (part === 'cut') {
+    J.clearPastedLyricEffects(P);
+    shuffleMediaEffects();
     P.seed = (Math.random() * 1e9) | 0;
-    P.rowCache = {};
-    if (P.timing) P.timing.cutTimes = null;
     msg = '構成：レイアウトと動きを再抽選';
   }
   fontKey = ''; syncUI(); replan(); commit();
@@ -1277,6 +2770,42 @@ function toast(m, cols) {
 }
 
 /* ---------------- かんたん / 詳細 ---------------- */
+function syncSourceDrawer() {
+  const compact=$('app').classList.contains('compact-ui'),panel=document.querySelector('.col-left');
+  panel.classList.toggle('source-open',compact&&!!S.sourceOpen);
+  for(const [id,tab]of [['sourceForeground','foreground'],['sourceLyrics','lyrics'],['sourceMedia','media']]){
+    $(id).setAttribute('aria-expanded',String(!compact||!!S.sourceOpen&&S.sourceTab===tab));
+  }
+  $('closeSourceDrawer').setAttribute('aria-label',J.mediaLabel('素材設定を閉じる','Close source settings'));
+  $('sourceDrawerTitle').textContent=J.mediaLabel(...({foreground:['前景','Foreground'],lyrics:['歌詞・曲','Lyrics / Audio'],media:['背景','Background']}[S.sourceTab]||['歌詞・曲','Lyrics / Audio']));
+}
+function selectSourceDrawer(tab) {
+  if($('app').classList.contains('compact-ui')){
+    S.sourceOpen=!(S.sourceOpen&&S.sourceTab===tab);
+    if(S.sourceOpen){S.settingsOpen=false;syncSettingsDrawer();}
+  }
+  cancelAreaEditor();S.sourceTab=tab;syncSourceTab();
+  if(tab!=='lyrics'){renderMediaList();renderMediaLines();}
+  syncSourceDrawer();
+}
+function positionSettingsDrawer() {
+  const top=Math.max(0,document.querySelector('.bar').getBoundingClientRect().bottom);
+  $('app').style.setProperty('--settings-top',Math.min(top,innerHeight-100)+'px');
+}
+function syncSettingsDrawer() {
+  const open=!!S.settingsOpen;
+  $('settingsDrawer').hidden=!open;
+  $('app').classList.toggle('settings-open',open);
+  for(const [id,mode] of [['modeEasy','easy'],['modePro','pro']]){
+    const active=open&&S.mode===mode;$(id).setAttribute('aria-expanded',String(active));$(id).setAttribute('aria-pressed',String(active));
+  }
+  $('settingsDrawerTitle').textContent=S.mode==='easy'?J.mediaLabel('かんたん','Easy'):J.mediaLabel('詳細','Details');
+  $('closeSettingsDrawer').setAttribute('aria-label',J.mediaLabel('設定を閉じる','Close settings'));
+  positionSettingsDrawer();
+}
+function toggleSettingsDrawer(mode) {
+  S.settingsOpen=!(S.settingsOpen&&S.mode===mode);if(S.settingsOpen){S.sourceOpen=false;syncSourceDrawer();}setMode(mode);
+}
 function setMode(m) {
   S.mode = m === 'easy' ? 'easy' : 'pro';
   const easy = S.mode === 'easy';
@@ -1285,6 +2814,7 @@ function setMode(m) {
   $('modeEasy').setAttribute('aria-pressed', String(easy));
   $('modePro').setAttribute('aria-pressed', String(!easy));
   try { localStorage.setItem('jizura.mode', S.mode); } catch (e) {}
+  syncSettingsDrawer();
   if (easy) { showNow(); syncOut(); codecNote(); }
   sizeViewport(); drawTimeline(); loadThumbFonts();
 }
@@ -1298,7 +2828,7 @@ function renderFx() {
     const v = S.project.fx[k] ?? 0.5;
     row.innerHTML = `<label for="fx_${k}">${label}</label><input id="fx_${k}" type="range" min="0" max="1" step="0.01" value="${v}"><output>${Math.round(v * 100)}</output>`;
     const inp = row.querySelector('input'), out = row.querySelector('output');
-    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; S.project.mood = null; out.textContent = Math.round(inp.value * 100); replanSoon(120); });
+    inp.addEventListener('input', () => { S.project.fx[k] = +inp.value; if (k === 'density') for (const ov of Object.values(S.project.overrides || {})) delete ov.divisionDensity; S.project.mood = null; out.textContent = Math.round(inp.value * 100); markUndoGroup(`fx:${k}`); replanSoon(120); });
     box.appendChild(row);
   });
   $('fxFlash').checked = !!S.project.fx.flash;
@@ -1312,6 +2842,22 @@ const GROUPS = [['layout', 'レイアウト'], ['enter', '登場'], ['hold', '�
 const openGroups = new Set();
 function techItems(g) { return J.order(g).filter(k => J.registry(g)[k] && !J.registry(g)[k].special); }
 function renderTech() {
+  const lyricEffects = J.lyricEffectSettings(S.project);
+  $('lyricAutoPlacement').checked = lyricEffects.autoPlacement;
+  $('lyricAvoidForeground').checked = lyricEffects.avoidForeground;
+  // 「画面中央を避ける」 (詳細 > 手法) and 「歌詞が画面中央を避ける」 (かんたん) are the same setting.
+  for (const input of document.querySelectorAll('.avoid-center-toggle')) input.checked = lyricEffects.avoidCenter && lyricEffects.autoPlacement;
+  $('lyricAvoidCenter').disabled = !lyricEffects.autoPlacement;
+  $('lyricGroupAvoidanceStrength').value = lyricEffects.lyricAvoidanceStrength;
+  $('lyricGroupAvoidanceStrengthValue').textContent = lyricEffects.lyricAvoidanceStrength.toFixed(2);
+  $('lyricAvoidanceStrength').value = lyricEffects.avoidanceStrength;
+  $('lyricAvoidanceStrengthValue').textContent = lyricEffects.avoidanceStrength.toFixed(2);
+  $('lyricAvoidanceStrength').disabled = !lyricEffects.autoPlacement || !lyricEffects.avoidForeground;
+  $('lyricRandomBlend').checked = lyricEffects.randomBlend;
+  $('lyricRandomOpacity').checked = lyricEffects.randomOpacity;
+  $('lyricOpacityRange').hidden = !lyricEffects.randomOpacity;
+  $('lyricOpacityMin').value = lyricEffects.opacityMin;
+  $('lyricOpacityMax').value = lyricEffects.opacityMax;
   const box = $('techLists'); box.innerHTML = '';
   const q = ($('techFilter').value || '').trim().toLowerCase();
   let total = 0, onAll = 0;
@@ -1329,9 +2875,10 @@ function renderTech() {
     shown.forEach(k => {
       const l = document.createElement('label');
       l.title = k + (tbl[k].tags && tbl[k].tags.length ? '（' + tbl[k].tags.map(t => (J.MOODS[t] ? J.MOODS[t].name : t)).join('・') + '）' : '');
-      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].extra && S.project.extra !== true ? '（追加分がオフのため、自動では選ばれません）' : '（和風の演出がオフのため、自動では選ばれません）'; }
+      if (!J.randomOk(S.project, g, k)) { l.classList.add('set-off'); l.title += tbl[k].set ? J.mediaLabel('（演出セットがオフ）',' (Part set is off)') : tbl[k].extra && S.project.extra !== true ? '（追加分がオフのため、自動では選ばれません）' : '（和風の演出がオフのため、自動では選ばれません）'; }
       l.innerHTML = `<input type="checkbox" ${en[k] !== false ? 'checked' : ''}> ${escapeHtml(tbl[k].name)}${setBadges(tbl[k])}`;
       l.querySelector('input').addEventListener('change', e => { en[k] = e.target.checked; S.project.mood = null; d.querySelector('.tg-cnt').textContent = `${items.filter(x => en[x] !== false).length}/${items.length}`; replanSoon(60); });
+      l.appendChild(J.effectPreviewButton(g,k));
       list.appendChild(l);
     });
     d.querySelectorAll('.tg-tools button').forEach(b => b.addEventListener('click', () => {
@@ -1353,13 +2900,21 @@ function renderTech() {
 function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
   $('eAspect').value = S.project.aspect; $('eRes').value = String(S.project.res); $('eFps').value = String(S.project.fps);
+  const size = S.project.videoSize;
+  const preset = size ? `${size.w}x${size.h}` : 'legacy';
+  for (const id of ['out', 'e']) {
+    const selector = $(`${id}VideoSize`);
+    selector.value = S.project.videoSizeMode === 'custom' ? 'custom' : [...selector.options].some(option => option.value === preset) ? preset : 'custom';
+    if (!size) selector.value = 'legacy';
+    $(`${id}VideoWidth`).value = size ? size.w : J.outputSize(S.project)[0];
+    $(`${id}VideoHeight`).value = size ? size.h : J.outputSize(S.project)[1];
+    $(`${id}VideoWidth`).closest('label').hidden = selector.value !== 'custom';
+    $(`${id}VideoHeight`).closest('label').hidden = selector.value !== 'custom';
+  }
+  for (const id of ['outAspect', 'outRes', 'eAspect', 'eRes']) $(id).disabled = !!size;
   $('outQuality').value = S.project.quality || 'high'; $('outAudio').checked = S.project.includeAudio !== false;
   const k = J.keyMode(S.project) || 'off';
   $('outKey').value = k; $('eKey').value = k;
-  $('outCenter').checked = $('eCenter').checked = !!S.project.centerFree;
-  const tall = J.designSize(S.project.aspect)[1] > J.designSize(S.project.aspect)[0] * 1.1;
-  document.querySelectorAll('.center-dir').forEach(el => { el.hidden = !(S.project.centerFree && tall); });
-  document.querySelectorAll('.centerDirSel').forEach(el => { el.value = S.project.centerDir === 'lr' ? 'lr' : 'tb'; });
   const kb = $('keyBadge');
   kb.hidden = k === 'off';
   if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
@@ -1369,27 +2924,74 @@ async function codecNote() {
   const vc = await J.pickVideoCodec(w, h, S.project.fps, 12e6);
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
-  ['btnMP4File', 'eMP4File'].forEach(id => { $(id).hidden = !vc || !canPickFile(); });
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'btnPNGL', 'eMP4', 'btnMP4File', 'eMP4File'];
+const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
+function openExportDialog(kind) {
+  if (S.exporting) return;
+  pause();
+  const mp4 = kind === 'mp4';
+  S.exportKind = kind;
+  $('exportFilename').value = baseName() + (mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
+  $('exportDlgTitle').textContent = J.mediaLabel(mp4 ? 'MP4 を書き出す' : kind === 'pnga' ? '透過PNG（ZIP・背景なし）' : '連番PNG（ZIP）', mp4 ? 'Export MP4' : kind === 'pnga' ? 'Transparent PNG (ZIP)' : 'PNG sequence (ZIP)');
+  $('exportDialogContent').appendChild($('exportSettings'));
+  for (const [id,type] of [['btnMP4','mp4'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
+  $('outQuality').closest('label').hidden = !mp4;
+  $('outAudio').closest('label').hidden = !mp4;
+  $('outKey').closest('label').hidden = kind === 'pnga';
+  $('exportSettings').querySelector('.key-note').hidden = kind === 'pnga';
+  $('codecNote').hidden = !mp4;
+  syncOut(); codecNote(); $('exportDlg').showModal();
+}
+function restoreExportSettings() {
+  $('exportSettingsHome').appendChild($('exportSettings'));
+  for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
+  for (const id of ['outQuality','outAudio','outKey']) $(id).closest('label').hidden = false;
+  $('exportSettings').querySelector('.key-note').hidden = false;
+}
 function baseName() {
   const k = J.keyMode(S.project);
   return ((S.project.title || 'jizura').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 60) || 'jizura') + (k ? (k === 'green' ? '_greenback' : '_blackback') : '');
 }
-const canPickFile = () => typeof window.showSaveFilePicker === 'function' && !document.documentElement.classList.contains('cep') && typeof VideoEncoder !== 'undefined';
+// 「ファイル名に日時を追加」: _yyyyMMddHHmm (local time) before the extension; the choice is remembered here.
+const fileStamp = (d = new Date()) => '_' + [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()].map((v, i) => String(v).padStart(i ? 2 : 4, '0')).join('');
+function withFileStamp(filename) { const dot = filename.lastIndexOf('.'); return filename.slice(0, dot) + fileStamp() + filename.slice(dot); }
+function syncFilenamePreview() {
+  const ext = $('filenameDlg').dataset.ext || '.jizuraichi', name = J.exportFilename($('saveFilename').value, ext, baseName());
+  $('saveFilenamePreview').textContent = $('saveFilenameDate').checked ? J.mediaLabel('保存名：', 'Saved as: ') + withFileStamp(name) : '';
+}
+// Resolves { filename, name }: the file name to write, and its name without extension or added date.
+function requestFilename(kind) {
+  const dlg = $('filenameDlg'), project = kind === 'project' || kind === 'settings', ext = project ? '.jizuraichi' : '.json';
+  $('filenameDlgTitle').textContent = J.mediaLabel(project ? 'プロジェクトを保存' : 'AE用に書き出し', project ? 'Save project' : 'Export for AE');
+  if (kind === 'settings') $('filenameDlgTitle').textContent = J.mediaLabel('設定のみ書き出し', 'Export settings only');
+  // A saved project's name is the next project save's default.
+  const saved = kind === 'project' && S.project.projectName ? S.project.projectName : '';
+  $('saveFilename').value = (saved || baseName() + (kind === 'settings' ? '_settings' : '') + (project ? '' : '_ae')) + ext;
+  dlg.dataset.ext = ext;
+  try { $('saveFilenameDate').checked = localStorage.getItem('jizura.filenameDate') === 'true'; } catch (e) {}
+  syncFilenamePreview();
+  dlg.returnValue = ''; dlg.showModal(); $('saveFilename').select();
+  return new Promise(resolve=>dlg.addEventListener('close',()=>{
+    if (dlg.returnValue !== 'save') { resolve(null); return; }
+    const plain = J.exportFilename($('saveFilename').value, ext, baseName());
+    try { localStorage.setItem('jizura.filenameDate', String($('saveFilenameDate').checked)); } catch (e) {}
+    resolve({ filename: $('saveFilenameDate').checked ? withFileStamp(plain) : plain, name: plain.slice(0, -ext.length) });
+  },{once:true}));
+}
+function confirmHiddenLayers() {
+  return !['foreground','lyrics','media'].some(layer=>S.project.layerVisibility?.[layer]===false) || window.confirm(J.mediaLabel('非表示のレイヤーは書き出しに含まれません。よろしいですか？','Hidden layers will not be included in the export. Continue?'));
+}
 async function runExport(kind) {
   if (S.exporting) return;
-  // 大きな動画用: the save dialog must open straight from the click (before anything is awaited)
-  let file = null, fileName = '';
-  if (kind === 'mp4file') {
-    try {
-      const hnd = await window.showSaveFilePicker({ suggestedName: baseName() + rangeSuffix() + '.mp4', types: [{ description: 'MP4', accept: { 'video/mp4': ['.mp4'] } }] });
-      file = await hnd.createWritable(); fileName = hnd.name;
-    } catch (e) { if (e && e.name === 'AbortError') return; toast('保存先を開けませんでした: ' + (e && e.message ? e.message : e)); return; }
-  }
+  if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
+  if(!confirmHiddenLayers())return;
+  const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
+  $('exportFilename').value = filename;
   pause();
   const ac = new AbortController(); S.exporting = ac;
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),$('exportFilename')].map(el=>[el,el.disabled]);
+  settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
   const txt = { set textContent(m) { setText(m); }, get textContent() { return boxes[0].querySelector('.exp-text').textContent; } };
@@ -1399,1124 +3001,628 @@ async function runExport(kind) {
   const onProgress = (p, m) => { boxes.forEach(b => { b.querySelector('.exp-bar').style.width = (p * 100).toFixed(1) + '%'; }); setText(m); };
   const t0 = performance.now();
   try {
-    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS, J.fontsOfPlan(S.plan));
-    if (kind === 'mp4' || kind === 'mp4file') {
-      const plan = S.plan, range = exportRange(), span = J.exportSpan(plan, range);
-      const r = await J.exportMP4({ plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, range, file });
-      file = null;
-      txt.textContent = `完成 ${r.blob ? (r.blob.size / 1048576).toFixed(1) + 'MB・' : ''}${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
-      if (r.blob) {
-        const res = await J.saveFile(baseName() + rangeSuffix() + '.mp4', r.blob);
-        if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
-      } else txt.textContent += `・「${fileName}」に保存しました`;
-      if (r.tried && r.tried.length) txt.textContent += '（最初の方法では失敗したため、別のエンコーダーで書き出しました）';
-      // audio that some players cannot play (Opus), or none at all: save the soundtrack as WAV next to it
-      if (r.audioWanted && r.audio !== 'aac') {
-        await J.saveFile(baseName() + rangeSuffix() + '_audio.wav', J.audioWav(S.audio.buffer, span.dur, span.t0));
-        txt.textContent += r.audio ? '。このブラウザでは音声が Opus になり、iPhone・QuickTime などでは音が出ないことがあるため、音声を WAV でも保存しました' : '。このブラウザは音声を書き出せないため、音声を WAV で別に保存しました（動画編集ソフトで重ねてください）';
-      } else if (S.project.includeAudio !== false && !S.audio && S.project.audioName) txt.textContent += '。曲が読み込まれていないため音声なしです（「曲を読み込む」から読み込み直してください）';
+    await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
+    if (kind === 'mp4') {
+      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal });
+      txt.textContent = `完成 ${(r.blob.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
+      const res = await J.saveFile(filename, r.blob);
+      if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
     } else {
-      const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', layers: kind === 'pngl', onProgress, signal: ac.signal, range: exportRange() });
+      const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', onProgress, signal: ac.signal });
       txt.textContent = `完成 ${(blob.size / 1048576).toFixed(1)}MB`;
-      await J.saveFile(baseName() + rangeSuffix() + (kind === 'pnga' ? '_alpha' : kind === 'pngl' ? '_layers' : '') + '_png.zip', blob);
+      await J.saveFile(filename, blob);
     }
   } catch (e) {
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
-    if (file) { try { await file.abort(); } catch (e2) {} }
   } finally {
     S.exporting = null; S.need = true;
+    settingsInputs.forEach(([el,disabled])=>{el.disabled=disabled;}); $('btnCloseExport').disabled = false;
     EXP_BTNS.forEach(id => { $(id).disabled = false; });
     codecNote();
   }
 }
 
 /* ---------------- tap sync ---------------- */
-function inferTapStartLine() {
-  const lines = S.plan && S.plan.lines;
-  if (!lines || !lines.length) return 0;
-  if (S.curLine >= 0 && S.curLine < lines.length) {
-    return S.curLine;
-  }
-  const curT = S.t || 0;
-  if (curT <= 0.3) return 0;
-  let bestIdx = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i];
-    if (curT >= ln.start - 0.5 && curT <= ln.end) {
-      return i;
-    }
-    if (ln.start > curT) {
-      return i;
-    }
-    bestIdx = i;
-  }
-  return bestIdx;
-}
-
-// start from any line: playback begins a little before that line, earlier lines keep their times
-function startTap(from = null) {
-  if (!S.plan.lines.length) return;
-  const startIdx = from != null ? J.clamp(from | 0, 0, S.plan.lines.length - 1) : inferTapStartLine();
-  const ln = S.plan.lines[startIdx];
-  if (!ln) return;
-
-  pushEdit();
-  remember();
-
-  S.tap = { i: startIdx, from: startIdx, startIdx, done: [] };
+function startTap(fromIndex = 0) {
+  const layer = activeMediaLayer();
+  if (!(layer ? J.mediaInsertChoices(S.project,layer).length : S.plan.lines.length)) return;
+  pause();
+  fromIndex = Math.max(0, Math.min(fromIndex, (layer ? S.plan[layer].cuts.length : S.plan.lines.length) - 1));
+  S.tap = { i: fromIndex, layer, append: !!layer, fileIndex: 0, countingDown: true, fromIndex };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-
-  // startIdx 以降の古いカット境界をクリアして新タップで再構築できるようにする（startIdx未満は完全保護）
-  if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
-    S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line < startIdx);
-  }
-  // startIdx 以降の古い lineTimes もクリア（上書き開始）
-  for (let k = startIdx; k < S.plan.lines.length; k++) {
-    delete S.project.timing.lineTimes[k];
-  }
-
-  $('tapPanel').hidden = false;
-  $('btnTap').setAttribute('aria-pressed', 'true');
-
-  const prev = startIdx > 0 ? S.plan.lines[startIdx - 1] : null;
-  const t0 = startIdx === 0 ? 0 : Math.max(0, prev.start + 0.01, ln.start - 1.8);
-  seek(t0);
-  play();
-  updateTap();
-
-  $('tapBtn').focus();
-  if (startIdx > 0) {
-    toast(`${startIdx + 1}行目「${ln.text.slice(0, 12)}…」からタップで同期します（${J.fmtTime(t0)} から再生）`);
-  }
-}
-
-function tapNow() {
-  if (!S.tap) return;
-  const curIdx = S.tap.i;
-  const LT = S.project.timing.lineTimes;
-  let tVal = +S.t.toFixed(3);
-
-  if (curIdx > 0 && LT && LT[curIdx - 1] != null) {
-    const prevT = LT[curIdx - 1];
-    if (tVal <= prevT) {
-      tVal = +(prevT + 0.05).toFixed(3);
+  $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : (fromIndex > 0 ? `${fromIndex + 1}行目からタップ同期します。Spaceキーまたはボタンを押してください。` : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。');
+  S.sourceOpen=false;S.settingsOpen=false;S.playheadMenu=null;closeTimelineCutMenu();syncSettingsDrawer();syncSourceDrawer();syncPlayheadMenu();
+  $('tapPanel').hidden = false; syncTapButtons();sizeViewport();drawTimeline();drawTimelineLinks();
+  if (S.tap.append && !S.audio) extendTapPreview(0);
+  const startSeekT = fromIndex > 0 && S.plan.lines[fromIndex - 1] ? Math.max(0, S.plan.lines[fromIndex - 1].start) : 0;
+  seek(startSeekT); updateTap();
+  const session=S.tap,deadline=performance.now()+3000;
+  const countdown=$('tapCountdown');countdown.hidden=false;
+  $('tapStop').focus();
+  const tick=()=>{
+    if(S.tap!==session)return;
+    const remaining=Math.ceil((deadline-performance.now())/1000);
+    if(remaining<=0){
+      session.countingDown=false;countdown.hidden=true;syncTapButtons();
+      seek(startSeekT);play();$('tapBtn').focus();return;
     }
-  }
-
-  // 1つ戻る (tapBack) 用の履歴記録
-  const oldCutTimes = S.project.timing.cutTimes ? [...S.project.timing.cutTimes] : null;
-  S.tap.done.push({ i: curIdx, had: LT[curIdx], oldCutTimes });
-
-  // 該当行のカット境界を確実にクリアして新タイミングで再導出
-  if (S.project.timing.cutTimes && Array.isArray(S.project.timing.cutTimes)) {
-    S.project.timing.cutTimes = S.project.timing.cutTimes.filter(c => c.line !== curIdx);
-  }
-
-  LT[curIdx] = tVal;
-  // later lines tapped earlier (a previous pass) must not come before this one
-  for (const k of Object.keys(LT)) if (+k > curIdx && LT[k] <= tVal + 0.2) delete LT[k];
-
-  S.tap.i++;
-  replan();
-
-  if (S.tap.i >= S.plan.lines.length) {
-    stopTap();
-    toast('全行のタップ同期が完了しました');
-  } else {
-    updateTap();
-  }
+    countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
+    session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));
+  };
+  tick();sizeViewport();
 }
-
-function tapBack() {                    // 1つ戻る: undo the last tap and jump back a little
-  if (!S.tap || !S.tap.done.length) return;
-  const d = S.tap.done.pop(), LT = S.project.timing.lineTimes;
-  if (d.had != null) LT[d.i] = d.had; else delete LT[d.i];
-  if (d.oldCutTimes) S.project.timing.cutTimes = d.oldCutTimes;
-  S.tap.i = d.i; replan(); updateTap();
-  seek(Math.max(0, S.t - 3)); if (!S.playing) play();
-}
-
-function stopTap() {
-  if (S.tap) {
-    commit('タップ同期');
-  }
-  S.tap = null;
-  $('tapPanel').hidden = true;
-  $('btnTap').setAttribute('aria-pressed', 'false');
-  replan();
-}
-
-function updateTap() {
-  if (!S.tap) return;
-  const ln = S.plan.lines[S.tap.i];
-  const total = S.plan.lines.length;
-  $('tapLine').textContent = ln ? `${S.tap.i + 1}/${total}. ${ln.text}` : '—';
-}
-window.startTap = startTap;
-window.tapNow = tapNow;
-window.stopTap = stopTap;
-
-function syncBgMediaUI() {
-  const bg = S.project.bgMedia || {};
-  if ($('bgFit')) $('bgFit').value = bg.fit || 'cover';
-  if ($('bgScale')) $('bgScale').value = bg.scale !== undefined ? bg.scale : 1.0;
-  if ($('bgX')) $('bgX').value = bg.x || 0;
-  if ($('bgY')) $('bgY').value = bg.y || 0;
-  if ($('bgOpacity')) $('bgOpacity').value = bg.opacity !== undefined ? bg.opacity : 1.0;
-  if ($('textBlendMode')) $('textBlendMode').value = bg.textBlendMode || 'normal';
-  if ($('bgBlendMode')) $('bgBlendMode').value = bg.bgBlendMode || 'normal';
-  const infoEl = $('bgMediaInfo');
-  if (infoEl) {
-    if (bg.type && bg.name) infoEl.textContent = `${bg.type === 'video' ? '動画' : '画像'}: ${bg.name}`;
-    else if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.element) infoEl.textContent = `${J.bgMedia.type === 'video' ? '動画' : '画像'}: 読み込み済み`;
-    else infoEl.textContent = '未選択';
-  }
-}
-
-/* ---------------- block inspector ---------------- */
-function syncBlockInspector() {
-  const bar = $('blockInspectorBar');
-  const btnDel = $('btnDelBlock');
-  if (!bar) return;
-  const sel = S.selectedBlock;
-  if (!sel || !sel.block) {
-    bar.hidden = true;
-    if (btnDel) btnDel.disabled = true;
+function tapNow() {
+  if (!S.tap || S.tap.countingDown) return;
+  if (S.tap.append) {
+    const i = S.tap.i;
+    const m = S.project[S.tap.layer];
+    if(!S.tap.nextItem)return;
+    if (i === 0) {
+      m.timing.lineTimes = {}; m.cutOverrides = {}; m.manualCuts = true;
+      const prefix=S.tap.layer==='foreground'?'f:':'m:';
+      S.project.timelineLinks=S.project.timelineLinks.filter(link=>!link.a.startsWith(prefix)&&!link.b.startsWith(prefix));
+    }
+    m.cutCount = i + 1;
+    m.cutOverrides[i] = { itemId: S.tap.nextItem.id, technique: null };
+    if(S.tap.nextItem.file)S.tap.fileIndex++;
+    delete S.tap.nextItem;
+    m.timing.lineTimes[i] = +S.t.toFixed(3);
+    S.tap.i++;
+    replan();
+    if (S.tap.i >= 1000) { pause(); stopTap(); toast('カット数の上限に達しました'); }
+    else updateTap();
     return;
   }
-  bar.hidden = false;
-  if (btnDel) btnDel.disabled = false;
-  const b = sel.block;
-  if ($('selBlockLabel')) $('selBlockLabel').textContent = `${sel.track === 'images' ? '画像' : '動画'}: ${b.name || '無題'}`;
-
-  // 現在時刻 S.t における補間値を取得
-  const curTrans = (typeof J !== 'undefined' && J.getBlockTransform)
-    ? J.getBlockTransform(b, S.t)
-    : { x: b.x || 0, y: b.y || 0, scale: b.scale != null ? b.scale : 1.0, opacity: b.opacity != null ? b.opacity : 1.0 };
-
-  // ユーザーが入力フィールドを編集中でなければ入力欄を更新
-  const active = document.activeElement;
-  const inInspector = bar.contains(active);
-  if (!inInspector) {
-    if ($('selBlockX')) $('selBlockX').value = Math.round(curTrans.x);
-    if ($('selBlockY')) $('selBlockY').value = Math.round(curTrans.y);
-    if ($('selBlockScale')) $('selBlockScale').value = parseFloat(curTrans.scale.toFixed(2));
-    if ($('selBlockOpacity')) $('selBlockOpacity').value = parseFloat(curTrans.opacity.toFixed(2));
+  const layer = S.tap.layer;
+  (layer ? S.project[layer].timing : S.project.timing).lineTimes[S.tap.i] = +S.t.toFixed(3);
+  S.tap.i++;
+  replan();
+  if (S.tap.i >= (layer ? S.plan[layer].cuts.length : S.plan.lines.length)) stopTap(); else updateTap();
+}
+function stopTap() { clearTimeout(S.tap?.timer); $('tapCountdown').hidden=true; S.tap = null; $('tapPanel').hidden = true; syncTapButtons(); replan(); }
+function syncTapButtons() {
+  $('tapBtn').disabled=!!S.tap?.countingDown;
+  if(!S.tap)$('tapCountdown').hidden=true;
+  for (const id of ['btnTap', 'btnTapMedia']) $(id).setAttribute('aria-pressed', String(!!S.tap));
+}
+function updateTap() {
+  if (S.tap.append) {
+    const m=S.project[S.tap.layer],order=J.mediaOrder(S.project,S.tap.layer);
+    if(!S.tap.nextItem){
+      const choices=J.mediaInsertChoices(S.project,S.tap.layer).filter(id=>id!=='files'||m.loop||S.tap.fileIndex<m.items.length);
+      if(!choices.length){pause();stopTap();return;}
+      const choice=choices[Math.floor(Math.random()*choices.length)];
+      S.tap.nextItem=choice==='files'
+        ? {id:m.items[S.tap.fileIndex % m.items.length].id,name:order[S.tap.fileIndex % order.length].name,file:true}
+        : J.mediaCopyItems(S.tap.layer).find(item=>item.id===choice);
+    }
+    $('tapLine').textContent = `${S.tap.i + 1}. ${S.tap.nextItem.name}`; return;
   }
-  if ($('selBlockBlend')) $('selBlockBlend').value = b.blendMode || 'normal';
-
-  // キーフレーム判定（現在時刻 S.t 近傍にキーフレームがあるか）
-  const curT = S.t;
-  const hasKey = b.keyframes && b.keyframes.some(k => Math.abs(k.t - curT) <= 0.05);
-  const btnAddKey = $('btnBlockAddKey');
-  const btnDelKey = $('btnBlockDelKey');
-  if (btnAddKey) {
-    btnAddKey.textContent = hasKey ? '◆更新' : '◆＋キー';
-    btnAddKey.classList.toggle('active', !!hasKey);
-    btnAddKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレーム値を更新` : `現在位置(${curT.toFixed(2)}s)にキーフレームを追加`;
-  }
-  if (btnDelKey) {
-    btnDelKey.disabled = !hasKey;
-    btnDelKey.title = hasKey ? `現在位置(${curT.toFixed(2)}s)のキーフレームを削除` : '現在位置にキーフレームがありません';
-  }
+  const ln = S.tap.layer ? S.plan[S.tap.layer].cuts[S.tap.i] : S.plan.lines[S.tap.i];
+  $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${S.tap.layer ? ln.name : ln.text}` : '—';
 }
 
-function deleteSelectedBlock() {
-  if (!S.selectedBlock || !S.selectedBlock.block) return;
-  remember();
-  const { track, block } = S.selectedBlock;
-  const list = S.project.tracks && S.project.tracks[track];
-  if (list) {
-    const idx = list.indexOf(block);
-    if (idx >= 0) list.splice(idx, 1);
+function shuffleMediaEffects(layers = ['media', 'foreground']) {
+  for (const layer of layers) for (const cut of S.plan[layer].cuts) {
+    const ov = mediaCutOptions(layer, cut.index);
+    if (!ov.lock && (ov.technique == null)) mediaOv(cut.index, { technique: null }, layer);
   }
-  S.selectedBlock = null;
-  syncBlockInspector();
-  replan();
-  drawTimeline();
-  commit();
-  flushSave();
-  toast('ブロックを削除しました');
+}
+const openMediaGroups = { foreground: new Set(), media: new Set() };
+function renderMediaEffects(layer) {
+  if (!layer) { for (const target of ['foreground', 'media']) renderMediaEffects(target); return; }
+  const box = $(layer + 'EffectsPanel'); if (!box) return;
+  const settings = J.mediaEffectSettings(S.project, layer), L = J.mediaLabel;
+  const layerNote = layer === 'foreground' ? L('前景の画像・動画に適用します。', 'Applies to foreground images and videos.') : L('背景の画像・動画に適用します。', 'Applies to background images and videos.');
+  const shuffleLabel = layer === 'foreground' ? L('前景をシャッフル', 'Shuffle foreground') : L('背景をシャッフル', 'Shuffle background');
+  const setting = key => box.querySelector(`[data-media-setting="${key}"]`);
+  const action = key => box.querySelector(`[data-media-action="${key}"]`);
+  box.innerHTML = `<p class="note">${layerNote} ${L('チェックした手法を「自動」とシャッフルで使用します。手動指定した手法とロック済みカットは維持されます。', 'Checked techniques are used by Auto and Shuffle. Explicit selections and locked cuts are preserved.')}</p><label class="check"><input data-media-setting="autoPlacement" type="checkbox" ${settings.autoPlacement !== false ? 'checked' : ''}><span>${L('配置・サイズにも自動で変化を付ける', 'Vary position and size automatically')}<small>${L('手動配置とロックは維持します。演出無しは中央に全体表示します。', 'Manual placement and locks are preserved. No effects keeps the centered full view.')}</small></span></label><div class="media-effect-sliders"></div><div class="row"><button type="button" data-media-action="shuffle">${shuffleLabel}</button><button type="button" data-media-action="enable">${L('全て有効', 'Enable all')}</button><button type="button" data-media-action="disable">${L('全て無効', 'Disable all')}</button></div>`;
+  const randomNote = document.createElement('p'); randomNote.className = 'note';
+  randomNote.textContent = L('「おまかせ」では前景・背景それぞれの手法チェックをランダムに設定します。', 'Randomize selects a random set of checked techniques independently for foreground and background.');
+  box.appendChild(randomNote);
+  const beatNote = document.createElement('p'); beatNote.className = 'note';
+  beatNote.textContent = L('登場・退場はカットごとに独立して設定できます（初期値：自動）。BPM同期は「曲・タイミング」のBPMを使用し、未設定時は120 BPMで動きます。', 'Set entrance and exit independently for each cut (default: Auto). BPM sync uses the BPM in Audio and timing, or 120 BPM when unset.');
+  box.appendChild(beatNote);
+  for (const [key, name, max, step] of [['motion', L('動きの強さ', 'Motion intensity'), 2, .05], ['treatment', L('加工の強さ', 'Treatment intensity'), 1, .05], ['duration', L('登場・退場時間', 'Entrance / exit (s)'), 1.5, .05]]) {
+    const row = document.createElement('label'); row.className = 'slider'; row.innerHTML = `<span>${name}</span><input data-media-setting="${key}" type="range" min="${key === 'duration' ? .05 : 0}" max="${max}" step="${step}" value="${settings[key]}"><output>${settings[key]}</output>`;
+    row.querySelector('input').addEventListener('input', e => { const next = J.mediaEffectSettings(S.project, layer); next[key] = +e.target.value; S.project[layer].effects = next; row.querySelector('output').textContent = e.target.value; markUndoGroup('mediaEffects:' + layer + ':' + key); replanSoon(100); }); box.querySelector('.media-effect-sliders').appendChild(row);
+  }
+  const groups = MEDIA_EFFECT_GROUPS;
+  for (const [group, name] of Object.entries(groups)) {
+    const items = Object.entries(J.MEDIA_TECH).filter(([, def]) => def.group === group);
+    const count = enabled => `${items.filter(([key]) => enabled[key] !== false).length}/${items.length}`;
+    const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = group;
+    section.open = openMediaGroups[layer].has(group);
+    section.addEventListener('toggle', () => {
+      if (!section.isConnected) return;
+      if (section.open) openMediaGroups[layer].add(group); else openMediaGroups[layer].delete(group);
+    });
+    section.innerHTML = `<summary><span class="tg-name">${name}</span><span class="tg-cnt mono">${count(settings.enabled)}</span></summary><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
+    const list = document.createElement('div'); list.className = 'checks';
+    for (const [key, def] of items) {
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${def.name}</span>`;
+      row.querySelector('input').addEventListener('change', e => {
+        const next = J.mediaEffectSettings(S.project, layer); next.enabled[key] = e.target.checked; S.project[layer].effects = next;
+        section.querySelector('.tg-cnt').textContent = count(next.enabled); replan();
+      }); row.appendChild(J.effectPreviewButton('media',key,layer)); list.appendChild(row);
+    }
+    section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
+      const next = J.mediaEffectSettings(S.project, layer), action = button.dataset.mediaGroupAction;
+      for (const [key] of items) next.enabled[key] = action === 'on' ? true : action === 'off' ? false : next.enabled[key] === false;
+      S.project[layer].effects = next; openMediaGroups[layer].add(group); renderMediaEffects(layer); replan();
+    }));
+    section.appendChild(list);
+    box.appendChild(section);
+  }
+  {
+    // Decorations for this layer, laid out like the technique groups; used when "Enable decorations" is on.
+    const items = J.order('decor').filter(key => J.DECOR[key]).map(key => [key, J.DECOR[key]]);
+    const count = s => `${items.filter(([key]) => J.mediaDecorOn(s, key)).length}/${items.length}`;
+    const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = 'decor';
+    section.open = openMediaGroups[layer].has('decor');
+    section.addEventListener('toggle', () => { if (!section.isConnected) return; if (section.open) openMediaGroups[layer].add('decor'); else openMediaGroups[layer].delete('decor'); });
+    section.innerHTML = `<summary><span class="tg-name">${L('装飾', 'Decoration')}</span><span class="tg-cnt mono">${count(settings)}</span></summary><p class="note">${L('「装飾を有効にする」がONのとき、チェックした装飾を「自動」の画像・動画で使います。背面の装飾は素材の下に描かれます。', 'With Enable decorations on, Auto images and videos use the checked decorations. Back decorations are drawn under the source.')}</p><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
+    const list = document.createElement('div'); list.className = 'checks';
+    for (const [key, def] of items) {
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
+      row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
+      row.querySelector('input').addEventListener('change', e => {
+        const next = J.mediaEffectSettings(S.project, layer); next.decorEnabled[key] = e.target.checked; S.project[layer].effects = next;
+        section.querySelector('.tg-cnt').textContent = count(next); replan();
+      }); row.appendChild(J.effectPreviewButton('decor', key)); list.appendChild(row);
+    }
+    section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
+      const next = J.mediaEffectSettings(S.project, layer), act = button.dataset.mediaGroupAction;
+      for (const [key] of items) next.decorEnabled[key] = act === 'on' ? true : act === 'off' ? false : !J.mediaDecorOn(next, key);
+      S.project[layer].effects = next; openMediaGroups[layer].add('decor'); renderMediaEffects(layer); replan();
+    }));
+    section.appendChild(list); box.appendChild(section);
+  }
+  setting('autoPlacement').onchange =e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
+  {
+    // Decorations (checked in this layer's Decoration group) on automatic media cuts; off by default.
+    const row = document.createElement('label'); row.className = 'check';
+    row.innerHTML = `<input type="checkbox" data-media-setting="decor" ${settings.decor ? 'checked' : ''}><span>${L('装飾を有効にする', 'Enable decorations')}<small>${L('「自動」の画像・動画に、下の「装飾」でチェックした装飾を付けます。', 'Adds the decorations checked below to Auto images and videos.')}</small></span>`;
+    row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.decor = e.target.checked; S.project[layer].effects = next; replan(); };
+    setting('autoPlacement').closest('label').before(row);
+  }
+  if (layer === 'media') {
+    const row = document.createElement('label'); row.className = 'check';
+    row.innerHTML = `<input type="checkbox" data-media-setting="applyLyricBackground" ${settings.applyLyricBackground !== false ? 'checked' : ''}><span>${L('歌詞の背景演出も適用', 'Apply lyric background effects')}</span>`;
+    row.querySelector('input').onchange = e => { const next = J.mediaEffectSettings(S.project, layer); next.applyLyricBackground = e.target.checked; S.project[layer].effects = next; replan(); };
+    box.prepend(row);
+  }
+  action('shuffle').onclick = () => { shuffleMediaEffects([layer]); S.project[layer].seed++; replan(); };
+  const all = value => { const next = J.mediaEffectSettings(S.project, layer); next.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(key => [key, value])); S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
+  action('enable').onclick = () => all(true); action('disable').onclick = () => all(false);
 }
 
 /* ---------------- sync all inputs from project ---------------- */
+function renderThemes() {
+  const ids = J.themeIds(S.project), ct = J.normalizeColorTheme(S.project.colorTheme);
+  $('themeLabels').innerHTML = ids.length ? ids.map(id=>`<span class="theme-label">${J.THEMES[id].name}</span>`).join('') : `<span class="muted">${J.mediaLabel('未選択：すべてのテーマ','Not selected: unrestricted')}</span>`;
+  if (J.colorThemeActive(S.project)) {
+    const chip = document.createElement('span'); chip.className = 'theme-label theme-color-label';
+    chip.textContent = J.mediaLabel('カラー：','Colour: ') + (ct.genre !== 'auto' ? J.COLOR_GENRES[ct.genre].name : '');
+    if (ct.color) { const dot = document.createElement('i'); dot.style.background = ct.color; dot.title = ct.color; chip.append(dot); }
+    $('themeLabels').append(chip);
+  }
+}
 function syncUI() {
-  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || '';
+  renderThemes();
+  $('songTitle').value = S.project.title || ''; $('songArtist').value = S.project.artist || ''; $('projectName').value = S.project.projectName || '';
   $('lyrics').value = S.project.lyrics;
   $('bpm').value = S.project.timing.bpm > 0 ? S.project.timing.bpm : '';
   $('bpm').placeholder = S.audio ? `自動 ${S.audio.bpm}` : 'なし';
   $('offset').value = S.project.timing.offset ?? 0.4;
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
-  document.querySelectorAll('.wa-toggle').forEach(el => { el.checked = S.project.wa !== false; });
-  document.querySelectorAll('.extra-toggle').forEach(el => { el.checked = S.project.extra === true; });
-  document.querySelectorAll('.unify-toggle').forEach(el => { el.checked = S.project.unify === true; });
-  document.querySelectorAll('.typeset-toggle').forEach(el => { el.checked = S.project.typeset === true; });
-  if ($('lyricLang') && J.LANG_LABEL) { $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; if (typeof langNote === 'function') langNote(); }
-  renderFontRoles(); renderColors(); renderFx(); renderTech(); syncOut(); syncBgMediaUI(); syncBlockInspector(); drawStyleGrid();
+  $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; langNote();
+  renderFontRoles(); renderColors(); renderFx(); renderTech(); renderMediaEffects(); syncOut(); drawStyleGrid();
 }
 
 /* ---------------- wiring ---------------- */
 function bind() {
-  let textCommitTimer = 0;
-  const commitTextSoon = (desc) => {
-    clearTimeout(textCommitTimer);
-    textCommitTimer = setTimeout(() => {
-      if (typeof UndoRedo !== 'undefined') UndoRedo.commit(desc);
-    }, 600);
-  };
-  $('lyrics').addEventListener('input', e => { S.project.lyrics = e.target.value; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replanSoon(260); commitTextSoon('歌詞編集'); });
-  $('lyrics').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('歌詞確定'); });
+  const storageWarning = document.createElement('p');
+  storageWarning.id = 'mediaStorageWarning'; storageWarning.hidden = true;
+  storageWarning.setAttribute('role', 'status');
+  storageWarning.style.cssText = 'flex:0 0 100%;margin:0;padding:8px 12px;border:1px solid var(--amber);color:var(--amber);font-size:12px;white-space:normal';
+  storageWarning.textContent = J.mediaLabel('ブラウザ内に素材を保存できないため、一時保存で編集中です。曲・素材は再読み込みで失われます。ページを閉じる前に素材入りプロジェクトを保存してください。', 'Browser storage is unavailable. Imported audio and media are kept only for this session and will be lost on reload. Save a project with assets before closing this page.');
+  document.querySelector('#app > .bar').appendChild(storageWarning);
+  window.addEventListener('jizura-media-storage', () => { storageWarning.hidden = !J.hasTemporaryMedia(); });
+  window.addEventListener('beforeunload', event => {
+    if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
+  });
+  const frameToggle=$('showItemFrames');
+  $('showItemFramesLabel').textContent=J.mediaLabel('アイテム枠表示','Show item frames');
+  try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
+  frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
+  $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
+
+  $('saveFilename').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('filenameDlg').querySelector('button[value="save"]').click();}});
+  const menus = [...document.querySelectorAll('.header-menu')];
+  menus.forEach(menu => {
+    menu.addEventListener('toggle', () => { if (menu.open) menus.forEach(other=>{if(other!==menu)other.open=false;}); });
+    menu.addEventListener('click', e => { if (e.target.closest('button')) menu.open=false; });
+  });
+  document.addEventListener('click', e => menus.forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
+  document.addEventListener('keydown', e => {if(e.key==='Escape')menus.forEach(menu=>{menu.open=false;});});
+  $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
+  $('fileProject').addEventListener('change',()=>{$('projectMenu').open=false;});
+  document.querySelectorAll('[data-export-dialog]').forEach(button=>button.addEventListener('click',()=>openExportDialog(button.dataset.exportDialog)));
+  $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
+  $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
+  $('exportDlg').addEventListener('close',restoreExportSettings);
+  $('btnThemes').addEventListener('click', () => {
+    const selected = new Set(J.themeIds(S.project));
+    $('themeChoices').innerHTML = ['genre','taste'].map(category => `<fieldset><legend>${J.mediaLabel(category === 'genre' ? '曲ジャンル' : 'テイスト',category === 'genre' ? 'Music genre' : 'Taste')}</legend>${Object.entries(J.THEMES).filter(([,t])=>t.category===category).map(([id,t])=>`<label class="check"><input type="checkbox" data-theme="${id}" ${selected.has(id)?'checked':''}><span>${t.name}<small>${t.description}</small></span></label>`).join('')}</fieldset>`).join('');
+    // Colour: a genre and one theme colour for random palettes, taking priority over the themes above.
+    const ct = J.normalizeColorTheme(S.project.colorTheme), L = J.mediaLabel, colors = document.createElement('fieldset'); colors.className = 'theme-colors';
+    colors.innerHTML = `<legend>${L('カラー','Colour')}</legend><p class="note">${L('ランダム配色（おまかせ・「配色」ボタン）に使います。曲ジャンル・テイストによる配色より優先されます。','Used by random palettes (Randomize and the Colours button), taking priority over music-genre and taste themes.')}</p><label class="theme-color-row"><span>${L('配色ジャンル','Colour genre')}</span><select id="colorGenre"></select></label><small id="colorGenreNote" class="muted"></small><label class="check"><input type="checkbox" id="colorThemeOn"><span>${L('テーマカラーを使う','Use a theme colour')}<small>${L('この色をアクセントにして、他の色を合わせます。','Uses this colour as the accent and matches the other colours to it.')}</small></span></label><label class="theme-color-row"><span>${L('テーマカラー','Theme colour')}</span><input type="color" id="colorThemeColor"></label>`;
+    const genre = colors.querySelector('#colorGenre');
+    for (const id of J.COLOR_GENRE_ORDER) genre.add(new Option(J.COLOR_GENRES[id].name, id));
+    genre.value = ct.genre;
+    const genreNote = () => { colors.querySelector('#colorGenreNote').textContent = J.COLOR_GENRES[genre.value].description; };
+    genre.addEventListener('change', genreNote); genreNote();
+    colors.querySelector('#colorThemeOn').checked = !!ct.color;
+    colors.querySelector('#colorThemeColor').value = (ct.color || '#FF4F8B').toLowerCase();
+    colors.querySelector('#colorThemeColor').addEventListener('input', () => { colors.querySelector('#colorThemeOn').checked = true; });
+    $('themeChoices').append(colors);
+    $('themesDlg').showModal();
+  });
+  $('btnApplyThemes').addEventListener('click', () => {
+    const before = JSON.stringify(J.normalizeColorTheme(S.project.colorTheme));
+    S.project.themes = [...$('themeChoices').querySelectorAll('input[data-theme]:checked')].map(el=>el.dataset.theme);
+    S.project.colorTheme = J.normalizeColorTheme({ genre: $('colorGenre').value, color: $('colorThemeOn').checked ? $('colorThemeColor').value : null });
+    // A changed colour theme is applied right away, so the choice shows immediately.
+    if (JSON.stringify(S.project.colorTheme) !== before && J.colorThemeActive(S.project)) {
+      remember(); S.project.colors = J.themedColors(S.project, S.project.style, Math.random); renderColors(); replan(); commit();
+    }
+    renderThemes(); autosave(); $('themesDlg').close();
+  });
+  $('btnClearThemes').addEventListener('click', () => { $('themeChoices').querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false); $('colorGenre').value = 'auto'; $('colorGenre').dispatchEvent(new Event('change')); });
+
+  $('lyricGroupAvoidanceStrength').addEventListener('input', e => {
+    S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), lyricAvoidanceStrength: +e.target.value };
+    $('lyricGroupAvoidanceStrengthValue').textContent = (+e.target.value).toFixed(2);
+    markUndoGroup('lyricGroupAvoidanceStrength'); replanSoon(100);
+  });
+  $('lyricAvoidanceStrength').addEventListener('input', e => {
+    S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), avoidanceStrength: +e.target.value };
+    $('lyricAvoidanceStrengthValue').textContent = (+e.target.value).toFixed(2);
+    markUndoGroup('lyricAvoidanceStrength'); replanSoon(100);
+  });
+  // The easy-mode switch has no separate automatic-placement toggle, so turning it on also enables placement.
+  for (const input of document.querySelectorAll('.avoid-center-toggle')) input.addEventListener('change', e => {
+    S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), avoidCenter: e.target.checked, ...(e.target.checked ? { autoPlacement: true } : {}) };
+    renderTech(); replan();
+  });
+  for (const [id, key] of [['lyricAutoPlacement', 'autoPlacement'], ['lyricAvoidForeground', 'avoidForeground'], ['lyricRandomBlend', 'randomBlend'], ['lyricRandomOpacity', 'randomOpacity']]) {
+    $(id).addEventListener('change', e => { S.project.lyricEffects = { ...J.lyricEffectSettings(S.project), [key]: e.target.checked }; renderTech(); replan(); });
+  }
+  for (const [id, key] of [['lyricOpacityMin', 'opacityMin'], ['lyricOpacityMax', 'opacityMax']]) {
+    $(id).addEventListener('change', e => {
+      const settings = J.lyricEffectSettings(S.project);
+      if (e.target.value !== '' && Number.isFinite(+e.target.value)) {
+        settings[key] = J.clamp(+e.target.value, 0, 100);
+        if (key === 'opacityMin') settings.opacityMax = Math.max(settings.opacityMin, settings.opacityMax);
+        else settings.opacityMin = Math.min(settings.opacityMin, settings.opacityMax);
+      }
+      S.project.lyricEffects = settings; renderTech(); replan();
+    });
+  }
+  for(const [id,layer] of [['insertLyricAtPlayhead','lyrics'],['insertForegroundAtPlayhead','foreground'],['insertBackgroundAtPlayhead','media']])$(id).addEventListener('click',()=>openInsertAtPlayhead(layer));
+  for(const layer of ['foreground','lyrics','media']){
+    const button=document.createElement('button');button.type='button';button.dataset.layer=layer;
+    button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="M3 3l18 18"/></svg>';
+    button.addEventListener('click',()=>{if(S.exporting)return;S.project.layerVisibility ||= {};S.project.layerVisibility[layer]=S.project.layerVisibility[layer]===false;replan();});
+    $('layerVisibilityControls').append(button);
+  }
+  $('splitForegroundCut').addEventListener('click',()=>openSplitMediaCut('foreground'));
+  $('splitBackgroundCut').addEventListener('click',()=>openSplitMediaCut('media'));
+  $('relayoutAtPlayhead').addEventListener('click',()=>{S.playheadMenu=null;relayoutAtPlayhead();syncPlayheadMenu();});
+  for(const [id,layer] of [['endForegroundHere','foreground'],['endLyricHere','lyrics'],['endBackgroundHere','media']])$(id).addEventListener('click',()=>playheadEnd(layer,false));
+  for(const [id,layer] of [['untilNextForeground','foreground'],['untilNextLyric','lyrics'],['untilNextBackground','media']])$(id).addEventListener('click',()=>playheadEnd(layer,true));
+  document.querySelector('.playhead-secondary').addEventListener('click',e=>{if(e.target.closest('[data-playhead-action]')){S.playheadMenu=null;syncPlayheadMenu();}});
+  initPlayheadMenu();
+  $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
+  $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
+  $('timelineZoomOut').disabled = true;
+  // A dedicated touch scrollbar leaves boundary dragging and seeking intact.
+  const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
+  panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
+  const pan=document.createElement('input');pan.type='range';pan.id='timelinePan';pan.min='0';pan.max='0';pan.value='0';pan.disabled=true;pan.setAttribute('aria-label',panLabel.textContent);panLabel.append(pan);
+  $('timelineScroll').closest('.timeline-with-visibility').after(panLabel);
+  pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
+  $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
+  for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
+  $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
+  $('sourceLyrics').addEventListener('click',()=>selectSourceDrawer('lyrics'));
+  $('sourceMedia').addEventListener('click',()=>selectSourceDrawer('media'));
+  $('sourceForeground').addEventListener('click',()=>selectSourceDrawer('foreground'));
+  $('closeSourceDrawer').addEventListener('click',()=>{S.sourceOpen=false;syncSourceDrawer();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.sourceOpen&&!document.querySelector('dialog[open]')){S.sourceOpen=false;syncSourceDrawer();}});
+  $('btnMediaFromLyrics').addEventListener('click', insertMediaFromLyrics);
+  $('mediaLyricInsertMode').addEventListener('change', e => {
+    const layer = activeMediaLayer(); if (!layer) return;
+    S.project[layer].lyricInsertMode = e.target.value;
+    syncSourceTab(); autosave();
+  });
+  $('mediaGroupLyrics').addEventListener('change', e => {
+    const layer = activeMediaLayer(); if (!layer) return;
+    S.project[layer].groupLyricsAsOneCut = e.target.checked;
+    syncSourceTab(); autosave();
+  });
+  const areaOverlay = $('areaEditOverlay');
+  areaOverlay.addEventListener('pointerdown', e => {
+    if (!S.areaEdit) return;
+    const handle = e.target.closest('[data-handle]'), mode = handle ? handle.dataset.handle : mediaHit(e);
+    if (!mode) return;
+    e.preventDefault(); areaOverlay.setPointerCapture(e.pointerId);
+    S.areaEdit.drag = { start: mediaPointer(e), previous: { ...S.areaEdit.draft }, previousAngle: S.areaEdit.angle, pointerAngle: mediaPointerAngle(e, S.areaEdit.draft), handle: mode };
+    areaOverlay.style.cursor = mode === 'rotate' ? 'var(--rotate-cursor)' : '';
+    $('areaEditRect').style.cursor = mode === 'rotate' ? 'var(--rotate-cursor)' : '';
+  });
+  areaOverlay.addEventListener('pointermove', e => {
+    if (!S.areaEdit) return;
+    if (S.areaEdit.drag) moveMediaDraft(e);
+    else {
+      const mode = mediaHit(e), cursor = mode === 'rotate' ? 'var(--rotate-cursor)' : mode === 'move' ? 'move' : 'default';
+      areaOverlay.style.cursor = cursor; $('areaEditRect').style.cursor = cursor;
+    }
+  });
+  areaOverlay.addEventListener('pointerup', e => {
+    if (!S.areaEdit) return;
+    S.areaEdit.drag = null; areaOverlay.style.cursor = ''; $('areaEditRect').style.cursor = '';
+  });
+  areaOverlay.addEventListener('pointercancel', () => { if (!S.areaEdit) return; if (S.areaEdit.drag) { S.areaEdit.draft = S.areaEdit.drag.previous; S.areaEdit.angle = S.areaEdit.drag.previousAngle; } S.areaEdit.drag = null; areaOverlay.style.cursor = ''; $('areaEditRect').style.cursor = ''; showAreaDraft(); });
+  $('mediaAreaAspectLock').addEventListener('change', e => { if (!S.areaEdit) return; S.areaEdit.lockAspect = e.target.checked; if (e.target.checked) S.areaEdit.ratio = S.areaEdit.draft.h / S.areaEdit.draft.w; showAreaDraft(); });
+  $('mediaAreaWidth').addEventListener('change', e => { if (!S.areaEdit) return; const w = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(w, S.areaEdit.lockAspect ? w * S.areaEdit.ratio : S.areaEdit.draft.h); });
+  $('mediaAreaHeight').addEventListener('change', e => { if (!S.areaEdit) return; const h = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(S.areaEdit.lockAspect ? h / S.areaEdit.ratio : S.areaEdit.draft.w, h); });
+  $('mediaAreaAngle').addEventListener('input', e => { if (!S.areaEdit || e.target.value === '') return; S.areaEdit.angle = J.clamp(+e.target.value || 0, -180, 180); showAreaDraft(); });
+  $('areaResetFull').addEventListener('click', () => { if (!S.areaEdit || S.areaEdit.kind !== 'lyric') return; S.areaEdit.autoDraft = null; S.areaEdit.draft = { x: 0, y: 0, w: 1, h: 1 }; S.areaEdit.ratio = 1; S.areaEdit.angle = 0; showAreaDraft(); });
+  $('areaResetAuto').addEventListener('click', () => {
+    const edit = S.areaEdit; if (!edit || edit.kind !== 'lyric') return;
+    const project = { ...S.project, overrides: { ...S.project.overrides, [edit.index]: { ...S.project.overrides[edit.index], area: undefined, lockedAreas: undefined } } };
+    const area = J.plan(project, audioLike()).cuts.find(c => c.line === edit.index && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1, angle: 0, lockAspect: true };
+    edit.draft = { ...area }; edit.ratio = area.h / area.w; edit.angle = area.angle; edit.lockAspect = area.lockAspect;
+    edit.autoDraft = JSON.stringify(J.lyricArea(area));
+    showAreaDraft();
+  });
+  $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
+  $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
+  $('areaCancel').addEventListener('click', cancelAreaEditor);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit) { e.preventDefault(); cancelAreaEditor(); } });
+  $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
+  const mediaPane = $('mediaPane');
+  const hasFiles = e => Array.from(e.dataTransfer && e.dataTransfer.types || []).includes('Files');
+  mediaPane.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; mediaPane.classList.add('media-drop-active'); });
+  mediaPane.addEventListener('dragleave', e => { if (!mediaPane.contains(e.relatedTarget)) mediaPane.classList.remove('media-drop-active'); });
+  mediaPane.addEventListener('drop', async e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); mediaPane.classList.remove('media-drop-active');
+    await addMediaFiles(Array.from(e.dataTransfer.files || []), activeMediaLayer() || 'media');
+  });
+  $('mediaRandom').addEventListener('change', e => { S.project[activeMediaLayer()].randomOrder = e.target.checked; replan(); });
+  $('mediaLoop').addEventListener('change', e => {
+    const m = S.project[activeMediaLayer()]; m.loop = e.target.checked;
+    if (e.target.checked && !m.cutCount) m.cutCount = Math.min(1000, m.items.length * 2);
+    replan();
+  });
+  $('lyricInputTools').addEventListener('click', e => {
+    const button=e.target.closest('[data-lyric-insert]'); if (!button) return;
+    const input=$('lyrics'), start=input.selectionStart, end=input.selectionEnd;
+    const selected=input.value.slice(start,end), kind=button.dataset.lyricInsert;
+    const pairs={cut:['/','/'],break:['\\n','\\n'],strong:['*','*'],soft:['~','~'],scene:['{','}'],separate:['{-','-}'],empty:['｜','｜']};
+    let [before,after]=pairs[kind], middle=selected;
+    if (kind==='empty') {
+      // Preserve the selected text's half/full-width spacing, but remove its glyphs.
+      const blank = selected ? [...selected].map(ch=>ch==='\n'?'\n':/[\u0000-\u007f\uff61-\uff9f]/.test(ch)?' ':'　').join('') : '　　　　';
+      before=start && input.value[start-1]!=='\n'?'\n':'';
+      middle=blank.split('\n').map(line=>'｜'+(line || '　　　　')+'｜').join('\n');
+      after='\n';
+    }
+    if (kind==='cut' || kind==='break') { if (!selected) after=''; }
+    if (kind==='scene' || kind==='separate') {
+      before=(start && input.value[start-1]!=='\n'?'\n':'')+before+'\n';
+      after='\n'+after+(end<input.value.length && input.value[end]!=='\n'?'\n':'');
+    }
+    // Commit pending typing first, then give every helper click its own undo step.
+    clearTimeout(replanTimer); recordUndoState(); markUndoGroup(null); U.lastGroup=null;
+    input.setRangeText(before+middle+after,start,end,'end');
+    reconcileLyricLines(S.project.lyrics,input.value);
+    S.project.lyrics=input.value;
+    replan();
+    input.focus();
+    const cursor=start+before.length+middle.length+after.length;
+    if (kind==='empty') input.setSelectionRange(cursor,cursor);
+    else input.setSelectionRange(start+before.length,start+before.length+middle.length);
+  });
+  $('lyrics').addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.code==='KeyZ' || e.code==='KeyY') {
+      e.preventDefault(); e.stopPropagation();
+      undoMove(e.code==='KeyY' || e.shiftKey ? 1 : -1);
+    }
+  });
+  $('lyrics').addEventListener('input', e => {
+    const changedCount = reconcileLyricLines(S.project.lyrics, e.target.value);
+    S.project.lyrics = e.target.value;
+    markUndoGroup('lyrics');
+    if (changedCount) { clearTimeout(replanTimer); replan(); }
+    else replanSoon(260);
+  });
   $('lyricLang').addEventListener('change', e => {
     remember();
     S.project.lang = e.target.value; replan(); renderFontRoles(); commit(); flushSave();
     const l = J.resolveLang(S.project);
     toast((S.project.lang === 'auto' ? '歌詞の言語：自動判定 → ' : '歌詞の言語：') + J.LANG_LABEL[l]);
   });
-  $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; replanSoon(300); commitTextSoon('タイトル編集'); });
-  $('songTitle').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('タイトル確定'); });
-  $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; replanSoon(300); commitTextSoon('アーティスト編集'); });
-  $('songArtist').addEventListener('blur', () => { clearTimeout(textCommitTimer); if (typeof UndoRedo !== 'undefined') UndoRedo.commit('アーティスト確定'); });
+  $('songTitle').addEventListener('input', e => { S.project.title = e.target.value; markUndoGroup('title'); replanSoon(300); });
+  $('songArtist').addEventListener('input', e => { S.project.artist = e.target.value; markUndoGroup('artist'); replanSoon(300); });
+  $('projectName').addEventListener('input', e => { S.project.projectName = e.target.value; markUndoGroup('projectName'); replanSoon(300); });
+  $('saveFilename').addEventListener('input', syncFilenamePreview);
+  $('saveFilenameDate').addEventListener('change', syncFilenamePreview);
   $('btnSyntax').addEventListener('click', e => { const s = $('syntax'); s.hidden = !s.hidden; e.target.setAttribute('aria-expanded', String(!s.hidden)); });
   $('bpm').addEventListener('change', e => { S.project.timing.bpm = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
   $('offset').addEventListener('change', e => { S.project.timing.offset = Math.max(0, parseFloat(e.target.value) || 0); replan(); });
   $('lineScale').addEventListener('change', e => { S.project.timing.lineScale = J.clamp(parseFloat(e.target.value) || 1, 0.3, 4); replan(); });
   $('snap').addEventListener('change', e => { S.project.timing.snap = e.target.checked; replan(); });
-  $('btnResetTimes').addEventListener('click', () => { S.project.timing.lineTimes = {}; replan(); });
-  $('audioFile').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadAudioFile(f); });
+  $('btnResetTimes').addEventListener('click', () => { const layer = activeMediaLayer(), timing = layer ? S.project[layer].timing : S.project.timing; timing.lineTimes = {}; if (!layer) timing.cutTimes = {}; replan(); });
+  $('audioFile').addEventListener('change', e => { const f = e.target.files?.[0];e.target.value='';if (f) openAudioImport(f); });
+  $('btnRemoveAudio').addEventListener('click', removeAudio);
   $('btnTap').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
+  $('btnTapMedia').addEventListener('click', () => (S.tap ? stopTap() : startTap()));
   $('tapBtn').addEventListener('click', tapNow);
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
-  if ($('tapFromStart')) $('tapFromStart').addEventListener('click', () => startTap(0));
+  $('effectFavorites').textContent=J.mediaLabel('☆お気に入り演出','☆ Favorite effects');
+  $('effectFavorites').onclick=()=>openEffectFavorites();
+  $('previewFullscreen').addEventListener('click',async()=>{
+    try { await $('viewport').requestFullscreen(); }
+    catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }
+  });
+  const exitPreviewFullscreen=()=>{
+    if(document.fullscreenElement)document.exitFullscreen();
+    $('viewport').classList.remove('preview-fullscreen');document.body.classList.remove('preview-fullscreen-open');sizeViewport();
+  };
+  $('exitPreviewFullscreen').addEventListener('click',exitPreviewFullscreen);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('viewport').classList.contains('preview-fullscreen'))exitPreviewFullscreen();});
+  document.addEventListener('fullscreenchange',()=>{sizeViewport();S.need=true;});
+  $('fullscreenPlay').addEventListener('click',()=>{S.playing?pause():play();updateTimeUI();});
+  const fullscreenScrub=$('fullscreenScrub');
+  fullscreenScrub.addEventListener('input',()=>{S.scrubbing=true;seek(fullscreenScrub.value/10000*S.plan.duration);updateTimeUI();});
+  fullscreenScrub.addEventListener('change',()=>{S.scrubbing=false;updateTimeUI();});
+  document.addEventListener('fullscreenchange',()=>{S.scrubbing=false;updateTimeUI();});
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
+  $('btnUndo').addEventListener('click', () => undoMove(-1));
+  $('btnRedo').addEventListener('click', () => undoMove(1));
   $('btnLoop').addEventListener('click', e => { S.loop = !S.loop; e.target.setAttribute('aria-pressed', String(S.loop)); });
-  $('btnShuffle').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit(); });
+  $('btnShuffle').addEventListener('click', () => { remember(); J.clearPastedLyricEffects(S.project); shuffleMediaEffects(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); commit(); });
   const sc = $('scrub');
   sc.addEventListener('input', () => { S.scrubbing = true; seek(sc.value / 10000 * S.plan.duration); });
   sc.addEventListener('change', () => { S.scrubbing = false; });
-  const tl = $('timeline');
-  let dragMode = null;
-  let dragData = null;
-
-  tl.addEventListener('pointerdown', e => {
-    if (!S.plan) return;
-    const r = tl.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const px = (e.clientX - r.left) * dpr;
-    const py = (e.clientY - r.top) * dpr;
-    const w = tl.width || (tl.clientWidth * dpr);
-    const h = tl.height || (tl.clientHeight * dpr);
-    const hit = hitTestTimeline(px, py, w, h, dpr);
-    try { tl.setPointerCapture(e.pointerId); } catch (_) {}
-
-    if (e.shiftKey || e.button === 1) {
-      dragMode = 'pan';
-      dragData = { startX: px, startScroll: S.timelineScroll };
-      return;
-    }
-
-    if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
-      remember();
-      dragMode = hit.type;
-      if (hit.target === 'cut') {
-        S.selectedBlock = null;
-        syncBlockInspector();
-        const c = hit.cut;
-        seek(c.start);
-        focusLineInList(c.line);
-        dragData = {
-          target: 'cut',
-          cutIndex: hit.index,
-          cut: c,
-          startX: px,
-          origStart: c.start,
-          origEnd: c.end,
-          origDur: c.end - c.start,
-          lineIdx: c.line
-        };
-      } else {
-        S.selectedBlock = { track: hit.track, block: hit.block, index: hit.index };
-        syncBlockInspector();
-        const b = hit.block;
-        dragData = {
-          target: 'block',
-          track: hit.track,
-          block: b,
-          startX: px,
-          origStart: b.start,
-          origEnd: b.end,
-          origDur: b.end - b.start
-        };
-      }
-      tl.style.cursor = 'ew-resize';
-      S.tlDrag = dragData;
-      drawTimeline();
-    } else if (hit && hit.type === 'move') {
-      remember();
-      dragMode = 'move';
-      if (hit.target === 'cut') {
-        S.selectedBlock = null;
-        syncBlockInspector();
-        const c = hit.cut;
-        seek(c.start);
-        focusLineInList(c.line);
-        dragData = {
-          target: 'cut',
-          cutIndex: hit.index,
-          cut: c,
-          startX: px,
-          origStart: c.start,
-          origEnd: c.end,
-          origDur: c.end - c.start,
-          lineIdx: c.line,
-          startTime: tlTimeFromPx(px, w),
-          isDeleting: false,
-          swapCandidate: null
-        };
-      } else {
-        S.selectedBlock = { track: hit.track, block: hit.block, index: hit.index };
-        syncBlockInspector();
-        const b = hit.block;
-        dragData = {
-          target: 'block',
-          track: hit.track,
-          block: b,
-          startX: px,
-          origStart: b.start,
-          origEnd: b.end,
-          origDur: b.end - b.start,
-          startTime: tlTimeFromPx(px, w),
-          isDeleting: false,
-          swapCandidate: null
-        };
-      }
-      tl.style.cursor = 'grabbing';
-      S.tlDrag = dragData;
-      drawTimeline();
-    } else {
-      dragMode = 'seek';
-      S.selectedBlock = null;
-      syncBlockInspector();
-      drawTimeline();
-      timelineSeek(e);
-    }
+  const durationValue = $('timeDur'), durationInput = $('timeDurInput'), durationHandle = $('timelineDurationHandle');
+  const closeDurationInput = save => {
+    if (durationInput.hidden) return;
+    const raw = durationInput.value.trim();
+    durationInput.hidden = true; durationValue.hidden = false;
+    if (save) setProjectDuration(raw ? parseProjectDuration(raw) : null);
+    updateTimeUI();
+  };
+  durationValue.addEventListener('click', () => {
+    if (S.exporting || S.tap) return;
+    pause(); durationValue.hidden = true; durationInput.hidden = false;
+    durationInput.value = J.fmtTime(S.plan.duration); durationInput.focus(); durationInput.select();
   });
-
-  tl.addEventListener('pointermove', e => {
-    const r = tl.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const px = (e.clientX - r.left) * dpr;
-    const py = (e.clientY - r.top) * dpr;
-    const w = tl.width || (tl.clientWidth * dpr);
-    const h = tl.height || (tl.clientHeight * dpr);
-
-    if (!dragMode) {
-      const hit = hitTestTimeline(px, py, w, h, dpr);
-      if (hit && (hit.type === 'trim-start' || hit.type === 'trim-end')) {
-        tl.style.cursor = 'ew-resize';
-      } else if (hit && hit.type === 'move') {
-        tl.style.cursor = 'grab';
-      } else {
-        tl.style.cursor = 'crosshair';
-      }
-      return;
-    }
-
-    if (dragMode === 'pan') {
-      const vis = tlVisSec();
-      const dxTime = ((px - dragData.startX) / w) * vis;
-      S.timelineScroll = Math.max(0, Math.min(dragData.startScroll - dxTime, Math.max(0, S.plan.duration - vis)));
-      drawTimeline();
-      return;
-    }
-
-    if (dragMode === 'seek') {
-      timelineSeek(e);
-      return;
-    }
-
-    // 上外へドラッグ判定（タイムラインキャンバスの上枠より上）
-    const isAbove = py < -8 * dpr;
-    if (dragMode === 'move') {
-      if (isAbove) {
-        dragData.isDeleting = true;
-        dragData.swapCandidate = null;
-        tl.style.cursor = 'no-drop';
-        S.tlDrag = dragData;
-        drawTimeline();
-        return;
-      } else {
-        if (dragData.isDeleting) {
-          dragData.isDeleting = false;
-          tl.style.cursor = 'grabbing';
-        }
-      }
-    }
-
-    const curTime = tlTimeFromPx(px, w);
-
-    if (dragData.target === 'cut') {
-      const c = dragData.cut;
-      const idx = dragData.cutIndex;
-      const cuts = S.plan.cuts;
-      const minDur = 0.08;
-
-      if (dragMode === 'trim-start') {
-        const prevCut = idx > 0 ? cuts[idx - 1] : null;
-        const isSameLine = prevCut && prevCut.line === c.line;
-
-        let minT = 0;
-        if (isSameLine) {
-          minT = prevCut.start + minDur;
-        } else if (prevCut) {
-          minT = prevCut.end + 0.04;
-        }
-        let maxT = dragData.origEnd - minDur;
-        let newT = Math.max(minT, Math.min(curTime, maxT));
-
-        c.start = newT;
-        c.dur = Math.max(minDur, c.end - c.start);
-
-        if (isSameLine) {
-          prevCut.end = newT;
-          prevCut.dur = Math.max(minDur, prevCut.end - prevCut.start);
-        } else {
-          if (c.line >= 0) {
-            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-            S.project.timing.lineTimes[c.line] = c.start;
-            if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
-          }
-        }
-        seek(c.start);
-        drawTimeline();
-      } else if (dragMode === 'trim-end') {
-        const nextCut = idx < cuts.length - 1 ? cuts[idx + 1] : null;
-        const isSameLine = nextCut && nextCut.line === c.line;
-
-        let minT = dragData.origStart + minDur;
-        let maxT = S.plan.duration;
-        if (isSameLine) {
-          maxT = nextCut.end - minDur;
-        } else if (nextCut) {
-          maxT = Math.max(minT, nextCut.start - 0.04);
-        }
-        let newT = Math.max(minT, Math.min(curTime, maxT));
-
-        c.end = newT;
-        c.dur = Math.max(minDur, c.end - c.start);
-
-        if (isSameLine) {
-          nextCut.start = newT;
-          nextCut.dur = Math.max(minDur, nextCut.end - nextCut.start);
-        }
-        seek(c.end);
-        drawTimeline();
-      } else if (dragMode === 'move') {
-        // 他のカットとのスワップ判定
-        let swapCut = null, swapIdx = -1;
-        for (let i = 0; i < S.plan.cuts.length; i++) {
-          if (i === dragData.cutIndex) continue;
-          const other = S.plan.cuts[i];
-          if (curTime >= other.start && curTime <= other.end) {
-            swapCut = other;
-            swapIdx = i;
-            break;
-          }
-        }
-        if (swapIdx >= 0) {
-          dragData.swapCandidate = { type: 'cut', index: swapIdx, cut: swapCut };
-        } else {
-          dragData.swapCandidate = null;
-          // 通常の平行移動
-          const delta = curTime - dragData.startTime;
-          let ns = dragData.origStart + delta;
-          let ne = dragData.origEnd + delta;
-          if (ns < 0) { ne -= ns; ns = 0; }
-          if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
-          c.start = Math.max(0, ns);
-          c.end = Math.max(c.start + 0.1, ne);
-          c.dur = c.end - c.start;
-          if (c.line >= 0) {
-            if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-            const lnCuts = S.plan.cuts.filter(x => x.line === c.line);
-            if (lnCuts.length && lnCuts[0] === c) {
-              S.project.timing.lineTimes[c.line] = c.start;
-              if (S.plan.lines[c.line]) S.plan.lines[c.line].start = c.start;
-            }
-          }
-          seek(c.start);
-        }
-        S.tlDrag = dragData;
-        drawTimeline();
-      }
-    } else if (dragData.target === 'block') {
-      const b = dragData.block;
-      if (dragMode === 'trim-start') {
-        let ns = Math.max(0, Math.min(curTime, dragData.origEnd - 0.1));
-        b.start = ns;
-        seek(b.start);
-        drawTimeline();
-      } else if (dragMode === 'trim-end') {
-        let ne = Math.min(S.plan.duration, Math.max(curTime, dragData.origStart + 0.1));
-        b.end = ne;
-        seek(b.end);
-        drawTimeline();
-      } else if (dragMode === 'move') {
-        // 同トラック内の他ブロックとのスワップ判定
-        const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
-        let swapBlock = null, swapIdx = -1;
-        for (let i = 0; i < blocks.length; i++) {
-          if (i === dragData.index) continue;
-          const other = blocks[i];
-          if (curTime >= other.start && curTime <= other.end) {
-            swapBlock = other;
-            swapIdx = i;
-            break;
-          }
-        }
-        if (swapIdx >= 0) {
-          dragData.swapCandidate = { type: 'block', index: swapIdx, block: swapBlock };
-        } else {
-          dragData.swapCandidate = null;
-          const delta = curTime - dragData.startTime;
-          let ns = dragData.origStart + delta;
-          let ne = dragData.origEnd + delta;
-          if (ns < 0) { ne -= ns; ns = 0; }
-          if (ne > S.plan.duration) { ns -= (ne - S.plan.duration); ne = S.plan.duration; }
-          b.start = Math.max(0, ns);
-          b.end = Math.max(b.start + 0.1, ne);
-          seek(b.start);
-        }
-        S.tlDrag = dragData;
-        drawTimeline();
-      }
-    }
+  durationInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); closeDurationInput(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeDurationInput(false); }
   });
-
-  function deleteCutSafe(idx) {
-    const cuts = S.plan.cuts;
-    if (idx < 0 || idx >= cuts.length) return false;
-    const cut = cuts[idx];
-
-    // 同一行内のカット一覧
-    const sameLineCuts = cuts.filter(c => c.line === cut.line);
-
-    // その行にカットが1つしか残っていない（最後の1カット）場合は誤削除を安全にブロック
-    if (sameLineCuts.length <= 1) {
-      toast(cut.line === -1 ? 'タイトルカードは削除できません' : '行の最後の演出は削除できません（行を削除したい場合は歌詞を編集してください）');
-      return false;
-    }
-
-    remember();
-
-    // 同一行内の直前カット（prevInLine）と直後カット（nextInLine）を検索
-    const prevInLine = cuts.slice(0, idx).reverse().find(c => c.line === cut.line);
-    const nextInLine = cuts.slice(idx + 1).find(c => c.line === cut.line);
-
-    if (prevInLine) {
-      prevInLine.end = cut.end;
-      prevInLine.dur = prevInLine.end - prevInLine.start;
-      if (cut.text && !prevInLine.text.includes(cut.text)) {
-        prevInLine.text = (prevInLine.text + ' ' + cut.text).trim();
-      }
-    } else if (nextInLine) {
-      nextInLine.start = cut.start;
-      nextInLine.dur = nextInLine.end - nextInLine.start;
-      if (cut.text && !nextInLine.text.includes(cut.text)) {
-        nextInLine.text = (cut.text + ' ' + nextInLine.text).trim();
-      }
-      if (cut.line >= 0) {
-        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-        S.project.timing.lineTimes[cut.line] = nextInLine.start;
-      }
-    }
-
-    // 2. タイムラインカット配列から対象カットを削除（※ 歌詞テキスト lyrics には一切触れない！）
-    cuts.splice(idx, 1);
-
-    // 3. タイトルカード削除時の特別処理
-    if (cut.line === -1 && S.plan.titleLine) {
-      S.plan.titleLine.cut = prevInLine || nextInLine || null;
-    }
-
-    // 4. 残存カットリストを永続データとして記録
-    if (!S.project.timing) S.project.timing = {};
-    S.project.timing.cutTimes = cuts.map(c => ({
-      start: +c.start.toFixed(3),
-      end: +c.end.toFixed(3),
-      line: c.line,
-      text: c.text
-    }));
-
-    // 5. 該当行のrowCache整合（カット数が減ったため安全に再抽選）
-    if (S.project.rowCache && S.project.rowCache[cut.line]) {
-      delete S.project.rowCache[cut.line];
-    }
-
-    replan();
-    commit('カット削除');
-    flushSave();
-    drawTimeline();
-    toast('演出を1つ削除し、行内の演出で尺とテキストを補間しました');
-    return true;
-  }
-  window.deleteCutSafe = deleteCutSafe;
-
-  tl.addEventListener('pointerup', () => {
-    if (dragMode && dragMode !== 'pan' && dragMode !== 'seek' && dragData) {
-      if (dragData.isDeleting) {
-        if (dragData.target === 'cut') {
-          deleteCutSafe(dragData.cutIndex);
-          dragMode = null;
-          dragData = null;
-          S.tlDrag = null;
-          tl.style.cursor = 'default';
-          return;
-        } else if (dragData.target === 'block') {
-          const trackName = dragData.track;
-          const blocks = (S.project && S.project.tracks && S.project.tracks[trackName]) || [];
-          const idx = dragData.index;
-          if (idx >= 0 && idx < blocks.length) {
-            const removed = blocks[idx];
-            if (idx > 0) {
-              blocks[idx - 1].end = removed.end;
-            } else if (blocks.length > 1) {
-              blocks[1].start = removed.start;
-            }
-            blocks.splice(idx, 1);
-            S.selectedBlock = null;
-            toast('ブロックを削除し、前の要素で尺を補間しました');
-          }
-        }
-      } else if (dragData.swapCandidate) {
-        remember();
-        if (dragData.target === 'cut' && dragData.swapCandidate.type === 'cut') {
-          const idxA = dragData.cutIndex;
-          const idxB = dragData.swapCandidate.index;
-          const cA = S.plan.cuts[idxA];
-          const cB = S.plan.cuts[idxB];
-          const rawLines = S.project.lyrics.split('\n');
-
-          if (cA.line >= 0 && cB.line >= 0 && cA.line !== cB.line) {
-            // 異なる歌詞行同士のスワップ
-            if (rawLines[cA.line] !== undefined && rawLines[cB.line] !== undefined) {
-              const tmp = rawLines[cA.line];
-              rawLines[cA.line] = rawLines[cB.line];
-              rawLines[cB.line] = tmp;
-              S.project.lyrics = rawLines.join('\n');
-              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
-
-              if (S.project.overrides) {
-                const ovA = S.project.overrides[cA.line];
-                const ovB = S.project.overrides[cB.line];
-                if (ovB) S.project.overrides[cA.line] = ovB; else delete S.project.overrides[cA.line];
-                if (ovA) S.project.overrides[cB.line] = ovA; else delete S.project.overrides[cB.line];
-              }
-              if (S.project.rowCache) {
-                const rcA = S.project.rowCache[cA.line];
-                const rcB = S.project.rowCache[cB.line];
-                if (rcB) S.project.rowCache[cA.line] = rcB; else delete S.project.rowCache[cA.line];
-                if (rcA) S.project.rowCache[cB.line] = rcA; else delete S.project.rowCache[cB.line];
-              }
-            }
-          } else if (cA.line >= 0 && cB.line >= 0 && cA.line === cB.line) {
-            // 同一行内のカット（フレーズ）同士のスワップ
-            const curL = rawLines[cA.line];
-            if (curL && curL.includes('/')) {
-              const parts = curL.split('/').map(p => p.trim()).filter(Boolean);
-              const pIdxA = parts.findIndex(p => p.includes(cA.text) || cA.text.includes(p));
-              const pIdxB = parts.findIndex(p => p.includes(cB.text) || cB.text.includes(p));
-              if (pIdxA >= 0 && pIdxB >= 0 && pIdxA !== pIdxB) {
-                const t = parts[pIdxA];
-                parts[pIdxA] = parts[pIdxB];
-                parts[pIdxB] = t;
-                rawLines[cA.line] = parts.join('/');
-                S.project.lyrics = rawLines.join('\n');
-                if ($('lyrics')) $('lyrics').value = S.project.lyrics;
-              }
-            }
-          } else if ((cA.line === -1 || cB.line === -1) && cA.line !== cB.line) {
-            // タイトルカードと歌詞行のスワップ
-            const lIdx = cA.line === -1 ? cB.line : cA.line;
-            if (rawLines[lIdx] !== undefined) {
-              const oldTitle = S.project.title || '';
-              const oldLyric = rawLines[lIdx];
-              S.project.title = oldLyric;
-              rawLines[lIdx] = oldTitle;
-              S.project.lyrics = rawLines.join('\n');
-              if ($('songTitle')) $('songTitle').value = S.project.title;
-              if ($('lyrics')) $('lyrics').value = S.project.lyrics;
-              if (S.project.rowCache) {
-                const rcTitle = S.project.rowCache[-1];
-                const rcLyric = S.project.rowCache[lIdx];
-                if (rcLyric) S.project.rowCache[-1] = rcLyric; else delete S.project.rowCache[-1];
-                if (rcTitle) S.project.rowCache[lIdx] = rcTitle; else delete S.project.rowCache[lIdx];
-              }
-            }
-          } else {
-            const props = ['text', 'layout', 'enter', 'exit', 'hold', 'decor', 'treat', 'cam', 'scheme', 'seed'];
-            for (const p of props) {
-              const t = cA[p];
-              cA[p] = cB[p];
-              cB[p] = t;
-            }
-          }
-          toast('カットを入れ替えました');
-        } else if (dragData.target === 'block' && dragData.swapCandidate.type === 'block') {
-          const blocks = (S.project && S.project.tracks && S.project.tracks[dragData.track]) || [];
-          const bA = blocks[dragData.index];
-          const bB = blocks[dragData.swapCandidate.index];
-          const keys = ['dataUrl', 'name', 'type', 'blendMode', 'fit', 'opacity', 'scale', 'x', 'y', 'keyframes'];
-          for (const k of keys) {
-            const t = bA[k];
-            bA[k] = bB[k];
-            bB[k] = t;
-          }
-          toast('ブロックを入れ替えました');
-        }
-      }
-
-      if (dragData.target === 'cut') {
-        S.project.timing.cutTimes = S.plan.cuts.map(c => ({
-          start: +c.start.toFixed(3),
-          end: +c.end.toFixed(3),
-          line: c.line,
-          text: c.text
-        }));
-        if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-        if (S.plan.lines) {
-          S.plan.lines.forEach(ln => {
-            const lnCuts = S.plan.cuts.filter(c => c.line === ln.index);
-            if (lnCuts.length) {
-              S.project.timing.lineTimes[ln.index] = lnCuts[0].start;
-            }
-          });
-        }
-        renderLines();
-      }
-
-      let actDesc = 'タイムライン操作';
-      if (dragData.isDeleting) actDesc = dragData.target === 'cut' ? 'カット削除' : 'ブロック削除';
-      else if (dragData.swapCandidate) actDesc = dragData.target === 'cut' ? 'カット入れ替え' : 'ブロック入れ替え';
-      else if (dragMode === 'trim-start' || dragMode === 'trim-end') actDesc = dragData.target === 'cut' ? 'カット境界調整' : 'ブロックトリミング';
-      else if (dragMode === 'move') actDesc = dragData.target === 'cut' ? 'カット移動' : 'ブロック移動';
-
-      replan();
-      commit(actDesc);
-      flushSave();
-    }
-    dragMode = null;
-    dragData = null;
-    S.tlDrag = null;
-    tl.style.cursor = 'default';
-    drawTimeline();
-  });
-
-  tl.addEventListener('wheel', e => {
+  durationInput.addEventListener('blur', () => closeDurationInput(true));
+  durationHandle.addEventListener('pointerdown', e => {
+    if (S.exporting || S.tap) return;
     e.preventDefault();
-    if (e.ctrlKey || e.altKey) {
-      const factor = e.deltaY < 0 ? 1.15 : 0.87;
-      const oldZoom = S.timelineZoom || 1;
-      setTlZoom(Math.max(1, Math.min(10, oldZoom * factor)));
-    } else {
-      const vis = tlVisSec();
-      const shift = (e.deltaY || e.deltaX) * (vis / 800) * 0.4;
-      S.timelineScroll = Math.max(0, Math.min(S.timelineScroll + shift, Math.max(0, S.plan.duration - vis)));
-      drawTimeline();
-    }
-  }, { passive: false });
-
-  function setTlZoom(z) {
-    const oldVis = tlVisSec();
-    const centerT = S.timelineScroll + oldVis / 2;
-    S.timelineZoom = z;
-    const inp = $('tlZoom'), val = $('tlZoomVal');
-    if (inp) inp.value = z.toFixed(1);
-    if (val) val.textContent = z.toFixed(1) + 'x';
-    const newVis = tlVisSec();
-    S.timelineScroll = Math.max(0, Math.min(centerT - newVis / 2, Math.max(0, S.plan.duration - newVis)));
-    drawTimeline();
-  }
-
-  if ($('tlZoom')) $('tlZoom').addEventListener('input', e => setTlZoom(parseFloat(e.target.value) || 1));
-  if ($('btnTlReset')) $('btnTlReset').addEventListener('click', () => {
-    S.timelineScroll = 0;
-    setTlZoom(1.0);
+    closeDurationInput(false); pause();
+    S.durationDrag = { pointerId: e.pointerId, originX: e.clientX, originDuration: S.plan.duration, preview: S.plan.duration, moved: false };
+    durationHandle.setPointerCapture(e.pointerId);
+    durationHandle.classList.add('dragging');
   });
-
-  // マルチトラック：ブロック追加・削除
-  if ($('btnAddImgBlock')) {
-    $('btnAddImgBlock').addEventListener('click', () => {
-      remember();
-      if (!S.project.tracks) S.project.tracks = { images: [], videos: [] };
-      if (!S.project.tracks.images) S.project.tracks.images = [];
-      const start = S.t;
-      const end = Math.min(S.plan.duration, start + 4.0);
-      const block = {
-        id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        name: '新規画像',
-        start,
-        end: Math.max(start + 0.5, end),
-        x: 0, y: 0, scale: 1.0, opacity: 1.0,
-        blendMode: 'normal',
-        fit: 'cover',
-        dataUrl: '',
-        ready: false
-      };
-      S.project.tracks.images.push(block);
-      S.selectedBlock = { track: 'images', block, index: S.project.tracks.images.length - 1 };
-      syncBlockInspector();
-      replan();
-      drawTimeline();
-      commit();
-      flushSave();
-      toast('画像ブロックを追加しました。素材を選択してください');
-      if ($('selBlockFile')) $('selBlockFile').click();
+  durationHandle.addEventListener('pointermove', e => {
+    const drag = S.durationDrag;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const width = Math.max(1, $('timelineStack').clientWidth);
+    if (Math.abs(e.clientX - drag.originX) >= 2) drag.moved = true;
+    drag.preview = Math.round(J.clamp(drag.originDuration * (1 + (e.clientX - drag.originX) / width), minimumProjectDuration(), 21600) * 100) / 100;
+    durationHandle.style.transform = `translateX(${(drag.preview / drag.originDuration - 1) * width}px)`;
+    updateTimeUI();
+  });
+  durationHandle.addEventListener('pointerup', e => {
+    const drag = S.durationDrag;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    S.durationDrag = null; durationHandle.classList.remove('dragging'); durationHandle.style.transform = '';
+    if (drag.moved) setProjectDuration(drag.preview);
+    else durationValue.click();
+    updateTimeUI();
+  });
+  durationHandle.addEventListener('pointercancel', () => {
+    S.durationDrag = null; durationHandle.classList.remove('dragging'); durationHandle.style.transform = ''; updateTimeUI();
+  });
+  for (const tl of [$('timeline'), $('mediaTimeline'), $('foregroundTimeline')]) {
+    const layer = tl.id === 'timeline' ? 'lyrics' : tl.id === 'foregroundTimeline' ? 'foreground' : 'media';
+    let drag = null;
+    tl.addEventListener('pointerdown', e => {
+      const boundary = !S.exporting && !S.tap && timelineBoundaryAt(e, layer);
+      const limits = boundary && (boundary.mode === 'end' ? boundary : boundaryGroupLimits(boundary.ref));
+      drag = boundary && limits && limits.max > limits.min ? { ...boundary, min: limits.min, max: limits.max, mode: boundary.mode === 'end' ? 'end' : 'boundary', originX: e.clientX, preview: boundary.start, moved: false, duration: S.plan.duration } : { mode: 'seek' };
+      e.preventDefault();
+      tl.setPointerCapture(e.pointerId);
+      if (boundary) { pause(); S.timelineDrag = drag; }
+      else timelineSeek(e);
     });
-  }
-
-  if ($('btnAddVidBlock')) {
-    $('btnAddVidBlock').addEventListener('click', () => {
-      remember();
-      if (!S.project.tracks) S.project.tracks = { images: [], videos: [] };
-      if (!S.project.tracks.videos) S.project.tracks.videos = [];
-      const start = S.t;
-      const end = Math.min(S.plan.duration, start + 5.0);
-      const block = {
-        id: 'vid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        name: '新規動画',
-        start,
-        end: Math.max(start + 0.5, end),
-        x: 0, y: 0, scale: 1.0, opacity: 1.0,
-        blendMode: 'normal',
-        fit: 'cover',
-        dataUrl: '',
-        ready: false
-      };
-      S.project.tracks.videos.push(block);
-      S.selectedBlock = { track: 'videos', block, index: S.project.tracks.videos.length - 1 };
-      syncBlockInspector();
-      replan();
+    tl.addEventListener('pointermove', e => {
+      if (!drag) { tl.style.cursor = !S.exporting && !S.tap && timelineBoundaryAt(e, layer) ? 'ew-resize' : 'pointer'; return; }
+      if (drag.mode === 'seek') { timelineSeek(e); return; }
+      if (Math.abs(e.clientX - drag.originX) >= 3) drag.moved = true;
+      if (!drag.moved) return;
+      const rect = tl.getBoundingClientRect();
+      drag.preview = J.clamp((e.clientX - rect.left) / rect.width * drag.duration, drag.min, drag.max);
       drawTimeline();
-      commit();
-      flushSave();
-      toast('動画ブロックを追加しました。素材を選択してください');
-      if ($('selBlockFile')) $('selBlockFile').click();
+      drawTimelineLinks();
     });
-  }
-
-  if ($('btnDelBlock')) {
-    $('btnDelBlock').addEventListener('click', () => deleteSelectedBlock());
-  }
-
-  // キーフレーム追加・更新
-  if ($('btnBlockAddKey')) {
-    $('btnBlockAddKey').addEventListener('click', () => {
-      if (!S.selectedBlock || !S.selectedBlock.block) return;
-      remember();
-      const b = S.selectedBlock.block;
-      if (!b.keyframes) b.keyframes = [];
-      const curT = parseFloat(S.t.toFixed(3));
-      const curVal = J.getBlockTransform(b, S.t);
-      let kf = b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
-      const isUpdate = !!kf;
-      if (!kf) {
-        kf = { t: curT, x: curVal.x, y: curVal.y, scale: curVal.scale, opacity: curVal.opacity };
-        b.keyframes.push(kf);
-        b.keyframes.sort((p, q) => p.t - q.t);
-      } else {
-        kf.t = curT;
-        kf.x = curVal.x;
-        kf.y = curVal.y;
-        kf.scale = curVal.scale;
-        kf.opacity = curVal.opacity;
-      }
-      syncBlockInspector();
-      replan();
-      drawTimeline();
-      commit();
-      flushSave();
-      toast(isUpdate ? `キーフレームを更新しました (${curT.toFixed(2)}s)` : `キーフレームを追加しました (${curT.toFixed(2)}s)`);
-    });
-  }
-
-  // キーフレーム削除
-  if ($('btnBlockDelKey')) {
-    $('btnBlockDelKey').addEventListener('click', () => {
-      if (!S.selectedBlock || !S.selectedBlock.block) return;
-      const b = S.selectedBlock.block;
-      if (!b.keyframes || !b.keyframes.length) return;
-      const curT = S.t;
-      const idx = b.keyframes.findIndex(k => Math.abs(k.t - curT) <= 0.05);
-      if (idx >= 0) {
-        remember();
-        b.keyframes.splice(idx, 1);
-        syncBlockInspector();
-        replan();
+    tl.addEventListener('pointerup', () => {
+      if (!drag) return;
+      if (drag.mode === 'boundary' || drag.mode === 'end') {
+        S.timelineDrag = null;
+        if (drag.moved && drag.mode === 'end') { setCutEnd(drag.layer, drag.key, drag.preview); replan(); }
+        else if (drag.moved) commitTimelineBoundary(drag);
+        else seek(drag.start);
         drawTimeline();
-        commit();
-        flushSave();
-        toast('キーフレームを削除しました');
+        drawTimelineLinks();
       }
+      drag = null;
     });
+    tl.addEventListener('pointercancel', () => { drag = null; S.timelineDrag = null; drawTimeline(); drawTimelineLinks(); });
   }
-
-  // ブロックインスペクタパラメータ入力（キーフレーム位置での直接編集 or ベース値編集）
-  const onBlockParam = (prop, parser) => e => {
-    if (!S.selectedBlock || !S.selectedBlock.block) return;
-    remember();
-    const b = S.selectedBlock.block;
-    const val = parser(e.target.value);
-    const curT = S.t;
-    const kf = b.keyframes && b.keyframes.find(k => Math.abs(k.t - curT) <= 0.05);
-    if (kf && prop !== 'blendMode') {
-      kf[prop] = val;
-    } else {
-      b[prop] = val;
+  const linkSvg = $('timelineLinks');
+  linkSvg.addEventListener('pointerdown', e => {
+    const action = e.target.closest('.timeline-action');
+    if (action) { e.preventDefault(); e.stopPropagation(); performTimelineAction(action); return; }
+    const remove = e.target.closest('.link-remove');
+    if (remove) {
+      e.preventDefault(); e.stopPropagation();
+      S.project.timelineLinks.splice(+remove.dataset.edge, 1);
+      drawTimelineLinks(); autosave();
+      return;
     }
-    replan();
-    drawTimeline();
-    flushSave();
-  };
-  if ($('selBlockX')) $('selBlockX').addEventListener('input', onBlockParam('x', parseFloat));
-  if ($('selBlockY')) $('selBlockY').addEventListener('input', onBlockParam('y', parseFloat));
-  if ($('selBlockScale')) $('selBlockScale').addEventListener('input', onBlockParam('scale', parseFloat));
-  if ($('selBlockOpacity')) $('selBlockOpacity').addEventListener('input', onBlockParam('opacity', parseFloat));
-  if ($('selBlockBlend')) $('selBlockBlend').addEventListener('change', onBlockParam('blendMode', String));
-
-  // ブロック素材ファイルの読み込み・差し替え
-  if ($('selBlockFile')) {
-    $('selBlockFile').addEventListener('change', async e => {
-      const file = e.target.files && e.target.files[0];
-      if (!file || !S.selectedBlock || !S.selectedBlock.block) return;
-      const b = S.selectedBlock.block;
-      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
-      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
-      if (!isVideo && !isImg) { toast('画像または動画ファイルを選択してください'); return; }
-      const url = URL.createObjectURL(file);
-      b.name = file.name;
-      b.url = url;
-      if (isVideo) {
-        const v = document.createElement('video');
-        v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
-        await v.play().catch(() => {});
-        b.element = v;
-        b.ready = true;
-        cacheMediaElement(url, v, true, file.name);
-      } else {
-        const img = new Image();
-        img.src = url;
-        await new Promise(r => { img.onload = r; img.onerror = r; });
-        b.element = img;
-        b.ready = true;
-        cacheMediaElement(url, img, false, file.name);
-      }
-      syncBlockInspector();
-      replan();
-      drawTimeline();
-      commit('ブロック素材設定');
-      flushSave();
-      toast(`素材「${file.name}」をブロックに設定しました`);
-      e.target.value = '';
-    });
-  }
-
-  // 背景メディアUIイベント
-  if ($('bgMediaFile')) {
-    $('bgMediaFile').addEventListener('change', async e => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name);
-      const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
-      if (!isVideo && !isImg) { toast('画像または動画ファイルを選択してください'); return; }
-      const url = URL.createObjectURL(file);
-      if (isVideo) {
-        const v = document.createElement('video');
-        v.src = url; v.loop = true; v.muted = true; v.playsInline = true;
-        await v.play().catch(() => {});
-        J.bgMedia = { type: 'video', element: v, ready: true, name: file.name, url };
-        cacheMediaElement(url, v, true, file.name);
-      } else {
-        const img = new Image();
-        img.src = url;
-        await new Promise(r => { img.onload = r; img.onerror = r; });
-        J.bgMedia = { type: 'image', element: img, ready: true, name: file.name, url };
-        cacheMediaElement(url, img, false, file.name);
-      }
-      if (!S.project.bgMedia) S.project.bgMedia = {};
-      S.project.bgMedia.enabled = true;
-      S.project.bgMedia.type = isVideo ? 'video' : 'image';
-      S.project.bgMedia.name = file.name;
-      S.project.bgMedia.url = url;
-      ['fit', 'scale', 'x', 'y', 'opacity', 'bgBlendMode', 'textBlendMode'].forEach(k => {
-        if (S.project.bgMedia[k] !== undefined && J.bgMedia) J.bgMedia[k] = S.project.bgMedia[k];
-      });
-      syncBgMediaUI();
-      replan();
-      commit('背景メディア設定');
-      toast(`${isVideo ? '動画' : '画像'}背景を設定しました`);
-    });
-  }
-  if ($('btnBgMediaClear')) {
-    $('btnBgMediaClear').addEventListener('click', () => {
-      if (typeof J !== 'undefined' && J.bgMedia && J.bgMedia.url) { try { URL.revokeObjectURL(J.bgMedia.url); } catch(err){} }
-      if (typeof J !== 'undefined') J.bgMedia = null;
-      if (S.project.bgMedia) {
-        S.project.bgMedia.enabled = false;
-        S.project.bgMedia.name = '';
-        S.project.bgMedia.dataUrl = '';
-      }
-      syncBgMediaUI();
-      replan();
-      toast('背景メディアを解除しました');
-    });
-  }
-  const onBgParam = (key, parser) => e => {
-    if (!S.project.bgMedia) S.project.bgMedia = {};
-    S.project.bgMedia[key] = parser(e.target.value);
-    if (typeof J !== 'undefined' && J.bgMedia) J.bgMedia[key] = S.project.bgMedia[key];
-    replan();
-    flushSave();
-  };
-  if ($('bgFit')) $('bgFit').addEventListener('change', onBgParam('fit', String));
-  if ($('bgScale')) $('bgScale').addEventListener('input', onBgParam('scale', parseFloat));
-  if ($('bgX')) $('bgX').addEventListener('input', onBgParam('x', parseFloat));
-  if ($('bgY')) $('bgY').addEventListener('input', onBgParam('y', parseFloat));
-  if ($('bgOpacity')) $('bgOpacity').addEventListener('input', onBgParam('opacity', parseFloat));
-  if ($('textBlendMode')) $('textBlendMode').addEventListener('change', onBgParam('textBlendMode', String));
-  if ($('bgBlendMode')) $('bgBlendMode').addEventListener('change', onBgParam('bgBlendMode', String));
-  if ($('btnBgResetTransform')) {
-    $('btnBgResetTransform').addEventListener('click', () => {
-      if (!S.project.bgMedia) S.project.bgMedia = {};
-      Object.assign(S.project.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
-      if (typeof J !== 'undefined' && J.bgMedia) Object.assign(J.bgMedia, { scale: 1.0, x: 0, y: 0, opacity: 1.0, fit: 'cover' });
-      syncBgMediaUI();
-      replan();
-      toast('変形をリセットしました');
-    });
-  }
-  if ($('tlIn')) $('tlIn').addEventListener('click', () => {
-    const curZoom = S.timelineZoom || 1;
-    if (typeof setTlZoom === 'function') setTlZoom(Math.min(10, curZoom * 1.5));
-    else if (typeof tlZoom === 'function') tlZoom(1.6);
+    const handle = e.target.closest('.link-handle');
+    if (!handle || S.exporting || S.tap) return;
+    e.preventDefault(); e.stopPropagation(); pause();
+    const marker = timelineMarkers().find(m => m.ref === handle.dataset.ref);
+    if (!marker) return;
+    S.linkDrag = { source: marker.ref, sourceLayer: marker.layer, sourceX: marker.x, sourceY: marker.y, x: marker.x, y: marker.y };
+    linkSvg.setPointerCapture(e.pointerId);
+    drawTimelineLinks();
   });
-  if ($('tlOut')) $('tlOut').addEventListener('click', () => {
-    const curZoom = S.timelineZoom || 1;
-    if (typeof setTlZoom === 'function') setTlZoom(Math.max(1, curZoom / 1.5));
-    else if (typeof tlZoom === 'function') tlZoom(1 / 1.6);
+  linkSvg.addEventListener('pointermove', e => {
+    if (!S.linkDrag) return;
+    const rect = $('timelineStack').getBoundingClientRect();
+    S.linkDrag.x = e.clientX - rect.left; S.linkDrag.y = e.clientY - rect.top;
+    drawTimelineLinks();
   });
-  if ($('tlFit')) $('tlFit').addEventListener('click', () => {
-    S.timelineScroll = 0;
-    if (typeof setTlZoom === 'function') setTlZoom(1.0);
-    drawTimeline();
+  linkSvg.addEventListener('pointerup', e => {
+    if (!S.linkDrag) return;
+    const drag = S.linkDrag, target = markerNear(e.clientX, e.clientY, drag.sourceLayer);
+    S.linkDrag = null;
+    if (target) connectTimelineBoundaries(drag.source, target.ref);
+    drawTimelineLinks();
   });
-  if ($('btnUndoEdit')) $('btnUndoEdit').addEventListener('click', () => {
-    if (typeof UndoRedo !== 'undefined' && UndoRedo.undo) UndoRedo.undo();
-    else if (typeof edGo === 'function') edGo(-1);
+  linkSvg.addEventListener('pointercancel', () => { S.linkDrag = null; drawTimelineLinks(); });
+  linkSvg.addEventListener('keydown', e => {
+    const action = e.target.closest('.timeline-action');
+    if (action && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); performTimelineAction(action); }
   });
-  if ($('tapBack')) $('tapBack').addEventListener('click', tapBack);
-  if (typeof bindRangeUI === 'function') bindRangeUI();
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
     document.querySelectorAll('.tabpane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.tab; });
@@ -2525,21 +3631,10 @@ function bind() {
   }));
   $('fxFlash').addEventListener('change', e => { S.project.fx.flash = e.target.checked; replan(); });
   $('techFilter').addEventListener('input', () => renderTech());
-  const setSwitch = (cls, key, on, msgOn, msgOff) => document.querySelectorAll('.' + cls).forEach(el => el.addEventListener('change', e => {
-    remember();
-    S.project[key] = e.target.checked;
-    document.querySelectorAll('.' + cls).forEach(x => { x.checked = e.target.checked; });
-    renderTech(); drawStyleGrid(); replan(); commit(); flushSave();
-    toast(e.target.checked ? msgOn : msgOff);
-  }));
-  setSwitch('extra-toggle', 'extra', true, '追加分の演出：使う', '追加分の演出：使わない（最初の公開版の演出だけ）');
-  setSwitch('wa-toggle', 'wa', true, '和風の演出：使う', '和風の演出：使わない（おまかせ・シャッフルで選ばれません）');
-  setSwitch('unify-toggle', 'unify', true, '統一感：オン（パートごとにそろえ、キメ・モーフ・太さも使います）', '統一感：オフ');
-  setSwitch('typeset-toggle', 'typeset', true, '文字整列：オン（字間・助詞・英字・0.2秒先・効果控えめ）', '文字整列：オフ');
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
-  $('seed').addEventListener('change', e => { remember(); S.project.seed = parseInt(e.target.value, 10) || 0; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード変更'); });
-  $('btnSeed').addEventListener('click', () => { remember(); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; S.project.rowCache = {}; if (S.project.timing) S.project.timing.cutTimes = null; replan(); commit('シード再抽選'); });
+  $('seed').addEventListener('change', e => { J.clearPastedLyricEffects(S.project); S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });
+  $('btnSeed').addEventListener('click', () => { J.clearPastedLyricEffects(S.project); S.project.seed = (Math.random() * 1e9) | 0; $('seed').value = S.project.seed; replan(); });
   const colorToggle = (flag, keys) => e => {
     remember();
     const c = S.project.colors; c[flag] = e.target.checked;
@@ -2558,13 +3653,74 @@ function bind() {
     S.project.fonts.display = key; $('localFont').value = '';
     fontKey = ''; renderFontRoles(); replan();
   });
+  $('btnListFonts').addEventListener('click', async () => {
+    if (typeof window.queryLocalFonts !== 'function') { toast('このブラウザではPCフォント一覧を取得できません'); return; }
+    try {
+      const fonts = await window.queryLocalFonts();
+      const unique = new Map();
+      for (const font of fonts) if (font.family) unique.set(`${font.family}\u0000${font.style}`, font);
+      const selector = $('installedFonts'); selector.innerHTML = '';
+      for (const font of [...unique.values()].sort((a, b) => (a.family + a.style).localeCompare(b.family + b.style))) {
+        const option = document.createElement('option'); option.value = font.postscriptName || font.fullName; option.textContent = font.fullName || `${font.family} ${font.style}`;
+        option.style.fontFamily = `"${font.family.replace(/"/g, '')}"`; option._font = font; selector.appendChild(option);
+      }
+      selector.hidden = !$('installedFonts').options.length; $('btnImportFont').hidden = selector.hidden;
+      if (selector.hidden) toast('フォントが見つかりませんでした');
+    } catch (error) { toast('PCフォント一覧の取得が許可されませんでした'); }
+  });
+  $('btnImportFont').addEventListener('click', () => {
+    const selector = $('installedFonts'), font = selector.selectedOptions[0]?._font;
+    if (!font) return;
+    const family = font.family, weight = /bold|black|heavy|太|[6-9]00/i.test(font.style || '') ? 700 : 400;
+    const key = 'local_' + Array.from(family + '_' + (font.style || '')).map(ch => ch.codePointAt(0).toString(16)).join('_');
+    const label = font.fullName || `${family} ${font.style || ''}`;
+    J.addUserFont(key, label, family, weight);
+    S.project.userFonts = (S.project.userFonts || []).filter(item => item.key !== key).concat([{ key, label, family, weight }]);
+    S.project.fonts.display = key; fontKey = ''; renderFontRoles(); replan();
+  });
+  $('btnSaveComposite').addEventListener('click', () => {
+    const name = $('compositeName').value.trim(), base = $('compositeBase').value;
+    if (!name || !J.FONTS[base] || J.FONTS[base].composite) { toast('設定名とベースフォントを指定してください'); return; }
+    const parts = Object.fromEntries([...$('compositeParts').querySelectorAll('select')].filter(el => el.value && J.FONTS[el.value] && !J.FONTS[el.value].composite).map(el => [el.dataset.part, el.value]));
+    const key = 'composite_' + Math.random().toString(36).slice(2, 11);
+    S.project.compositeFonts.push({ key, name, base, parts }); J.setCompositeFonts(S.project.compositeFonts);
+    S.project.fonts.display = key; $('compositeName').value = ''; fontKey = ''; renderFontRoles(); replan();
+  });
+  $('compositeList').addEventListener('click', e => {
+    const button = e.target.closest('[data-key]'); if (!button) return;
+    S.project.compositeFonts = S.project.compositeFonts.filter(def => def.key !== button.dataset.key);
+    for (const role of Object.keys(S.project.fonts)) if (S.project.fonts[role] === button.dataset.key) delete S.project.fonts[role];
+    J.setCompositeFonts(S.project.compositeFonts); fontKey = ''; renderFontRoles(); replan();
+  });
   $('fontFile').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
-    try { const key = await J.loadFontFile(f); S.project.fonts.display = key; fontKey = ''; renderFontRoles(); replan(); }
+    try {
+      const key = await J.loadFontFile(f), face = J.FONTS[key];
+      S.project.userFonts = (S.project.userFonts || []).filter(item => item.key !== key).concat([{ key, label: face.label, family: face.family.replace(/"/g, ''), weight: face.weight, file: true }]);
+      S.project.fonts.display = key; fontKey = ''; renderFontRoles(); replan();
+    }
     catch (err) { showMsg('フォントを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
   });
   ['outAspect', 'eAspect'].forEach(id => $(id).addEventListener('change', e => { S.project.aspect = e.target.value; syncOut(); replan(); codecNote(); }));
   ['outRes', 'eRes'].forEach(id => $(id).addEventListener('change', e => { S.project.res = +e.target.value; syncOut(); autosave(); codecNote(); }));
+  for (const id of ['out', 'e']) {
+    $(`${id}VideoSize`).addEventListener('change', e => {
+      const choice = e.target.value;
+      S.project.videoSizeMode = choice === 'custom' ? 'custom' : 'preset';
+      if (choice === 'legacy') S.project.videoSize = null;
+      else if (choice === 'custom') {
+        const [w, h] = J.outputSize(S.project); S.project.videoSize = { w, h };
+      } else { const [w, h] = choice.split('x').map(Number); S.project.videoSize = { w, h }; }
+      syncOut(); replan(); codecNote();
+    });
+    for (const dimension of ['Width', 'Height']) $(`${id}Video${dimension}`).addEventListener('change', e => {
+      const n = Math.round(+e.target.value / 2) * 2;
+      if (!Number.isFinite(n) || n < 16 || n > 8192) { syncOut(); return; }
+      const [w, h] = J.outputSize(S.project);
+      S.project.videoSize = { w: dimension === 'Width' ? n : w, h: dimension === 'Height' ? n : h };
+      syncOut(); replan(); codecNote();
+    });
+  }
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
   $('outQuality').addEventListener('change', e => { S.project.quality = e.target.value; autosave(); });
   ['outKey', 'eKey'].forEach(id => $(id).addEventListener('change', e => {
@@ -2573,25 +3729,19 @@ function bind() {
     toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
   }));
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
-  document.querySelectorAll('.centerDirSel').forEach(el => el.addEventListener('change', e => {
-    S.project.centerDir = e.target.value; syncOut(); replan(); flushSave();
-    toast(e.target.value === 'lr' ? '縦長の画面：左右に分けます' : '縦長の画面：上下に分けます');
-  }));
-  ['outCenter', 'eCenter'].forEach(id => $(id).addEventListener('change', e => {
-    S.project.centerFree = e.target.checked; syncOut(); replan(); flushSave();
-    const tall = S.plan.H > S.plan.W * 1.1 && S.project.centerDir !== 'lr';
-    toast(e.target.checked ? `中央を空けました：文字と演出を${tall ? '上下' : '左右'}に置きます` : '中央を空けるのをやめました');
-  }));
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
-  ['btnMP4File', 'eMP4File'].forEach(id => $(id).addEventListener('click', () => runExport('mp4file')));
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
-  $('btnPNGL').addEventListener('click', () => runExport('pngl'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
   $('eMP4').addEventListener('click', () => runExport('mp4'));
   // かんたんモード
-  $('modeEasy').addEventListener('click', () => setMode('easy'));
-  $('modePro').addEventListener('click', () => setMode('pro'));
+  $('modeEasy').addEventListener('click', () => toggleSettingsDrawer('easy'));
+  $('modePro').addEventListener('click', () => toggleSettingsDrawer('pro'));
+  $('closeSettingsDrawer').addEventListener('click',()=>{S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.settingsOpen&&!document.querySelector('dialog[open]')&&!timelineCutMenu&&!S.playheadMenu){S.settingsOpen=false;syncSettingsDrawer();$(S.mode==='easy'?'modeEasy':'modePro').focus();}});
+  window.addEventListener('scroll',positionSettingsDrawer,{passive:true});
+  window.addEventListener('resize',positionSettingsDrawer);
+  if(window.ResizeObserver)new ResizeObserver(positionSettingsDrawer).observe(document.querySelector('.bar'));
   $('btnOmakase').addEventListener('click', omakase);
   $('btnOmakaseBig').addEventListener('click', omakase);
   ['btnPrev', 'btnPrev2'].forEach(id => $(id).addEventListener('click', () => histGo(-1)));
@@ -2605,151 +3755,235 @@ function bind() {
   const openTerms = () => { if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', ''); };
   document.querySelectorAll('.terms-open').forEach(b => b.addEventListener('click', openTerms));
   dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close ? dlg.close() : dlg.removeAttribute('open'); });   // click on the backdrop
-  $('btnSave').addEventListener('click', () => J.saveFile(baseName() + '.jizura.json', JSON.stringify(S.project, null, 1)));
-  $('btnAE').addEventListener('click', () => J.saveFile(baseName() + rangeSuffix() + '_ae.json', JSON.stringify(J.planForAE(S.plan, S.project, exportRange()), null, 1)));
-  audioNameDefault = $('audioName').textContent;
-  $('btnClearLyrics').addEventListener('click', clearLyrics);
-  $('btnReset').addEventListener('click', () => {
-    const dlg = $('resetDlg');
-    if (!dlg || typeof dlg.showModal !== 'function') { if (window.confirm('歌詞・曲・設定・履歴をすべて消して、最初の状態に戻します。元に戻すことはできません。')) resetAll(); return; }
-    dlg.returnValue = ''; dlg.showModal();
+  $('btnNew').addEventListener('click', () => { if (!S.exporting && !S.projectBusy) $('newProjectDlg').showModal(); });
+  $('btnCreateProject').addEventListener('click', () => {
+    const project = J.defaultProject(); project.lyrics = ''; project.aspect = $('newProjectAspect').value;
+    replaceProject(project, null, null, new Map()); $('newProjectDlg').close();
+    $('btnThemes').click();
   });
-  $('resetDlg').addEventListener('close', () => { if ($('resetDlg').returnValue === 'reset') resetAll(); });
+  $('btnSave').addEventListener('click', async () => {
+    if (S.projectBusy) return;
+    const request = await requestFilename('project'); if (!request) return;
+    S.projectBusy = true; $('btnSave').disabled = true;
+    // The saved name (without an added date) becomes the project name, stored in the file too.
+    const previousName = S.project.projectName;
+    S.project.projectName = request.name; $('projectName').value = request.name;
+    const project = JSON.parse(JSON.stringify(S.project)), audio = S.audioFile;
+    try { await J.saveFile(request.filename, await J.packProject(project, audio)); autosave(); }
+    catch (err) { S.project.projectName = previousName; $('projectName').value = previousName || ''; toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    finally { S.projectBusy = false; $('btnSave').disabled = false; }
+  });
+  $('btnSaveSettings').addEventListener('click', async () => {
+    if (S.projectBusy || S.exporting) return;
+    const filename = (await requestFilename('settings'))?.filename; if (!filename) return;
+    S.projectBusy = true; $('btnSaveSettings').disabled = true;
+    try { await J.saveFile(filename, await J.packProject(J.settingsProject(S.project), null)); }
+    catch (err) { toast(J.mediaLabel('保存できませんでした：', 'Could not save: ') + err.message); }
+    finally { S.projectBusy = false; $('btnSaveSettings').disabled = false; }
+  });
+  $('fileSettings').closest('label').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileSettings').click(); }
+  });
+  $('fileSettings').addEventListener('change', async e => {
+    const file = e.target.files?.[0]; if (!file) return;
+    $('projectMenu').open = false;
+    if (S.projectBusy || S.exporting) { e.target.value = ''; return; }
+    S.projectBusy = true;
+    try {
+      const loaded = await J.unpackProject(file);
+      for (const entry of loaded.files) if (entry.kind === 'font') await J.saveFontFile(entry.id,entry.file);
+      await J.restoreFontFiles(loaded.project.userFonts);
+      pause(); if (S.areaEdit) cancelAreaEditor();
+      S.project = mergeProject(J.applyProjectSettings(S.project,loaded.project));
+      fontKey = ''; syncUI(); replan(); flushSave();
+      toast(J.mediaLabel('設定を読み込みました', 'Settings imported'));
+    } catch (err) { toast(J.mediaLabel('設定を読み込めませんでした：', 'Could not import settings: ') + err.message); }
+    finally { S.projectBusy = false; e.target.value = ''; }
+  });
+  $('btnAE').addEventListener('click', async () => {
+    if (S.projectBusy || S.exporting) return;
+    if(!confirmHiddenLayers())return;
+    const filename = (await requestFilename('ae'))?.filename; if (!filename) return;
+    try { await J.saveFile(filename, JSON.stringify(J.planForAE(S.plan, S.project), null, 1)); }
+    catch (err) { toast(J.mediaLabel('保存できませんでした：','Could not save: ') + err.message); }
+  });
   $('fileProject').addEventListener('change', async e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
-    try { S.project = mergeProject(JSON.parse(await f.text())); syncUI(); replan(); }
-    catch (err) { showMsg('プロジェクトを読み込めませんでした'); setTimeout(() => showMsg(null), 2500); }
+    if (S.exporting || S.projectBusy) { e.target.value = ''; return; }
+    S.projectBusy = true;
+    const dialog=document.createElement('dialog');dialog.className='insert-cut-dialog';dialog.id='projectLoadingDialog';
+    const title=document.createElement('h2'),status=document.createElement('p');title.textContent=J.mediaLabel('プロジェクトを読み込み中','Opening project');status.setAttribute('role','status');status.textContent=f.name;dialog.append(title,status);
+    dialog.addEventListener('cancel',event=>{if(S.projectBusy)event.preventDefault();});
+    dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+    try { await openProjectFile(f,message=>{status.textContent=message;});dialog.close(); }
+    catch (err) {title.textContent=J.mediaLabel('プロジェクトを読み込めませんでした','Could not open project');status.textContent=err.message;const close=document.createElement('button');close.textContent=J.mediaLabel('閉じる','Close');close.onclick=()=>dialog.close();dialog.append(close);}
+    finally { S.projectBusy = false; }
     e.target.value = '';
   });
   document.addEventListener('keydown', e => {
-    const tag = (e.target && e.target.tagName) || '';
-    const typing = /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
-    const isCtrl = e.ctrlKey || e.metaKey;
-    if (isCtrl && !typing && !S.tap) {
-      const key = e.key.toLowerCase();
-      if (key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        UndoRedo.undo();
-        return;
-      } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
-        e.preventDefault();
-        UndoRedo.redo();
-        return;
-      }
+    // Ctrl+S / ⌘S saves the project (also while typing) instead of the browser's "save page".
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
+      e.preventDefault();
+      if (!e.repeat && !S.projectBusy && !S.exporting && !document.querySelector('dialog[open]')) $('btnSave').click();
+      return;
     }
+    const tag = (e.target && e.target.tagName) || '';
+    const typing = (e.target && e.target.isContentEditable) || /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
+    if (!typing && !e.altKey && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undoMove(e.shiftKey ? 1 : -1); return; }
+    if (!typing && !e.altKey && e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); undoMove(1); return; }
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
     if (S.tap && e.code === 'Escape') { pause(); stopTap(); return; }
-    if (S.tap && e.code === 'Backspace' && !typing) { e.preventDefault(); tapBack(); return; }
-    if (typing || $('termsDlg').open || $('resetDlg').open) return;
+    if (typing || document.querySelector('dialog[open]')) return;
     if (e.code === 'Space') { e.preventDefault(); S.playing ? pause() : play(); }
     else if (e.code === 'ArrowRight') seek(S.t + (e.shiftKey ? 1 : 1 / S.plan.fps));
     else if (e.code === 'ArrowLeft') seek(S.t - (e.shiftKey ? 1 : 1 / S.plan.fps));
     else if (e.code === 'KeyR' && !e.metaKey && !e.ctrlKey && !e.altKey && !S.exporting) { e.preventDefault(); omakase(); }
-    else if ((e.code === 'Delete' || e.code === 'Backspace') && S.selectedBlock) { e.preventDefault(); deleteSelectedBlock(); }
   });
-  window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); });
-  if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); }).observe($('viewport'));
-  bindFollow();
+  window.addEventListener('resize', () => { sizeViewport(); drawTimeline(); drawTimelineLinks(); });
+  if (window.ResizeObserver) new ResizeObserver(() => { sizeViewport(); drawTimeline(); drawTimelineLinks(); }).observe($('viewport'));
+  if(window.ResizeObserver){const observer=new ResizeObserver(sizeViewport);for(const el of document.querySelector('.col-stage').children)if(el.id!=='viewport')observer.observe(el);}
+  if (window.ResizeObserver) new ResizeObserver(drawTimelineLinks).observe($('timelineStack'));
 }
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
-async function loadAudioFile(f, restored) {
+function openAudioImport(file) {
+  pause();
+  const L=J.mediaLabel,video=J.isVideoFile(file),dialog=document.createElement('dialog');
+  dialog.id='audioImportDialog';dialog.className='insert-cut-dialog';
+  dialog.innerHTML=`<form><h2>${L('曲・動画を読み込む','Import audio / video')}</h2><p class="audio-import-name"></p><label class="row"><input name="matchDuration" type="checkbox" checked>${L('作成する動画の長さを合わせる','Match output duration to this file')}</label>${video?`<label class="row"><input name="background" type="checkbox" checked>${L('背景としても取り込む','Also import as background')}</label><p class="hint">${L('背景動画は先頭に挿入します。既存の背景カットは後ろへ移動します。','The video is inserted at the beginning. Existing background cuts move after it.')}</p>`:''}<div class="row"><button type="button" data-cancel>${L('キャンセル','Cancel')}</button><button type="submit">${L('読み込む','Import')}</button></div></form>`;
+  dialog.querySelector('.audio-import-name').textContent=file.name;
+  dialog.querySelector('[data-cancel]').onclick=()=>dialog.close();
+  dialog.querySelector('form').onsubmit=e=>{e.preventDefault();const options={matchDuration:dialog.querySelector('[name=matchDuration]').checked,background:!!dialog.querySelector('[name=background]')?.checked};dialog.close();loadAudioFile(file,options);};
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+}
+async function loadAudioFile(f,options={matchDuration:true,background:false}) {
+  const project = S.project, request = S.audioLoad = (S.audioLoad || 0) + 1;
+  const previousDuration=S.plan.duration,video=J.isVideoFile(f),assets=new Map();
   $('audioName').textContent = '解析中…';
   try {
     pause();
-    S.audio = await J.analyzeAudio(f);
-    $('audioName').textContent = `${f.name}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）` + (restored ? '・前回の曲' : '');
-    S.project.audioName = f.name;
-    if (!restored && J.saveSong) J.saveSong(f);             // kept in this browser: a reload does not drop the song from exports
+    const audio = await J.analyzeAudio(f);
+    const duration=video?await J.videoFileDuration(f):audio.duration;
+    if (S.project !== project || S.audioLoad !== request) return false;
+    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):f);
+    let item=null;
+    if(video&&options.background){
+      if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
+      item={id:crypto.randomUUID(),name:f.name,size:f.size,type:'video',duration};
+      await J.attachMedia(item,f,assets);await J.storeMedia(item.id,f);
+    }
+    const audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
+    await J.storeMedia(audioAsset.id,audioFile);
+    if (S.project !== project || S.audioLoad !== request) return false;
+    if(item){
+      const m=project.media,cuts=S.plan.media.cuts,overrides={0:{itemId:item.id,technique:'none',entrance:'none',departure:'none',videoStart:0,videoDuration:duration,videoLoop:false}},times={0:0};
+      cuts.forEach((cut,i)=>{overrides[i+1]={...m.cutOverrides[i],itemId:cut.itemId};times[i+1]=cut.start+duration;});
+      m.items.push(item);m.manualCuts=true;m.randomOrder=false;m.cutCount=cuts.length+1;m.cutOverrides=overrides;m.timing.lineTimes=times;
+      for(const link of project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith('m:'))link[side]='m:'+(+link[side].slice(2)+1);
+      for(const [id,asset] of assets){J.mediaAssets.set(id,asset);asset.element.addEventListener('seeked',()=>{S.need=true;});}assets.clear();
+    }
+    S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;
+    project.durationOverride=options.matchDuration?duration:previousDuration;
+    refreshAudioName();
     S.project.timing.snap = true;
     syncUI(); replan();
     return true;
-  } catch (err) { $('audioName').textContent = '読み込めませんでした: ' + err.message; S.audio = null; return false; }
+  } catch (err) {
+    if (S.project === project && S.audioLoad === request) { refreshAudioName(); toast(J.mediaLabel('曲を読み込めませんでした：','Could not import audio: ') + err.message); }
+    return false;
+  } finally {releaseProjectAssets(assets);}
 }
 
-/* ---------------- かんたんモードの案内ツアー ---------------- */
-const TOUR = [
-  { t: () => $('lyrics'), title: '1. 歌詞を入れる', text: '1行が1フレーズになります。空行で少し間が空き、[間奏 8] と書くと8秒の間奏（背景と装飾だけ）になります。' },
-  { t: () => $('audioFile').closest('label') || $('audioFile'), title: '2. 曲を読み込む', text: 'mp3 などを読み込むと拍を検出して、カットの切り替わりを合わせます。曲がなくても作れます。「タップで同期」で行の頭を合わせることもできます。' },
-  { t: () => $('btnOmakaseBig'), title: '3. おまかせで作る', text: 'スタイル・雰囲気・動き・配色・構成をまるごと決めます。押すたびに別の案になり、「◀ 前の案」で戻れます。' },
-  { t: () => $('btnPlay'), title: '4. 再生して確認する', text: '再生して見てみましょう。下のタイムラインでは、行の区切りをドラッグして動かせます（＋−で拡大）。' },
-  { t: () => $('lineList'), title: '5. 気になる行だけ直す', text: '行ごとに、歌詞を直す（✎）、カット数を決める、この行からタップし直す（◎）、この行だけ作り直す（サイコロ）ができます。' },
-  { t: () => $('eMP4').closest('.easy-sec') || $('eMP4'), title: '6. 書き出す', text: '画面比（縦長 9:16 など）と解像度を選んで MP4 を書き出します。「書き出す範囲」で選んだ行だけを書き出すこともできます。' },
-];
-const TR = { i: -1 };
-function tourShow(i) {
-  const el = $('tour'), n = TOUR.length;
-  if (i < 0 || i >= n) return tourEnd();
-  TR.i = i;
-  const st = TOUR[i], tg = st.t();
-  el.hidden = false;
-  el.querySelector('.tour-step').textContent = `${i + 1} / ${n}`;
-  el.querySelector('.tour-title').textContent = st.title;
-  el.querySelector('.tour-text').textContent = st.text;
-  el.querySelector('.tour-prev').disabled = i === 0;
-  el.querySelector('.tour-next').textContent = i === n - 1 ? 'はじめる' : '次へ';
-  if (tg && tg.scrollIntoView) tg.scrollIntoView({ block: 'center', behavior: 'auto' });
-  requestAnimationFrame(() => tourPlace(tg));
-  el.querySelector('.tour-next').focus();
+function releaseProjectAssets(assets) {
+  for (const asset of assets.values()) {
+    J.releaseMediaAsset(asset);
+  }
+  assets.clear();
 }
-function tourPlace(tg) {
-  const el = $('tour'), spot = el.querySelector('.tour-spot'), bub = el.querySelector('.tour-bub');
-  const vw = window.innerWidth, vh = window.innerHeight, pad = 6;
-  const r = tg ? tg.getBoundingClientRect() : { left: vw / 2, top: vh / 2, width: 0, height: 0, right: vw / 2, bottom: vh / 2 };
-  const x0 = Math.max(4, r.left - pad), y0 = Math.max(4, r.top - pad), x1 = Math.min(vw - 4, r.right + pad), y1 = Math.min(vh - 4, r.bottom + pad);
-  Object.assign(spot.style, { left: x0 + 'px', top: y0 + 'px', width: Math.max(0, x1 - x0) + 'px', height: Math.max(0, y1 - y0) + 'px' });
-  const bw = bub.offsetWidth, bh = bub.offsetHeight, gap = 12;
-  let top = y1 + gap <= vh - bh - 8 ? y1 + gap : y0 - gap - bh >= 8 ? y0 - gap - bh : Math.max(8, vh - bh - 8);
-  let left = J.clamp(x0 + (x1 - x0) / 2 - bw / 2, 8, vw - bw - 8);
-  Object.assign(bub.style, { top: top + 'px', left: left + 'px' });
+function refreshAudioName() {
+  S.audioAssetId = S.audio ? S.project.audioAsset?.id : null;
+  $('audioFile').value = '';
+  $('audioName').textContent = S.audio ? `${S.project.audioAsset?.name || ''}（${J.fmtTime(S.audio.duration)}・約${S.audio.bpm}BPM）` : NO_AUDIO_LABEL;
+  $('btnRemoveAudio').hidden = !S.audio;
 }
-function tourStart() {
-  if (S.exporting || S.tap) return;
-  if (S.mode !== 'easy') setMode('easy');
-  pause(); tourShow(0);
+function replaceProject(project, audio, audioFile, assets) {
+  S.audioLoad = (S.audioLoad || 0) + 1;
+  pause(); clearTimeout(replanTimer); clearTimeout(saveTimer);
+  if (S.areaEdit) cancelAreaEditor();
+  S.tap = null; S.timelineDrag = null; S.linkDrag = null; S.scrubbing = false;
+  $('tapPanel').hidden = true; syncTapButtons();
+  releaseProjectAssets(J.mediaAssets);
+  for (const [id,asset] of assets) { J.mediaAssets.set(id,asset); asset.element.addEventListener('seeked',()=>{S.need=true}); }
+  for (const font of S.project.userFonts || []) delete J.FONTS[font.key];
+  S.project = mergeProject(project); S.audio = audio; S.audioFile = audioFile;
+  S.t = 0; S.sourceTab = 'lyrics'; S.timelineZoom = 1; S.loop = true;
+  $('btnLoop').setAttribute('aria-pressed','true'); $('mediaFiles').value = '';
+  J.mediaTransitionFrame = null; J.foregroundTransitionFrame = null;
+  H.list = []; H.i = -1; fontKey = ''; initUndo();
+  refreshAudioName(); syncUI(); replan(); setTimelineZoom(1); commit(); flushSave(); ensureFonts();
 }
-function tourEnd() {
-  $('tour').hidden = true; TR.i = -1;
-  try { localStorage.setItem('jizura.tourDone', '1'); } catch (e) {}
+async function restoreAudioAsset() {
+  const project = S.project, info = project.audioAsset;
+  if (!info) return;
+  try {
+    const file = await J.loadMedia(info.id);
+    if (!file) return;
+    const audio = await J.analyzeAudio(file);
+    if (S.project !== project || S.project.audioAsset !== info) return;
+    S.audio = audio; S.audioFile = file; refreshAudioName(); syncUI(); replan();
+  } catch (err) { toast(J.mediaLabel('曲を復元できませんでした：','Could not restore audio: ') + err.message); }
 }
-function bindTour() {
-  const el = $('tour');
-  el.querySelector('.tour-next').addEventListener('click', () => tourShow(TR.i + 1));
-  el.querySelector('.tour-prev').addEventListener('click', () => tourShow(TR.i - 1));
-  el.querySelector('.tour-skip').addEventListener('click', tourEnd);
-  $('btnTour').addEventListener('click', tourStart);
-  document.addEventListener('keydown', e => {
-    if (TR.i < 0) return;
-    if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); tourShow(TR.i + 1); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopImmediatePropagation(); tourShow(TR.i - 1); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); tourEnd(); }
-    else if (e.key !== 'Tab') { e.stopImmediatePropagation(); }
-  }, true);
-  window.addEventListener('resize', () => { if (TR.i >= 0) tourPlace(TOUR[TR.i].t()); });
-  window.addEventListener('scroll', () => { if (TR.i >= 0) tourPlace(TOUR[TR.i].t()); }, true);
+async function openProjectFile(file,report=()=>{}) {
+  const L=J.mediaLabel;
+  const step=async(message,work)=>{
+    report(message);let timer;
+    try{return await Promise.race([work(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message+' — '+L('読み込みがタイムアウトしました。ファイルを端末にダウンロードしてから再度お試しください。','Loading timed out. Download the file to this device and try again.'))),60000);})]);}
+    finally{clearTimeout(timer);}
+  };
+  const loaded = await step(L('ファイルを確認しています','Reading project file'),()=>J.unpackProject(file)), project = loaded.project, assets = new Map();
+  let audio = null, audioFile = null;
+  try {
+    const files = new Map(loaded.files.map(entry=>[entry.kind+':'+entry.id,entry.file]));
+    for (const item of [...(project.media?.items || []),...(project.foreground?.items || [])]) {
+      if (assets.has(item.id)) continue;
+      const blob = files.get('media:'+item.id) || await J.loadMedia(item.id);
+      if (blob) await step(L('素材を復元しています：','Restoring asset: ')+item.name,()=>J.attachMedia(item,blob,assets));
+    }
+    if (project.audioAsset) {
+      audioFile = files.get('audio:'+project.audioAsset.id) || await J.loadMedia(project.audioAsset.id);
+      if (audioFile) audioFile = await J.snapshotMediaFile(audioFile);
+      if (audioFile) audio = await step(L('音声を解析しています','Analyzing audio'),()=>J.analyzeAudio(audioFile));
+    }
+    // Decode everything first: malformed projects leave the current edit intact.
+    for (const entry of loaded.files) {
+      await step(L('素材を保存しています：','Saving asset: ')+entry.name,()=>entry.kind==='font'?J.saveFontFile(entry.id,entry.file):J.storeMedia(entry.id,entry.file));
+    }
+    await step(L('フォントを復元しています','Restoring fonts'),()=>J.restoreFontFiles(project.userFonts));
+    replaceProject(project,audio,audioFile,assets);
+  } catch (err) { releaseProjectAssets(assets); throw err; }
 }
 
 /* ---------------- boot ---------------- */
 function boot() {
   S.project = loadLocal();
-  if (typeof UndoRedo !== 'undefined') UndoRedo.init(S.project);
-  bind(); initVolume(); syncUI(); replan();
+  cleanupDeletedMedia();
+  initUndo();
+  bind(); syncUI(); replan();
+  restoreMediaAssets();
+  restoreAudioAsset();
+  J.restoreFontFiles(S.project.userFonts).then(() => { fontKey = ''; ensureFonts(); S.need = true; }).catch(() => {});
   let mode = 'easy'; try { mode = localStorage.getItem('jizura.mode') || 'easy'; } catch (e) {}
   setMode(mode); commit();
-  bindTour();
-  let seen = false; try { seen = localStorage.getItem('jizura.tourDone') === '1'; } catch (e) {}
-  if (!seen && S.mode === 'easy' && !window.__adobe_cep__) setTimeout(tourStart, 600);   // first visit: show the tour once
   // open on a representative frame (end of the first cut's entrance)
   const c0 = S.plan.cuts.find(c => c.line >= 0);
   if (c0) seek(c0.start + Math.min(c0.dur * 0.6, c0.inDur + 0.25));
   requestAnimationFrame(tick);
-  // the song used last time (same name as the saved project's) comes back after a reload
-  if (J.loadSong && S.project.audioName) J.loadSong().then(f => { if (f && f.name === S.project.audioName && !S.audio) loadAudioFile(f, true); });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
-window.S = S;
-window.J = J;
-window.$ = $;
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview, UndoRedo, commit, cacheMediaElement, drawTimeline, MediaElementCache, exportRange, exportRangeLines };
+// hooks for hosts that embed the app (the After Effects CEP panel)
+J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
+  openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
+  removeLyricCut, removeMediaCut, connectTimelineBoundaries,
+  boundaryGroupLimits, commitTimelineBoundary };
 })();
