@@ -5591,16 +5591,27 @@ J.syncMediaPreview = (plan, t, playing) => {
   for (const [id, asset] of J.mediaAssets) {
     if (asset.type !== 'video') continue;
     const v = asset.element, cut = active.get(id);
-    if (!cut) { v.pause(); v.loop = false;asset.previewCut=null;continue; }
+    if (!cut) { v.pause(); v.loop = false; v.playbackRate = 1;asset.previewCut=null;continue; }
     v.loop = !!cut.videoLoop;
     const target = J.mediaVideoTime(cut, t, v.duration);
     const changed=asset.previewCut!==cut||t<(asset.previewTime??t)-.05;
     asset.previewCut=cut;asset.previewTime=t;
     if(v.seeking){v.pause();continue;}
     const now=performance.now();
-    if (Math.abs(v.currentTime - target) > (playing ? 0.18 : 0.02) && (!playing||changed||now-(asset.previewSeekAt??-Infinity)>700)) {v.pause();asset.previewSeekAt=now;v.currentTime = target;continue;}
-    if (playing && v.paused) v.play().catch(() => {});
-    if (!playing) v.pause();
+    // While playing, drift is absorbed by nudging the playback rate instead of seeking: every seek stalls the
+    // decoder, and a video that starts a little late (or decodes slowly) used to be re-seeked again and again.
+    let drift = v.currentTime - target;
+    if (cut.videoLoop && v.duration > 0) drift = ((drift % v.duration) + 1.5 * v.duration) % v.duration - v.duration / 2;
+    if (!playing) {
+      v.playbackRate = 1;
+      if (Math.abs(drift) > 0.02) { v.pause(); asset.previewSeekAt = now; v.currentTime = target; continue; }
+      v.pause(); continue;
+    }
+    if (changed ? Math.abs(drift) > 0.1 : Math.abs(drift) > 0.6 && now - (asset.previewSeekAt ?? -Infinity) > 1500) { v.pause(); asset.previewSeekAt = now; v.playbackRate = 1; v.currentTime = target; continue; }
+    if (v.paused) v.play().catch(() => {});
+    // ahead → slow down, behind → speed up (bounded so it is not noticeable); close enough → normal speed
+    const rate = Math.abs(drift) < 0.04 ? 1 : J.clamp(1 - drift * 0.8, 0.8, 1.25);
+    if (Math.abs(v.playbackRate - rate) > 0.02) v.playbackRate = rate;
   }
 };
 const chromaCanvases = new WeakMap();
