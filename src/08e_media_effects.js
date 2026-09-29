@@ -64,7 +64,8 @@ J.mediaEffectSettings = (p, layer = 'media') => {
   return settings;
 };
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
-  const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH);
+  // Only the techniques this layer can use (the background-only masks stay out of the foreground).
+  const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH).filter(key => !J.mediaTechAllowed || J.mediaTechAllowed(key, layer));
   settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < .55]));
   // Keep a usable pool even for an unlucky draw, while still producing a subset.
   const pick = () => keys[Math.floor(rnd() * keys.length)];
@@ -86,8 +87,9 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
     if (legacy) return { technique: 'legacy' };
     key = ov.seed != null ? null : 'none';
   }
-  if (key !== 'none' && !J.MEDIA_TECH[key]) {
-    const pool = Object.keys(J.MEDIA_TECH).filter(k => !J.MEDIA_TECH[k].stage && settings.enabled[k] !== false);
+  // Unknown keys, and background-only techniques on the foreground, fall back to the automatic pick.
+  if (key !== 'none' && !(J.MEDIA_TECH[key] && (!J.mediaTechAllowed || J.mediaTechAllowed(key, layer)))) {
+    const pool = Object.keys(J.MEDIA_TECH).filter(k => !J.MEDIA_TECH[k].stage && settings.enabled[k] !== false && (!J.mediaTechAllowed || J.mediaTechAllowed(k, layer)));
     key = pool.length ? rng.pick(pool) : 'none';
   }
   // Keep the cut's source filename; technique labels are read from MEDIA_TECH.

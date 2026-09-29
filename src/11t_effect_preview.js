@@ -17,7 +17,8 @@ function ensureDialog(){
   dialog.querySelector('button').setAttribute('aria-label',J.mediaLabel('閉じる','Close'));
   dialog.querySelector('.effect-preview-seek .progress').setAttribute('aria-label',J.mediaLabel('再生位置','Playback position'));
   document.body.append(dialog);canvas=dialog.querySelector('canvas');heading=dialog.querySelector('h2');
-  dialog.addEventListener('close',stop);
+  // The close event is queued: if the preview was reopened meanwhile (close, then ▶ at once), keep the new one.
+  dialog.addEventListener('close',()=>{if(!dialog.open)stop();});
   const outside = event => {
     const rect=dialog.getBoundingClientRect();
     return event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom;

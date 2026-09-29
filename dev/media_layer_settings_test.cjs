@@ -51,8 +51,9 @@ const assert = require('node:assert/strict');
         assert.equal(await tab.innerText(), layer === 'foreground' ? (locale ? 'Foreground' : '前景') : (locale ? 'Background' : '背景'));
         assert.equal(await panel.isVisible(), true);
         assert.equal(await page.locator(`#${other}EffectsPanel`).isVisible(), false);
-        assert.equal(await panel.locator('[data-media-tech]').count(), await page.evaluate(()=>Object.keys(J.MEDIA_TECH).length));
-        assert.equal(await panel.locator('details[data-media-group]').count(),9);// 8 technique categories + 装飾
+        // The マスク category (background-only techniques) appears in the background panel only.
+        assert.equal(await panel.locator('[data-media-tech]').count(), await page.evaluate(layer=>Object.keys(J.MEDIA_TECH).filter(key=>J.mediaTechAllowed(key,layer)).length,layer));
+        assert.equal(await panel.locator('details[data-media-group]').count(),layer==='media'?10:9);// 8 technique categories (+ マスク on the background) + 装飾
         assert.equal(await panel.locator('details[open]').count(),0,'categories initially collapse independently per layer');
         assert.equal(await panel.locator('[data-media-tech]').first().isVisible(),false);
         const cinema = panel.locator('[data-media-group="cinema"]'), total = await cinema.locator('[data-media-tech]').count();
@@ -91,7 +92,7 @@ const assert = require('node:assert/strict');
         await page.locator('#btnRedo').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === technique));
         await panel.locator('[data-media-action="enable"]').click();
-        assert.equal(await panel.locator('[data-media-tech]:checked').count(), await page.evaluate(()=>Object.keys(J.MEDIA_TECH).length));
+        assert.equal(await panel.locator('[data-media-tech]:checked').count(), await page.evaluate(layer=>Object.keys(J.MEDIA_TECH).filter(key=>J.mediaTechAllowed(key,layer)).length,layer));
         assert.deepEqual(await snapshot(other), untouched, 'enable/disable and undo must stay local to the tab');
         await page.locator('#btnUndo').click();
 
