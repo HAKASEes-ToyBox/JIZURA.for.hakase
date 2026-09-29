@@ -311,12 +311,26 @@ J.snapshotMediaFile = file => {
   task.catch(() => mediaSnapshots.delete(file));
   return task;
 };
+// If browser storage is unavailable, keep newly imported bytes for this session.
+// Never delete/reset an existing database to recover: it may contain user assets.
+const temporaryMedia = new Map();
+J.hasTemporaryMedia = () => temporaryMedia.size > 0;
+const storageChanged = () => window.dispatchEvent(new Event('jizura-media-storage'));
 J.storeMedia = async (id, file) => {
   const copy = await J.snapshotMediaFile(file);
-  return dbOp('readwrite', s => s.put(copy, id));
+  try {
+    await dbOp('readwrite', s => s.put(copy, id));
+    if (temporaryMedia.delete(id)) storageChanged();
+  } catch (error) {
+    temporaryMedia.set(id, copy);
+    storageChanged();
+  }
 };
-J.loadMedia = id => dbOp('readonly', s => s.get(id));
-J.removeMedia = id => dbOp('readwrite', s => s.delete(id));
+J.loadMedia = async id => temporaryMedia.has(id) ? temporaryMedia.get(id) : dbOp('readonly', s => s.get(id));
+J.removeMedia = async id => {
+  if (temporaryMedia.delete(id)) storageChanged();
+  return dbOp('readwrite', s => s.delete(id));
+};
 J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   file = await J.snapshotMediaFile(file);
   return new Promise((resolve, reject) => {

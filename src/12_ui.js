@@ -3138,6 +3138,16 @@ function syncUI() {
 
 /* ---------------- wiring ---------------- */
 function bind() {
+  const storageWarning = document.createElement('p');
+  storageWarning.id = 'mediaStorageWarning'; storageWarning.hidden = true;
+  storageWarning.setAttribute('role', 'status');
+  storageWarning.style.cssText = 'flex:0 0 100%;margin:0;padding:8px 12px;border:1px solid var(--amber);color:var(--amber);font-size:12px;white-space:normal';
+  storageWarning.textContent = J.mediaLabel('ブラウザ内に素材を保存できないため、一時保存で編集中です。曲・素材は再読み込みで失われます。ページを閉じる前に素材入りプロジェクトを保存してください。', 'Browser storage is unavailable. Imported audio and media are kept only for this session and will be lost on reload. Save a project with assets before closing this page.');
+  document.querySelector('#app > .bar').appendChild(storageWarning);
+  window.addEventListener('jizura-media-storage', () => { storageWarning.hidden = !J.hasTemporaryMedia(); });
+  window.addEventListener('beforeunload', event => {
+    if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
+  });
   const frameToggle=$('showItemFrames');
   $('showItemFramesLabel').textContent=J.mediaLabel('アイテム枠表示','Show item frames');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
