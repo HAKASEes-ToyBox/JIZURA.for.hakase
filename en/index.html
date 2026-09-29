@@ -5162,20 +5162,34 @@ J.storeMedia = async (id, file) => {
     storageChanged();
   }
 };
-J.loadMedia = async id => temporaryMedia.has(id) ? temporaryMedia.get(id) : dbOp('readonly', s => s.get(id));
+J.loadMedia = async id => {
+  if (temporaryMedia.has(id)) return temporaryMedia.get(id);
+  const file = await dbOp('readonly', s => s.get(id));
+  // Do not let callers retain a Blob backed by IndexedDB's on-disk file.
+  // This also covers restored audio and project/export APIs, not only video URLs.
+  return file ? J.snapshotMediaFile(file) : file;
+};
 J.removeMedia = async id => {
   if (temporaryMedia.delete(id)) storageChanged();
   return dbOp('readwrite', s => s.delete(id));
 };
+J.releaseMediaAsset = asset => {
+  if (!asset) return;
+  if (asset.element && asset.type === 'video') {
+    asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
+  } else if (asset.element) asset.element.removeAttribute('src');
+  if (asset.posterElement) asset.posterElement.removeAttribute('src');
+  if (asset.url) URL.revokeObjectURL(asset.url);
+};
 J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   file = await J.snapshotMediaFile(file);
   return new Promise((resolve, reject) => {
-  const previous = assets.get(item.id); if (previous) URL.revokeObjectURL(previous.url);
+  const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
   const el = document.createElement(item.type === 'video' ? 'video' : 'img');
   if (item.type === 'video') { el.muted = true; el.playsInline = true; el.preload = 'auto'; }
   let settled=false;
-  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;URL.revokeObjectURL(url);reject(new Error(J.mediaLabel('素材をCould not load：','Could not load asset: ')+item.name));};
+  const fail=()=>{if(settled)return;settled=true;clearTimeout(timer);el.onload=el.onloadedmetadata=el.onloadeddata=el.onerror=null;J.releaseMediaAsset({element:el,type:item.type,url});reject(new Error(J.mediaLabel('素材をCould not load：','Could not load asset: ')+item.name));};
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
@@ -39436,9 +39450,9 @@ async function cleanupDeletedMedia() {
   for (const id of pending) {
     if (active.has(id)) continue;
     try {
-      await J.removeMedia(id);
       const asset = J.mediaAssets.get(id);
-      if (asset) { URL.revokeObjectURL(asset.url); J.mediaAssets.delete(id); }
+      if (asset) { J.releaseMediaAsset(asset); J.mediaAssets.delete(id); }
+      await J.removeMedia(id);
     } catch (e) { failed.push(id); }
   }
   try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify(pendingMediaDeletes().filter(id => !pending.includes(id) || failed.includes(id)))); } catch (e) {}
@@ -43136,8 +43150,7 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
 
 function releaseProjectAssets(assets) {
   for (const asset of assets.values()) {
-    if (asset.type === 'video') { asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load(); }
-    URL.revokeObjectURL(asset.url);
+    J.releaseMediaAsset(asset);
   }
   assets.clear();
 }

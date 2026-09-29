@@ -109,9 +109,9 @@ async function cleanupDeletedMedia() {
   for (const id of pending) {
     if (active.has(id)) continue;
     try {
-      await J.removeMedia(id);
       const asset = J.mediaAssets.get(id);
-      if (asset) { URL.revokeObjectURL(asset.url); J.mediaAssets.delete(id); }
+      if (asset) { J.releaseMediaAsset(asset); J.mediaAssets.delete(id); }
+      await J.removeMedia(id);
     } catch (e) { failed.push(id); }
   }
   try { localStorage.setItem(MEDIA_DELETE_KEY, JSON.stringify(pendingMediaDeletes().filter(id => !pending.includes(id) || failed.includes(id)))); } catch (e) {}
@@ -3809,8 +3809,7 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
 
 function releaseProjectAssets(assets) {
   for (const asset of assets.values()) {
-    if (asset.type === 'video') { asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load(); }
-    URL.revokeObjectURL(asset.url);
+    J.releaseMediaAsset(asset);
   }
   assets.clear();
 }
