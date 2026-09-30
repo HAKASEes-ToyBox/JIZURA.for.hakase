@@ -288,6 +288,17 @@ J.finishLyricPlan = (project, plan, audio) => {
     // slotEnd keeps the cut's own slot (what placement used) once its end follows the group.
     if (cut.displayEnd > cut.end) { cut.slotEnd = cut.end; cut.end = cut.displayEnd; cut.dur = cut.end - cut.start; }
   }
+  // Manual areas use the same layout seed and retained duration as automatic areas.
+  // Moving a cut therefore keeps its layout variants; resizing only refits its geometry.
+  for(const cut of plan.cuts)if(cut.areaMode==='manual' && cut.area && J.LAYOUTS[cut.layout]?.plan){
+    cut.params=J.LAYOUTS[cut.layout].plan(J.rng(J.h(cut.seed,318)),{
+      text:cut.text,n:[...cut.text.replace(/\s/g,'')].length,
+      W:plan.W*cut.area.w,H:plan.H*cut.area.h,dur:cut.dur,
+    },plan.style);
+    if(cut.text.includes('\n'))cut.params.sx=1;
+    if(cut.emphasis&&cut.contentScale===J.EMPHASIS_TEXT_SCALE||cut.suppressed&&cut.contentScale===J.SUPPRESSED_TEXT_SCALE)cut.contentScale=1;
+  }
+
 };
 
 // Resolve retained groups once at plan time: seeking never moves earlier lyrics.

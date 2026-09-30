@@ -313,7 +313,8 @@ J.plan = (project, audio, chain) => {
     if (li > 0 && ln.gapBefore) paragraph++;
     const s = tm.starts[li], e = tm.ends[li];
     const ov = (project.overrides || {})[li] || {};
-    const area = J.lyricArea(ov.area), layoutW = area ? W * area.w : W, layoutH = area ? H * area.h : H;
+    // Placement must not change effect selection or its random stream. Fit the chosen layout later.
+    const area = J.lyricArea(ov.area), layoutW = W, layoutH = H;
     const lineSeed = ov.lock && ov.lockedSeed != null ? ov.lockedSeed : J.h(project.seed, li + 1, ov.seed | 0);
     const rng = J.rng(lineSeed);
     const chainMark = chain ? { h: history.length, b: bgHistory.length, f: fxHistory.length } : null;
