@@ -476,7 +476,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
-.cut-mask-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 6px; }
+.cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.cut-mask-opacity-row { display: flex; gap: 12px; align-items: center; }
+.cut-mask-opacity-row input[type=number] { width: 5em; min-width: 0; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -41213,10 +41215,9 @@ function openCutDetails(layer,index,part=0) {
   dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
-  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label><p class="hint"></p>`;
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label>`;
   pane.querySelector('h2').textContent=L('cutsの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('Foreground','Foreground'):L('Background','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;
   pane.querySelector('.progress').setAttribute('aria-label',L('Play位置','Playback position'));
-  pane.querySelector('.hint').textContent=L('このcutsの区間をループPlayします。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
   const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
   solo.addEventListener('change',()=>{cutPreviewSolo=solo.checked;});
   const focus=pane.querySelector('[data-preview-focus]');focus.checked=cutPreviewFocus;focus.nextElementSibling.textContent=L('編集対象にフォーカス','Focus on the edited cut');
@@ -41324,7 +41325,10 @@ function openCutDetails(layer,index,part=0) {
       if(opacityInput.value===''||!opacityInput.validity.valid)return;
       mask.opacity=Number(opacityInput.value);save();
     });
-    section.querySelector('.cut-mask-controls').append(opacityLabel);
+    const controls=section.querySelector('.cut-mask-controls');
+    const [useLabel,targetLabel,invertLabel]=controls.children;
+    const opacityRow=document.createElement('div');opacityRow.className='cut-mask-opacity-row';opacityRow.append(opacityLabel,invertLabel);
+    controls.replaceChildren(useLabel,opacityRow,targetLabel);
     function draw(){
       const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
       if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
@@ -41748,7 +41752,7 @@ function openCutDetails(layer,index,part=0) {
       const panel=e.target.closest('[data-detail-tab-panel]');if(panel)selectTab(panel.dataset.detailTabPanel);
       for(let node=e.target.parentElement;node&&node!==form;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
     },true);
-    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape],select[data-mask-field]')){
+    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape]')){
       const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
       attachDetailRandom(select,path);
     }
