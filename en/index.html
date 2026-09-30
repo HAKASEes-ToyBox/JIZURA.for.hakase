@@ -487,6 +487,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
 .cut-mask-opacity-row { display: flex; gap: 12px; align-items: center; }
 .cut-mask-opacity-row input[type=number] { width: 5em; min-width: 0; }
+.cut-mask-feather { width: 100%; }
+.cut-mask-feather input { flex: 1; width: 120px; min-width: 50px; }
+.cut-mask-feather output { min-width: 3ch; text-align: right; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -8014,7 +8017,7 @@ J.normalizeMask = m => {
   const shapes = (Array.isArray(m.shapes) ? m.shapes : []).filter(s => s && J.MASK_SHAPES.includes(s.type)).map(s => ({
     type: s.type, cx: num(s.cx, .5), cy: num(s.cy, .5), w: Math.max(0, num(s.w, .5)), h: Math.max(0, num(s.h, .5)), angle: J.clamp(num(s.angle, 0), -180, 180), lockAspect: s.lockAspect !== false,
   })).filter(s => s.w > 0 && s.h > 0);
-  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, opacity: J.clamp(num(m.opacity, 100), 0, 100), shapes, motion: J.normalizeMaskMotion(m.motion) };
+  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, opacity: J.clamp(num(m.opacity, 100), 0, 100), feather: J.clamp(num(m.feather, 0), 0, 100), shapes, motion: J.normalizeMaskMotion(m.motion) };
 };
 // The editor previews the unmasked reference while it is drawn.
 J.masksSuspended = false;
@@ -8076,7 +8079,7 @@ const motionState = (motion, { cut, t, plan }) => {
 // Keep (or, inverted, remove) the union of the shapes on a whole canvas. matrix maps frame units to pixels;
 // timing ({cut, t, plan}) animates the mask when it has a motion.
 J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
-  const [m, mx] = buffer('shapes', canvas.width, canvas.height);
+  let [m, mx] = buffer('shapes', canvas.width, canvas.height);
   if (timing && J.maskMotionActive(mask.motion) && J.paintMediaEffect) {
     // Draw the shapes as a white image and move it with the media painter (phases, holds, beats, cameras).
     const sx = Math.hypot(matrix.a, matrix.b), sy = Math.hypot(matrix.c, matrix.d), k = Math.min(1, 2048 / Math.max(fw * sx, fh * sy, 1));
@@ -8091,6 +8094,15 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     mx.setTransform(matrix); mx.fillStyle = '#fff';
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
     for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
+  }
+  // Blur the completed union (including motion) before inversion and opacity.
+  // A size-relative radius keeps preview and export consistent at any resolution.
+  const feather = J.clamp(num(mask.feather, 0), 0, 100);
+  if (feather > 0) {
+    const [soft, sx] = buffer('feather', canvas.width, canvas.height);
+    sx.filter = `blur(${Math.min(canvas.width, canvas.height) * feather / 1000}px)`;
+    sx.drawImage(m, 0, 0); sx.filter = 'none';
+    m = soft; mx = sx;
   }
   const opacity = J.clamp(num(mask.opacity, 100), 0, 100) / 100;
   // Interpolate the mask coverage with an unmasked frame. Fill the union once,
@@ -41343,6 +41355,12 @@ function openCutDetails(layer,index,part=0) {
     const [useLabel,targetLabel,invertLabel]=controls.children;
     const opacityRow=document.createElement('div');opacityRow.className='cut-mask-opacity-row';opacityRow.append(opacityLabel,invertLabel);
     controls.replaceChildren(useLabel,opacityRow,targetLabel);
+    const featherLabel=document.createElement('label');featherLabel.className='cut-mask-feather';
+    featherLabel.innerHTML=`<span>${L('境界のBlur','Edge feathering')}</span><input type="range" min="0" max="100" step="1" data-mask-field="feather"><output></output>`;
+    const featherInput=featherLabel.querySelector('input'),featherValue=featherLabel.querySelector('output');
+    featherInput.value=mask.feather;featherValue.textContent=String(mask.feather);
+    featherInput.addEventListener('input',()=>{mask.feather=Number(featherInput.value);featherValue.textContent=String(mask.feather);save();});
+    controls.append(featherLabel);
     function draw(){
       const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
       if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
@@ -41350,10 +41368,9 @@ function openCutDetails(layer,index,part=0) {
       try{x.drawImage(ref.image,ref.sx,ref.sy,ref.sw,ref.sh,0,0,w,ch);}catch(e){}
       // Darken what the mask hides.
       const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
-      sx.fillStyle='rgba(0,0,0,.62)';
-      if(mask.invert){for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
-      else{sx.fillRect(0,0,w,ch);sx.globalCompositeOperation='destination-out';for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
-      if(mask.enabled){x.save();x.globalAlpha=mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
+      sx.fillStyle='#000';sx.fillRect(0,0,w,ch);
+      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix([w,0,0,ch,0,0]),1,1);
+      if(mask.enabled){x.save();x.globalAlpha=.62*mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
         if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}

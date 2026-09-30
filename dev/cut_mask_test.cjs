@@ -6,6 +6,19 @@ const result=await page.evaluate(()=>{
 const failures=[],check=(ok,m)=>{if(!ok)failures.push(m)};
 // Mask opacity controls concealment, including overlapping shapes and inversion.
 check(J.normalizeMask({}).opacity===100,'legacy mask opacity defaults to 100');
+check(J.normalizeMask({}).feather===0&&J.normalizeMask({feather:150}).feather===100,'feather defaults and bounds');
+const softAlpha=(feather,invert=false,opacity=100,size=200)=>{
+ const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.fillRect(0,0,size,size);
+ const mask=J.normalizeMask({enabled:true,feather,invert,opacity,shapes:[{type:'rect',cx:.5,cy:.5,w:.5,h:.5}]});
+ J.applyMaskToCanvas(c,mask,new DOMMatrix([size,0,0,size,0,0]),1,1);
+ return [.2,.3,.5].map(u=>x.getImageData(Math.round(u*size),size/2,1,1).data[3]);
+};
+const hard=softAlpha(0),soft=softAlpha(50),inverse=softAlpha(50,true),half=softAlpha(50,false,50),large=softAlpha(50,false,100,400);
+check(hard[0]===0&&hard[1]===255,'zero feather preserves hard edges');
+check(soft[0]>0&&soft[1]<255&&soft[2]>250,'feather creates an edge gradient');
+check(soft.every((v,i)=>Math.abs(v+inverse[i]-255)<=1),'feather inversion complements alpha');
+check(half.every((v,i)=>Math.abs(v-(127.5+soft[i]/2))<=2),'feather combines with opacity');
+check(soft.every((v,i)=>Math.abs(v-large[i])<=5),'feather scales with export resolution');
 check(J.normalizeMask({opacity:150}).opacity===100&&J.normalizeMask({opacity:-1}).opacity===0,'opacity bounds');
 for(const invert of [false,true])for(const opacity of [0,50,100]){
  const c=document.createElement('canvas');c.width=100;c.height=100;const x=c.getContext('2d');
@@ -145,6 +158,8 @@ await section.locator('[data-mask-motion="technique"]').selectOption('rollAcross
 await section.locator('[data-mask-motion="duration"]').fill('0.8');await section.locator('[data-mask-motion="duration"]').dispatchEvent('change');
 assert.equal(await section.locator('[data-mask-field="opacity"]').inputValue(),'100');
 await section.locator('[data-mask-field="opacity"]').fill('50');
+assert.equal(await section.locator('[data-mask-field="feather"]').inputValue(),'0');
+await section.locator('[data-mask-field="feather"]').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));});
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Cut:':'カット：'));
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
@@ -152,6 +167,8 @@ const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.opacity),50);
 assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].mask.opacity),50);
+assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].mask.feather),40);
+assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.feather),40);
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
 assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
