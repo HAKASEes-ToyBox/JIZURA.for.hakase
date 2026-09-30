@@ -41667,6 +41667,7 @@ function drawItemFrames() {
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
     const selected=S.areaEdit && (S.areaEdit.kind==='lyric'?'lyrics':S.areaEdit.kind)===layer && S.areaEdit.index===index;
+    if(S.areaEdit&&!selected)return '';
     if(selected)area={...S.areaEdit.draft,angle:S.areaEdit.angle};
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;

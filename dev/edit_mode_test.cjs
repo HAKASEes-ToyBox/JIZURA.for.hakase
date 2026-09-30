@@ -8,7 +8,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
  for(const layer of ['foreground','lyrics','media']){
   const original=await page.evaluate(()=>JSON.stringify(J.ui.project)),time=await page.evaluate(()=>J.ui.t);
   await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).first().click();
-  assert.equal(await page.evaluate(()=>J.ui.t),time,'preview selection preserves time');assert.equal(await page.locator('#itemFrames').isVisible(),true);assert.equal(await page.locator(`.item-frame-action:not([data-layer="${layer}"])`).count(),0,'other item icons hidden');assert.ok(await page.locator(`.item-frame-action[data-layer="${layer}"]`).count()>0,'selected icons remain');
+  assert.equal(await page.evaluate(()=>J.ui.t),time,'preview selection preserves time');assert.equal(await page.locator('#itemFrames').isVisible(),true);assert.equal(await page.locator(`.item-frame-action:not([data-layer="${layer}"])`).count(),0,'other item icons hidden');assert.equal(await page.locator('.item-frame-outline').count(),1,'only selected outline remains');assert.equal(await page.locator('.item-frame-name').count(),1,'only selected name remains');assert.ok(await page.locator(`.item-frame-action[data-layer="${layer}"]`).count()>0,'selected icons remain');
   assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),true,'transport inert during selection');
   const bounds=await page.locator('#viewport').boundingBox(),controls=await page.locator('#areaEditControls').boundingBox();
   assert.ok(controls.y>=bounds.y+bounds.height && controls.y-bounds.y-bounds.height<16,'controls immediately under preview');
