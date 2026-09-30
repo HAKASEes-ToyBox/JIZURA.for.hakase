@@ -28,7 +28,7 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   await modal.locator('[data-detail-tab="motion"]').click();
   await modal.locator('[data-detail-field="hold"]').selectOption('still');
   await modal.locator('[data-detail-tab="placement"]').click();
-  await modal.locator('[data-detail-field="area.w"]').fill('0.6');
+  await modal.locator('[data-detail-field="area.w"]').fill('60');
   await modal.getByRole('button',{name:locale?'Apply':'適用',exact:true}).click();
   const saved=await page.evaluate(()=>{J.uiApi.replan();return J.ui.plan.cuts.filter(c=>c.line>=0&&Number.isInteger(c.part)).map(c=>({text:c.text,opacity:c.opacity,blend:c.blend,area:c.area}));});
   assert.equal(saved[0].text,'編集したカット');assert.equal(saved[0].opacity,42);assert.equal(saved[0].blend,'overlay');assert.equal(saved[0].area.w,.6);assert.notEqual(saved[1].text,saved[0].text);

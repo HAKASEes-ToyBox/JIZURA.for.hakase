@@ -897,10 +897,8 @@ function openCutDetails(layer,index,part=0) {
   function maskEditor(parent){
     const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
-    const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
-    section.open=openDetails.get('mask') ?? mask.enabled;
-    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
-    section.querySelector('summary').textContent=L('マスク','Mask');
+    const section=document.createElement('section');section.dataset.detailSection='mask';section.className='cut-mask';
+    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
@@ -954,10 +952,11 @@ function openCutDetails(layer,index,part=0) {
       const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
       kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);attachDetailRandom(kindSelect,'mask.shape.type');
       for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','角度（度）','Angle (degrees)',-180,180]]){
-        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="any" min="${min}" max="${max}" data-mask-shape="${key}">`;
-        const input=row.querySelector('input');input.value=+s[key].toFixed(4);
+        const factor=['w','h'].includes(key)?100:1;
+        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}${factor===100?L('（％）',' (%)'):''}</span><input type="number" step="any" min="${min*factor}" max="${max*factor}" data-mask-shape="${key}">`;
+        const input=row.querySelector('input');input.value=+(s[key]*factor).toFixed(4);
         input.addEventListener('change',()=>{
-          const v=Number(input.value);if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
+          const v=Number(input.value)/factor;if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
           // Locked aspect: width and height scale together.
           if(s.lockAspect&&(key==='w'||key==='h')&&s[key]>0){const other=key==='w'?'h':'w';s[other]=J.clamp(s[other]*next/s[key],.01,4);}
           s[key]=next;fields();save();
@@ -1062,7 +1061,7 @@ function openCutDetails(layer,index,part=0) {
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置・サイズ（画面比率）','Placement / size (stage ratios)'],
     motionScale:['動きの倍率','Motion scale'],contentScale:['文字サイズ倍率','Text scale'],effectSettings:['演出パラメータ','Effect parameters'],
     motion:['動きの強さ','Motion amount'],treatment:['加工の強さ','Treatment amount'],duration:['登場・退場時間（秒）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（秒）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['角度（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
-    untilNext:['次カット再生まで','Until the next cut'],endTime:['カット終了時間（秒）','Cut end (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
+    untilNext:['次カット再生まで','Until the next cut'],endTime:['終了位置（秒）','End position (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => names[key] ? L(...names[key]) : key;
@@ -1211,9 +1210,9 @@ function openCutDetails(layer,index,part=0) {
   }
   function fieldEditor(parent,field,value,onChange,path=field) {
     if(value && typeof value==='object') {
-      const section=document.createElement('details'); section.dataset.detailSection=path;
+      const section=document.createElement(path==='decor'?'section':'details'); section.dataset.detailSection=path;
       section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
-      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); section.append(title);
+      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       for(const [child,v] of Object.entries(value)) {
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
@@ -1221,7 +1220,7 @@ function openCutDetails(layer,index,part=0) {
         fieldEditor(grid,child,v,next=>{
           if (value.lockAspect && ['w','h'].includes(child) && value[child]>0) {
             const other=child==='w'?'h':'w'; value[other]*=next/value[child];
-            const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=value[other];
+            const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=+(value[other]*100).toFixed(6);
           }
           value[child]=next;onChange(clone(value));
         },`${path}.${child}`);
@@ -1233,15 +1232,16 @@ function openCutDetails(layer,index,part=0) {
       if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1} を削除`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
       return;
     }
-    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field);row.append(text);
+    const percent=typeof value==='number' && ['w','h','contentScale'].includes(field), factor=percent?100:1;
+    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field)+(percent?L('（％）',' (%)'):'');row.append(text);
     const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
-    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
+    else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     input.addEventListener('change',()=>{
-      const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value):input.value;
+      const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value)/factor:input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
       if(/^decor\.\d+\.id$/.test(path))preview();
@@ -1270,7 +1270,6 @@ function openCutDetails(layer,index,part=0) {
     removedDetail=null;
     const scrollTop=formHost.scrollTop;
     formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
-    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のカットの値です。表示範囲の 1 は画面全体の幅・高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
     fieldEditor(grid,'start',start,v=>{start=v;});
@@ -1357,7 +1356,7 @@ function openCutDetails(layer,index,part=0) {
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
-    const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
+    const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');reset.className='cut-details-reset';buttons.append(reset,apply,cancel);
     formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       applyDisabledChoices(S.project);

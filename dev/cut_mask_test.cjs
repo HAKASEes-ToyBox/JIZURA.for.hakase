@@ -100,8 +100,8 @@ await page.evaluate(()=>{const p=J.ui.project;const c=document.createElement('ca
  p.media={...p.media,items:[{id:'mk',name:'mk.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'mk',technique:'none'}}};J.uiApi.syncUI();J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
 const modal=page.locator('#cutDetailsDialog'),section=modal.locator('[data-detail-section="mask"]');
-assert.equal((await section.locator('summary').textContent()),lang?'Mask':'マスク');assert.equal(await section.evaluate(el=>el.open),false);
-await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();
+assert.equal(await section.locator(':scope > summary').count(),0);
+await modal.locator('[data-detail-tab="mask"]').click();
 assert.equal(await section.locator('[data-mask-field="target"] option').allTextContents().then(x=>x.join('/')),lang?'Source/Cut':'素材/カット');
 await section.locator('[data-mask-field="enabled"]').check();
 // The first circle is round on screen: width × frame aspect = height.
@@ -122,10 +122,10 @@ const after=+await section.locator('[data-mask-shape="cx"]').inputValue();assert
 // Lock aspect (default on): width edits scale height; off: independent.
 assert.equal(await section.locator('[data-mask-shape="lockAspect"]').isChecked(),true);
 let ratio=+await section.locator('[data-mask-shape="h"]').inputValue()/ +await section.locator('[data-mask-shape="w"]').inputValue();
-await section.locator('[data-mask-shape="w"]').fill('0.2');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
-assert.ok(Math.abs(+await section.locator('[data-mask-shape="h"]').inputValue()-.2*ratio)<.002,'locked width edit');
+await section.locator('[data-mask-shape="w"]').fill('20');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+assert.ok(Math.abs(+await section.locator('[data-mask-shape="h"]').inputValue()-20*ratio)<.002,'locked width edit');
 // Resizing by the corner handle keeps the ratio too.
-const shape=async()=>page.evaluate(()=>{const g=k=>+document.querySelector(`[data-mask-shape="${k}"]`).value;return {cx:g('cx'),cy:g('cy'),w:g('w'),h:g('h'),angle:g('angle')};});
+const shape=async()=>page.evaluate(()=>{const g=k=>+document.querySelector(`[data-mask-shape="${k}"]`).value;return {cx:g('cx'),cy:g('cy'),w:g('w')/100,h:g('h')/100,angle:g('angle')};});
 let s=await shape();const cb=await section.locator('canvas').boundingBox(),toPage=(u,v)=>[cb.x+u*cb.width,cb.y+v*cb.height];
 const rad=s.angle*Math.PI/180,hx=s.cx+(s.w/2*Math.cos(rad)*cb.width-s.h/2*Math.sin(rad)*cb.height)/cb.width,hy=s.cy+(s.w/2*Math.sin(rad)*cb.width+s.h/2*Math.cos(rad)*cb.height)/cb.height;
 await page.mouse.move(...toPage(hx,hy));await page.mouse.down();await page.mouse.move(...toPage(hx+.08,hy+.02),{steps:4});await page.mouse.up();
@@ -136,7 +136,7 @@ assert.equal(await section.locator('canvas').evaluate(c=>c.style.cursor),'var(--
 await page.mouse.down();await page.mouse.move(...toPage(s.cx,s.cy+(s.w/2*cb.width+14)/cb.height),{steps:8});await page.mouse.up();
 t=await shape();assert.ok(Math.abs(t.angle-s.angle-90)<3,'rotated '+s.angle+' -> '+t.angle);assert.deepEqual([t.cx,t.cy,t.w,t.h],[s.cx,s.cy,s.w,s.h]);
 await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=+await section.locator('[data-mask-shape="h"]').inputValue();
-await section.locator('[data-mask-shape="w"]').fill('0.3');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+await section.locator('[data-mask-shape="w"]').fill('30');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
 assert.equal(+await section.locator('[data-mask-shape="h"]').inputValue(),hBefore);
 // Motion: all None at first; pick a technique, an entrance (a reveal shape) and an exit.
 assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Mask motion':'マスクのモーション');
@@ -157,14 +157,14 @@ assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].deta
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
 await page.evaluate(()=>{delete J.ui.project.media.cutOverrides[0].details.mask;J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
-await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
+await modal.locator('[data-detail-tab="mask"]').click();await section.locator('[data-mask-field="enabled"]').check();
 await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await page.waitForTimeout(400);await section.locator('[data-mask-motion="entrance"]').selectOption('none');
 assert.equal(await modal.locator('form').evaluate(f=>f.checkValidity()),true);
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();await modal.waitFor({state:'detached'});
 const shown=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=320;c.height=180;const x=c.getContext('2d');new J.Renderer().frame(x,J.ui.plan,3,{scale:320/J.ui.plan.W,noHud:true,noLyrics:true});const d=x.getImageData(0,0,320,180).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>180&&d[i+1]<90&&d[i+2]<90)n++;return {entrance:J.ui.project.media.cutOverrides[0].details.mask.motion.entrance,red:n/(d.length/4)};});
 assert.equal(shown.entrance,'none');assert.ok(shown.red>.05,'source visible after reveal reset '+JSON.stringify(shown));
 // Lyric cut details show the mask section with the display-area hint.
-await page.locator('#lineList .cut-details-open').first().click();await modal.locator('[data-detail-tab="mask"]').click();await section.locator('summary').click();
+await page.locator('#lineList .cut-details-open').first().click();await modal.locator('[data-detail-tab="mask"]').click();
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
 await modal.getByRole('button',{name:lang?'Cancel':'キャンセル',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(lang||'ja','cut mask passed');await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

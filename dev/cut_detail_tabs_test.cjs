@@ -22,12 +22,17 @@ const {timelineAction}=require('./ui_helpers.cjs');
     assert.equal(await modal.locator('[role=tabpanel]:visible').count(),1);
     assert.equal(await modal.locator(`[data-detail-tab-panel="${id}"]`).isVisible(),true);
    }
+   assert.equal(await modal.locator('.cut-details-actions button').nth(1).getAttribute('class'),'primary');
+   await modal.locator('[data-detail-tab="placement"]').click();
+   const sizeField=layer==='lyrics'?'area.w':'placement.w';
+   await modal.locator(`[data-detail-field="${sizeField}"]`).fill('65');
+   await modal.locator(`[data-detail-field="${sizeField}"]`).dispatchEvent('change');
    await modal.locator('[data-detail-tab="motion"]').click();
    const field=layer==='lyrics'?'hold':'technique';
    await modal.locator(`[data-detail-field="${field}"]`).selectOption(layer==='lyrics'?'still':'beatPulse');
    assert.equal(await modal.locator('[role=tab][aria-selected=true]').getAttribute('data-detail-tab'),'motion','tab survives form rebuild');
    await modal.locator('[data-detail-tab="mask"]').click();
-   await modal.locator('[data-detail-section="mask"] summary').click();
+   assert.equal(await modal.locator('[data-detail-section="mask"] > summary').count(),0);
    await modal.locator('[data-mask-field="enabled"]').check();
    await modal.locator('[data-mask-field="opacity"]').fill('35');
    await modal.locator('[data-detail-tab="basic"]').click();
@@ -39,6 +44,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
    assert.ok(bounds.scroll<=bounds.width+1,'dialog does not overflow horizontally');
    await modal.locator('button[type=submit]').click();
    assert.equal(await page.evaluate(layer=>(layer==='lyrics'?J.ui.plan.cuts.find(c=>c.line===0):J.ui.plan[layer].cuts[0]).mask.opacity,layer),35);
+   assert.equal(await page.evaluate(layer=>layer==='lyrics'?J.ui.project.lyricCutOptions['0:0'].details.area.w:J.ui.project[layer].cutOverrides[0].placement.w,layer),.65);
   }
   assert.deepEqual(errors,[]);console.log(lang||'ja',width,'detail tabs, editing, persistence, keyboard and mobile passed');await page.close();
  }}finally{await browser.close();}

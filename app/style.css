@@ -465,6 +465,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
 .cut-mask-motion h4 { margin: 0 0 4px; font-size: 13px; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
+.cut-details-form > form { min-height: 100%; display: flex; flex-direction: column; }
+.cut-details-form .cut-details-actions { margin-top: auto; flex-wrap: nowrap; }
+.cut-details-reset { margin-right: auto; }
+.cut-details-actions button { min-width: 0; white-space: normal; }
+.cut-details-grid > section { grid-column: 1 / -1; min-width: 0; }
 .cut-details-tabs { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: -24px; z-index: 2; background: #191b20; padding: 10px 0; margin-bottom: 14px; border-bottom: 1px solid #45474e; }
 .cut-details-tabs button { padding: 7px 10px; font-size: 12px; }
 .cut-details-tabs button[aria-selected=true] { color: #ffb000; border-color: #ffb000; background: #302719; }
