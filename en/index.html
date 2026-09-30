@@ -955,7 +955,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="Preview">
       <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="回転"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label><button id="mediaAreaAngleReset" class="ghost" type="button">Reset angle</button></div><div class="area-edit-actions"><button id="areaResetFull" class="ghost" type="button">Full screen</button><button id="areaResetAuto" class="ghost" type="button">Reset automatic placement</button><button id="areaDelete" type="button">削除</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div></div>
+      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label><button id="mediaAreaAngleReset" class="ghost" type="button">Reset angle</button></div><div class="area-edit-actions"><button id="areaResetAuto" class="ghost" type="button">Auto配置</button><button id="areaResetFull" class="ghost" type="button">Full area</button><button id="areaDelete" type="button">削除</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div></div>
       <div id="tapPanel" class="tapbox" hidden>
         <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
         <div class="hint" id="tapHint">Press Space or the button when each lyric line or media cut starts.</div>
@@ -42500,7 +42500,8 @@ function showAreaDraft() {
   $('mediaAreaAngleField').hidden = !edit;
   if (edit) $('mediaAreaAngle').value = String(edit.angle);
   $('areaResetFull').hidden = !edit || media;
-  $('areaResetAuto').hidden = !edit || media || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
+  $('areaResetAuto').hidden = !edit || media;
+  $('areaResetAuto').disabled = !edit || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
   $('areaApplyOne').textContent = J.mediaLabel('配置決定','Set placement');
   $('areaApplyOne').disabled = !area;
   $('areaApplyFollowing').disabled = !area;
@@ -44020,7 +44021,7 @@ function bind() {
     const area = J.plan(project, audioLike()).cuts.find(c => c.line === edit.index && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1, angle: 0, lockAspect: true };
     edit.draft = { ...area }; edit.ratio = area.h / area.w; edit.angle = area.angle; edit.lockAspect = area.lockAspect;
     edit.autoDraft = JSON.stringify(J.lyricArea(area));
-    applyAreaEditor(false);
+    showAreaDraft();
   });
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));

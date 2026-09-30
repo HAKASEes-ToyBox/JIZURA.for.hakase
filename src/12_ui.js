@@ -2059,7 +2059,8 @@ function showAreaDraft() {
   $('mediaAreaAngleField').hidden = !edit;
   if (edit) $('mediaAreaAngle').value = String(edit.angle);
   $('areaResetFull').hidden = !edit || media;
-  $('areaResetAuto').hidden = !edit || media || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
+  $('areaResetAuto').hidden = !edit || media;
+  $('areaResetAuto').disabled = !edit || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
   $('areaApplyOne').textContent = J.mediaLabel('配置決定','Set placement');
   $('areaApplyOne').disabled = !area;
   $('areaApplyFollowing').disabled = !area;
@@ -3579,7 +3580,7 @@ function bind() {
     const area = J.plan(project, audioLike()).cuts.find(c => c.line === edit.index && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1, angle: 0, lockAspect: true };
     edit.draft = { ...area }; edit.ratio = area.h / area.w; edit.angle = area.angle; edit.lockAspect = area.lockAspect;
     edit.autoDraft = JSON.stringify(J.lyricArea(area));
-    applyAreaEditor(false);
+    showAreaDraft();
   });
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
