@@ -26,5 +26,20 @@ const {timelineAction}=require('./ui_helpers.cjs');
  await page.locator('#showItemFrames').uncheck();await timelineAction(page,'[data-layer="lyrics"]','area');assert.equal(await page.locator('#showItemFrames').isChecked(),true);
  await page.locator('#mediaAreaAngle').fill('30');await page.locator('#mediaAreaAngle').dispatchEvent('input');await page.locator('#areaApplyOne').click();
  assert.equal(await page.locator('#showItemFrames').isChecked(),false,'temporary edit mode restored');assert.equal(await page.evaluate(()=>J.ui.project.overrides[0].area.angle),30);
- await page.locator('#showItemFrames').check();assert.deepEqual(errors,[]);console.log(locale||'ja',width,'selection, move, resize, rotation, cancel and timeline restoration passed');await page.close();
+ await page.locator('#showItemFrames').check();
+ await page.locator('.item-frame-name[data-select-layer="lyrics"]').click();
+ await page.locator('#mediaAreaAngle').fill('45');await page.locator('#mediaAreaAngle').dispatchEvent('input');
+ const clearCorners=await page.evaluate(()=>{const tools=document.querySelector('.item-frame-tools.lyrics').getBoundingClientRect(),svg=document.querySelector('.item-frame-outline.lyrics'),box=svg.getBoundingClientRect();return [...svg.querySelector('polygon').points].every(p=>p.x+box.x<tools.left-4||p.x+box.x>tools.right+4||p.y+box.y<tools.top-4||p.y+box.y>tools.bottom+4)});
+ assert.ok(clearCorners,'rotated corners do not overlap menu');
+ for(const layer of ['lyrics','foreground','media']){
+  const lock=page.locator(`.item-frame-action[data-layer="${layer}"][data-action="lock"]`),before=await lock.getAttribute('aria-pressed');await lock.click();assert.notEqual(await lock.getAttribute('aria-pressed'),before);
+ }
+ const seed=await page.evaluate(()=>J.ui.plan.foreground.cuts[0].seed);
+ await page.locator('.item-frame-action[data-layer="foreground"][data-action="dice"]').click();assert.notEqual(await page.evaluate(()=>J.ui.plan.foreground.cuts[0].seed),seed);
+ assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'menu preserves placement draft');
+ await page.locator('.item-frame-action[data-layer="media"][data-action="details"]').click();await page.locator('#cutDetailsDialog').getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
+ assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'details dialog keeps selection');
+ await page.locator('.item-frame-action[data-layer="lyrics"][data-action="remove"]').click();assert.equal(await page.evaluate(()=>J.ui.areaEdit),null,'delete exits selection');
+ assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false,'delete restores interaction');
+ assert.deepEqual(errors,[]);console.log(locale||'ja',width,'selection, move, resize, rotation, cancel and timeline restoration passed');await page.close();
 }}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});

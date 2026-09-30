@@ -1446,6 +1446,7 @@ function drawItemFrames() {
   }
   const L=J.mediaLabel,labels={copy:L('演出をお気に入りに追加','Add effects to favorites'),paste:L('お気に入りから演出を適用','Apply favorite effects'),dice:L('再抽選','Randomize'),disableReroll:L('この演出をOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('最前に表示','Frontmost')};
   const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
+  overlay.classList.toggle('selecting',!!S.areaEdit);
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
     const selected=S.areaEdit && (S.areaEdit.kind==='lyric'?'lyrics':S.areaEdit.kind)===layer && S.areaEdit.index===index;
@@ -1458,13 +1459,25 @@ function drawItemFrames() {
     const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
     const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
     let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
-    while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
+    if(S.areaEdit){
+      const preferred=Math.min(...points.map(p=>p[1]))-64;
+      const handles=[...document.querySelectorAll('.area-edit-handle,.area-rotate-handle')].map(el=>el.getBoundingClientRect());
+      const minY=Math.ceil(host.top-view.top+6);
+      const candidates=Array.from({length:Math.ceil((view.height+30-minY)/26)},(_,i)=>minY+i*26).filter(v=>v+26<=view.height+30);
+      const score=v=>{
+        const corners=points.filter(([px,py])=>px>=x-8&&px<=x+width+8&&py>=v-8&&py<=v+34).length;
+        const overlaps=occupied.filter(r=>x<r.x+r.w&&x+width>r.x&&v<r.y+26&&v+26>r.y).length;
+        const grip=handles.filter(r=>view.left+x<r.right+5&&view.left+x+width>r.left-5&&view.top+v<r.bottom+5&&view.top+v+26>r.top-5).length;
+        return grip*1000000000+corners*1000000+overlaps*10000+Math.abs(v-preferred);
+      };
+      y=candidates.reduce((best,v)=>score(v)<score(best)?v:best,candidates[0]);
+    }else while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
     occupied.push({x,y,w:width});
     const controls=actions.map(action=>{
       const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
-      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing||S.areaEdit?'disabled':''}>${ICON[action]}</button>`;
+      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
     }).join('');
-    return `<svg class="item-frame-outline ${layer} ${selected?'selected':''}" data-select-layer="${layer}" data-select-index="${index}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><button type="button" class="item-frame-name" data-select-layer="${layer}" data-select-index="${index}" title="${escapeHtml(frameName)}" ${S.playing||S.areaEdit?'disabled':''}>${escapeHtml(frameName)}</button>${controls}</div>`;
+    return `<svg class="item-frame-outline ${layer} ${selected?'selected':''}" data-select-layer="${layer}" data-select-index="${index}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><button type="button" class="item-frame-name" data-select-layer="${layer}" data-select-index="${index}" title="${escapeHtml(frameName)}" ${S.playing?'disabled':''}>${escapeHtml(frameName)}</button>${controls}</div>`;
   }).join('');
   if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
 }
@@ -2011,7 +2024,7 @@ function beginAreaSelection() {
   const disable=node=>{
     if(allowed.includes(node))return;
     if(allowed.some(el=>node.contains(el))){for(const child of node.children)disable(child);}
-    else if(!node.inert && !['SCRIPT','STYLE'].includes(node.tagName)){node.inert=true;edit.inertNodes.push(node);}
+    else if(!node.inert && !['SCRIPT','STYLE','DIALOG'].includes(node.tagName)){node.inert=true;edit.inertNodes.push(node);}
   };
   for(const child of document.body.children)disable(child);
   const shade=document.createElementNS('http://www.w3.org/2000/svg','svg');shade.id='areaSelectionShade';shade.classList.add('area-selection-shade');shade.setAttribute('aria-hidden','true');
@@ -3391,9 +3404,9 @@ function bind() {
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
   $('itemFrames').addEventListener('click',e=>{
-    if(S.playing||S.areaEdit)return;
+    if(S.playing)return;
     const button=e.target.closest('.item-frame-action');
-    if(button){e.stopPropagation();performTimelineAction(button);return;}
+    if(button){e.stopPropagation();if(button.dataset.action==='remove'&&S.areaEdit)cancelAreaEditor();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
     const target=e.target.closest('[data-select-layer]');if(!target)return;
     const layer=target.dataset.selectLayer,index=Number(target.dataset.selectIndex);
     if(layer==='lyrics')openAreaEditor(index,true);else openMediaEditor(index,layer,true);
@@ -3573,7 +3586,7 @@ function bind() {
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
   $('areaCancel').addEventListener('click', cancelAreaEditor);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit) { e.preventDefault(); cancelAreaEditor(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
   const mediaPane = $('mediaPane');
   const hasFiles = e => Array.from(e.dataTransfer && e.dataTransfer.types || []).includes('Files');

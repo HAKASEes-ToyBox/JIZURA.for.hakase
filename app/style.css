@@ -196,6 +196,7 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .area-selection-shade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 10000; pointer-events: none; }
 .area-selection-shade path { fill: rgba(0,0,0,.65); pointer-events: fill; }
 .viewport.area-selection { padding: 36px; box-sizing: border-box; }
+@media (max-width:600px) { .viewport.area-selection { padding-top:110px; } }
 @media (pointer: coarse) { .area-rotate-handle { width: 24px; height: 24px; } }
 .area-edit-handle { display: none; position: absolute; width: 15px; height: 15px; border: 2px solid #111; background: var(--amber); border-radius: 2px; transform: translate(-50%,-50%); touch-action: none; }
 .media-edit .area-edit-handle { display: block; }
@@ -524,6 +525,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frame-toggle { display:flex; align-items:center; gap:6px; padding:6px 0; font-size:12px; }
 .item-frames { position:absolute; pointer-events:none; overflow:hidden; z-index:3; }
 .item-frames[hidden] { display:none; }
+.item-frames.selecting { z-index:5; overflow:visible; }
+.item-frames.selecting .item-frame-outline polygon { pointer-events:none; }
 .item-frame-outline { position:absolute; inset:0; overflow:visible; }
 .item-frame-outline polygon { fill:transparent; pointer-events:all; cursor:pointer; stroke:currentColor; stroke-width:1.5; stroke-dasharray:5 3; filter:drop-shadow(0 0 1px #000); }
 .item-frame-outline.selected { color: var(--amber); }
