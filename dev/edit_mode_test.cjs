@@ -5,6 +5,14 @@ const {timelineAction}=require('./ui_helpers.cjs');
  await page.evaluate(()=>{const p=J.defaultProject();p.lyrics='[00:00]Edit me';p.durationOverride=8;p.overrides={0:{single:true,area:{x:.2,y:.2,w:.6,h:.6,angle:0},layout:'center'}};
  for(const layer of ['foreground','media']){const c=document.createElement('canvas');c.width=400;c.height=200;c.getContext('2d').fillRect(0,0,400,200);J.mediaAssets.set(layer,{element:c,type:'image'});Object.assign(p[layer],{items:[{id:layer,name:layer+'.png',type:'image',width:400,height:200}],manualCuts:true,cutCount:1,cutOverrides:{0:{itemId:layer,technique:'none',placement:{cx:.5,cy:.5,w:.5,h:.4,angle:0}}}})}
  J.ui.project=p;J.uiApi.syncUI();J.uiApi.replan();J.uiApi.seek(.3);});
+ await page.locator('#showItemFrames').uncheck();await page.locator('#view').click();assert.ok(await page.locator('#showItemFrames').isChecked(),'preview click enables edit mode');
+ await page.locator('#showItemFramesLabel').click();assert.equal(await page.locator('#showItemFrames').isChecked(),false,'checkbox retains manual toggle');await page.locator('#view').click();
+ await page.locator('#btnPlay').click();assert.equal(await page.locator('#showItemFrames').isChecked(),false,'outside click disables edit mode');await page.locator('#btnPlay').click();await page.evaluate(()=>J.uiApi.seek(.3));
+ await page.locator('#view').click();await page.locator('.item-frame-name[data-select-layer="foreground"]').click();
+ await page.locator('#mediaAreaAngle').fill('30');await page.locator('#mediaAreaAngle').dispatchEvent('input');assert.ok(await page.locator('#showItemFrames').isChecked(),'editor controls keep edit mode');
+ const unchangedOnOutside=await page.evaluate(()=>JSON.stringify(J.ui.project));await page.mouse.click(2,2);
+ assert.equal(await page.evaluate(()=>J.ui.areaEdit),null,'outside click cancels selection');assert.equal(await page.locator('#showItemFrames').isChecked(),false);assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),unchangedOnOutside,'outside cancel does not save draft');
+ await page.locator('#view').click();
  for(const layer of ['foreground','lyrics','media']){
   const original=await page.evaluate(()=>JSON.stringify(J.ui.project)),time=await page.evaluate(()=>J.ui.t);
   await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).first().click();

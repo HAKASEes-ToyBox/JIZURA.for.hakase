@@ -3417,6 +3417,13 @@ function bind() {
   $('showItemFramesLabel').textContent=J.mediaLabel('編集モード','Edit mode');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
+  document.addEventListener('click',e=>{
+    if(S.exporting || S.tap || document.querySelector('dialog[open]'))return;
+    if(e.target.closest('.item-frame-toggle,#areaEditControls'))return;
+    const inside=$('viewport').contains(e.target);
+    if(!inside && S.areaEdit)cancelAreaEditor();
+    if(frameToggle.checked!==inside){frameToggle.checked=inside;frameToggle.dispatchEvent(new Event('change'));}
+  },true);
   $('itemFrames').addEventListener('click',e=>{
     if(S.playing)return;
     const button=e.target.closest('.item-frame-action');
