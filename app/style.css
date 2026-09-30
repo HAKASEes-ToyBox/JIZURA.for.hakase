@@ -461,6 +461,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview .progress:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
 .cut-details-preview [data-cut-preview-play] { flex: 0 0 auto; min-width: 34px; padding: 5px 8px; }
 .cut-detail-array-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+[data-detail-section="decor"] > .cut-detail-array-actions { margin: 0 0 14px; }
+.cut-decoration-delete { margin-left: 12px; padding: 4px 10px; background: var(--danger); border-color: var(--danger); color: #000; font-weight: 700; }
+.cut-decoration-delete:hover { background: #ff7b88; border-color: #ff7b88; }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
 .cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }

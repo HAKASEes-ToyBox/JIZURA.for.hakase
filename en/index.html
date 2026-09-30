@@ -479,6 +479,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview .progress:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
 .cut-details-preview [data-cut-preview-play] { flex: 0 0 auto; min-width: 34px; padding: 5px 8px; }
 .cut-detail-array-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+[data-detail-section="decor"] > .cut-detail-array-actions { margin: 0 0 14px; }
+.cut-decoration-delete { margin-left: 12px; padding: 4px 10px; background: var(--danger); border-color: var(--danger); color: #000; font-weight: 700; }
+.cut-decoration-delete:hover { background: #ff7b88; border-color: #ff7b88; }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
 .cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
@@ -41646,12 +41649,20 @@ function openCutDetails(layer,index,part=0) {
         },`${path}.${child}`);
       }
       const actions=document.createElement('div');actions.className='cut-detail-array-actions';
-      if(Array.isArray(value))section.append(actions);
+      if(Array.isArray(value)){if(field==='decor')section.prepend(actions);else section.append(actions);}
       if(field==='decor') {
         const add=document.createElement('button');add.type='button';add.textContent=L('DecorationをNew','Add decoration');
         add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};actions.append(add);
       }
-      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}  remove`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};actions.append(del);});
+      if(Array.isArray(value)) value.forEach((_,i)=>{
+        const del=document.createElement('button');del.type='button';
+        del.textContent=field==='decor'?L('削除','Delete'):L(`${i+1}  remove`,`Remove ${i+1}`);
+        del.onclick=e=>{e.preventDefault();e.stopPropagation();removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};
+        if(field==='decor'){
+          del.className='cut-decoration-delete';
+          grid.querySelector(`[data-detail-section="${path}.${i}"] > summary`).append(del);
+        }else actions.append(del);
+      });
       return;
     }
     const percent=typeof value==='number' && ['w','h','contentScale'].includes(field), factor=percent?100:1;
