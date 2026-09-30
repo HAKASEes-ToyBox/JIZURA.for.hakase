@@ -9,5 +9,14 @@ await p.locator('#lyrics').focus();await p.locator('#lyrics').evaluate(e=>{e.set
 await p.locator('#lyrics').evaluate(e=>e.blur());await p.waitForFunction(()=>document.querySelector('#lyrics').scrollTop>0);assert.equal(await p.locator('#lyricPlaybackHighlight').isVisible(),true);assert.deepEqual(await rows(),[29]);
 await p.evaluate(()=>J.uiApi.seek(6.5));await p.waitForFunction(()=>document.querySelector('#lyricPlaybackHighlight').hidden);
 await p.evaluate(()=>J.uiApi.seek(4.5));await p.waitForFunction(()=>!document.querySelector('#lyricPlaybackHighlight').hidden);assert.deepEqual(await rows(),[4,5]);
+for(const id of ['timeline','foregroundTimeline','mediaTimeline']){
+ await p.locator('#lyrics').focus();
+ const box=await p.locator('#'+id).boundingBox();
+ await p.mouse.click(box.x+box.width*.45,box.y+box.height-3);
+ assert.equal(await p.evaluate(()=>document.activeElement===document.getElementById('lyrics')),false,id+' releases lyric focus');
+ assert.ok(await p.evaluate(()=>J.ui.t>20&&J.ui.t<35),id+' still seeks');
+}
+await p.keyboard.press('Space');assert.equal(await p.evaluate(()=>J.ui.playing),true,'space controls playback after timeline click');
+await p.keyboard.press('Space');assert.equal(await p.evaluate(()=>J.ui.playing),false);
 assert.deepEqual(errors,[]);console.log(lang||'ja','source rows, groups, wrapping/scroll, focus selection, blank interval passed');await p.close();
 }}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});

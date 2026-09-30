@@ -196,21 +196,36 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
-.area-edit-overlay { position: absolute; z-index: 4; cursor: crosshair; touch-action: none; background: rgba(0,0,0,0.32); }
+.area-edit-overlay { position: absolute; z-index: 4; touch-action: none; pointer-events: none; }
 .area-edit-rect { position: absolute; box-sizing: border-box; border: 2px solid var(--amber); background: rgba(245,165,12,0.12); box-shadow: 0 0 0 1px #000; pointer-events: none; }
 :root { --rotate-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23101620' stroke-width='2'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23101620' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair; }
-.area-edit-overlay.media-edit { background: rgba(0,0,0,0.14); cursor: default; }
+.area-edit-overlay.media-edit { background: transparent; cursor: default; }
 .area-edit-overlay.media-edit .area-edit-rect { background: rgba(245,165,12,0.04); pointer-events: auto; cursor: move; }
-.area-edit-overlay.media-edit .area-edit-rect::before { content: ''; position: absolute; inset: -18px; border: 1px dashed var(--cyan); pointer-events: none; }
+.area-rotate-handle { position: absolute; width: 16px; height: 16px; border: 2px solid #111; border-radius: 50%; background: var(--amber); transform: translate(-50%,-50%); cursor: var(--rotate-cursor); touch-action: none; }
+.area-rotate-handle::before { content: ''; position: absolute; background: var(--amber); pointer-events: none; }
+.area-rotate-handle.n { left: 50%; top: -32px; }
+.area-rotate-handle.s { left: 50%; top: calc(100% + 32px); }
+.area-rotate-handle.e { left: calc(100% + 32px); top: 50%; }
+.area-rotate-handle.w { left: -32px; top: 50%; }
+.area-rotate-handle.n::before { width: 2px; height: 24px; left: 5px; top: 12px; }
+.area-rotate-handle.s::before { width: 2px; height: 24px; left: 5px; bottom: 12px; }
+.area-rotate-handle.e::before { height: 2px; width: 24px; top: 5px; right: 12px; }
+.area-rotate-handle.w::before { height: 2px; width: 24px; top: 5px; left: 12px; }
+.area-selection-shade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 10000; pointer-events: none; }
+.area-selection-shade path { fill: rgba(0,0,0,.65); pointer-events: fill; }
+.viewport.area-selection { padding: 36px; box-sizing: border-box; }
+@media (max-width:600px) { .viewport.area-selection { padding-top:110px; } }
+@media (pointer: coarse) { .area-rotate-handle { width: 24px; height: 24px; } }
 .area-edit-handle { display: none; position: absolute; width: 15px; height: 15px; border: 2px solid #111; background: var(--amber); border-radius: 2px; transform: translate(-50%,-50%); touch-action: none; }
 .media-edit .area-edit-handle { display: block; }
 .area-edit-handle.nw { left: 0; top: 0; cursor: nwse-resize; }
 .area-edit-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
 .area-edit-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
 .area-edit-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
-.area-edit-hint { position: absolute; top: 8px; left: 8px; color: #fff; font-size: 12px; background: rgba(0,0,0,0.8); padding: 4px 7px; pointer-events: none; }
+#areaDelete, .area-delete-confirm { background:var(--danger); border-color:var(--danger); color:#000; font-weight:700; }
 .area-edit-controls { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--amber); border-radius: var(--r); background: var(--panel); font-size: 12px; }
-.area-edit-controls span { flex: 1 1 100%; color: var(--muted); }
+.area-edit-actions, .area-edit-confirm { display:flex; flex:1 1 100%; gap:7px; flex-wrap:wrap; }
+.area-edit-confirm { justify-content:flex-end; }
 .media-area-size-controls { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; flex-wrap: wrap; }
 .media-area-size-controls label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
 #mediaAreaAngleField[hidden] { display: none; }
@@ -474,15 +489,39 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview { min-height: 0; overflow: auto; padding: 24px; border-right: 1px solid #33353b; background: #15161a; }
 .cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
 .cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
+.cut-details-preview .progress { position: relative; overflow: visible; }
+.cut-details-preview [data-cut-preview-seek] { position: absolute; inset: -10px 0; width: 100%; height: calc(100% + 20px); margin: 0; opacity: 0; cursor: pointer; }
+.cut-details-preview .progress:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
+.cut-details-preview [data-cut-preview-play] { flex: 0 0 auto; min-width: 34px; padding: 5px 8px; }
+.cut-detail-array-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+[data-detail-section="decor"] > .cut-detail-array-actions { margin: 0 0 14px; }
+.cut-decoration-delete { margin-left: 12px; padding: 4px 10px; background: var(--danger); border-color: var(--danger); color: #000; font-weight: 700; }
+.cut-decoration-delete:hover { background: #ff7b88; border-color: #ff7b88; }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
-.cut-mask-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 6px; }
+.cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.cut-mask-opacity-row { display: flex; gap: 12px; align-items: center; }
+.cut-mask-opacity-row input[type=number] { width: 5em; min-width: 0; }
+.cut-mask-feather { width: 100%; }
+.cut-mask-feather input { flex: 1; width: 120px; min-width: 50px; }
+.cut-mask-feather output { min-width: 3ch; text-align: right; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
 .cut-mask-motion h4 { margin: 0 0 4px; font-size: 13px; }
 .cut-details-form { min-height: 0; overflow: auto; padding: 24px; }
+.cut-details-form > form { min-height: 100%; display: flex; flex-direction: column; }
+.cut-details-form .cut-details-actions { margin-top: auto; flex-wrap: nowrap; }
+.cut-details-reset { margin-right: auto; }
+.cut-details-actions button { min-width: 0; white-space: normal; }
+.cut-details-grid > section { grid-column: 1 / -1; min-width: 0; }
+.cut-details-tabs { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: -24px; z-index: 2; background: #191b20; padding: 10px 0; margin-bottom: 14px; border-bottom: 1px solid #45474e; }
+.cut-details-tabs button { padding: 7px 10px; font-size: 12px; }
+.cut-details-tabs button[aria-selected=true] { color: #ffb000; border-color: #ffb000; background: #302719; }
+.cut-details-tab-panel[hidden] { display: none; }
+@media (max-width: 860px) { .cut-details-tabs { top: -16px; } }
+@media (max-width: 600px) { .cut-details-tabs { top: -12px; gap: 4px; } .cut-details-tabs button { padding: 6px 8px; font-size: 11px; } }
 @media (max-width: 860px) {
   .cut-details-dialog[open] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .cut-details-preview { border-right: 0; border-bottom: 1px solid #33353b; padding: 14px 16px; overflow: visible; }
@@ -505,17 +544,21 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frame-toggle { display:flex; align-items:center; gap:6px; padding:6px 0; font-size:12px; }
 .item-frames { position:absolute; pointer-events:none; overflow:hidden; z-index:3; }
 .item-frames[hidden] { display:none; }
+.item-frames.selecting { z-index:5; overflow:visible; }
+.item-frames.selecting .item-frame-outline polygon { pointer-events:none; }
 .item-frame-outline { position:absolute; inset:0; overflow:visible; }
-.item-frame-outline polygon { fill:none; stroke:currentColor; stroke-width:1.5; stroke-dasharray:5 3; filter:drop-shadow(0 0 1px #000); }
+.item-frame-outline polygon { fill:transparent; pointer-events:all; cursor:pointer; stroke:currentColor; stroke-width:1.5; stroke-dasharray:5 3; filter:drop-shadow(0 0 1px #000); }
+.item-frame-outline.selected { color: var(--amber); }
+.item-frame-outline.selected polygon { stroke-dasharray:none; stroke-width:2; }
 .item-frames .foreground { color:#f5bd65; }
 .item-frames .lyrics { color:#68e3ca; }
 .item-frames .media { color:#95baff; }
-.item-frame-tools { position:absolute; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
+.item-frame-tools { position:absolute; z-index:1; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
 .item-frame-tools span { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; }
+.item-frame-name { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; border:0; background:transparent; color:inherit; }
 .item-frame-action { display:flex; align-items:center; justify-content:center; width:25px; min-width:20px; height:23px; padding:3px; border:0; border-radius:2px; background:transparent; color:inherit; }
 .item-frame-action svg { width:16px; height:16px; pointer-events:none; }
 .item-frame-action.active { background:#3b6560; color:#fff; }
-.item-frame-action[data-action="remove"] { color:#ff7180; }
 .item-frame-action:hover:not(:disabled),.item-frame-action:focus-visible { background:#51525b; }
 .item-frame-action:disabled { cursor:default; opacity:.4; }
 
@@ -911,7 +954,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="Preview">
-      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span></div><span class="area-edit-hint">Drag to select the lyrics display area</span></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="回転"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
+      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><div class="area-edit-actions"><button id="areaResetAuto" class="ghost" type="button">Auto配置</button><button id="areaResetFull" class="ghost" type="button">Full area</button><button id="areaDelete" type="button">削除</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div></div>
       <div id="tapPanel" class="tapbox" hidden>
         <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
         <div class="hint" id="tapHint">Press Space or the button when each lyric line or media cut starts.</div>
@@ -919,8 +963,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <button id="tapBtn" class="tap">TAP</button>
         <button id="tapStop" class="ghost">Finish</button>
       </div>
-      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">アイテム枠表示</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入りEffects</button><button id="previewFullscreen" type="button" class="ghost small">Fullscreen preview</button></div>
-      <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><button id="areaResetFull" class="ghost" type="button">Reset to full area</button><button id="areaResetAuto" class="ghost" type="button">Reset automatic placement</button><button id="areaApplyOne" class="primary" disabled>Apply to this line</button><button id="areaApplyFollowing" disabled>Apply from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">Edit mode</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入りEffects</button><button id="previewFullscreen" type="button" class="ghost small">Fullscreen preview</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="Play">▶</button>
         <span id="timeNow" class="tc">00:00.00</span><span class="tc muted">/</span><button id="timeDur" class="tc muted duration-value" type="button" title="Enter total video duration (blank for auto)" aria-label="Enter total video duration">00:00.00</button><input id="timeDurInput" class="tc duration-input" type="text" inputmode="decimal" aria-label="Total video duration (seconds or mm:ss; blank for auto)" hidden>
@@ -8012,7 +8055,7 @@ J.normalizeMask = m => {
   const shapes = (Array.isArray(m.shapes) ? m.shapes : []).filter(s => s && J.MASK_SHAPES.includes(s.type)).map(s => ({
     type: s.type, cx: num(s.cx, .5), cy: num(s.cy, .5), w: Math.max(0, num(s.w, .5)), h: Math.max(0, num(s.h, .5)), angle: J.clamp(num(s.angle, 0), -180, 180), lockAspect: s.lockAspect !== false,
   })).filter(s => s.w > 0 && s.h > 0);
-  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, shapes, motion: J.normalizeMaskMotion(m.motion) };
+  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, opacity: J.clamp(num(m.opacity, 100), 0, 100), feather: J.clamp(num(m.feather, 0), 0, 100), shapes, motion: J.normalizeMaskMotion(m.motion) };
 };
 // The editor previews the unmasked reference while it is drawn.
 J.masksSuspended = false;
@@ -8074,7 +8117,7 @@ const motionState = (motion, { cut, t, plan }) => {
 // Keep (or, inverted, remove) the union of the shapes on a whole canvas. matrix maps frame units to pixels;
 // timing ({cut, t, plan}) animates the mask when it has a motion.
 J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
-  const [m, mx] = buffer('shapes', canvas.width, canvas.height);
+  let [m, mx] = buffer('shapes', canvas.width, canvas.height);
   if (timing && J.maskMotionActive(mask.motion) && J.paintMediaEffect) {
     // Draw the shapes as a white image and move it with the media painter (phases, holds, beats, cameras).
     const sx = Math.hypot(matrix.a, matrix.b), sy = Math.hypot(matrix.c, matrix.d), k = Math.min(1, 2048 / Math.max(fw * sx, fh * sy, 1));
@@ -8090,7 +8133,23 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
     for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
   }
-  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none';
+  // Blur the completed union (including motion) before inversion and opacity.
+  // A size-relative radius keeps preview and export consistent at any resolution.
+  const feather = J.clamp(num(mask.feather, 0), 0, 100);
+  if (feather > 0) {
+    const [soft, sx] = buffer('feather', canvas.width, canvas.height);
+    sx.filter = `blur(${Math.min(canvas.width, canvas.height) * feather / 1000}px)`;
+    sx.drawImage(m, 0, 0); sx.filter = 'none';
+    m = soft; mx = sx;
+  }
+  const opacity = J.clamp(num(mask.opacity, 100), 0, 100) / 100;
+  // Interpolate the mask coverage with an unmasked frame. Fill the union once,
+  // so overlapping shapes do not multiply the opacity.
+  if (!mask.invert && opacity < 1) {
+    mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalCompositeOperation = 'destination-over';
+    mx.globalAlpha = 1 - opacity; mx.fillStyle = '#fff'; mx.fillRect(0, 0, m.width, m.height);
+  }
+  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = mask.invert ? opacity : 1; x.filter = 'none';
   x.globalCompositeOperation = mask.invert ? 'destination-out' : 'destination-in'; x.drawImage(m, 0, 0); x.restore();
 };
 const dims = src => [src.videoWidth || src.naturalWidth || src.width || 0, src.videoHeight || src.naturalHeight || src.height || 0];
@@ -41209,14 +41268,14 @@ function openCutDetails(layer,index,part=0) {
   const disabledChoices=[];
   let removedDetail = null;
   const openDetails = new Map();
+  let activeDetailTab='basic';
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
-  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label><p class="hint"></p>`;
+  pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><button type="button" data-cut-preview-play></button><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i><input type="range" min="0" max="1000" step="1" value="0" data-cut-preview-seek></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label>`;
   pane.querySelector('h2').textContent=L('cutsの詳細編集','Edit cut details')+' — '+(lyric?L('歌詞','Lyrics'):layer==='foreground'?L('Foreground','Foreground'):L('Background','Background'))+` ${index+1}${lyric?` / ${part+1}`:''}`;
   pane.querySelector('.progress').setAttribute('aria-label',L('Play位置','Playback position'));
-  pane.querySelector('.hint').textContent=L('このcutsの区間をループPlayします。適用前の変更も反映されます。','Loops this cut. Changes show before you apply them.');
   const solo=pane.querySelector('[data-preview-solo]');solo.checked=cutPreviewSolo;solo.nextElementSibling.textContent=L('編集対象単体を表示','Show the edited cut only');
   solo.addEventListener('change',()=>{cutPreviewSolo=solo.checked;});
   const focus=pane.querySelector('[data-preview-focus]');focus.checked=cutPreviewFocus;focus.nextElementSibling.textContent=L('編集対象にフォーカス','Focus on the edited cut');
@@ -41225,7 +41284,13 @@ function openCutDetails(layer,index,part=0) {
   dialog.append(pane,formHost);
   document.body.appendChild(dialog);
   const previewCanvas=pane.querySelector('canvas'),previewRenderer=new J.Renderer();
-  let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewStart=performance.now();
+  let previewPlan=S.plan,previewCut=cut,previewFrame=0,previewTimer=0,previewLast=performance.now(),previewTime=0,previewPlaying=true;
+  const previewPlay=pane.querySelector('[data-cut-preview-play]'),previewSeek=pane.querySelector('[data-cut-preview-seek]');
+  const previewLength=()=>Math.max(.1,Math.min(previewCut.end,previewPlan.duration)-previewCut.start);
+  const syncPreviewPlay=()=>{previewPlay.textContent=previewPlaying?'❚❚':'▶';previewPlay.setAttribute('aria-label',previewPlaying?L('停止','Pause'):L('Play','Play'));previewPlay.title=previewPlay.getAttribute('aria-label');};
+  syncPreviewPlay();previewSeek.setAttribute('aria-label',L('プレビューのPlay位置','Preview playback position'));
+  previewPlay.addEventListener('click',()=>{previewPlaying=!previewPlaying;previewLast=performance.now();syncPreviewPlay();});
+  previewSeek.addEventListener('input',()=>{previewTime=Number(previewSeek.value)/1000*previewLength();previewLast=performance.now();});
   const findCut=plan=>lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
   const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);{if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
   function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
@@ -41297,10 +41362,8 @@ function openCutDetails(layer,index,part=0) {
   function maskEditor(parent){
     const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
-    const section=document.createElement('details');section.dataset.detailSection='mask';section.className='cut-mask';
-    section.open=openDetails.get('mask') ?? mask.enabled;
-    section.innerHTML=`<summary></summary><div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
-    section.querySelector('summary').textContent=L('マスク','Mask');
+    const section=document.createElement('section');section.dataset.detailSection='mask';section.className='cut-mask';
+    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスクInvert','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
@@ -41319,6 +41382,23 @@ function openCutDetails(layer,index,part=0) {
     tools.add.setAttribute('aria-label',L('図形をNew','Add shape'));tools.remove.textContent=L('選択中の図形 remove','Remove selected shape');
     const canvas=section.querySelector('canvas'),shapeBox=section.querySelector('.cut-mask-shape');
     const save=()=>{write('mask',clone(mask),false);draw();};
+    const opacityLabel=document.createElement('label');
+    opacityLabel.innerHTML=`<span>${L('不透明度（％）','Opacity (%)')}</span> <input type="number" min="0" max="100" step="1" data-mask-field="opacity">`;
+    const opacityInput=opacityLabel.querySelector('input');opacityInput.value=mask.opacity;
+    opacityInput.addEventListener('input',()=>{
+      if(opacityInput.value===''||!opacityInput.validity.valid)return;
+      mask.opacity=Number(opacityInput.value);save();
+    });
+    const controls=section.querySelector('.cut-mask-controls');
+    const [useLabel,targetLabel,invertLabel]=controls.children;
+    const opacityRow=document.createElement('div');opacityRow.className='cut-mask-opacity-row';opacityRow.append(opacityLabel,invertLabel);
+    controls.replaceChildren(useLabel,opacityRow,targetLabel);
+    const featherLabel=document.createElement('label');featherLabel.className='cut-mask-feather';
+    featherLabel.innerHTML=`<span>${L('境界のBlur','Edge feathering')}</span><input type="range" min="0" max="100" step="1" data-mask-field="feather"><output></output>`;
+    const featherInput=featherLabel.querySelector('input'),featherValue=featherLabel.querySelector('output');
+    featherInput.value=mask.feather;featherValue.textContent=String(mask.feather);
+    featherInput.addEventListener('input',()=>{mask.feather=Number(featherInput.value);featherValue.textContent=String(mask.feather);save();});
+    controls.append(featherLabel);
     function draw(){
       const ref=maskReference(mask.target),cw=480,ch=Math.round(Math.min(320,cw/ref.aspect)),w=Math.round(Math.min(cw,ch*ref.aspect));
       if(canvas.width!==w||canvas.height!==ch){canvas.width=w;canvas.height=ch;}
@@ -41326,10 +41406,9 @@ function openCutDetails(layer,index,part=0) {
       try{x.drawImage(ref.image,ref.sx,ref.sy,ref.sw,ref.sh,0,0,w,ch);}catch(e){}
       // Darken what the mask hides.
       const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
-      sx.fillStyle='rgba(0,0,0,.62)';
-      if(mask.invert){for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
-      else{sx.fillRect(0,0,w,ch);sx.globalCompositeOperation='destination-out';for(const s of mask.shapes){J.maskShapePath(sx,[s],w,ch);sx.fill();}}
-      if(mask.enabled)x.drawImage(shade,0,0);
+      sx.fillStyle='#000';sx.fillRect(0,0,w,ch);
+      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix([w,0,0,ch,0,0]),1,1);
+      if(mask.enabled){x.save();x.globalAlpha=.62*mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
         if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}
@@ -41346,10 +41425,11 @@ function openCutDetails(layer,index,part=0) {
       const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
       kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);attachDetailRandom(kindSelect,'mask.shape.type');
       for(const [key,ja,en,min,max] of [['cx','中心 X','Center X',-1,2],['cy','中心 Y','Center Y',-1,2],['w','幅','Width',.01,4],['h','高さ','Height',.01,4],['angle','Rotation（度）','Angle (degrees)',-180,180]]){
-        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}</span><input type="number" step="any" min="${min}" max="${max}" data-mask-shape="${key}">`;
-        const input=row.querySelector('input');input.value=+s[key].toFixed(4);
+        const factor=['w','h'].includes(key)?100:1;
+        const row=document.createElement('label');row.className='cut-detail-field';row.innerHTML=`<span>${L(ja,en)}${factor===100?L('（％）',' (%)'):''}</span><input type="number" step="any" min="${min*factor}" max="${max*factor}" data-mask-shape="${key}">`;
+        const input=row.querySelector('input');input.value=+(s[key]*factor).toFixed(4);
         input.addEventListener('change',()=>{
-          const v=Number(input.value);if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
+          const v=Number(input.value)/factor;if(!Number.isFinite(v))return;const next=J.clamp(v,min,max);
           // Locked aspect: width and height scale together.
           if(s.lockAspect&&(key==='w'||key==='h')&&s[key]>0){const other=key==='w'?'h':'w';s[other]=J.clamp(s[other]*next/s[key],.01,4);}
           s[key]=next;fields();save();
@@ -41427,11 +41507,15 @@ function openCutDetails(layer,index,part=0) {
     const plan=previewPlan,c=previewCut;if(!plan||!c)return;
     const w=Math.round(Math.min(plan.W,640)),h=Math.round(w*plan.H/plan.W);
     if(previewCanvas.width!==w||previewCanvas.height!==h){previewCanvas.width=w;previewCanvas.height=h;}
-    const end=Math.min(c.end,plan.duration),length=Math.max(.1,end-c.start),elapsed=((now-previewStart)/1000)%length,t=c.start+elapsed;
+    const length=previewLength();
+    if(previewPlaying)previewTime=(previewTime+Math.max(0,now-previewLast)/1000)%length;
+    else previewTime=J.clamp(previewTime,0,length);
+    previewLast=now;
+    const elapsed=previewTime,t=Math.min(c.start+elapsed,c.start+length-1e-6);
     const shown=cutPreviewSolo?soloPlan(plan,c):plan;
     const view=cutPreviewFocus?focusWindow(focusOf(plan,c)):null,options={noHud:true,...(cutPreviewSolo?soloOptions:{})};
     try{
-      J.syncMediaPreview(shown,t,true);
+      J.syncMediaPreview(shown,t,previewPlaying);
       if(!view)previewRenderer.frame(previewCanvas.getContext('2d'),shown,t,{...options,scale:w/plan.W});
       else{
         // Render large enough that the window fills the preview sharply (at most full stage resolution).
@@ -41442,19 +41526,20 @@ function openCutDetails(layer,index,part=0) {
         pc.drawImage(zoomCanvas,view.x*zw,view.y*zh,view.size*zw,view.size*zh,0,0,w,h);pc.globalCompositeOperation='source-over';
       }
     }catch(e){}
+    previewSeek.value=String(Math.round(elapsed/length*1000));
     const pct=Math.round(elapsed/length*1000)/10;pane.querySelector('.progress i').style.width=pct+'%';pane.querySelector('.progress').setAttribute('aria-valuenow',String(Math.round(pct)));
     pane.querySelector('.effect-preview-now').textContent=J.fmtTime(elapsed);pane.querySelector('.effect-preview-dur').textContent=J.fmtTime(length+1e-6);
   }
   const names = {
     text:['歌詞','Lyrics'],layout:['Layout','Layout'],enter:['Entrance','Entrance'],hold:['Hold · モーション','Hold / motion'],exit:['Exit','Exit'],
     inDur:['Entrance時間（s）','Entrance duration (s)'],outDur:['Exit時間（s）','Exit duration (s)'],stagger:['Textの時間差（s）','Character delay (s)'],
-    decor:['Decoration','Decoration'],scheme:['Palette','Palette'],params:['Layout詳細','Layout parameters'],treat:['Treatment','Treatment'],treatP:['Treatmentの詳細','Treatment parameters'],
+    decor:['Decoration','Decoration'],scheme:['Palette','Palette'],palette:['個別パレット','Custom palette'],params:['Layout詳細','Layout parameters'],treat:['Treatment','Treatment'],treatP:['Treatmentの詳細','Treatment parameters'],
     bg:['BackgroundEffects','Background effect'],bgP:['BackgroundEffectsの詳細','Background parameters'],cam:['Camera','Camera'],camP:['Camera詳細','Camera parameters'],
     trans:['Transitions','Transition'],transP:['Transitionの詳細','Transition parameters'],transDur:['Transition時間（s）','Transition duration (s)'],
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置 · サイズ（画面比率）','Placement / size (stage ratios)'],
     motionScale:['動きの倍率','Motion scale'],contentScale:['Textサイズ倍率','Text scale'],effectSettings:['Effectsパラメータ','Effect parameters'],
     motion:['Motion strength','Motion amount'],treatment:['Treatmentの強さ','Treatment amount'],duration:['Entrance · Exit時間（s）','Entrance / exit duration (s)'],bpm:['BPM','BPM'],beatOffset:['拍の開始位置（s）','Beat offset (s)'],x:['左位置','Left'],y:['上位置','Top'],cx:['中心 X','Center X'],cy:['中心 Y','Center Y'],w:['幅','Width'],h:['高さ','Height'],angle:['Rotation（度）','Angle (degrees)'],lockAspect:['縦横比を固定','Lock aspect ratio'],
-    untilNext:['次cutsPlayまで','Until the next cut'],endTime:['cuts終了時間（s）','Cut end (s)'],technique:['手法','Technique'],entrance:['Entrance','Entrance'],departure:['Exit','Exit'],itemId:['素材','Asset'],frontmost:['Show above foreground','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['Loop video','Loop video'],videoStart:['素材のPlay開始位置（s）','Source start time (s)'],videoDuration:['Video duration (s)','Video duration (s)'],chromaKey:['Chroma key','Chroma key'],chromaColor:['Chroma key色','Key color'],
+    untilNext:['次cutsPlayまで','Until the next cut'],endTime:['終了位置（s）','End position (s)'],technique:['手法','Technique'],entrance:['Entrance','Entrance'],departure:['Exit','Exit'],itemId:['素材','Asset'],frontmost:['Show above foreground','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['Loop video','Loop video'],videoStart:['素材のPlay開始位置（s）','Source start time (s)'],videoDuration:['Video duration (s)','Video duration (s)'],chromaKey:['Chroma key','Chroma key'],chromaColor:['Chroma key色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:[' types類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
   const label = key => names[key] ? L(...names[key]) : key;
@@ -41471,9 +41556,15 @@ function openCutDetails(layer,index,part=0) {
       const lockedField={technique:'lockedTechnique',entrance:'lockedEntrance',departure:'lockedDeparture',itemId:'lockedItemId'}[field];
       if(lockedField)delete draft[lockedField];
     }
-    if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
-    // choosing a palette number replaces a colour set that was captured earlier (lock / pasted effects)
-    if(lyric && !native && field==='scheme') draft.details.palette=null;
+    if(native) draft[field]=value; else {
+      draft.details ||= {}; draft.details[field]=value;
+      // An explicit scheme choice also replaces any captured palette (favorites,
+      // locks or manual colors) that would otherwise override its colors.
+      if(lyric && field==='scheme'){
+        const palette=(J.STYLES[S.project.style] || J.STYLES.noir).schemes[Number(value)];
+        if(palette)draft.details.palette=clone(palette);
+      }
+    }
     schedulePreview();
   }
   function options(field) {
@@ -41568,6 +41659,7 @@ function openCutDetails(layer,index,part=0) {
     });
   }
   function attachDetailRandom(select,path){
+    if(path==='scheme')return;
     attachDetailSearch(select);
     if(select.dataset.randomAttached)return;select.dataset.randomAttached='true';
     const row=select.closest('label');if(!row)return;
@@ -41605,9 +41697,9 @@ function openCutDetails(layer,index,part=0) {
   }
   function fieldEditor(parent,field,value,onChange,path=field) {
     if(value && typeof value==='object') {
-      const section=document.createElement('details'); section.dataset.detailSection=path;
+      const section=document.createElement(path==='decor'?'section':'details'); section.dataset.detailSection=path;
       section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
-      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); section.append(title);
+      const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       for(const [child,v] of Object.entries(value)) {
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
@@ -41615,27 +41707,42 @@ function openCutDetails(layer,index,part=0) {
         fieldEditor(grid,child,v,next=>{
           if (value.lockAspect && ['w','h'].includes(child) && value[child]>0) {
             const other=child==='w'?'h':'w'; value[other]*=next/value[child];
-            const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=value[other];
+            const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=+(value[other]*100).toFixed(6);
           }
           value[child]=next;onChange(clone(value));
         },`${path}.${child}`);
       }
+      const actions=document.createElement('div');actions.className='cut-detail-array-actions';
+      if(Array.isArray(value)){if(field==='decor')section.prepend(actions);else section.append(actions);}
       if(field==='decor') {
         const add=document.createElement('button');add.type='button';add.textContent=L('DecorationをNew','Add decoration');
-        add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};section.append(add);
+        add.onclick=()=>{value.push({id:Object.keys(J.DECOR)[0],seed:cut.seed,n:1});onChange(clone(value));preview();};actions.append(add);
       }
-      if(Array.isArray(value)) value.forEach((_,i)=>{const del=document.createElement('button');del.type='button';del.textContent=L(`${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}  remove`,`Remove ${field==='decor' ? J.DECOR[value[i].id]?.name || value[i].id : i+1}`);del.onclick=()=>{removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};section.append(del);});
+      if(Array.isArray(value)) value.forEach((_,i)=>{
+        const del=document.createElement('button');del.type='button';
+        del.textContent=field==='decor'?L('削除','Delete'):L(`${i+1}  remove`,`Remove ${i+1}`);
+        del.onclick=e=>{e.preventDefault();e.stopPropagation();removedDetail={path,index:i};value.splice(i,1);onChange(clone(value));preview();};
+        if(field==='decor'){
+          del.className='cut-decoration-delete';
+          grid.querySelector(`[data-detail-section="${path}.${i}"] > summary`).append(del);
+        }else actions.append(del);
+      });
       return;
     }
-    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field);row.append(text);
+    const percent=typeof value==='number' && ['w','h','contentScale'].includes(field), factor=percent?100:1;
+    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field)+(percent?L('（％）',' (%)'):'');row.append(text);
+    if(path.startsWith('palette.')){
+      const colorNames={bg:['Background色','Background color'],fg:['Text色','Text color'],sub:['SecondaryText色','Secondary text color'],accent:['Accent色','Accent color'],accent2:['Accent色2','Accent color 2'],ink:['Decoration色','Decoration color'],dim:['BackgroundText色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
+      if(colorNames[field])text.textContent=L(...colorNames[field]);
+    }
     const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
-    else if(typeof value==='number'){input.type='number';input.step='any';input.value=value; if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
+    else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
     else {if(field!=='text')input.type=/^#[0-9a-f]{6}$/i.test(value||'')?'color':'text';input.value=value??'';}
     if(lyric && field==='frontmost' && cut.emphasis){input.disabled=true;input.title=emphasisFrontmostHint();}
     input.addEventListener('change',()=>{
-      const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value):input.value;
+      const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value)/factor:input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
       if(/^decor\.\d+\.id$/.test(path))preview();
@@ -41647,6 +41754,9 @@ function openCutDetails(layer,index,part=0) {
       }
     });
     row.append(input);parent.append(row);
+    if(field==='scheme'){
+      const hint=document.createElement('small');hint.className='muted';hint.textContent=L('選択すると、このcutsだけStyle本来のPaletteを適用します。','Selecting a scheme applies the original style colors to this cut only.');row.append(hint);
+    }
     if(choices)attachDetailRandom(input,path);
   }
   function render() {
@@ -41664,7 +41774,6 @@ function openCutDetails(layer,index,part=0) {
     removedDetail=null;
     const scrollTop=formHost.scrollTop;
     formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
-    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('変更は「適用」で確定します。数値は現在のcutsの値です。表示範囲の 1 は画面全体の幅 · 高さに相当します。','Changes are saved with Apply. Values describe this cut. A display-area ratio of 1 equals the full stage width or height.');form.append(hint);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
     fieldEditor(grid,'start',start,v=>{start=v;});
@@ -41700,7 +41809,50 @@ function openCutDetails(layer,index,part=0) {
       if(value===undefined)continue;
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
-    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape],select[data-mask-field]')){
+    const categories=[
+      ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
+      ['placement',L('配置 · サイズ','Position / size'),['area','placement','contentScale']],
+      ['style',L('Style','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
+      ['motion',L('モーション','Motion'),['technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
+      ['effects',L('Treatment · Effects','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
+      ['decor',L('Decoration','Decorations'),['decor']],
+      ['mask',L('マスク','Mask'),['mask']],
+      ['other',L('その他','Other'),[]],
+    ];
+    const tabs=document.createElement('div');tabs.className='cut-details-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',L('編集項目','Edit categories'));
+    const panels=new Map(),tabButtons=new Map();
+    for(const node of [...grid.children]){
+      const field=(node.dataset.detailSection || node.querySelector('[data-detail-field]')?.dataset.detailField || '').split('.')[0];
+      const category=categories.find(([, ,fields])=>fields.includes(field)) || categories.at(-1);
+      if(!panels.has(category[0])){
+        const panel=document.createElement('div');panel.className='cut-details-grid cut-details-tab-panel';panel.dataset.detailTabPanel=category[0];
+        panel.id=`cut-detail-panel-${category[0]}`;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',`cut-detail-tab-${category[0]}`);panels.set(category[0],panel);
+      }
+      panels.get(category[0]).append(node);
+    }
+    grid.replaceWith(tabs);
+    const selectTab=(id,focus=false)=>{
+      activeDetailTab=id;
+      for(const [key,panel] of panels){panel.hidden=key!==id;const button=tabButtons.get(key);button.setAttribute('aria-selected',String(key===id));button.tabIndex=key===id?0:-1;}
+      if(focus)tabButtons.get(id).focus();
+    };
+    for(const [id,title] of categories){
+      if(!panels.has(id))continue;
+      const button=document.createElement('button');button.type='button';button.id=`cut-detail-tab-${id}`;button.dataset.detailTab=id;button.textContent=title;button.setAttribute('role','tab');button.setAttribute('aria-controls',panels.get(id).id);
+      button.onclick=()=>selectTab(id);tabs.append(button);tabButtons.set(id,button);form.append(panels.get(id));
+    }
+    tabs.addEventListener('keydown',e=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+      e.preventDefault();const keys=[...tabButtons.keys()],i=keys.indexOf(activeDetailTab);
+      selectTab(keys[e.key==='Home'?0:e.key==='End'?keys.length-1:(i+(e.key==='ArrowRight'?1:-1)+keys.length)%keys.length],true);
+    });
+    selectTab(panels.has(activeDetailTab)?activeDetailTab:panels.keys().next().value);
+    // Browser validation must reveal the relevant panel before focusing its input.
+    form.addEventListener('invalid',e=>{
+      const panel=e.target.closest('[data-detail-tab-panel]');if(panel)selectTab(panel.dataset.detailTabPanel);
+      for(let node=e.target.parentElement;node&&node!==form;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+    },true);
+    for(const select of form.querySelectorAll('select[data-mask-motion],select[data-mask-shape]')){
       const path=select.dataset.maskMotion?'mask.motion.'+select.dataset.maskMotion:select.dataset.maskShape?'mask.shape.'+select.dataset.maskShape:'mask.'+select.dataset.maskField;
       attachDetailRandom(select,path);
     }
@@ -41708,7 +41860,7 @@ function openCutDetails(layer,index,part=0) {
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
     const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
-    const apply=document.createElement('button');apply.type='submit';apply.textContent=L('適用','Apply');buttons.append(reset,cancel,apply);
+    const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');reset.className='cut-details-reset';buttons.append(reset,apply,cancel);
     formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       applyDisabledChoices(S.project);
@@ -41728,17 +41880,17 @@ function openCutDetails(layer,index,part=0) {
     // Hand shared video elements back to the editor's own time.
     J.syncMediaPreview(S.plan,S.t,false);S.need=true;
   });
-  refreshPreview();render();dialog.showModal();previewStart=performance.now();previewFrame=requestAnimationFrame(drawPreview);
+  refreshPreview();render();dialog.showModal();previewLast=performance.now();previewFrame=requestAnimationFrame(drawPreview);
 }
 // Preview controls are DOM overlays, so they never enter exported frames.
 let itemFrameSignature = '';
 function drawItemFrames() {
   const overlay=$('itemFrames'), view=$('view').getBoundingClientRect(), host=$('viewport').getBoundingClientRect();
-  overlay.hidden=!$('showItemFrames').checked || !!S.areaEdit || !!S.exporting;
+  overlay.hidden=!$('showItemFrames').checked || !!S.exporting;
   if(overlay.hidden) { itemFrameSignature=''; return; }
   Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
   const items=[];
-  for(const layer of ['foreground','lyrics','media']) {
+  for(const layer of ['media','lyrics','foreground']) {
     if(S.plan.layerVisibility?.[layer]===false)continue;
     if(layer==='lyrics') {
       for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
@@ -41754,23 +41906,38 @@ function drawItemFrames() {
   }
   const L=J.mediaLabel,labels={copy:L('Effectsをお気に入りにNew','Add effects to favorites'),paste:L('お気に入りからEffectsを適用','Apply favorite effects'),dice:L('再抽選','Randomize'),disableReroll:L('このEffectsをOFFにして再抽選','Disable current effects and randomize'),lock:L('ロック','Lock'),area:L('表示範囲','Display area'),details:L('詳細編集','Edit details'),remove:L('削除','Delete'),frontmost:L('Show above foreground','Frontmost')};
   const layerNames={foreground:L('Foreground','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('Background','Background')};
+  overlay.classList.toggle('selecting',!!S.areaEdit);
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
+    const selected=S.areaEdit && (S.areaEdit.kind==='lyric'?'lyrics':S.areaEdit.kind)===layer && S.areaEdit.index===index;
+    if(selected)area={...S.areaEdit.draft,angle:S.areaEdit.angle};
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
-    const actions=['dice','disableReroll','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const actions=['lock','dice','disableReroll','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'details'];
     const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('No image','No image'));
     const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
     const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
     let y=J.clamp(points[0][1],0,Math.max(0,view.height-26));
-    while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
+    if(S.areaEdit){
+      const preferred=Math.min(...points.map(p=>p[1]))-64;
+      const handles=[...document.querySelectorAll('.area-edit-handle,.area-rotate-handle')].map(el=>el.getBoundingClientRect());
+      const minY=Math.ceil(host.top-view.top+6);
+      const candidates=Array.from({length:Math.ceil((view.height+30-minY)/26)},(_,i)=>minY+i*26).filter(v=>v+26<=view.height+30);
+      const score=v=>{
+        const corners=points.filter(([px,py])=>px>=x-8&&px<=x+width+8&&py>=v-8&&py<=v+34).length;
+        const overlaps=occupied.filter(r=>x<r.x+r.w&&x+width>r.x&&v<r.y+26&&v+26>r.y).length;
+        const grip=handles.filter(r=>view.left+x<r.right+5&&view.left+x+width>r.left-5&&view.top+v<r.bottom+5&&view.top+v+26>r.top-5).length;
+        return grip*1000000000+corners*1000000+overlaps*10000+Math.abs(v-preferred);
+      };
+      y=candidates.reduce((best,v)=>score(v)<score(best)?v:best,candidates[0]);
+    }else while(occupied.some(r=>x<r.x+r.w && x+width>r.x && y<r.y+26 && y+26>r.y) && y+52<=view.height)y+=26;
     occupied.push({x,y,w:width});
     const controls=actions.map(action=>{
       const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
       return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
     }).join('');
-    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><span title="${escapeHtml(frameName)}">${escapeHtml(frameName)}</span>${controls}</div>`;
+    return `<svg class="item-frame-outline ${layer} ${selected?'selected':''}" data-select-layer="${layer}" data-select-index="${index}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><button type="button" class="item-frame-name" data-select-layer="${layer}" data-select-index="${index}" title="${escapeHtml(frameName)}" ${S.playing?'disabled':''}>${escapeHtml(frameName)}</button>${controls}</div>`;
   }).join('');
   if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
 }
@@ -42307,29 +42474,60 @@ function renderLines() {
   $('linesInfo').textContent = `${S.plan.lines.length} lines / ${S.plan.cuts.length} cuts`;
   syncSourceTab();
 }
+function beginAreaSelection() {
+  const edit=S.areaEdit;if(!edit)return;
+  edit.previousEditMode=$('showItemFrames').checked;$('showItemFrames').checked=true;
+  $('viewport').classList.add('area-selection');sizeViewport();
+  S.settingsOpen=false;S.sourceOpen=false;syncSettingsDrawer();syncSourceDrawer();
+  edit.inertNodes=[];
+  const allowed=[$('viewport'),$('areaEditControls')];
+  const disable=node=>{
+    if(allowed.includes(node))return;
+    if(allowed.some(el=>node.contains(el))){for(const child of node.children)disable(child);}
+    else if(!node.inert && !['SCRIPT','STYLE','DIALOG'].includes(node.tagName)){node.inert=true;edit.inertNodes.push(node);}
+  };
+  for(const child of document.body.children)disable(child);
+  const shade=document.createElementNS('http://www.w3.org/2000/svg','svg');shade.id='areaSelectionShade';shade.classList.add('area-selection-shade');shade.setAttribute('aria-hidden','true');
+  shade.innerHTML='<path fill-rule="evenodd"/>';document.body.append(shade);
+  $('areaCancel').focus({preventScroll:true});
+}
+function endAreaSelection() {
+  const edit=S.areaEdit;if(!edit)return;
+  for(const node of edit.inertNodes||[])node.inert=false;
+  $('areaSelectionShade')?.remove();$('showItemFrames').checked=edit.previousEditMode;
+  $('viewport').classList.remove('area-selection');sizeViewport();
+  itemFrameSignature='';S.need=true;
+}
 function positionAreaEditor() {
   if (!S.areaEdit) return;
   const view = $('view').getBoundingClientRect(), viewport = $('viewport').getBoundingClientRect(), overlay = $('areaEditOverlay');
   Object.assign(overlay.style, { left: `${view.left - viewport.left}px`, top: `${view.top - viewport.top}px`, width: `${view.width}px`, height: `${view.height}px` });
+  const shade=$('areaSelectionShade');
+  if(shade){
+    shade.setAttribute('viewBox',`0 0 ${innerWidth} ${innerHeight}`);
+    const rect=r=>`M${r.left},${r.top}H${r.right}V${r.bottom}H${r.left}Z`;
+    shade.querySelector('path').setAttribute('d',`M0,0H${innerWidth}V${innerHeight}H0Z`+rect(viewport)+rect($('areaEditControls').getBoundingClientRect()));
+  }
 }
 function showAreaDraft() {
   const edit = S.areaEdit, area = edit && edit.draft, rect = $('areaEditRect'), media = !!edit && edit.kind !== 'lyric';
   rect.hidden = !area;
   if (area) Object.assign(rect.style, { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%`, transform: `rotate(${edit.angle}deg)` });
   $('areaEditOverlay').classList.toggle('media-edit', !!edit);
-  $('areaEditOverlay').querySelector('.area-edit-hint').textContent = 'Drag inside to move, corners to resize, or around the frame to rotate';
   $('mediaAreaSizeControls').hidden = !edit;
   if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
   $('mediaAreaAngleField').hidden = !edit;
   if (edit) $('mediaAreaAngle').value = String(edit.angle);
   $('areaResetFull').hidden = !edit || media;
   $('areaResetAuto').hidden = !edit || media;
-  $('areaApplyOne').textContent = media ? 'Apply to this cut' : 'Apply to this line';
+  $('areaResetAuto').disabled = !edit || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
+  $('areaApplyOne').textContent = J.mediaLabel('配置決定','Set placement');
   $('areaApplyOne').disabled = !area;
   $('areaApplyFollowing').disabled = !area;
+  positionAreaEditor();drawItemFrames();
   S.need = true;
 }
-function openAreaEditor(index) {
+function openAreaEditor(index,fromPreview=false) {
   if (S.exporting || S.tap) return;
   if (S.areaEdit) cancelAreaEditor();
   const line = S.plan.lines[index]; if (!line) return;
@@ -42337,13 +42535,13 @@ function openAreaEditor(index) {
   clearTimeout(warmTimer); ++warmJob;
   const saved = J.lyricArea((S.project.overrides[index] || {}).area) || S.plan.cuts.find(c => c.line === index && c.part === 0)?.area;
   S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
+  if(!J.lyricArea(S.project.overrides[index]?.area))S.areaEdit.autoDraft=JSON.stringify(J.lyricArea({...S.areaEdit.draft,angle:S.areaEdit.angle,lockAspect:S.areaEdit.lockAspect}));
   const cut = S.plan.cuts.find(c => c.line === index);
-  seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
-  $('areaEditTitle').textContent = `${index + 1} line: “${line.text}” display area`;
+  if(!fromPreview)seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
-  positionAreaEditor(); showAreaDraft();
+  beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
-function openMediaEditor(index, layer) {
+function openMediaEditor(index, layer,fromPreview=false) {
   if (S.exporting || S.tap) return;
   if (S.areaEdit) cancelAreaEditor();
   const cut = S.plan[layer].cuts[index], dimensions = J.mediaSourceDimensions(S.plan,cut,S.t);
@@ -42354,15 +42552,14 @@ function openMediaEditor(index, layer) {
   pause();
   clearTimeout(warmTimer); ++warmJob;
   S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
-  seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
-  $('areaEditTitle').textContent = `${index + 1} cut: “${cut.name}” position and size`;
+  if(!fromPreview)seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
-  positionAreaEditor(); showAreaDraft();
+  beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
 function cancelAreaEditor() {
   if (!S.areaEdit) return;
   const oldTime = S.areaEdit.oldTime;
-  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  endAreaSelection();S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   seek(oldTime);
 }
 function applyAreaEditor(following) {
@@ -42388,7 +42585,7 @@ function applyAreaEditor(following) {
     }
     relock('lyrics', index);
   }
-  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  endAreaSelection();S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   replan(); commit();
 }
 function areaPointer(ev) {
@@ -42406,8 +42603,6 @@ function mediaHit(ev) {
   const x = Math.abs(dx * Math.cos(radians) + dy * Math.sin(radians));
   const y = Math.abs(-dx * Math.sin(radians) + dy * Math.cos(radians));
   const halfW = area.w * box.width / 2, halfH = area.h * box.height / 2;
-  const band = Math.min(18, Math.min(halfW, halfH) * 0.35);
-  if (x <= halfW + 18 && y <= halfH + 18 && (x >= halfW - band || y >= halfH - band)) return 'rotate';
   return x <= halfW && y <= halfH ? 'move' : null;
 }
 function mediaPointerAngle(ev, area) {
@@ -43664,10 +43859,17 @@ function bind() {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });
   const frameToggle=$('showItemFrames');
-  $('showItemFramesLabel').textContent=J.mediaLabel('アイテム枠表示','Show item frames');
+  $('showItemFramesLabel').textContent=J.mediaLabel('編集モード','Edit mode');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
-  $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
+  $('itemFrames').addEventListener('click',e=>{
+    if(S.playing)return;
+    const button=e.target.closest('.item-frame-action');
+    if(button){e.stopPropagation();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
+    const target=e.target.closest('[data-select-layer]');if(!target)return;
+    const layer=target.dataset.selectLayer,index=Number(target.dataset.selectIndex);
+    if(layer==='lyrics')openAreaEditor(index,true);else openMediaEditor(index,layer,true);
+  });
 
   $('saveFilename').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('filenameDlg').querySelector('button[value="save"]').click();}});
   const menus = [...document.querySelectorAll('.header-menu')];
@@ -43779,6 +43981,11 @@ function bind() {
   $('timelineScroll').closest('.timeline-with-visibility').after(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
+  // Timeline dragging prevents the browser's default focus change. End lyric
+  // editing before those handlers run, including cut controls and link markers.
+  $('timelineScroll').addEventListener('pointerdown',()=>{
+    if(document.activeElement===$('lyrics'))$('lyrics').blur();
+  },{capture:true});
   for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
   $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
   $('sourceLyrics').addEventListener('click',()=>selectSourceDrawer('lyrics'));
@@ -43823,6 +44030,7 @@ function bind() {
   $('mediaAreaAspectLock').addEventListener('change', e => { if (!S.areaEdit) return; S.areaEdit.lockAspect = e.target.checked; if (e.target.checked) S.areaEdit.ratio = S.areaEdit.draft.h / S.areaEdit.draft.w; showAreaDraft(); });
   $('mediaAreaWidth').addEventListener('change', e => { if (!S.areaEdit) return; const w = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(w, S.areaEdit.lockAspect ? w * S.areaEdit.ratio : S.areaEdit.draft.h); });
   $('mediaAreaHeight').addEventListener('change', e => { if (!S.areaEdit) return; const h = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(S.areaEdit.lockAspect ? h / S.areaEdit.ratio : S.areaEdit.draft.w, h); });
+  document.addEventListener('scroll',()=>{if(S.areaEdit)positionAreaEditor();},{capture:true,passive:true});
   $('mediaAreaAngle').addEventListener('input', e => { if (!S.areaEdit || e.target.value === '') return; S.areaEdit.angle = J.clamp(+e.target.value || 0, -180, 180); showAreaDraft(); });
   $('areaResetFull').addEventListener('click', () => { if (!S.areaEdit || S.areaEdit.kind !== 'lyric') return; S.areaEdit.autoDraft = null; S.areaEdit.draft = { x: 0, y: 0, w: 1, h: 1 }; S.areaEdit.ratio = 1; S.areaEdit.angle = 0; showAreaDraft(); });
   $('areaResetAuto').addEventListener('click', () => {
@@ -43836,7 +44044,23 @@ function bind() {
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
   $('areaCancel').addEventListener('click', cancelAreaEditor);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit) { e.preventDefault(); cancelAreaEditor(); } });
+  $('areaDelete').addEventListener('click',()=>{
+    const edit=S.areaEdit;
+    if(!edit || S.playing || S.exporting || S.tap)return;
+    const {kind,index}=edit;
+    const part=kind==='lyric' ? J.lyricCutsAt(S.plan,S.t).find(c=>c.line===index)?.part || 0 : 0;
+    const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='areaDeleteDialog';dialog.className='insert-cut-dialog';
+    dialog.innerHTML=`<form method="dialog"><p>${L('Remove this cutします。よろしいですか？','Delete this cut?')}</p><div class="row"><button value="cancel">${L('キャンセル','Cancel')}</button><button value="delete" class="area-delete-confirm">${L('削除','Delete')}</button></div></form>`;
+    dialog.addEventListener('close',()=>{
+      const remove=dialog.returnValue==='delete';dialog.remove();
+      if(!remove || S.areaEdit!==edit)return;
+      cancelAreaEditor();
+      if(kind==='lyric')removeLyricCut(index,part);else removeMediaCut(index,kind);
+    },{once:true});
+    dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close('cancel');}});
+    document.body.append(dialog);dialog.showModal();dialog.querySelector('[value="cancel"]').focus();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
   const mediaPane = $('mediaPane');
   const hasFiles = e => Array.from(e.dataTransfer && e.dataTransfer.types || []).includes('Files');
@@ -44266,6 +44490,7 @@ function bind() {
   });
   document.addEventListener('keydown', e => {
     // Ctrl+S / ⌘S saves the project (also while typing) instead of the browser's "save page".
+    if(S.areaEdit)return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
       e.preventDefault();
       if (!e.repeat && !S.projectBusy && !S.exporting && !document.querySelector('dialog[open]')) $('btnSave').click();

@@ -20,7 +20,7 @@ J.normalizeMask = m => {
   const shapes = (Array.isArray(m.shapes) ? m.shapes : []).filter(s => s && J.MASK_SHAPES.includes(s.type)).map(s => ({
     type: s.type, cx: num(s.cx, .5), cy: num(s.cy, .5), w: Math.max(0, num(s.w, .5)), h: Math.max(0, num(s.h, .5)), angle: J.clamp(num(s.angle, 0), -180, 180), lockAspect: s.lockAspect !== false,
   })).filter(s => s.w > 0 && s.h > 0);
-  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, shapes, motion: J.normalizeMaskMotion(m.motion) };
+  return { enabled: m.enabled === true, target: m.target === 'cut' ? 'cut' : 'source', invert: m.invert === true, opacity: J.clamp(num(m.opacity, 100), 0, 100), feather: J.clamp(num(m.feather, 0), 0, 100), shapes, motion: J.normalizeMaskMotion(m.motion) };
 };
 // The editor previews the unmasked reference while it is drawn.
 J.masksSuspended = false;
@@ -82,7 +82,7 @@ const motionState = (motion, { cut, t, plan }) => {
 // Keep (or, inverted, remove) the union of the shapes on a whole canvas. matrix maps frame units to pixels;
 // timing ({cut, t, plan}) animates the mask when it has a motion.
 J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
-  const [m, mx] = buffer('shapes', canvas.width, canvas.height);
+  let [m, mx] = buffer('shapes', canvas.width, canvas.height);
   if (timing && J.maskMotionActive(mask.motion) && J.paintMediaEffect) {
     // Draw the shapes as a white image and move it with the media painter (phases, holds, beats, cameras).
     const sx = Math.hypot(matrix.a, matrix.b), sy = Math.hypot(matrix.c, matrix.d), k = Math.min(1, 2048 / Math.max(fw * sx, fh * sy, 1));
@@ -98,7 +98,23 @@ J.applyMaskToCanvas = (canvas, mask, matrix, fw, fh, timing) => {
     // Each shape is filled on its own so overlaps always add up (a true union, whatever the winding).
     for (const s of mask.shapes) { J.maskShapePath(mx, [s], fw, fh); mx.fill(); }
   }
-  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.filter = 'none';
+  // Blur the completed union (including motion) before inversion and opacity.
+  // A size-relative radius keeps preview and export consistent at any resolution.
+  const feather = J.clamp(num(mask.feather, 0), 0, 100);
+  if (feather > 0) {
+    const [soft, sx] = buffer('feather', canvas.width, canvas.height);
+    sx.filter = `blur(${Math.min(canvas.width, canvas.height) * feather / 1000}px)`;
+    sx.drawImage(m, 0, 0); sx.filter = 'none';
+    m = soft; mx = sx;
+  }
+  const opacity = J.clamp(num(mask.opacity, 100), 0, 100) / 100;
+  // Interpolate the mask coverage with an unmasked frame. Fill the union once,
+  // so overlapping shapes do not multiply the opacity.
+  if (!mask.invert && opacity < 1) {
+    mx.setTransform(1, 0, 0, 1, 0, 0); mx.globalCompositeOperation = 'destination-over';
+    mx.globalAlpha = 1 - opacity; mx.fillStyle = '#fff'; mx.fillRect(0, 0, m.width, m.height);
+  }
+  const x = canvas.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = mask.invert ? opacity : 1; x.filter = 'none';
   x.globalCompositeOperation = mask.invert ? 'destination-out' : 'destination-in'; x.drawImage(m, 0, 0); x.restore();
 };
 const dims = src => [src.videoWidth || src.naturalWidth || src.width || 0, src.videoHeight || src.naturalHeight || src.height || 0];

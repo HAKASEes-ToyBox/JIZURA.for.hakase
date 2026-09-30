@@ -46,7 +46,7 @@ try{for(const lang of ['','en/']){
  await scenario('shuffle',p=>p.locator('#btnShuffle').click(),unchanged);
  await scenario('change style',p=>p.evaluate(()=>{J.ui.project.style=Object.keys(J.STYLES).find(k=>k!==J.ui.project.style);J.uiApi.replan();}),unchanged);
  // Direct operations apply, and the cut stays locked with its new state.
- await scenario('resize the locked lyric',async p=>{await seekAnd(p,10);await p.locator('.item-frame-action[data-action="area"][data-layer="lyrics"]').first().click();await p.waitForTimeout(200);
+ await scenario('resize the locked lyric',async p=>{await seekAnd(p,10);await p.locator('.item-frame-name[data-select-layer="lyrics"]').first().click();await p.waitForTimeout(200);
   await p.evaluate(()=>{const r=document.getElementById('areaEditRect').getBoundingClientRect();window.__r=r;});
   const r=await p.evaluate(()=>window.__r);await p.mouse.move(r.x+r.width/2,r.y+r.height/2);await p.mouse.down();await p.mouse.move(r.x+r.width/2-60,r.y+r.height/2-40,{steps:5});await p.mouse.up();
   await p.locator('#areaApplyOne').click();},(c,ok)=>{ok(c.lyric.includes('area'),'area applied');ok(c.lyric.every(k=>['area','params'].includes(k)),'only the area changed: '+c.lyric);});
