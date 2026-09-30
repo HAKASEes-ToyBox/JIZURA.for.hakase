@@ -28,6 +28,14 @@ const assert=require('node:assert/strict'), fs=require('node:fs'), path=require(
   assert.ok(drawn.w>=320&&Math.abs(drawn.w/drawn.h-16/9)<.02&&drawn.bright>20,'canvas '+JSON.stringify(drawn));
   const first=await state();assert.equal(await pane.locator('.effect-preview-dur').textContent(),await page.evaluate(t=>J.fmtTime(t+1e-6),first.end-first.start));
   assert.notEqual(await pane.locator('.effect-preview-now').textContent(),'00:00.00');
+  const playback=pane.locator('[data-cut-preview-play]'),scrub=pane.locator('[data-cut-preview-seek]');
+  await playback.click();await page.waitForTimeout(80);
+  const paused=await pane.locator('.effect-preview-now').textContent();
+  await page.waitForTimeout(180);assert.equal(await pane.locator('.effect-preview-now').textContent(),paused,'pause holds frame');
+  const track=await scrub.boundingBox();await page.mouse.click(track.x+track.width*.75,track.y+track.height/2);
+  await page.waitForTimeout(80);assert.ok(Math.abs(Number(await scrub.inputValue())-750)<70,'pointer seeks while paused');
+  await scrub.press('Home');await page.waitForTimeout(80);assert.equal(await scrub.inputValue(),'0','keyboard seeks to start');
+  await playback.click();await page.waitForTimeout(180);assert.ok(Number(await scrub.inputValue())>0,'resume advances');
   await modal.locator('[data-detail-field="text"]').fill('プレビュー反映');await modal.locator('[data-detail-field="text"]').dispatchEvent('change');
   await modal.locator('[data-detail-field="opacity"]').fill('42');await modal.locator('[data-detail-field="opacity"]').dispatchEvent('change');
   await page.waitForTimeout(250);

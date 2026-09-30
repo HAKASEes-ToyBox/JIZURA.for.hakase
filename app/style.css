@@ -456,6 +456,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview { min-height: 0; overflow: auto; padding: 24px; border-right: 1px solid #33353b; background: #15161a; }
 .cut-details-preview h2 { font-size: 16px; margin: 0 0 14px; }
 .cut-details-preview canvas { display: block; width: 100%; height: auto; background: #000; border-radius: 6px; }
+.cut-details-preview .progress { position: relative; overflow: visible; }
+.cut-details-preview [data-cut-preview-seek] { position: absolute; inset: -10px 0; width: 100%; height: calc(100% + 20px); margin: 0; opacity: 0; cursor: pointer; }
+.cut-details-preview .progress:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
+.cut-details-preview [data-cut-preview-play] { flex: 0 0 auto; min-width: 34px; padding: 5px 8px; }
+.cut-detail-array-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
 .cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
