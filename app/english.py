@@ -460,6 +460,7 @@ FORK_BODY = {
     'ドラッグして歌詞の表示範囲を指定': 'Drag to select the lyrics display area',
     'アスペクト比を固定': 'Lock aspect ratio',
     '幅（画面比％）': 'Width (% of canvas)', '高さ（画面比％）': 'Height (% of canvas)',
+    '角度リセット': 'Reset angle', '画面全域': 'Full screen', '配置決定': 'Set placement', '以降すべて同じ配置': 'Use this placement from here onward',
     '角度（°）': 'Rotation (°)', '全域へリセット': 'Reset to full area',
     '角度をリセット': 'Reset rotation', '編集モード': 'Edit mode',
     'この行だけに適用': 'Apply to this line', 'これ以降全てに適用': 'Apply from here onward',

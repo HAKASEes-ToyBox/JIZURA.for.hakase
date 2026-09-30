@@ -2059,8 +2059,8 @@ function showAreaDraft() {
   $('mediaAreaAngleField').hidden = !edit;
   if (edit) $('mediaAreaAngle').value = String(edit.angle);
   $('areaResetFull').hidden = !edit || media;
-  $('areaResetAuto').hidden = !edit || media;
-  $('areaApplyOne').textContent = media ? 'このカットだけに適用' : 'この行だけに適用';
+  $('areaResetAuto').hidden = !edit || media || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
+  $('areaApplyOne').textContent = J.mediaLabel('配置決定','Set placement');
   $('areaApplyOne').disabled = !area;
   $('areaApplyFollowing').disabled = !area;
   positionAreaEditor();drawItemFrames();
@@ -2074,6 +2074,7 @@ function openAreaEditor(index,fromPreview=false) {
   clearTimeout(warmTimer); ++warmJob;
   const saved = J.lyricArea((S.project.overrides[index] || {}).area) || S.plan.cuts.find(c => c.line === index && c.part === 0)?.area;
   S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
+  if(!J.lyricArea(S.project.overrides[index]?.area))S.areaEdit.autoDraft=JSON.stringify(J.lyricArea({...S.areaEdit.draft,angle:S.areaEdit.angle,lockAspect:S.areaEdit.lockAspect}));
   const cut = S.plan.cuts.find(c => c.line === index);
   if(!fromPreview)seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
@@ -3578,17 +3579,26 @@ function bind() {
     const area = J.plan(project, audioLike()).cuts.find(c => c.line === edit.index && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1, angle: 0, lockAspect: true };
     edit.draft = { ...area }; edit.ratio = area.h / area.w; edit.angle = area.angle; edit.lockAspect = area.lockAspect;
     edit.autoDraft = JSON.stringify(J.lyricArea(area));
-    showAreaDraft();
+    applyAreaEditor(false);
   });
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
   $('areaCancel').addEventListener('click', cancelAreaEditor);
   $('areaDelete').addEventListener('click',()=>{
-    if(!S.areaEdit || S.playing || S.exporting || S.tap)return;
-    const {kind,index}=S.areaEdit;
+    const edit=S.areaEdit;
+    if(!edit || S.playing || S.exporting || S.tap)return;
+    const {kind,index}=edit;
     const part=kind==='lyric' ? J.lyricCutsAt(S.plan,S.t).find(c=>c.line===index)?.part || 0 : 0;
-    cancelAreaEditor();
-    if(kind==='lyric')removeLyricCut(index,part);else removeMediaCut(index,kind);
+    const L=J.mediaLabel,dialog=document.createElement('dialog');dialog.id='areaDeleteDialog';dialog.className='insert-cut-dialog';
+    dialog.innerHTML=`<form method="dialog"><p>${L('このカットを削除します。よろしいですか？','Delete this cut?')}</p><div class="row"><button value="cancel">${L('キャンセル','Cancel')}</button><button value="delete" class="area-delete-confirm">${L('削除','Delete')}</button></div></form>`;
+    dialog.addEventListener('close',()=>{
+      const remove=dialog.returnValue==='delete';dialog.remove();
+      if(!remove || S.areaEdit!==edit)return;
+      cancelAreaEditor();
+      if(kind==='lyric')removeLyricCut(index,part);else removeMediaCut(index,kind);
+    },{once:true});
+    dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close('cancel');}});
+    document.body.append(dialog);dialog.showModal();dialog.querySelector('[value="cancel"]').focus();
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
