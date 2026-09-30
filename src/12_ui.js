@@ -3442,6 +3442,11 @@ function bind() {
   $('timelineScroll').closest('.timeline-with-visibility').after(panLabel);
   pan.addEventListener('input',()=>{$('timelineScroll').scrollLeft=+pan.value;});
   $('timelineScroll').addEventListener('scroll',syncTimelinePan,{passive:true});
+  // Timeline dragging prevents the browser's default focus change. End lyric
+  // editing before those handlers run, including cut controls and link markers.
+  $('timelineScroll').addEventListener('pointerdown',()=>{
+    if(document.activeElement===$('lyrics'))$('lyrics').blur();
+  },{capture:true});
   for(const type of ['wheel','pointerdown','touchstart'])$('timelineScroll').addEventListener(type,()=>{timelineUserScroll=performance.now();},{passive:true});
   $('timelinePan')?.addEventListener('pointerdown',()=>{timelineUserScroll=performance.now();});
   $('sourceLyrics').addEventListener('click',()=>selectSourceDrawer('lyrics'));
