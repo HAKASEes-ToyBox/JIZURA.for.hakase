@@ -178,19 +178,32 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
-.area-edit-overlay { position: absolute; z-index: 4; cursor: crosshair; touch-action: none; background: rgba(0,0,0,0.32); }
+.area-edit-overlay { position: absolute; z-index: 4; touch-action: none; pointer-events: none; }
 .area-edit-rect { position: absolute; box-sizing: border-box; border: 2px solid var(--amber); background: rgba(245,165,12,0.12); box-shadow: 0 0 0 1px #000; pointer-events: none; }
 :root { --rotate-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M25 13a10 10 0 1 0 1 7' fill='none' stroke='%23101620' stroke-width='2'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23ffffff' stroke-width='4'/%3E%3Cpath d='M23 4v10h8' fill='none' stroke='%23101620' stroke-width='2'/%3E%3C/svg%3E") 16 16, crosshair; }
-.area-edit-overlay.media-edit { background: rgba(0,0,0,0.14); cursor: default; }
+.area-edit-overlay.media-edit { background: transparent; cursor: default; }
 .area-edit-overlay.media-edit .area-edit-rect { background: rgba(245,165,12,0.04); pointer-events: auto; cursor: move; }
-.area-edit-overlay.media-edit .area-edit-rect::before { content: ''; position: absolute; inset: -18px; border: 1px dashed var(--cyan); pointer-events: none; }
+.area-rotate-handle { position: absolute; width: 16px; height: 16px; border: 2px solid #111; border-radius: 50%; background: var(--amber); transform: translate(-50%,-50%); cursor: var(--rotate-cursor); touch-action: none; }
+.area-rotate-handle::before { content: ''; position: absolute; background: var(--amber); pointer-events: none; }
+.area-rotate-handle.n { left: 50%; top: -32px; }
+.area-rotate-handle.s { left: 50%; top: calc(100% + 32px); }
+.area-rotate-handle.e { left: calc(100% + 32px); top: 50%; }
+.area-rotate-handle.w { left: -32px; top: 50%; }
+.area-rotate-handle.n::before { width: 2px; height: 24px; left: 5px; top: 12px; }
+.area-rotate-handle.s::before { width: 2px; height: 24px; left: 5px; bottom: 12px; }
+.area-rotate-handle.e::before { height: 2px; width: 24px; top: 5px; right: 12px; }
+.area-rotate-handle.w::before { height: 2px; width: 24px; top: 5px; left: 12px; }
+.area-selection-shade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 10000; pointer-events: none; }
+.area-selection-shade path { fill: rgba(0,0,0,.65); pointer-events: fill; }
+.viewport.area-selection { padding: 36px; box-sizing: border-box; }
+@media (pointer: coarse) { .area-rotate-handle { width: 24px; height: 24px; } }
 .area-edit-handle { display: none; position: absolute; width: 15px; height: 15px; border: 2px solid #111; background: var(--amber); border-radius: 2px; transform: translate(-50%,-50%); touch-action: none; }
 .media-edit .area-edit-handle { display: block; }
 .area-edit-handle.nw { left: 0; top: 0; cursor: nwse-resize; }
 .area-edit-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
 .area-edit-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
 .area-edit-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
-.area-edit-hint { position: absolute; top: 8px; left: 8px; color: #fff; font-size: 12px; background: rgba(0,0,0,0.8); padding: 4px 7px; pointer-events: none; }
+.area-edit-hint { color: var(--muted); font-size: 11px; pointer-events: none; }
 .area-edit-controls { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--amber); border-radius: var(--r); background: var(--panel); font-size: 12px; }
 .area-edit-controls span { flex: 1 1 100%; color: var(--muted); }
 .media-area-size-controls { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; flex-wrap: wrap; }
@@ -512,12 +525,15 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frames { position:absolute; pointer-events:none; overflow:hidden; z-index:3; }
 .item-frames[hidden] { display:none; }
 .item-frame-outline { position:absolute; inset:0; overflow:visible; }
-.item-frame-outline polygon { fill:none; stroke:currentColor; stroke-width:1.5; stroke-dasharray:5 3; filter:drop-shadow(0 0 1px #000); }
+.item-frame-outline polygon { fill:transparent; pointer-events:all; cursor:pointer; stroke:currentColor; stroke-width:1.5; stroke-dasharray:5 3; filter:drop-shadow(0 0 1px #000); }
+.item-frame-outline.selected { color: var(--amber); }
+.item-frame-outline.selected polygon { stroke-dasharray:none; stroke-width:2; }
 .item-frames .foreground { color:#f5bd65; }
 .item-frames .lyrics { color:#68e3ca; }
 .item-frames .media { color:#95baff; }
-.item-frame-tools { position:absolute; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
+.item-frame-tools { position:absolute; z-index:1; display:flex; align-items:center; height:25px; background:#17191fee; border:1px solid currentColor; border-radius:3px; pointer-events:auto; }
 .item-frame-tools span { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; }
+.item-frame-name { flex:1; min-width:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; font-size:10px; padding:0 4px; white-space:nowrap; border:0; background:transparent; color:inherit; }
 .item-frame-action { display:flex; align-items:center; justify-content:center; width:25px; min-width:20px; height:23px; padding:3px; border:0; border-radius:2px; background:transparent; color:inherit; }
 .item-frame-action svg { width:16px; height:16px; pointer-events:none; }
 .item-frame-action.active { background:#3b6560; color:#fff; }

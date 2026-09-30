@@ -461,6 +461,7 @@ FORK_BODY = {
     'アスペクト比を固定': 'Lock aspect ratio',
     '幅（画面比％）': 'Width (% of canvas)', '高さ（画面比％）': 'Height (% of canvas)',
     '角度（°）': 'Rotation (°)', '全域へリセット': 'Reset to full area',
+    '角度をリセット': 'Reset rotation', '編集モード': 'Edit mode',
     'この行だけに適用': 'Apply to this line', 'これ以降全てに適用': 'Apply from here onward',
     '前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',
     '歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',

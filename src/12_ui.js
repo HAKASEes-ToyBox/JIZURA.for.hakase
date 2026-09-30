@@ -1426,11 +1426,11 @@ function openCutDetails(layer,index,part=0) {
 let itemFrameSignature = '';
 function drawItemFrames() {
   const overlay=$('itemFrames'), view=$('view').getBoundingClientRect(), host=$('viewport').getBoundingClientRect();
-  overlay.hidden=!$('showItemFrames').checked || !!S.areaEdit || !!S.exporting;
+  overlay.hidden=!$('showItemFrames').checked || !!S.exporting;
   if(overlay.hidden) { itemFrameSignature=''; return; }
   Object.assign(overlay.style,{left:`${view.left-host.left}px`,top:`${view.top-host.top}px`,width:`${view.width}px`,height:`${view.height}px`});
   const items=[];
-  for(const layer of ['foreground','lyrics','media']) {
+  for(const layer of ['media','lyrics','foreground']) {
     if(S.plan.layerVisibility?.[layer]===false)continue;
     if(layer==='lyrics') {
       for(const cut of J.lyricCutsAt(S.plan,S.t)) if(cut.line>=0) items.push({layer,cut,index:cut.line,area:cut.area||{x:0,y:0,w:1,h:1}});
@@ -1448,10 +1448,12 @@ function drawItemFrames() {
   const layerNames={foreground:L('前景','Foreground'),lyrics:L('歌詞','Lyrics'),media:L('背景','Background')};
   const occupied=[];
   const html=items.map(({layer,cut,index,area})=>{
+    const selected=S.areaEdit && (S.areaEdit.kind==='lyric'?'lyrics':S.areaEdit.kind)===layer && S.areaEdit.index===index;
+    if(selected)area={...S.areaEdit.draft,angle:S.areaEdit.angle};
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
-    const actions=['dice','disableReroll','lock','area','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const actions=['dice','disableReroll','lock','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
     const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('画像無し','No image'));
     const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
     const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
@@ -1460,9 +1462,9 @@ function drawItemFrames() {
     occupied.push({x,y,w:width});
     const controls=actions.map(action=>{
       const active=action==='lock'?locked:action==='frontmost'?!!cut.frontmost:false;
-      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing?'disabled':''}>${ICON[action]}</button>`;
+      return `<button type="button" class="item-frame-action ${active?'active':''}" data-action="${action}" data-layer="${layer}" data-index="${index}" data-part="${cut.part??0}" title="${labels[action]}" aria-label="${layerNames[layer]} ${labels[action]}" ${['lock','frontmost'].includes(action)?`aria-pressed="${active}"`:''} ${S.playing||S.areaEdit?'disabled':''}>${ICON[action]}</button>`;
     }).join('');
-    return `<svg class="item-frame-outline ${layer}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><span title="${escapeHtml(frameName)}">${escapeHtml(frameName)}</span>${controls}</div>`;
+    return `<svg class="item-frame-outline ${layer} ${selected?'selected':''}" data-select-layer="${layer}" data-select-index="${index}" width="100%" height="100%" aria-hidden="true"><polygon points="${points.map(p=>p.join(',')).join(' ')}"/></svg><div class="item-frame-tools ${layer}" style="left:${x}px;top:${y}px;width:${width}px;max-width:${view.width}px" data-layer="${layer}"><button type="button" class="item-frame-name" data-select-layer="${layer}" data-select-index="${index}" title="${escapeHtml(frameName)}" ${S.playing||S.areaEdit?'disabled':''}>${escapeHtml(frameName)}</button>${controls}</div>`;
   }).join('');
   if(itemFrameSignature!==html){overlay.innerHTML=html;itemFrameSignature=html;}
 }
@@ -1999,17 +2001,47 @@ function renderLines() {
   $('linesInfo').textContent = `${S.plan.lines.length}行 / ${S.plan.cuts.length}カット`;
   syncSourceTab();
 }
+function beginAreaSelection() {
+  const edit=S.areaEdit;if(!edit)return;
+  edit.previousEditMode=$('showItemFrames').checked;$('showItemFrames').checked=true;
+  $('viewport').classList.add('area-selection');sizeViewport();
+  S.settingsOpen=false;S.sourceOpen=false;syncSettingsDrawer();syncSourceDrawer();
+  edit.inertNodes=[];
+  const allowed=[$('viewport'),$('areaEditControls')];
+  const disable=node=>{
+    if(allowed.includes(node))return;
+    if(allowed.some(el=>node.contains(el))){for(const child of node.children)disable(child);}
+    else if(!node.inert && !['SCRIPT','STYLE'].includes(node.tagName)){node.inert=true;edit.inertNodes.push(node);}
+  };
+  for(const child of document.body.children)disable(child);
+  const shade=document.createElementNS('http://www.w3.org/2000/svg','svg');shade.id='areaSelectionShade';shade.classList.add('area-selection-shade');shade.setAttribute('aria-hidden','true');
+  shade.innerHTML='<path fill-rule="evenodd"/>';document.body.append(shade);
+  $('areaCancel').focus({preventScroll:true});
+}
+function endAreaSelection() {
+  const edit=S.areaEdit;if(!edit)return;
+  for(const node of edit.inertNodes||[])node.inert=false;
+  $('areaSelectionShade')?.remove();$('showItemFrames').checked=edit.previousEditMode;
+  $('viewport').classList.remove('area-selection');sizeViewport();
+  itemFrameSignature='';S.need=true;
+}
 function positionAreaEditor() {
   if (!S.areaEdit) return;
   const view = $('view').getBoundingClientRect(), viewport = $('viewport').getBoundingClientRect(), overlay = $('areaEditOverlay');
   Object.assign(overlay.style, { left: `${view.left - viewport.left}px`, top: `${view.top - viewport.top}px`, width: `${view.width}px`, height: `${view.height}px` });
+  const shade=$('areaSelectionShade');
+  if(shade){
+    shade.setAttribute('viewBox',`0 0 ${innerWidth} ${innerHeight}`);
+    const rect=r=>`M${r.left},${r.top}H${r.right}V${r.bottom}H${r.left}Z`;
+    shade.querySelector('path').setAttribute('d',`M0,0H${innerWidth}V${innerHeight}H0Z`+rect(viewport)+rect($('areaEditControls').getBoundingClientRect()));
+  }
 }
 function showAreaDraft() {
   const edit = S.areaEdit, area = edit && edit.draft, rect = $('areaEditRect'), media = !!edit && edit.kind !== 'lyric';
   rect.hidden = !area;
   if (area) Object.assign(rect.style, { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%`, transform: `rotate(${edit.angle}deg)` });
   $('areaEditOverlay').classList.toggle('media-edit', !!edit);
-  $('areaEditOverlay').querySelector('.area-edit-hint').textContent = '内側をドラッグして移動・四隅でサイズ変更・枠の周囲をドラッグして回転';
+  $('areaEditHint').textContent = J.mediaLabel('内側をドラッグして移動・四隅でサイズ変更・回転ハンドルで回転','Drag inside to move, corners to resize, rotation handles to rotate');
   $('mediaAreaSizeControls').hidden = !edit;
   if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
   $('mediaAreaAngleField').hidden = !edit;
@@ -2019,9 +2051,10 @@ function showAreaDraft() {
   $('areaApplyOne').textContent = media ? 'このカットだけに適用' : 'この行だけに適用';
   $('areaApplyOne').disabled = !area;
   $('areaApplyFollowing').disabled = !area;
+  positionAreaEditor();drawItemFrames();
   S.need = true;
 }
-function openAreaEditor(index) {
+function openAreaEditor(index,fromPreview=false) {
   if (S.exporting || S.tap) return;
   if (S.areaEdit) cancelAreaEditor();
   const line = S.plan.lines[index]; if (!line) return;
@@ -2030,12 +2063,12 @@ function openAreaEditor(index) {
   const saved = J.lyricArea((S.project.overrides[index] || {}).area) || S.plan.cuts.find(c => c.line === index && c.part === 0)?.area;
   S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
   const cut = S.plan.cuts.find(c => c.line === index);
-  seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
+  if(!fromPreview)seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
   $('areaEditTitle').textContent = `${index + 1}行目「${line.text}」の表示エリア`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
-  positionAreaEditor(); showAreaDraft();
+  beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
-function openMediaEditor(index, layer) {
+function openMediaEditor(index, layer,fromPreview=false) {
   if (S.exporting || S.tap) return;
   if (S.areaEdit) cancelAreaEditor();
   const cut = S.plan[layer].cuts[index], dimensions = J.mediaSourceDimensions(S.plan,cut,S.t);
@@ -2046,15 +2079,15 @@ function openMediaEditor(index, layer) {
   pause();
   clearTimeout(warmTimer); ++warmJob;
   S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
-  seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
+  if(!fromPreview)seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
   $('areaEditTitle').textContent = `${index + 1}カット目「${cut.name}」の配置・サイズ`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
-  positionAreaEditor(); showAreaDraft();
+  beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
 function cancelAreaEditor() {
   if (!S.areaEdit) return;
   const oldTime = S.areaEdit.oldTime;
-  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  endAreaSelection();S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   seek(oldTime);
 }
 function applyAreaEditor(following) {
@@ -2080,7 +2113,7 @@ function applyAreaEditor(following) {
     }
     relock('lyrics', index);
   }
-  S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
+  endAreaSelection();S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   replan(); commit();
 }
 function areaPointer(ev) {
@@ -2098,8 +2131,6 @@ function mediaHit(ev) {
   const x = Math.abs(dx * Math.cos(radians) + dy * Math.sin(radians));
   const y = Math.abs(-dx * Math.sin(radians) + dy * Math.cos(radians));
   const halfW = area.w * box.width / 2, halfH = area.h * box.height / 2;
-  const band = Math.min(18, Math.min(halfW, halfH) * 0.35);
-  if (x <= halfW + 18 && y <= halfH + 18 && (x >= halfW - band || y >= halfH - band)) return 'rotate';
   return x <= halfW && y <= halfH ? 'move' : null;
 }
 function mediaPointerAngle(ev, area) {
@@ -3356,10 +3387,17 @@ function bind() {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });
   const frameToggle=$('showItemFrames');
-  $('showItemFramesLabel').textContent=J.mediaLabel('アイテム枠表示','Show item frames');
+  $('showItemFramesLabel').textContent=J.mediaLabel('編集モード','Edit mode');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
-  $('itemFrames').addEventListener('click',e=>{const button=e.target.closest('.item-frame-action');if(button&&!S.playing&&!S.areaEdit){e.stopPropagation();performTimelineAction(button);}});
+  $('itemFrames').addEventListener('click',e=>{
+    if(S.playing||S.areaEdit)return;
+    const button=e.target.closest('.item-frame-action');
+    if(button){e.stopPropagation();performTimelineAction(button);return;}
+    const target=e.target.closest('[data-select-layer]');if(!target)return;
+    const layer=target.dataset.selectLayer,index=Number(target.dataset.selectIndex);
+    if(layer==='lyrics')openAreaEditor(index,true);else openMediaEditor(index,layer,true);
+  });
 
   $('saveFilename').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('filenameDlg').querySelector('button[value="save"]').click();}});
   const menus = [...document.querySelectorAll('.header-menu')];
@@ -3520,6 +3558,8 @@ function bind() {
   $('mediaAreaAspectLock').addEventListener('change', e => { if (!S.areaEdit) return; S.areaEdit.lockAspect = e.target.checked; if (e.target.checked) S.areaEdit.ratio = S.areaEdit.draft.h / S.areaEdit.draft.w; showAreaDraft(); });
   $('mediaAreaWidth').addEventListener('change', e => { if (!S.areaEdit) return; const w = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(w, S.areaEdit.lockAspect ? w * S.areaEdit.ratio : S.areaEdit.draft.h); });
   $('mediaAreaHeight').addEventListener('change', e => { if (!S.areaEdit) return; const h = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(S.areaEdit.lockAspect ? h / S.areaEdit.ratio : S.areaEdit.draft.w, h); });
+  document.addEventListener('scroll',()=>{if(S.areaEdit)positionAreaEditor();},{capture:true,passive:true});
+  $('mediaAreaAngleReset').addEventListener('click',()=>{if(!S.areaEdit)return;S.areaEdit.angle=0;showAreaDraft();});
   $('mediaAreaAngle').addEventListener('input', e => { if (!S.areaEdit || e.target.value === '') return; S.areaEdit.angle = J.clamp(+e.target.value || 0, -180, 180); showAreaDraft(); });
   $('areaResetFull').addEventListener('click', () => { if (!S.areaEdit || S.areaEdit.kind !== 'lyric') return; S.areaEdit.autoDraft = null; S.areaEdit.draft = { x: 0, y: 0, w: 1, h: 1 }; S.areaEdit.ratio = 1; S.areaEdit.angle = 0; showAreaDraft(); });
   $('areaResetAuto').addEventListener('click', () => {
@@ -3963,6 +4003,7 @@ function bind() {
   });
   document.addEventListener('keydown', e => {
     // Ctrl+S / ⌘S saves the project (also while typing) instead of the browser's "save page".
+    if(S.areaEdit)return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyS') {
       e.preventDefault();
       if (!e.repeat && !S.projectBusy && !S.exporting && !document.querySelector('dialog[open]')) $('btnSave').click();
