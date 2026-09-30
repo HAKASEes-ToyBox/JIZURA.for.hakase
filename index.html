@@ -222,9 +222,8 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .area-edit-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
 .area-edit-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
 .area-edit-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
-.area-edit-hint { color: var(--muted); font-size: 11px; pointer-events: none; }
+#areaDelete { background:var(--danger); border-color:var(--danger); color:#000; font-weight:700; }
 .area-edit-controls { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--amber); border-radius: var(--r); background: var(--panel); font-size: 12px; }
-.area-edit-controls span { flex: 1 1 100%; color: var(--muted); }
 .media-area-size-controls { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; flex-wrap: wrap; }
 .media-area-size-controls label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
 #mediaAreaAngleField[hidden] { display: none; }
@@ -558,7 +557,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .item-frame-action { display:flex; align-items:center; justify-content:center; width:25px; min-width:20px; height:23px; padding:3px; border:0; border-radius:2px; background:transparent; color:inherit; }
 .item-frame-action svg { width:16px; height:16px; pointer-events:none; }
 .item-frame-action.active { background:#3b6560; color:#fff; }
-.item-frame-action[data-action="remove"] { color:#ff7180; }
 .item-frame-action:hover:not(:disabled),.item-frame-action:focus-visible { background:#51525b; }
 .item-frame-action:disabled { cursor:default; opacity:.4; }
 
@@ -955,7 +953,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <!-- ================= center: stage ================= -->
     <section class="col col-stage" aria-label="プレビュー">
       <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">全画面を終了</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="再生">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="再生位置"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="表示位置とサイズを編集" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="回転"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
-      <div id="areaEditControls" class="area-edit-controls" hidden><span id="areaEditTitle"></span><span id="areaEditHint" class="area-edit-hint"></span><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>アスペクト比を固定</label><label>幅（画面比％）<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>高さ（画面比％）<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">角度（°）<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label><button id="mediaAreaAngleReset" class="ghost" type="button">角度をリセット</button></div><button id="areaResetFull" class="ghost" type="button">全域へリセット</button><button id="areaResetAuto" class="ghost" type="button">自動配置に戻す</button><button id="areaApplyOne" class="primary" disabled>この行だけに適用</button><button id="areaApplyFollowing" disabled>これ以降全てに適用</button><button id="areaCancel" class="ghost">キャンセル</button></div>
+      <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>アスペクト比を固定</label><label>幅（画面比％）<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>高さ（画面比％）<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">角度（°）<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label><button id="mediaAreaAngleReset" class="ghost" type="button">角度をリセット</button></div><button id="areaResetFull" class="ghost" type="button">全域へリセット</button><button id="areaResetAuto" class="ghost" type="button">自動配置に戻す</button><button id="areaApplyOne" class="primary" disabled>この行だけに適用</button><button id="areaApplyFollowing" disabled>これ以降全てに適用</button><button id="areaCancel" class="ghost">キャンセル</button><button id="areaDelete" type="button">削除</button></div>
       <div id="tapPanel" class="tapbox" hidden>
         <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
         <div class="hint" id="tapHint">曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。</div>
@@ -41652,7 +41650,7 @@ function drawItemFrames() {
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
-    const actions=['dice','disableReroll','lock','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const actions=['lock','dice','disableReroll','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'details'];
     const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('画像無し','No image'));
     const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
     const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
@@ -42252,7 +42250,6 @@ function showAreaDraft() {
   rect.hidden = !area;
   if (area) Object.assign(rect.style, { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%`, transform: `rotate(${edit.angle}deg)` });
   $('areaEditOverlay').classList.toggle('media-edit', !!edit);
-  $('areaEditHint').textContent = J.mediaLabel('内側をドラッグして移動・四隅でサイズ変更・回転ハンドルで回転','Drag inside to move, corners to resize, rotation handles to rotate');
   $('mediaAreaSizeControls').hidden = !edit;
   if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
   $('mediaAreaAngleField').hidden = !edit;
@@ -42275,7 +42272,6 @@ function openAreaEditor(index,fromPreview=false) {
   S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
   const cut = S.plan.cuts.find(c => c.line === index);
   if(!fromPreview)seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
-  $('areaEditTitle').textContent = `${index + 1}行目「${line.text}」の表示エリア`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
   beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
@@ -42291,7 +42287,6 @@ function openMediaEditor(index, layer,fromPreview=false) {
   clearTimeout(warmTimer); ++warmJob;
   S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
   if(!fromPreview)seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
-  $('areaEditTitle').textContent = `${index + 1}カット目「${cut.name}」の配置・サイズ`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
   beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
@@ -43604,7 +43599,7 @@ function bind() {
   $('itemFrames').addEventListener('click',e=>{
     if(S.playing)return;
     const button=e.target.closest('.item-frame-action');
-    if(button){e.stopPropagation();if(button.dataset.action==='remove'&&S.areaEdit)cancelAreaEditor();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
+    if(button){e.stopPropagation();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
     const target=e.target.closest('[data-select-layer]');if(!target)return;
     const layer=target.dataset.selectLayer,index=Number(target.dataset.selectIndex);
     if(layer==='lyrics')openAreaEditor(index,true);else openMediaEditor(index,layer,true);
@@ -43784,6 +43779,13 @@ function bind() {
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
   $('areaCancel').addEventListener('click', cancelAreaEditor);
+  $('areaDelete').addEventListener('click',()=>{
+    if(!S.areaEdit || S.playing || S.exporting || S.tap)return;
+    const {kind,index}=S.areaEdit;
+    const part=kind==='lyric' ? J.lyricCutsAt(S.plan,S.t).find(c=>c.line===index)?.part || 0 : 0;
+    cancelAreaEditor();
+    if(kind==='lyric')removeLyricCut(index,part);else removeMediaCut(index,kind);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
   const mediaPane = $('mediaPane');

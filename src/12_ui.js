@@ -1454,7 +1454,7 @@ function drawItemFrames() {
     const locked=layer==='lyrics'?!!S.project.overrides[index]?.lock:!!mediaCutOptions(layer,index)?.lock;
     const cx=(area.x+area.w/2)*view.width,cy=(area.y+area.h/2)*view.height,a=(area.angle||0)*Math.PI/180;
     const points=[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>{x*=area.w*view.width/2;y*=area.h*view.height/2;return [cx+x*Math.cos(a)-y*Math.sin(a),cy+x*Math.sin(a)+y*Math.cos(a)];});
-    const actions=['dice','disableReroll','lock','details','copy','paste','remove',...(layer==='lyrics'?['frontmost']:[])];
+    const actions=['lock','dice','disableReroll','copy','paste',...(layer==='lyrics'?['frontmost']:[]),'details'];
     const frameName=layer==='lyrics'?(String(cut.text||'').trim()||L('空の歌詞','Empty lyrics')):(cut.name||L('画像無し','No image'));
     const labelWidth=Math.min(160,Math.max(36,[...frameName].length*10+8));
     const width=Math.min(view.width,actions.length*25+labelWidth),x=J.clamp(points[0][0],0,Math.max(0,view.width-width));
@@ -2054,7 +2054,6 @@ function showAreaDraft() {
   rect.hidden = !area;
   if (area) Object.assign(rect.style, { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%`, transform: `rotate(${edit.angle}deg)` });
   $('areaEditOverlay').classList.toggle('media-edit', !!edit);
-  $('areaEditHint').textContent = J.mediaLabel('内側をドラッグして移動・四隅でサイズ変更・回転ハンドルで回転','Drag inside to move, corners to resize, rotation handles to rotate');
   $('mediaAreaSizeControls').hidden = !edit;
   if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
   $('mediaAreaAngleField').hidden = !edit;
@@ -2077,7 +2076,6 @@ function openAreaEditor(index,fromPreview=false) {
   S.areaEdit = { kind: 'lyric', index, oldTime: S.t, draft: saved || { x: 0, y: 0, w: 1, h: 1 }, ratio: saved ? saved.h / saved.w : 1, lockAspect: saved ? saved.lockAspect : true, angle: saved ? saved.angle : 0, drag: null };
   const cut = S.plan.cuts.find(c => c.line === index);
   if(!fromPreview)seek(cut ? cut.start + Math.min(cut.dur * 0.6, cut.inDur + 0.25) : line.start);
-  $('areaEditTitle').textContent = `${index + 1}行目「${line.text}」の表示エリア`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
   beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
@@ -2093,7 +2091,6 @@ function openMediaEditor(index, layer,fromPreview=false) {
   clearTimeout(warmTimer); ++warmJob;
   S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
   if(!fromPreview)seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
-  $('areaEditTitle').textContent = `${index + 1}カット目「${cut.name}」の配置・サイズ`;
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
   beginAreaSelection();positionAreaEditor(); showAreaDraft();
 }
@@ -3406,7 +3403,7 @@ function bind() {
   $('itemFrames').addEventListener('click',e=>{
     if(S.playing)return;
     const button=e.target.closest('.item-frame-action');
-    if(button){e.stopPropagation();if(button.dataset.action==='remove'&&S.areaEdit)cancelAreaEditor();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
+    if(button){e.stopPropagation();performTimelineAction(button);if(S.areaEdit)showAreaDraft();return;}
     const target=e.target.closest('[data-select-layer]');if(!target)return;
     const layer=target.dataset.selectLayer,index=Number(target.dataset.selectIndex);
     if(layer==='lyrics')openAreaEditor(index,true);else openMediaEditor(index,layer,true);
@@ -3586,6 +3583,13 @@ function bind() {
   $('areaApplyOne').addEventListener('click', () => applyAreaEditor(false));
   $('areaApplyFollowing').addEventListener('click', () => applyAreaEditor(true));
   $('areaCancel').addEventListener('click', cancelAreaEditor);
+  $('areaDelete').addEventListener('click',()=>{
+    if(!S.areaEdit || S.playing || S.exporting || S.tap)return;
+    const {kind,index}=S.areaEdit;
+    const part=kind==='lyric' ? J.lyricCutsAt(S.plan,S.t).find(c=>c.line===index)?.part || 0 : 0;
+    cancelAreaEditor();
+    if(kind==='lyric')removeLyricCut(index,part);else removeMediaCut(index,kind);
+  });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
   const mediaPane = $('mediaPane');

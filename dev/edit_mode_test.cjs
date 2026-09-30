@@ -39,7 +39,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
  assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'menu preserves placement draft');
  await page.locator('.item-frame-action[data-layer="media"][data-action="details"]').click();await page.locator('#cutDetailsDialog').getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
  assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'details dialog keeps selection');
- await page.locator('.item-frame-action[data-layer="lyrics"][data-action="remove"]').click();assert.equal(await page.evaluate(()=>J.ui.areaEdit),null,'delete exits selection');
+ await page.locator('#areaDelete').click();assert.equal(await page.evaluate(()=>J.ui.areaEdit),null,'delete exits selection');
  assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false,'delete restores interaction');
  assert.deepEqual(errors,[]);console.log(locale||'ja',width,'selection, move, resize, rotation, cancel and timeline restoration passed');await page.close();
 }}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});
