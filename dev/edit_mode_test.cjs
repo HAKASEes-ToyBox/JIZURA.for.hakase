@@ -20,7 +20,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
   assert.ok(await page.evaluate(w=>J.ui.areaEdit.draft.w>w,w0),'corner resizes');
   const h=await page.locator('.area-rotate-handle.n').boundingBox();await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+25,h.y+h.height/2+10);await page.mouse.up();
   assert.ok(await page.evaluate(()=>Math.abs(J.ui.areaEdit.angle)>1),'rotation handle rotates');
-  await page.locator('#mediaAreaAngleReset').click();assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),0);
+  assert.equal(await page.locator('#mediaAreaAngleReset').count(),0);await page.locator('#mediaAreaAngle').fill('0');await page.locator('#mediaAreaAngle').dispatchEvent('input');assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),0);
   await page.locator('#areaCancel').click();assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false);
  }
  await page.locator('#showItemFrames').uncheck();await timelineAction(page,'[data-layer="lyrics"]','area');assert.equal(await page.locator('#showItemFrames').isChecked(),true);
