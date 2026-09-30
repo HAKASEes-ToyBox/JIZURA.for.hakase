@@ -2058,8 +2058,8 @@ function showAreaDraft() {
   if (area) { $('mediaAreaAspectLock').checked = edit.lockAspect; $('mediaAreaWidth').value = String(Math.round(area.w * 1000) / 10); $('mediaAreaHeight').value = String(Math.round(area.h * 1000) / 10); }
   $('mediaAreaAngleField').hidden = !edit;
   if (edit) $('mediaAreaAngle').value = String(edit.angle);
-  $('areaResetFull').hidden = !edit || media;
-  $('areaResetAuto').hidden = !edit || media;
+  $('areaResetFull').hidden = !edit;
+  $('areaResetAuto').hidden = !edit;
   $('areaResetAuto').disabled = !edit || edit.autoDraft===JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));
   $('areaApplyOne').textContent = J.mediaLabel('配置決定','Set placement');
   $('areaApplyOne').disabled = !area;
@@ -2092,6 +2092,7 @@ function openMediaEditor(index, layer,fromPreview=false) {
   pause();
   clearTimeout(warmTimer); ++warmJob;
   S.areaEdit = { kind: layer, index, oldTime: S.t, draft, ratio: S.plan.W / S.plan.H * sh / sw, lockAspect: !cut.placement || cut.placement.lockAspect !== false, type: cut.type, angle: cut.placement && cut.placement.angle || 0, drag: null };
+  if(cut.placementMode!=='manual')S.areaEdit.autoDraft=JSON.stringify(J.lyricArea({...draft,angle:S.areaEdit.angle,lockAspect:S.areaEdit.lockAspect}));
   if(!fromPreview)seek(cut.start + Math.min(0.5, Math.max(0.001, (cut.end - cut.start) / 2)));
   $('areaEditOverlay').hidden = false; $('areaEditControls').hidden = false;
   beginAreaSelection();positionAreaEditor(); showAreaDraft();
@@ -2102,6 +2103,13 @@ function cancelAreaEditor() {
   endAreaSelection();S.areaEdit = null; $('areaEditOverlay').hidden = true; $('areaEditControls').hidden = true;
   seek(oldTime);
 }
+function automaticMediaArea(layer,index) {
+  const m=S.project[layer],ov=m.cutOverrides[index]||{};
+  const project={...S.project,[layer]:{...m,cutOverrides:{...m.cutOverrides,[index]:{...ov,placement:null,lock:false,...autoWindowReset(layer,index)}}}};
+  const plan=composePlan(project),resolved=plan[layer].cuts[index],dimensions=J.mediaSourceDimensions(plan,resolved,S.t);
+  const area=dimensions&&J.mediaPlacementRect(resolved.placement,dimensions.width,dimensions.height,plan.W,plan.H);
+  return {area,cut:resolved};
+}
 function applyAreaEditor(following) {
   if (!S.areaEdit || !S.areaEdit.draft) return;
   const { kind, index, draft } = S.areaEdit;
@@ -2110,6 +2118,12 @@ function applyAreaEditor(following) {
   if (kind !== 'lyric') {
     for (let i = index; i < (following ? S.plan[kind].cuts.length : index + 1); i++) {
       if (i !== index && S.project[kind].cutOverrides[i]?.lock) continue;
+      const automatic=S.areaEdit.autoDraft===JSON.stringify(J.lyricArea({...draft,angle:S.areaEdit.angle,lockAspect:S.areaEdit.lockAspect}));
+      if(automatic){
+        const ov=mediaCutOptions(kind,i),resolved=automaticMediaArea(kind,i);
+        mediaOv(i,{placement:null,...autoWindowReset(kind,i),...(ov?.lock?{lockedPlacement:resolved.cut.placement,lockedPlacementMode:resolved.cut.placementMode,lockedLayout:resolved.cut.bgLayout}: {})},kind);
+        continue;
+      }
       // The placement becomes manual; an automatic layout's window stays with it as the cut's own mask.
       const auto = S.plan[kind].cuts[i], windowSig = layoutWindowSig(kind, auto);
       const details = windowSig ? { ...(S.project[kind].cutOverrides[i]?.details || {}), mask: JSON.parse(JSON.stringify(auto.mask)) } : null;
@@ -3572,9 +3586,23 @@ function bind() {
   $('mediaAreaHeight').addEventListener('change', e => { if (!S.areaEdit) return; const h = J.clamp(+e.target.value / 100, 0.005, 4); setMediaDraftSize(S.areaEdit.lockAspect ? h / S.areaEdit.ratio : S.areaEdit.draft.w, h); });
   document.addEventListener('scroll',()=>{if(S.areaEdit)positionAreaEditor();},{capture:true,passive:true});
   $('mediaAreaAngle').addEventListener('input', e => { if (!S.areaEdit || e.target.value === '') return; S.areaEdit.angle = J.clamp(+e.target.value || 0, -180, 180); showAreaDraft(); });
-  $('areaResetFull').addEventListener('click', () => { if (!S.areaEdit || S.areaEdit.kind !== 'lyric') return; S.areaEdit.autoDraft = null; S.areaEdit.draft = { x: 0, y: 0, w: 1, h: 1 }; S.areaEdit.ratio = 1; S.areaEdit.angle = 0; showAreaDraft(); });
+  $('areaResetFull').addEventListener('click',()=>{
+    const edit=S.areaEdit;if(!edit)return;
+    edit.autoDraft=null;edit.angle=0;
+    if(edit.kind==='lyric'){edit.draft={x:0,y:0,w:1,h:1};edit.ratio=1;}
+    else {
+      const dimensions=J.mediaSourceDimensions(S.plan,S.plan[edit.kind].cuts[edit.index],S.t);if(!dimensions)return;
+      edit.draft=J.mediaPlacementRect(null,dimensions.width,dimensions.height,S.plan.W,S.plan.H);edit.lockAspect=true;edit.ratio=edit.draft.h/edit.draft.w;
+    }
+    showAreaDraft();
+  });
   $('areaResetAuto').addEventListener('click', () => {
-    const edit = S.areaEdit; if (!edit || edit.kind !== 'lyric') return;
+    const edit = S.areaEdit; if (!edit) return;
+    if(edit.kind!=='lyric'){
+      const {area,cut}=automaticMediaArea(edit.kind,edit.index);if(!area)return;
+      edit.draft=area;edit.ratio=area.h/area.w;edit.angle=cut.placement?.angle||0;edit.lockAspect=cut.placement?.lockAspect!==false;
+      edit.autoDraft=JSON.stringify(J.lyricArea({...area,angle:edit.angle,lockAspect:edit.lockAspect}));showAreaDraft();return;
+    }
     const project = { ...S.project, overrides: { ...S.project.overrides, [edit.index]: { ...S.project.overrides[edit.index], area: undefined, lockedAreas: undefined } } };
     const area = J.plan(project, audioLike()).cuts.find(c => c.line === edit.index && c.part === 0)?.area || { x: 0, y: 0, w: 1, h: 1, angle: 0, lockAspect: true };
     edit.draft = { ...area }; edit.ratio = area.h / area.w; edit.angle = area.angle; edit.lockAspect = area.lockAspect;

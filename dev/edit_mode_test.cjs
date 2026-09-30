@@ -23,6 +23,19 @@ const {timelineAction}=require('./ui_helpers.cjs');
   assert.equal(await page.locator('#mediaAreaAngleReset').count(),0);await page.locator('#mediaAreaAngle').fill('0');await page.locator('#mediaAreaAngle').dispatchEvent('input');assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),0);
   await page.locator('#areaCancel').click();assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false);
  }
+ for(const layer of ['foreground','media']){
+  await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).click();
+  assert.ok(await page.locator('#areaResetAuto').isVisible());assert.ok(await page.locator('#areaResetFull').isVisible());assert.ok(await page.locator('#areaResetAuto').isEnabled());
+  await page.locator('#areaResetFull').click();
+  const fit=await page.evaluate(()=>({...J.ui.areaEdit.draft}));assert.ok(Math.abs(Math.max(fit.w,fit.h)-1)<.00001);const ratio=await page.evaluate(()=>J.ui.plan.W/J.ui.plan.H/2);assert.ok(Math.abs(fit.h/fit.w-ratio)<.00001,'full area retains source aspect');
+  await page.locator('#areaApplyOne').click();assert.equal(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].placementMode,layer),'manual');
+  await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).click();await page.locator('#areaResetAuto').click();
+  assert.ok(await page.evaluate(()=>!!J.ui.areaEdit));assert.ok(await page.locator('#areaResetAuto').isDisabled());
+  await page.locator('#areaCancel').click();assert.equal(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].placementMode,layer),'manual','cancel preserves manual placement');
+  await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).click();await page.locator(`.item-frame-action[data-layer="${layer}"][data-action="lock"]`).click();await page.locator('#areaResetAuto').click();await page.locator('#areaApplyOne').click();assert.ok(await page.evaluate(layer=>J.ui.project[layer].cutOverrides[0].lock,layer),'automatic reset preserves lock');
+  assert.notEqual(await page.evaluate(layer=>J.ui.plan[layer].cuts[0].placementMode,layer),'manual','automatic placement persists');
+  await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).click();assert.ok(await page.locator('#areaResetAuto').isDisabled());await page.locator('#areaCancel').click();
+ }
  await page.locator('#showItemFrames').uncheck();await timelineAction(page,'[data-layer="lyrics"]','area');assert.equal(await page.locator('#showItemFrames').isChecked(),true);
  await page.locator('#mediaAreaAngle').fill('30');await page.locator('#mediaAreaAngle').dispatchEvent('input');await page.locator('#areaApplyOne').click();
  assert.equal(await page.locator('#showItemFrames').isChecked(),false,'temporary edit mode restored');assert.equal(await page.evaluate(()=>J.ui.project.overrides[0].area.angle),30);
