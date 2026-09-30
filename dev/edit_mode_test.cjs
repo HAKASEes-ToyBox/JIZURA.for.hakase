@@ -8,7 +8,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
  for(const layer of ['foreground','lyrics','media']){
   const original=await page.evaluate(()=>JSON.stringify(J.ui.project)),time=await page.evaluate(()=>J.ui.t);
   await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).first().click();
-  assert.equal(await page.evaluate(()=>J.ui.t),time,'preview selection preserves time');assert.equal(await page.locator('#itemFrames').isVisible(),true);
+  assert.equal(await page.evaluate(()=>J.ui.t),time,'preview selection preserves time');assert.equal(await page.locator('#itemFrames').isVisible(),true);assert.equal(await page.locator(`.item-frame-action:not([data-layer="${layer}"])`).count(),0,'other item icons hidden');assert.ok(await page.locator(`.item-frame-action[data-layer="${layer}"]`).count()>0,'selected icons remain');
   assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),true,'transport inert during selection');
   const bounds=await page.locator('#viewport').boundingBox(),controls=await page.locator('#areaEditControls').boundingBox();
   assert.ok(controls.y>=bounds.y+bounds.height && controls.y-bounds.y-bounds.height<16,'controls immediately under preview');
@@ -21,7 +21,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
   const h=await page.locator('.area-rotate-handle.n').boundingBox();await page.mouse.move(h.x+h.width/2,h.y+h.height/2);await page.mouse.down();await page.mouse.move(h.x+h.width/2+25,h.y+h.height/2+10);await page.mouse.up();
   assert.ok(await page.evaluate(()=>Math.abs(J.ui.areaEdit.angle)>1),'rotation handle rotates');
   assert.equal(await page.locator('#mediaAreaAngleReset').count(),0);await page.locator('#mediaAreaAngle').fill('0');await page.locator('#mediaAreaAngle').dispatchEvent('input');assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),0);
-  await page.locator('#areaCancel').click();assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false);
+  await page.locator('#areaCancel').click();assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original);assert.equal(await page.locator('#btnPlay').evaluate(el=>!!el.closest('[inert]')),false);await page.waitForFunction(()=>document.querySelectorAll('.item-frame-action').length===19);assert.equal(await page.locator('.item-frame-action').count(),19,'all icons restored after editing');
  }
  for(const layer of ['foreground','media']){
   await page.locator(`.item-frame-name[data-select-layer="${layer}"]`).click();
@@ -44,13 +44,13 @@ const {timelineAction}=require('./ui_helpers.cjs');
  await page.locator('#mediaAreaAngle').fill('45');await page.locator('#mediaAreaAngle').dispatchEvent('input');
  const clearCorners=await page.evaluate(()=>{const tools=document.querySelector('.item-frame-tools.lyrics').getBoundingClientRect(),svg=document.querySelector('.item-frame-outline.lyrics'),box=svg.getBoundingClientRect();return [...svg.querySelector('polygon').points].every(p=>p.x+box.x<tools.left-4||p.x+box.x>tools.right+4||p.y+box.y<tools.top-4||p.y+box.y>tools.bottom+4)});
  assert.ok(clearCorners,'rotated corners do not overlap menu');
- for(const layer of ['lyrics','foreground','media']){
+ for(const layer of ['lyrics']){
   const lock=page.locator(`.item-frame-action[data-layer="${layer}"][data-action="lock"]`),before=await lock.getAttribute('aria-pressed');await lock.click();assert.notEqual(await lock.getAttribute('aria-pressed'),before);
  }
- const seed=await page.evaluate(()=>J.ui.plan.foreground.cuts[0].seed);
- await page.locator('.item-frame-action[data-layer="foreground"][data-action="dice"]').click();assert.notEqual(await page.evaluate(()=>J.ui.plan.foreground.cuts[0].seed),seed);
+ const seed=await page.evaluate(()=>J.ui.plan.cuts.find(c=>c.line===0).seed);
+ await page.locator('.item-frame-action[data-layer="lyrics"][data-action="dice"]').click();assert.notEqual(await page.evaluate(()=>J.ui.plan.cuts.find(c=>c.line===0).seed),seed);
  assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'menu preserves placement draft');
- await page.locator('.item-frame-action[data-layer="media"][data-action="details"]').click();await page.locator('#cutDetailsDialog').getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
+ await page.locator('.item-frame-action[data-layer="lyrics"][data-action="details"]').click();await page.locator('#cutDetailsDialog').getByRole('button',{name:locale?'Cancel':'キャンセル',exact:true}).click();
  assert.equal(await page.evaluate(()=>J.ui.areaEdit.angle),45,'details dialog keeps selection');
  assert.ok(await page.locator('#areaResetAuto').isVisible());await page.locator('#areaResetAuto').click();
  assert.ok(await page.evaluate(()=>!!J.ui.areaEdit),'auto placement keeps editing');assert.ok(await page.locator('#areaResetAuto').isVisible());assert.ok(await page.locator('#areaResetAuto').isDisabled());await page.locator('#areaApplyOne').click();assert.equal(await page.evaluate(()=>J.ui.project.overrides[0].area),undefined);
