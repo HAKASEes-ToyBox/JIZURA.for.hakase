@@ -41495,7 +41495,7 @@ function openCutDetails(layer,index,part=0) {
   const names = {
     text:['歌詞','Lyrics'],layout:['Layout','Layout'],enter:['Entrance','Entrance'],hold:['Hold · モーション','Hold / motion'],exit:['Exit','Exit'],
     inDur:['Entrance時間（s）','Entrance duration (s)'],outDur:['Exit時間（s）','Exit duration (s)'],stagger:['Textの時間差（s）','Character delay (s)'],
-    decor:['Decoration','Decoration'],scheme:['Palette','Palette'],params:['Layout詳細','Layout parameters'],treat:['Treatment','Treatment'],treatP:['Treatmentの詳細','Treatment parameters'],
+    decor:['Decoration','Decoration'],scheme:['Palette','Palette'],palette:['個別パレット','Custom palette'],params:['Layout詳細','Layout parameters'],treat:['Treatment','Treatment'],treatP:['Treatmentの詳細','Treatment parameters'],
     bg:['BackgroundEffects','Background effect'],bgP:['BackgroundEffectsの詳細','Background parameters'],cam:['Camera','Camera'],camP:['Camera詳細','Camera parameters'],
     trans:['Transitions','Transition'],transP:['Transitionの詳細','Transition parameters'],transDur:['Transition時間（s）','Transition duration (s)'],
     area:['表示範囲（画面比率）','Display area (stage ratios)'],placement:['配置 · サイズ（画面比率）','Placement / size (stage ratios)'],
@@ -41518,7 +41518,15 @@ function openCutDetails(layer,index,part=0) {
       const lockedField={technique:'lockedTechnique',entrance:'lockedEntrance',departure:'lockedDeparture',itemId:'lockedItemId'}[field];
       if(lockedField)delete draft[lockedField];
     }
-    if(native) draft[field]=value; else { draft.details ||= {}; draft.details[field]=value; }
+    if(native) draft[field]=value; else {
+      draft.details ||= {}; draft.details[field]=value;
+      // An explicit scheme choice also replaces any captured palette (favorites,
+      // locks or manual colors) that would otherwise override its colors.
+      if(lyric && field==='scheme'){
+        const palette=(J.STYLES[S.project.style] || J.STYLES.noir).schemes[Number(value)];
+        if(palette)draft.details.palette=clone(palette);
+      }
+    }
     schedulePreview();
   }
   function options(field) {
@@ -41685,6 +41693,10 @@ function openCutDetails(layer,index,part=0) {
     }
     const percent=typeof value==='number' && ['w','h','contentScale'].includes(field), factor=percent?100:1;
     const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=label(field)+(percent?L('（％）',' (%)'):'');row.append(text);
+    if(path.startsWith('palette.')){
+      const colorNames={bg:['Background色','Background color'],fg:['Text色','Text color'],sub:['SecondaryText色','Secondary text color'],accent:['Accent色','Accent color'],accent2:['Accent色2','Accent color 2'],ink:['Decoration色','Decoration color'],dim:['BackgroundText色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
+      if(colorNames[field])text.textContent=L(...colorNames[field]);
+    }
     const choices=options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
@@ -41704,6 +41716,9 @@ function openCutDetails(layer,index,part=0) {
       }
     });
     row.append(input);parent.append(row);
+    if(field==='scheme'){
+      const hint=document.createElement('small');hint.className='muted';hint.textContent=L('選択すると、このcutsだけStyle本来のPaletteを適用します。','Selecting a scheme applies the original style colors to this cut only.');row.append(hint);
+    }
     if(choices)attachDetailRandom(input,path);
   }
   function render() {
