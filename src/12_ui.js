@@ -298,9 +298,14 @@ function sizeViewport() {
   if(S.tap)$('tapPanel').style.top=(vp.offsetTop+vp.offsetHeight+6)+'px';
   S.need = true;
 }
+// Detail previews share the imported videos with the main renderer. Their seeked
+// events request main redraws, which must not reset the videos to the main clock.
+function syncMainMediaPreview() {
+  if(!$('cutDetailsDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+}
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
-  if(!S.playPreparing)J.syncMediaPreview(S.plan, S.t, S.playing);
+  if(!S.playPreparing)syncMainMediaPreview();
   const t0 = performance.now();
   const previewCuts = S.areaEdit && S.areaEdit.kind === 'lyric' && S.areaEdit.draft ? S.plan.cuts.filter(cut => cut.line === S.areaEdit.index) : [];
   const previousAreas = previewCuts.map(cut => cut.area);
@@ -445,7 +450,7 @@ async function play() {
 function pause() {
   S.playPreparing?.abort();S.playPreparing=null;
   S.playing = false; AP.stop();
-  J.syncMediaPreview(S.plan, S.t, false);
+  syncMainMediaPreview();
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
 }
 function seek(t) {
@@ -453,7 +458,7 @@ function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
   if (S.audio) { if (S.playing) AP.play(S.audio.buffer, S.t); }
   else S.t0 = performance.now() - S.t * 1000;
-  J.syncMediaPreview(S.plan, S.t, S.playing);
+  syncMainMediaPreview();
   S.need = true;
 }
 
