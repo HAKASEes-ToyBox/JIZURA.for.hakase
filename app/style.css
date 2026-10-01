@@ -482,6 +482,11 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-preview .hint { margin: 10px 0 0; }
 .cut-details-preview .cut-details-solo, .cut-details-preview .cut-details-focus { margin: 10px 0 0; }
 .cut-mask-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-bottom: 6px; }
+.cut-mask-target-row { display:flex; align-items:center; gap:12px; width:100%; }
+.cut-mask-target-row > label { flex-shrink:0; }
+.cut-mask-target-row .cut-mask-hint { margin:0; flex:1; min-width:0; }
+.cut-mask-aspect { margin-top:8px; }
+.cut-mask-aspect .cut-detail-field { display:inline-flex; align-items:center; gap:6px; }
 .cut-mask-opacity-row { display: flex; gap: 12px; align-items: center; }
 .cut-mask-opacity-row input[type=number] { width: 5em; min-width: 0; }
 .cut-mask-feather { width: 100%; }

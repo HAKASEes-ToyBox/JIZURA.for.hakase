@@ -903,7 +903,7 @@ function openCutDetails(layer,index,part=0) {
     const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
     const section=document.createElement('section');section.dataset.detailSection='mask';section.className='cut-mask';
-    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
+    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><div class="cut-mask-aspect"></div><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスク反転','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
@@ -932,7 +932,8 @@ function openCutDetails(layer,index,part=0) {
     const controls=section.querySelector('.cut-mask-controls');
     const [useLabel,targetLabel,invertLabel]=controls.children;
     const opacityRow=document.createElement('div');opacityRow.className='cut-mask-opacity-row';opacityRow.append(opacityLabel,invertLabel);
-    controls.replaceChildren(useLabel,opacityRow,targetLabel);
+    const targetRow=document.createElement('div');targetRow.className='cut-mask-target-row';targetRow.append(targetLabel,hint);
+    controls.replaceChildren(useLabel,targetRow,opacityRow);
     const featherLabel=document.createElement('label');featherLabel.className='cut-mask-feather';
     featherLabel.innerHTML=`<span>${L('境界のぼかし','Edge feathering')}</span><input type="range" min="0" max="100" step="1" data-mask-field="feather"><output></output>`;
     const featherInput=featherLabel.querySelector('input'),featherValue=featherLabel.querySelector('output');
@@ -960,7 +961,7 @@ function openCutDetails(layer,index,part=0) {
     // New shapes are square on screen (a circle stays round on a wide frame).
     const newShape=(type,size)=>{const aspect=canvas.width/Math.max(1,canvas.height);let w=size,h=size*aspect;if(h>.9){w*=.9/h;h=.9;}return {type,cx:.5,cy:.5,w,h,angle:0,lockAspect:true};};
     function fields(){
-      shapeBox.replaceChildren();const s=mask.shapes[maskSelected];tools.remove.disabled=!s;if(!s)return;
+      shapeBox.replaceChildren();const aspectRow=section.querySelector('.cut-mask-aspect');aspectRow.replaceChildren();const s=mask.shapes[maskSelected];aspectRow.hidden=!s;tools.remove.disabled=!s;if(!s)return;
       const kind=document.createElement('label');kind.className='cut-detail-field';kind.innerHTML=`<span>${L('形','Shape')}</span><select data-mask-shape="type"></select>`;
       const kindSelect=kind.querySelector('select');for(const type of J.MASK_SHAPES)kindSelect.add(new Option(L(...shapeNames[type]),type));kindSelect.value=s.type;
       kindSelect.addEventListener('change',()=>{s.type=kindSelect.value;save();});shapeBox.append(kind);attachDetailRandom(kindSelect,'mask.shape.type');
@@ -976,7 +977,7 @@ function openCutDetails(layer,index,part=0) {
         });shapeBox.append(row);
       }
       const lock=document.createElement('label');lock.className='cut-detail-field';lock.innerHTML=`<span>${L('アスペクト比を固定','Lock aspect ratio')}</span><input type="checkbox" data-mask-shape="lockAspect">`;
-      lock.querySelector('input').checked=s.lockAspect!==false;lock.querySelector('input').addEventListener('change',e=>{s.lockAspect=e.target.checked;save();});shapeBox.append(lock);
+      lock.querySelector('input').checked=s.lockAspect!==false;lock.querySelector('input').addEventListener('change',e=>{s.lockAspect=e.target.checked;save();});aspectRow.append(lock);
     }
     section.querySelector('[data-mask-field="enabled"]').addEventListener('change',e=>{
       mask.enabled=e.target.checked;
