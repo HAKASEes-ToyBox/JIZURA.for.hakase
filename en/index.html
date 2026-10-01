@@ -589,7 +589,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #timelineAssets { position: absolute; inset: 0; pointer-events: none; }
 .timeline-asset-select { position: absolute; pointer-events: auto; min-width: 0; height: 20px; min-height: 0; padding: 0 2px; border-radius: 3px; font-size: 11px; text-overflow: ellipsis; }
 
-#tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
+#tapPanel .tap-button-wrap { position:relative; }
+#tapPanel .tap-button-wrap > button { width:100%; }
+#tapCountdown { position:absolute; inset:0; display:grid; place-items:center; border-radius:var(--r); font-size:24px; font-weight:bold; text-align:center; color:#120c00; background:var(--amber); pointer-events:none; }
+#tapCountdown[hidden] { display:none; }
 
 .timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
 .timeline-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -975,14 +978,16 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <div class="viewport" id="viewport"><button id="exitPreviewFullscreen" class="fullscreen-exit" type="button">Exit fullscreen</button><div class="fullscreen-transport"><button id="fullscreenPlay" type="button" aria-label="Play">▶</button><span id="fullscreenTime" class="tc"></span><input id="fullscreenScrub" type="range" min="0" max="10000" value="0" aria-label="Playback position"></div><canvas id="view" width="1280" height="720"></canvas><div id="itemFrames" class="item-frames"></div><div id="areaEditOverlay" class="area-edit-overlay" aria-label="Edit position and size" hidden><div id="areaEditRect" class="area-edit-rect"><span class="area-edit-handle nw" data-handle="nw"></span><span class="area-edit-handle ne" data-handle="ne"></span><span class="area-edit-handle sw" data-handle="sw"></span><span class="area-edit-handle se" data-handle="se"></span><span class="area-rotate-handle n" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle e" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle s" data-handle="rotate" role="button" aria-label="回転"></span><span class="area-rotate-handle w" data-handle="rotate" role="button" aria-label="回転"></span></div></div><div id="viewMsg" class="overlay-msg" hidden></div><div id="keyBadge" class="key-badge" hidden></div><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></div>
       <div id="areaEditControls" class="area-edit-controls" hidden><div id="mediaAreaSizeControls" class="media-area-size-controls" hidden><label><input id="mediaAreaAspectLock" type="checkbox" checked>Lock aspect ratio</label><label>Width (% of canvas)<input id="mediaAreaWidth" type="number" min="0.5" max="400" step="0.5"></label><label>Height (% of canvas)<input id="mediaAreaHeight" type="number" min="0.5" max="400" step="0.5"></label><label id="mediaAreaAngleField">Rotation (°)<input id="mediaAreaAngle" type="number" min="-180" max="180" step="0.1"></label></div><div class="area-edit-actions"><button id="areaResetAuto" class="ghost" type="button">Auto配置</button><button id="areaResetFull" class="ghost" type="button">Full area</button><button id="areaDelete" type="button">削除</button></div><div class="area-edit-confirm"><button id="areaApplyOne" class="primary" disabled>Set placement</button><button id="areaApplyFollowing" disabled>Use this placement from here onward</button><button id="areaCancel" class="ghost">キャンセル</button></div></div>
       <div id="tapPanel" class="tapbox" hidden>
-        <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
         <div class="hint" id="tapHint">Click the button (or press Space) at the moment you want to insert.</div>
         <div class="tap-queue">
           <div class="tap-queue-line tap-future-two" hidden><span class="tap-marker" aria-hidden="true"></span><span id="tapLineAhead2"></span></div>
           <div class="tap-queue-line tap-future-one" hidden><span class="tap-marker" aria-hidden="true"></span><span id="tapLineAhead1"></span></div>
           <div class="next tap-queue-line tap-current" aria-live="polite"><span class="tap-marker" aria-hidden="true">▶</span><b id="tapLine">—</b></div>
         </div>
-        <button id="tapBtn" class="tap">TAP</button>
+        <div class="tap-button-wrap">
+          <button id="tapBtn" class="tap">TAP</button>
+          <div id="tapCountdown" role="status" aria-live="polite" hidden></div>
+        </div>
         <button id="tapStop" class="ghost">Finish</button>
       </div>
       <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">Edit mode</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入りEffects</button><button id="previewFullscreen" type="button" class="ghost small">Fullscreen preview</button></div>
@@ -44372,13 +44377,13 @@ function startTap() {
   seek(0); updateTap();
   const session=S.tap,deadline=performance.now()+3000;
   const countdown=$('tapCountdown');countdown.hidden=false;
-  $('tapStop').focus();
+  $('tapStop').focus({preventScroll:true});
   const tick=()=>{
     if(S.tap!==session)return;
     const remaining=Math.ceil((deadline-performance.now())/1000);
     if(remaining<=0){
       session.countingDown=false;countdown.hidden=true;syncTapButtons();
-      seek(0);play();$('tapBtn').focus();return;
+      seek(0);play();$('tapBtn').focus({preventScroll:true});return;
     }
     countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
     session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));

@@ -3280,13 +3280,13 @@ function startTap() {
   seek(0); updateTap();
   const session=S.tap,deadline=performance.now()+3000;
   const countdown=$('tapCountdown');countdown.hidden=false;
-  $('tapStop').focus();
+  $('tapStop').focus({preventScroll:true});
   const tick=()=>{
     if(S.tap!==session)return;
     const remaining=Math.ceil((deadline-performance.now())/1000);
     if(remaining<=0){
       session.countingDown=false;countdown.hidden=true;syncTapButtons();
-      seek(0);play();$('tapBtn').focus();return;
+      seek(0);play();$('tapBtn').focus({preventScroll:true});return;
     }
     countdown.textContent=J.mediaLabel(`開始まで ${remaining}`,`Starting in ${remaining}`);
     session.timer=setTimeout(tick,Math.min(1000,Math.max(1,deadline-performance.now())));

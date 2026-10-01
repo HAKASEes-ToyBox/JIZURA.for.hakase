@@ -571,7 +571,10 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 #timelineAssets { position: absolute; inset: 0; pointer-events: none; }
 .timeline-asset-select { position: absolute; pointer-events: auto; min-width: 0; height: 20px; min-height: 0; padding: 0 2px; border-radius: 3px; font-size: 11px; text-overflow: ellipsis; }
 
-#tapCountdown { font-size: 28px; font-weight: bold; text-align: center; color: var(--amber); padding: 12px; }
+#tapPanel .tap-button-wrap { position:relative; }
+#tapPanel .tap-button-wrap > button { width:100%; }
+#tapCountdown { position:absolute; inset:0; display:grid; place-items:center; border-radius:var(--r); font-size:24px; font-weight:bold; text-align:center; color:#120c00; background:var(--amber); pointer-events:none; }
+#tapCountdown[hidden] { display:none; }
 
 .timeline-position-label { margin: 8px 0 6px; font-size: 12px; color: var(--muted); }
 .timeline-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
