@@ -37,7 +37,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
    await modal.locator('[data-mask-field="opacity"]').fill('35');
    await modal.locator('[data-detail-tab="basic"]').click();
    await modal.locator('[data-detail-tab="basic"]').press('ArrowRight');
-   assert.equal(await modal.locator('[role=tab][aria-selected=true]').getAttribute('data-detail-tab'),'placement');
+   assert.equal(await modal.locator('[role=tab][aria-selected=true]').getAttribute('data-detail-tab'),await modal.locator('[role=tab]').nth(1).getAttribute('data-detail-tab'));
    await modal.locator('[data-detail-tab="mask"]').click();
    assert.equal(await modal.locator('[data-mask-field="opacity"]').inputValue(),'35');
    const bounds=await modal.evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));

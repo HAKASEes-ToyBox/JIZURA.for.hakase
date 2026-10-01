@@ -521,8 +521,8 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
-  const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(cut.effectSettings?.duration || 0.45, d * 0.3));
-  const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(cut.effectSettings?.duration || 0.45, d * 0.3));
+  const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
+  const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
   if (cut.technique && (cut.technique !== 'legacy' || cut.independentPhases) && J.paintMediaEffect) {
     const placement = cut.placement && J.mediaPlacementRect(cut.placement, sw, sh, w, h);
     const scale = cut.layout === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);

@@ -454,7 +454,7 @@ class Renderer {
       }
     }
     // bloom
-    const glow = (st.glow || 0.6) * 0.5 * (fx.texture ?? 0.6);
+    const glow = (st.glow ?? 0.6) * 0.5 * (fx.texture ?? 0.6);
     if (!opt.fast && allowFilter && glow > 0.05 && !opt.transparent) {
       const sw = Math.round(cw / 4), sh = Math.round(ch / 4);
       const Sm = this.ensure(this.small, sw, sh), sx = Sm.getContext('2d');

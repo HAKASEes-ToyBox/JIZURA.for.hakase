@@ -3,7 +3,7 @@
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['drawing','text','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
+  lyrics: ['drawing','text','note','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
   media: ['drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
 // The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
@@ -12,6 +12,7 @@ J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   if(details.drawing){J.validateDrawing(details.drawing);if(layer!=='lyrics'&&cut.technique==='legacy')cut.technique='none';}
   const copy = value => JSON.parse(JSON.stringify(value));
+  const seedChanged=layer==='lyrics' && Number.isFinite(details.seed) && details.seed!==cut.seed;
   if (layer === 'lyrics' && Number.isFinite(details.seed)) cut.seed=details.seed;
   if (details.trans && details.trans !== 'none' && details.trans !== cut.trans) {
     const def=J.TRANS[details.trans];
@@ -19,11 +20,13 @@ J.applyCutDetails = (cut, details, plan, layer) => {
     cut.transP=def?.plan ? def.plan(J.rng(cut.seed),plan.style) : {};
   }
   if (layer === 'lyrics') {
-    const cutStyle = {...(details.effectStyle || plan.style),...(details.fonts ? {fonts:details.fonts} : {})};
+    if(details.effectStyle)cut.effectStyle={...plan.style,...cut.effectStyle,...copy(details.effectStyle)};
+    if(details.effectFx)cut.effectFx={...plan.fx,...cut.effectFx,...copy(details.effectFx)};
+    const cutStyle = {...(cut.effectStyle || plan.style),...(details.fonts ? {fonts:details.fonts} : {})};
     const area = details.area || cut.area;
     for (const [key, param, registry] of [['layout','params',J.LAYOUTS],['treat','treatP',J.TREAT],['bg','bgP',J.BG],['cam','camP',J.CAMERA],['trans','transP',J.TRANS]]) {
-      const rebuildLayout = key === 'layout' && (details.area !== undefined || details.text !== undefined || details.layout !== undefined || details.params !== undefined);
-      if (!rebuildLayout && (details[key] === undefined || details[key] === cut[key])) continue;
+      const rebuildLayout = key === 'layout' && (seedChanged || details.area !== undefined || details.text !== undefined || details.layout !== undefined || details.params !== undefined || details.fonts !== undefined);
+      if (!rebuildLayout && !seedChanged && (details[key] === undefined || details[key] === cut[key])) continue;
       const def = registry[details[key] ?? cut[key]], rng = J.rng(cut.seed);
       cut[param] = def?.plan ? (key === 'layout' ? def.plan(rng, {
         text: details.text ?? cut.text, n: [...(details.text ?? cut.text).replace(/\s/g,'')].length,
@@ -34,6 +37,7 @@ J.applyCutDetails = (cut, details, plan, layer) => {
   for (const key of J.cutDetailKeys[layer === 'lyrics' ? 'lyrics' : 'media']) {
     if (Object.prototype.hasOwnProperty.call(details,key)) {
       if (layer === 'lyrics' && key === 'params') cut.params = {...cut.params,...copy(details.params)};
+      else if(layer==='lyrics' && ['effectStyle','effectFx'].includes(key))continue;
       else cut[key] = copy(details[key]);
     }
   }
