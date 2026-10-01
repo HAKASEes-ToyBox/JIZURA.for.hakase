@@ -3273,7 +3273,7 @@ function startTap() {
   pause();
   S.tap = { i: 0, layer, append: !!layer, fileIndex: 0, countingDown: true };
   if (!S.project.timing.lineTimes) S.project.timing.lineTimes = {};
-  $('tapHint').textContent = S.tap.append ? J.mediaLabel('選択した項目から、タップするたびにカットを追加します。','Each tap inserts a cut from the selected items.') : '曲に合わせて、各行・素材が始まる瞬間に Space かボタンを押してください。';
+  $('tapHint').textContent = J.mediaLabel('挿入したいタイミングでボタンをクリック（またはスペースキー）','Click the button (or press Space) at the moment you want to insert.');
   S.sourceOpen=false;S.settingsOpen=false;S.playheadMenu=null;closeTimelineCutMenu();syncSettingsDrawer();syncSourceDrawer();syncPlayheadMenu();
   $('tapPanel').hidden = false; syncTapButtons();sizeViewport();drawTimeline();drawTimelineLinks();
   if (S.tap.append && !S.audio) extendTapPreview(0);
@@ -3328,6 +3328,9 @@ function syncTapButtons() {
   for (const id of ['btnTap', 'btnTapMedia']) $(id).setAttribute('aria-pressed', String(!!S.tap));
 }
 function updateTap() {
+  const lyricQueue=!S.tap.layer,rows=[$('tapLine').parentElement,$('tapLineAhead1').parentElement,$('tapLineAhead2').parentElement];
+  for(const row of rows)for(const animation of row.getAnimations())animation.cancel();
+  rows[1].hidden=rows[2].hidden=!lyricQueue;
   if (S.tap.append) {
     const m=S.project[S.tap.layer],order=J.mediaOrder(S.project,S.tap.layer);
     if(!S.tap.nextItem){
@@ -3338,10 +3341,19 @@ function updateTap() {
         ? {id:m.items[S.tap.fileIndex % m.items.length].id,name:order[S.tap.fileIndex % order.length].name,file:true}
         : J.mediaCopyItems(S.tap.layer).find(item=>item.id===choice);
     }
-    $('tapLine').textContent = `${S.tap.i + 1}. ${S.tap.nextItem.name}`; return;
+    $('tapLine').textContent = `${S.tap.i + 1}. ${S.tap.nextItem.name}`; $('tapLine').title=S.tap.nextItem.name; return;
   }
   const ln = S.tap.layer ? S.plan[S.tap.layer].cuts[S.tap.i] : S.plan.lines[S.tap.i];
-  $('tapLine').textContent = ln ? `${S.tap.i + 1}. ${S.tap.layer ? ln.name : ln.text}` : '—';
+  $('tapLine').textContent = ln ? (S.tap.layer ? `${S.tap.i + 1}. ${ln.name}` : ln.text) : '—';
+  if(lyricQueue){
+    for(const offset of [1,2]){const line=S.plan.lines[S.tap.i+offset],el=$('tapLineAhead'+offset);el.textContent=line?.text || '';el.title=line?.text || '';}
+    $('tapLine').title=ln?.text || '';
+    if(S.tap.queueIndex!=null && S.tap.queueIndex!==S.tap.i && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+      const height=rows[0].getBoundingClientRect().height,opacities=[1,.5,.22];
+      rows.forEach((row,i)=>row.animate([{transform:`translateY(-${height}px)`,opacity:opacities[i+1]??0},{transform:'translateY(0)',opacity:opacities[i]}],{duration:220,easing:'ease-out'}));
+    }
+    S.tap.queueIndex=S.tap.i;
+  }
 }
 
 function shuffleMediaEffects(layers = ['media', 'foreground']) {

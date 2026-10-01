@@ -62,6 +62,7 @@ BODY = {
     'タップで同期': 'Tap to sync', '開始(秒)': 'Start (s)', '行の長さ': 'Line duration',
     '拍にスナップ': 'Snap to beat', '手動タイミングを消す': 'Clear manual timing',
     '曲に合わせて、各行が始まる瞬間に': 'Press', 'かボタンを押してください。': 'or the button as each line starts.',
+    '挿入したいタイミングでボタンをクリック（またはスペースキー）': 'Click the button (or press Space) at the moment you want to insert.',
     '次:': 'Next:', '終了する': 'Finish', '行とカット': 'Lines and cuts',
     '再生位置': 'Playback position', 'タイムライン（クリックで移動）': 'Timeline (click to seek)',
     '前の案に戻る': 'Previous variation', '次の案へ進む': 'Next variation',

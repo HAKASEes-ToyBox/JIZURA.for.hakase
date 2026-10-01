@@ -751,7 +751,16 @@ body.preview-fullscreen-open { overflow: hidden; }
 .col-stage { position:relative; }
 #tapPanel { position:absolute; left:8px; right:8px; width:min(520px,calc(100% - 16px)); margin-inline:auto; z-index:40; background:#241f16; box-shadow:0 8px 28px #000b; box-sizing:border-box; }
 #tapPanel[hidden] { display:none; }
-#tapPanel .next { overflow-wrap:anywhere; }
+#tapPanel #tapHint { font-size:14px; line-height:1.5; }
+#tapPanel .tap-queue { overflow:hidden; }
+#tapPanel .tap-queue-line { display:flex; align-items:center; gap:8px; min-width:0; height:32px; font-size:15px; line-height:1.35; }
+#tapPanel .tap-queue-line[hidden] { display:none; }
+#tapPanel .tap-queue-line > :last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#tapPanel .tap-marker { flex:0 0 16px; color:var(--amber); }
+#tapPanel .tap-future-one { opacity:.5; }
+#tapPanel .tap-future-two { opacity:.22; }
+#tapPanel .tap-current { opacity:1; height:auto; min-height:32px; }
+#tapPanel .tap-current > b { white-space:pre-wrap; overflow-wrap:anywhere; }
 
 /* A phone uses the available width, not the laptop preview minimum. Keep text
    autosizing from enlarging controls after drawers or canvas content change. */
