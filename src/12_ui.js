@@ -1288,7 +1288,11 @@ function openCutDetails(layer,index,part=0) {
       section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
       const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : /^effectEvents\.\d+$/.test(path) ? eventName(value) : /^\d+$/.test(field) ? L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
-      for(const [child,v] of Object.entries(value)) {
+      const decoration=/^decor\.\d+$/.test(path),allowed=decoration?new Set(['id',...J.decorDetailFields(value.id)]):null;
+      const shown=decoration?{...J.decorDetailDefaults(cut.seed),...value}:value;
+      for(const [child,v] of Object.entries(shown)) {
+        if(allowed && !allowed.has(child))continue;
+        if(decoration && value.id==='counter' && shown.mode!=='count' && ['from','to'].includes(child))continue;
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
         if(path==='effectSettings' && !['motion','treatment','duration'].includes(child)) continue;
         fieldEditor(grid,child,v,next=>{
@@ -1296,7 +1300,9 @@ function openCutDetails(layer,index,part=0) {
             const other=child==='w'?'h':'w'; value[other]*=next/value[child];
             const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=+(value[other]*100).toFixed(6);
           }
-          value[child]=next;onChange(clone(value));
+          value[child]=next;
+          if(decoration){const defaults=J.decorDetailDefaults(cut.seed);for(const key of J.decorDetailFields(value.id))if(value[key]===undefined&&defaults[key]!==undefined)value[key]=defaults[key];}
+          onChange(clone(value));
         },`${path}.${child}`);
       }
       const actions=document.createElement('div');actions.className='cut-detail-array-actions';
@@ -1322,7 +1328,11 @@ function openCutDetails(layer,index,part=0) {
       const colorNames={bg:['背景色','Background color'],fg:['文字色','Text color'],sub:['補助文字色','Secondary text color'],accent:['アクセント色','Accent color'],accent2:['アクセント色2','Accent color 2'],ink:['装飾色','Decoration color'],dim:['背景文字色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
       if(colorNames[field])text.textContent=L(...colorNames[field]);
     }
-    const choices=/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
+    const decorMode=/^decor\.\d+\.mode$/.test(path);
+    const decorId=decorMode?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    if(decorMode)value=value==='count'?'count':'index';
+    const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('カットの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
+    const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
     else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','duration','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
@@ -1333,7 +1343,7 @@ function openCutDetails(layer,index,part=0) {
       const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value)/factor:input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
-      if(/^decor\.\d+\.id$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
+      if(/^decor\.\d+\.(id|mode)$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
       if(choices && !path.includes('.')) {
         const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
@@ -1344,6 +1354,10 @@ function openCutDetails(layer,index,part=0) {
     if(!lyric && ['enter','exit'].includes(path))text.textContent=path==='enter'?L('登場モーション（詳細）','Entrance motion (advanced)'):L('退場モーション（詳細）','Exit motion (advanced)');
     if(lyric && current.lyricSize!=null && /^area\.(w|h)$/.test(path)){input.disabled=true;const hint=document.createElement('small');hint.className='muted';hint.textContent=L(`歌詞のサイズ記法 ${current.lyricSize}: が優先されます。歌詞入力で変更してください。`,`The lyric size directive ${current.lyricSize}: takes priority. Change it in the lyrics input.`);row.append(hint);}
     row.append(input);parent.append(row);
+    if(decorMode){
+      const hint=document.createElement('small');hint.className='muted';
+      hint.textContent=decorId==='indexNum'?L('表示される番号は同じです。登場時に数字が回転する回数を選びます。','The displayed number stays the same. Choose how many times the digits roll on entrance.'):L('「カットの通し番号」はカットの番号を表示します。「開始値から終了値へ変化」は指定した開始値から終了値まで数字を変化させます。','Cut number displays the cut index. Animate from start to end changes the number between the specified starting and ending values.');row.append(hint);
+    }
     if(field==='scheme'){
       const hint=document.createElement('small');hint.className='muted';hint.textContent=L('選択すると、このカットだけスタイル本来の配色を適用します。','Selecting a scheme applies the original style colors to this cut only.');row.append(hint);
     }

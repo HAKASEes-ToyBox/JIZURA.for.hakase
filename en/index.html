@@ -40199,6 +40199,84 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
 };
 })();
 
+// Editable decoration parameters, including reads in positioning helpers.
+// Keep this catalog aligned with each decoration draw implementation.
+(() => {
+'use strict';
+const fields={};
+for(const [keys,ids] of [
+  ["n", "grid"],
+  ["accent corner", "stripes"],
+  ["seed n", "blobs bars shapes rings slash sparks glitchRects confetti chochin rainRipples bubbles fireflies musicNotes hrStaticPatch hrDrips"],
+  ["right low accent mode from to", "counter"],
+  ["accent", "brackets bracketsJP"],
+  ["", "dots sonarArcs knWordTicks tyGlyphBody"],
+  ["right low big", "arrows"],
+  ["seed", "leaders highlightMark glyphLock"],
+  ["seed low", "waveform"],
+  ["seed right low", "barcode paperClip hrCracks"],
+  ["accent v", "crosshair beatRing tyBigPunct"],
+  ["accent big r", "cropMarks"],
+  ["right low corner v r", "reticle sensu tsukiKumo starburst"],
+  ["seed n right low r", "radar"],
+  ["right low corner v", "progressRing spinner swatches registration moonPhases stripeCircle halfCircles mediaControls"],
+  ["right low", "timecodeBar zigzagRibbon tyColophon"],
+  ["right low corner", "rulerEdge"],
+  ["right low accent big v", "dimension"],
+  ["right low mode v", "indexNum"],
+  ["seed right v", "dateStamp ruledLines"],
+  ["seed right low accent", "qrBlock seigaiha"],
+  ["n right low corner v r", "concentricSquares spiralLine loopArrows"],
+  ["right low accent corner big v r", "triangleSpin"],
+  ["seed n big", "lineBurst twinkle momiji"],
+  ["n right low corner big v r", "plusGrid"],
+  ["accent big v", "guides"],
+  ["right low accent v", "waveLine checkerStrip"],
+  ["seed right low accent v", "halftonePatch"],
+  ["n right r", "orbitDots"],
+  ["seed n right low corner v", "constellation dataColumns"],
+  ["seed n right", "petals snow kasumi cloudPuffs knSpeedTrail"],
+  ["seed n right r", "rainStreaks"],
+  ["seed right low corner v r", "lightLeak spectrumRing atomOrbit"],
+  ["seed n v", "bokeh hanabi memphis hrScratches"],
+  ["seed n corner", "speedCorner"],
+  ["seed n accent v", "risingParticles"],
+  ["seed right low v", "brushStroke"],
+  ["seed right big v r", "tapePieces"],
+  ["seed right accent v", "scribbleCircle"],
+  ["seed accent v", "scribbleUnder"],
+  ["right corner v", "crossOut"],
+  ["seed n big v", "heartsStars"],
+  ["right low v", "watermarkKanji verticalStrip punchHoles staple indexTabs cursorClick tyTypeScale"],
+  ["seed low accent v", "romajiLine"],
+  ["seed corner v", "seal"],
+  ["right low accent corner v r", "kamon"],
+  ["seed right low accent corner r", "asanoha"],
+  ["n low", "shimenawa"],
+  ["right r", "namiGashira"],
+  ["seed n right low corner big v r", "hexGrid"],
+  ["right low r", "headingTape"],
+  ["seed n right big r", "circuit"],
+  ["seed right low big", "vines hrWatchEye"],
+  ["seed n r", "starField"],
+  ["n right low accent v r", "sunRays"],
+  ["seed n right v", "smoke"],
+  ["seed n right big", "dandelion"],
+  ["n right low accent corner v", "polkaPatch"],
+  ["corner big", "decoCorners"],
+  ["seed n right low accent corner v", "tally"],
+  ["v", "windowChrome"],
+  ["seed right low corner v", "progressBar notifBell likeCounter volumeBars"],
+  ["n right low corner v", "toggleSwitch"],
+  ["seed right", "hrSigil hrDustBeam"],
+  ["right", "tyRunningHead"],
+  ["n low v", "tyTextRule"],
+])for(const id of ids.split(' '))fields[id]=keys?keys.split(' '):[];
+J.DECOR_DETAIL_FIELDS=fields;
+J.decorDetailFields=id=>J.DECOR[id]?.detailFields || fields[id] || [];
+J.decorDetailDefaults=seed=>({seed,n:1,right:false,low:false,accent:false,corner:false,big:false,mode:'index',from:0,to:100,v:0,r:.5});
+})();
+
 /* Isolated technique previews: never replace or save the editor project. */
 (() => {
 'use strict';
@@ -42289,7 +42367,11 @@ function openCutDetails(layer,index,part=0) {
       section.open=openDetails.get(path) ?? ['area','placement'].includes(field);
       const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : /^effectEvents\.\d+$/.test(path) ? eventName(value) : /^\d+$/.test(field) ? L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
-      for(const [child,v] of Object.entries(value)) {
+      const decoration=/^decor\.\d+$/.test(path),allowed=decoration?new Set(['id',...J.decorDetailFields(value.id)]):null;
+      const shown=decoration?{...J.decorDetailDefaults(cut.seed),...value}:value;
+      for(const [child,v] of Object.entries(shown)) {
+        if(allowed && !allowed.has(child))continue;
+        if(decoration && value.id==='counter' && shown.mode!=='count' && ['from','to'].includes(child))continue;
         // Random candidate pools belong to the layer; this editor changes the resolved cut.
         if(path==='effectSettings' && !['motion','treatment','duration'].includes(child)) continue;
         fieldEditor(grid,child,v,next=>{
@@ -42297,7 +42379,9 @@ function openCutDetails(layer,index,part=0) {
             const other=child==='w'?'h':'w'; value[other]*=next/value[child];
             const input=grid.querySelector(`[data-detail-field="${path}.${other}"]`);if(input)input.value=+(value[other]*100).toFixed(6);
           }
-          value[child]=next;onChange(clone(value));
+          value[child]=next;
+          if(decoration){const defaults=J.decorDetailDefaults(cut.seed);for(const key of J.decorDetailFields(value.id))if(value[key]===undefined&&defaults[key]!==undefined)value[key]=defaults[key];}
+          onChange(clone(value));
         },`${path}.${child}`);
       }
       const actions=document.createElement('div');actions.className='cut-detail-array-actions';
@@ -42323,7 +42407,11 @@ function openCutDetails(layer,index,part=0) {
       const colorNames={bg:['Background色','Background color'],fg:['Text色','Text color'],sub:['SecondaryText色','Secondary text color'],accent:['Accent色','Accent color'],accent2:['Accent色2','Accent color 2'],ink:['Decoration色','Decoration color'],dim:['BackgroundText色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
       if(colorNames[field])text.textContent=L(...colorNames[field]);
     }
-    const choices=/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
+    const decorMode=/^decor\.\d+\.mode$/.test(path);
+    const decorId=decorMode?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    if(decorMode)value=value==='count'?'count':'index';
+    const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('cutsの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
+    const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
     if(choices) { for(const [v,n] of choices) input.add(new Option(n,v));if(value!=null&&!choices.some(([v])=>String(v)===String(value))) input.add(new Option(String(value),String(value)));input.value=value??''; }
     else if(typeof value==='boolean'){input.type='checkbox';input.checked=value;}
     else if(typeof value==='number'){input.type='number';input.step='any';input.value=+(value*factor).toFixed(6); if(['w','h','n','inDur','outDur','transDur','duration','stagger','motionScale','contentScale','videoStart','videoDuration','opacity'].includes(field)) input.min=field==='videoDuration'?.04:0; if(field==='opacity')input.max=100;}
@@ -42334,7 +42422,7 @@ function openCutDetails(layer,index,part=0) {
       const v=typeof value==='boolean'?input.checked:typeof value==='number'?Number(input.value)/factor:input.value;
       if(typeof v==='number'&&!Number.isFinite(v))return;
       onChange(v);
-      if(/^decor\.\d+\.id$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
+      if(/^decor\.\d+\.(id|mode)$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
       if(choices && !path.includes('.')) {
         const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
@@ -42345,6 +42433,10 @@ function openCutDetails(layer,index,part=0) {
     if(!lyric && ['enter','exit'].includes(path))text.textContent=path==='enter'?L('Entranceモーション（詳細）','Entrance motion (advanced)'):L('Exitモーション（詳細）','Exit motion (advanced)');
     if(lyric && current.lyricSize!=null && /^area\.(w|h)$/.test(path)){input.disabled=true;const hint=document.createElement('small');hint.className='muted';hint.textContent=L(`歌詞のサイズ記法 ${current.lyricSize}: が優先されます。歌詞入力で変更してください。`,`The lyric size directive ${current.lyricSize}: takes priority. Change it in the lyrics input.`);row.append(hint);}
     row.append(input);parent.append(row);
+    if(decorMode){
+      const hint=document.createElement('small');hint.className='muted';
+      hint.textContent=decorId==='indexNum'?L('表示される番号は同じです。Entrance時に数字が回転する回数を選びます。','The displayed number stays the same. Choose how many times the digits roll on entrance.'):L('「cutsの通し番号」はcutsの番号を表示します。「開始値から終了値へ変化」は指定した開始値から終了値まで数字を変化させます。','Cut number displays the cut index. Animate from start to end changes the number between the specified starting and ending values.');row.append(hint);
+    }
     if(field==='scheme'){
       const hint=document.createElement('small');hint.className='muted';hint.textContent=L('選択すると、このcutsだけStyle本来のPaletteを適用します。','Selecting a scheme applies the original style colors to this cut only.');row.append(hint);
     }
