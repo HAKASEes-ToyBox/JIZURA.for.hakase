@@ -486,14 +486,15 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-target-row > label { flex-shrink:0; }
 .cut-mask-target-row .cut-mask-hint { margin:0; flex:1; min-width:0; }
 .cut-mask-aspect { margin-top:8px; }
-.cut-mask-aspect .cut-detail-field { display:inline-flex; align-items:center; gap:6px; }
+.cut-mask-aspect .cut-detail-field { display:inline-flex; flex-direction:row; align-items:center; gap:6px; }
+.cut-mask-aspect .cut-detail-field input[type=checkbox] { order:-1; flex:0 0 18px; width:18px; height:18px; margin:0; }
 .cut-mask-opacity-row { display: flex; gap: 12px; align-items: center; }
 .cut-mask-opacity-row input[type=number] { width: 5em; min-width: 0; }
 .cut-mask-feather { width: 100%; }
 .cut-mask-feather input { flex: 1; width: 120px; min-width: 50px; }
 .cut-mask-feather output { min-width: 3ch; text-align: right; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
-.cut-details-history { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.cut-details-history { display:flex; gap:8px; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--line2); flex-wrap:wrap; }
 .cut-mask-stage { position:relative; padding:36px; touch-action:none; }
 .cut-mask-stage .cut-mask-canvas { margin:0; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }

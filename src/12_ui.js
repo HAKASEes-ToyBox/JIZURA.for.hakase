@@ -1382,12 +1382,12 @@ function openCutDetails(layer,index,part=0) {
     }
     const categories=[
       ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
-      ['placement',L('配置・サイズ','Position / size'),['area','placement','contentScale']],
       ['style',L('スタイル','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
       ['motion',L('モーション','Motion'),['technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
       ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
       ['decor',L('装飾','Decorations'),['decor']],
       ['mask',L('マスク','Mask'),['mask']],
+      ['placement',L('配置・サイズ','Position / size'),['area','placement','contentScale']],
       ['other',L('その他','Other'),[]],
     ];
     const tabs=document.createElement('div');tabs.className='cut-details-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',L('編集項目','Edit categories'));
