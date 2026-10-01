@@ -7926,6 +7926,14 @@ J.applyCutDetails = (cut, details, plan, layer) => {
       if (parent && Object.hasOwn(parent,key) && typeof parent[key]==='string') parent[key]=entry.font;
     }
   }
+  // Imported favorites and older projects can contain empty/partial parameter
+  // objects. Fill required defaults without overwriting the user's own values.
+  if (layer === 'lyrics') {
+    for (const [key,param] of [['treat','treatP'],['bg','bgP'],['cam','camP'],['trans','transP']]) {
+      const def=J.registry(key)[cut[key]];
+      if(def?.plan)cut[param]={...def.plan(J.rng(cut.seed),cut.effectStyle || plan.style),...cut[param]};
+    }
+  }
   if (cut.trans === 'none') cut.trans = null;
   if (layer === 'lyrics' && details.area) cut.areaMode = 'manual';
   if (layer === 'lyrics' && typeof details.text === 'string') cut.words = J.chunkText(cut.text);
@@ -21010,7 +21018,9 @@ fx('perspectiveTilt', { name: 'パース揺れ', tags: ['pop', 'graphic', 'emoti
     const phi = dir * (30 + 10 * J.r(s, 3)) * clamp(ampOf(ev), 0.5, 1.2) * e * DEG;
     if (Math.abs(phi) < 0.002) return;
     const L = cols ? cw : ch, Mx = cols ? ch : cw, hl = L / 2, D = 1.15 * Math.max(cw, ch), co = Math.cos(phi), si = Math.sin(phi);
-    ctx.fillStyle = isDark(sc.bg) ? sc.bg : J.mix(sc.bg, sc.fg, 0.1); ctx.fillRect(0, 0, cw, ch);
+    // On a lyric-only layer, the uncovered area belongs to the media below.
+    if (I.opt?.transparent) ctx.clearRect(0, 0, cw, ch);
+    else { ctx.fillStyle = isDark(sc.bg) ? sc.bg : J.mix(sc.bg, sc.fg, 0.1); ctx.fillRect(0, 0, cw, ch); }
     const N = 48, sw = L / N;
     let pd = null;
     for (let i = 0; i <= N; i++) {
@@ -42710,6 +42720,7 @@ function openCutDetails(layer,index,part=0) {
       if(field==='area')value ||= {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
       if(field==='trans')value ||= 'none';
       if(value===undefined)continue;
+      if(['enterP','holdP','exitP','techniqueP','entranceP','departureP','treatP','bgP','camP','transP'].includes(field) && value && !Object.keys(value).length)continue;
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
     const categories=[

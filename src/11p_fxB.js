@@ -495,7 +495,9 @@ fx('perspectiveTilt', { name: 'パース揺れ', tags: ['pop', 'graphic', 'emoti
     const phi = dir * (30 + 10 * J.r(s, 3)) * clamp(ampOf(ev), 0.5, 1.2) * e * DEG;
     if (Math.abs(phi) < 0.002) return;
     const L = cols ? cw : ch, Mx = cols ? ch : cw, hl = L / 2, D = 1.15 * Math.max(cw, ch), co = Math.cos(phi), si = Math.sin(phi);
-    ctx.fillStyle = isDark(sc.bg) ? sc.bg : J.mix(sc.bg, sc.fg, 0.1); ctx.fillRect(0, 0, cw, ch);
+    // On a lyric-only layer, the uncovered area belongs to the media below.
+    if (I.opt?.transparent) ctx.clearRect(0, 0, cw, ch);
+    else { ctx.fillStyle = isDark(sc.bg) ? sc.bg : J.mix(sc.bg, sc.fg, 0.1); ctx.fillRect(0, 0, cw, ch); }
     const N = 48, sw = L / N;
     let pd = null;
     for (let i = 0; i <= N; i++) {

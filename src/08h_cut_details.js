@@ -50,6 +50,14 @@ J.applyCutDetails = (cut, details, plan, layer) => {
       if (parent && Object.hasOwn(parent,key) && typeof parent[key]==='string') parent[key]=entry.font;
     }
   }
+  // Imported favorites and older projects can contain empty/partial parameter
+  // objects. Fill required defaults without overwriting the user's own values.
+  if (layer === 'lyrics') {
+    for (const [key,param] of [['treat','treatP'],['bg','bgP'],['cam','camP'],['trans','transP']]) {
+      const def=J.registry(key)[cut[key]];
+      if(def?.plan)cut[param]={...def.plan(J.rng(cut.seed),cut.effectStyle || plan.style),...cut[param]};
+    }
+  }
   if (cut.trans === 'none') cut.trans = null;
   if (layer === 'lyrics' && details.area) cut.areaMode = 'manual';
   if (layer === 'lyrics' && typeof details.text === 'string') cut.words = J.chunkText(cut.text);

@@ -1435,6 +1435,7 @@ function openCutDetails(layer,index,part=0) {
       if(field==='area')value ||= {x:0,y:0,w:1,h:1,angle:0,lockAspect:true};
       if(field==='trans')value ||= 'none';
       if(value===undefined)continue;
+      if(['enterP','holdP','exitP','techniqueP','entranceP','departureP','treatP','bgP','camP','transP'].includes(field) && value && !Object.keys(value).length)continue;
       fieldEditor(grid,field,clone(value),v=>write(field,field==='scheme'?+v:v,false));
     }
     const categories=[
