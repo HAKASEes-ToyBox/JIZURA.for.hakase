@@ -41143,7 +41143,7 @@ function mergeProject(p) {
   return o;
 }
 function setBadges(d) {
-  return (d && d.custom ? '<span class="set-badge ex" title="'+J.mediaLabel('取り込んだ独自演出','Imported custom effect')+'">'+J.mediaLabel('追加','Added')+'</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
+  return d && d.custom ? '<span class="set-badge ex" title="'+J.mediaLabel('取り込んだ独自演出','Imported custom effect')+'">'+J.mediaLabel('追加','Added')+'</span>' : '';
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
 function pendingMediaDeletes() { try { const ids = JSON.parse(localStorage.getItem(MEDIA_DELETE_KEY) || '[]'); return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : []; } catch (e) { return []; } }
