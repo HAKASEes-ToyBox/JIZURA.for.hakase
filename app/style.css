@@ -493,6 +493,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-feather input { flex: 1; width: 120px; min-width: 50px; }
 .cut-mask-feather output { min-width: 3ch; text-align: right; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
+.cut-details-history { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.cut-mask-stage { position:relative; padding:36px; touch-action:none; }
+.cut-mask-stage .cut-mask-canvas { margin:0; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }

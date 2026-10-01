@@ -511,6 +511,9 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-mask-feather input { flex: 1; width: 120px; min-width: 50px; }
 .cut-mask-feather output { min-width: 3ch; text-align: right; }
 .cut-mask-controls label { display: inline-flex; align-items: center; gap: 6px; }
+.cut-details-history { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.cut-mask-stage { position:relative; padding:36px; touch-action:none; }
+.cut-mask-stage .cut-mask-canvas { margin:0; }
 .cut-mask-canvas { display: block; max-width: 100%; margin: 8px 0; background: #000; border-radius: 6px; cursor: move; touch-action: none; }
 .cut-mask-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .cut-mask-motion { margin-top: 14px; padding-top: 10px; border-top: 1px solid #45474e; }
@@ -41287,7 +41290,7 @@ function openCutDetails(layer,index,part=0) {
   const openDetails = new Map();
   let activeDetailTab='basic';
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
-  dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));
+  dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));dialog.tabIndex=-1;
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
   const pane=document.createElement('aside');pane.className='cut-details-preview';
   pane.innerHTML=`<h2></h2><canvas></canvas><div class="effect-preview-seek"><button type="button" data-cut-preview-play></button><span class="tc effect-preview-now">00:00.00</span><span class="tc muted">/</span><span class="tc muted effect-preview-dur">00:00.00</span><div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i><input type="range" min="0" max="1000" step="1" value="0" data-cut-preview-seek></div></div><label class="check cut-details-solo"><input type="checkbox" data-preview-solo><span></span></label><label class="check cut-details-focus"><input type="checkbox" data-preview-focus><span></span></label>`;
@@ -41313,7 +41316,28 @@ function openCutDetails(layer,index,part=0) {
   function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
-  const schedulePreview=()=>{clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
+  const detailState=()=>JSON.stringify({draft,locked,start,disabledChoices});
+  const detailHistory=[detailState()];let detailHistoryIndex=0;
+  function syncDetailHistory(){
+    const undo=dialog.querySelector('[data-detail-undo]'),redo=dialog.querySelector('[data-detail-redo]');
+    if(undo)undo.disabled=detailHistoryIndex===0;if(redo)redo.disabled=detailHistoryIndex===detailHistory.length-1;
+  }
+  function rememberDetail(){
+    const state=detailState();if(state===detailHistory[detailHistoryIndex])return;
+    detailHistory.splice(detailHistoryIndex+1);detailHistory.push(state);
+    if(detailHistory.length>100)detailHistory.shift();detailHistoryIndex=detailHistory.length-1;syncDetailHistory();
+  }
+  function moveDetailHistory(delta){
+    const next=detailHistoryIndex+delta;if(next<0||next>=detailHistory.length)return;
+    const focused=document.activeElement,attribute=['data-detail-field','data-mask-field','data-mask-shape','data-mask-motion','data-detail-undo','data-detail-redo'].find(a=>focused?.hasAttribute(a));
+    const focusSelector=attribute?`[${attribute}="${CSS.escape(focused.getAttribute(attribute))}"]`:'[data-detail-undo]';
+    detailHistoryIndex=next;const state=JSON.parse(detailHistory[next]);draft=state.draft;locked=state.locked;start=state.start;disabledChoices.splice(0,disabledChoices.length,...state.disabledChoices);
+    clearTimeout(previewTimer);current=refreshPreview();render();const restoredFocus=dialog.querySelector(focusSelector);(restoredFocus&&!restoredFocus.disabled?restoredFocus:dialog).focus({preventScroll:true});
+  }
+  dialog.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&!e.altKey&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();moveDetailHistory(e.key.toLowerCase()==='y'||e.shiftKey?1:-1);}
+  });
+  const schedulePreview=()=>{rememberDetail();clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
   // "Show the edited cut only": other layers are switched off and other lyric cuts are left out
   // of a shallow plan copy (the cut keeps its own background effect and transition).
   const soloOptions=lyric?{noForeground:true,noMedia:true}:layer==='foreground'?{noMedia:true,noLyrics:true}:{noForeground:true,noLyrics:true};
@@ -41380,7 +41404,7 @@ function openCutDetails(layer,index,part=0) {
     const mask=J.normalizeMask(draft.details?.mask ?? current.mask) || J.normalizeMask({});// defaults include the motion
     maskSelected=Math.min(maskSelected,Math.max(0,mask.shapes.length-1));
     const section=document.createElement('section');section.dataset.detailSection='mask';section.className='cut-mask';
-    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><div class="cut-mask-aspect"></div><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
+    section.innerHTML=`<div class="cut-mask-controls"><label><input type="checkbox" data-mask-field="enabled"> <span></span></label><label><span></span> <select data-mask-field="target"></select></label><label><input type="checkbox" data-mask-field="invert"> <span></span></label></div><p class="hint cut-mask-hint"></p><div class="cut-mask-aspect"></div><div class="cut-mask-stage"><canvas class="cut-mask-canvas"></canvas><div class="cut-mask-handles area-edit-overlay media-edit"><div class="area-edit-rect"><span class="area-edit-handle nw" data-mask-handle="nw"></span><span class="area-edit-handle ne" data-mask-handle="ne"></span><span class="area-edit-handle sw" data-mask-handle="sw"></span><span class="area-edit-handle se" data-mask-handle="se"></span><span class="area-rotate-handle n" data-mask-handle="rotate" role="button" aria-label="${L('回転','Rotate')}"></span><span class="area-rotate-handle e" data-mask-handle="rotate" role="button" aria-label="${L('回転','Rotate')}"></span><span class="area-rotate-handle s" data-mask-handle="rotate" role="button" aria-label="${L('回転','Rotate')}"></span><span class="area-rotate-handle w" data-mask-handle="rotate" role="button" aria-label="${L('回転','Rotate')}"></span></div></div></div><div class="cut-mask-tools"><select data-mask-add></select><button type="button" data-mask-remove></button></div><div class="cut-details-grid cut-mask-shape"></div><div class="cut-mask-motion"><h4></h4><p class="hint"></p><div class="cut-details-grid"></div></div>`;
     const [useText,targetText,invertText]=section.querySelectorAll('.cut-mask-controls label > span');
     useText.textContent=L('マスクを使う','Use mask');targetText.textContent=L('マスク対象','Mask target');invertText.textContent=L('マスクInvert','Invert mask');
     const target=section.querySelector('[data-mask-field="target"]');
@@ -41429,10 +41453,17 @@ function openCutDetails(layer,index,part=0) {
       if(mask.enabled){x.save();x.globalAlpha=.62*mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();
-        if(i===maskSelected){const h=handle(s,w,ch);x.fillStyle='#ffb000';x.fillRect(h[0]-5,h[1]-5,10,10);}
+
       });
+      positionMaskHandles();
     }
-    const handle=(s,w,h)=>{const a=s.angle*J.DEG,rx=s.w*w/2,ry=s.h*h/2;return [s.cx*w+rx*Math.cos(a)-ry*Math.sin(a),s.cy*h+rx*Math.sin(a)+ry*Math.cos(a)];};
+    function positionMaskHandles(){
+      const stage=section.querySelector('.cut-mask-stage'),overlay=section.querySelector('.cut-mask-handles'),rect=overlay.firstElementChild,s=mask.shapes[maskSelected];
+      overlay.hidden=!s;if(!s)return;
+      const box=canvas.getBoundingClientRect(),host=stage.getBoundingClientRect();
+      Object.assign(overlay.style,{left:`${box.left-host.left}px`,top:`${box.top-host.top}px`,width:`${box.width}px`,height:`${box.height}px`});
+      Object.assign(rect.style,{left:`${(s.cx-s.w/2)*100}%`,top:`${(s.cy-s.h/2)*100}%`,width:`${s.w*100}%`,height:`${s.h*100}%`,transform:`rotate(${s.angle}deg)`});
+    }
     const local=(s,px,py,w,h)=>{const a=-s.angle*J.DEG,dx=px-s.cx*w,dy=py-s.cy*h;return [dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)];};
     const inside=(s,px,py,w,h)=>{const p=new Path2D();J.maskShapePath(p,[s],w,h);return canvas.getContext('2d').isPointInPath(p,px,py);};
     // New shapes are square on screen (a circle stays round on a wide frame).
@@ -41465,41 +41496,42 @@ function openCutDetails(layer,index,part=0) {
     section.querySelector('[data-mask-field="invert"]').addEventListener('change',e=>{mask.invert=e.target.checked;save();});
     tools.add.addEventListener('change',()=>{const type=tools.add.value;tools.add.value='';if(!type)return;mask.shapes.push(newShape(type,.4));maskSelected=mask.shapes.length-1;fields();save();});
     tools.remove.addEventListener('click',()=>{if(!mask.shapes[maskSelected])return;mask.shapes.splice(maskSelected,1);maskSelected=Math.max(0,maskSelected-1);fields();save();});
-    // Corner handle: resize. Inside a shape: move. Around the selected shape: rotate.
-    const ROTATE_BAND=26;
+    // Use the same four corner and dedicated rotation handles as preview placement.
+    const stage=section.querySelector('.cut-mask-stage');
     const point=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)*canvas.width/r.width,(e.clientY-r.top)*canvas.height/r.height];};
-    function hit(px,py){
-      const w=canvas.width,h=canvas.height,sel=mask.shapes[maskSelected];
-      if(sel){const hp=handle(sel,w,h);if(Math.hypot(px-hp[0],py-hp[1])<=10)return {mode:'size',index:maskSelected};}
-      for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h))return {mode:'move',index:i};
-      if(sel){const [lx,ly]=local(sel,px,py,w,h);if(Math.abs(lx)<=sel.w*w/2+ROTATE_BAND&&Math.abs(ly)<=sel.h*h/2+ROTATE_BAND)return {mode:'rotate',index:maskSelected};}
-      return null;
-    }
     let drag=null;
-    canvas.addEventListener('pointerdown',e=>{
-      const [px,py]=point(e),w=canvas.width,h=canvas.height,found=hit(px,py);if(!found)return;
-      maskSelected=found.index;const s=mask.shapes[found.index];
-      drag={mode:found.mode,shape:s,px,py,cx:s.cx,cy:s.cy,w:s.w,h:s.h,angle:s.angle,start:Math.atan2(py-s.cy*h,px-s.cx*w)};
-      canvas.setPointerCapture(e.pointerId);fields();draw();
+    stage.addEventListener('pointerdown',e=>{
+      const [px,py]=point(e),w=canvas.width,h=canvas.height,grip=e.target.closest('[data-mask-handle]');
+      let found=grip?{mode:grip.dataset.maskHandle==='rotate'?'rotate':'size',index:maskSelected,corner:grip.dataset.maskHandle}:null;
+      if(!found&&e.target.closest('.area-edit-rect'))found={mode:'move',index:maskSelected};
+      if(!found)for(let i=mask.shapes.length-1;i>=0;i--)if(inside(mask.shapes[i],px,py,w,h)){found={mode:'move',index:i};break;}
+      if(!found)return;
+      e.preventDefault();maskSelected=found.index;const s=mask.shapes[found.index];
+      drag={mode:found.mode,corner:found.corner,shape:s,px,py,cx:s.cx,cy:s.cy,w:s.w,h:s.h,angle:s.angle,start:Math.atan2(py-s.cy*h,px-s.cx*w)};
+      stage.setPointerCapture(e.pointerId);fields();draw();
     });
-    canvas.addEventListener('pointermove',e=>{
-      const [px,py]=point(e),w=canvas.width,h=canvas.height;
-      if(!drag){const found=hit(px,py);canvas.style.cursor=!found?'default':found.mode==='size'?'nwse-resize':found.mode==='rotate'?'var(--rotate-cursor)':'move';return;}
-      const s=drag.shape;
+    stage.addEventListener('pointermove',e=>{
+      if(!drag)return;
+      const [px,py]=point(e),w=canvas.width,h=canvas.height,s=drag.shape;
       if(drag.mode==='move'){s.cx=J.clamp(drag.cx+(px-drag.px)/w,-1,2);s.cy=J.clamp(drag.cy+(py-drag.py)/h,-1,2);}
       else if(drag.mode==='rotate'){
-        let a=drag.angle+(Math.atan2(py-s.cy*h,px-s.cx*w)-drag.start)*180/Math.PI;
+        let a=drag.angle+(Math.atan2(py-drag.cy*h,px-drag.cx*w)-drag.start)*180/Math.PI;
         if(e.shiftKey)a=Math.round(a/15)*15;
         s.angle=Math.round(((a+540)%360-180)*10)/10;
       }else{
-        const [lx,ly]=local(s,px,py,w,h);
-        if(s.lockAspect!==false){const k=Math.max(Math.abs(lx)/(drag.w*w/2),Math.abs(ly)/(drag.h*h/2));s.w=J.clamp(drag.w*k,.01,4);s.h=J.clamp(drag.h*k,.01,4);}
-        else{s.w=J.clamp(Math.abs(lx)*2/w,.01,4);s.h=J.clamp(Math.abs(ly)*2/h,.01,4);}
+        const sx=drag.corner.endsWith('e')?1:-1,sy=drag.corner.startsWith('s')?1:-1,a=drag.angle*J.DEG;
+        const [lx,ly]=local({...drag,cx:drag.cx,cy:drag.cy},px,py,w,h);
+        let nw=J.clamp((sx*lx+drag.w*w/2)/w,.01,4),nh=J.clamp((sy*ly+drag.h*h/2)/h,.01,4);
+        if(s.lockAspect!==false){const k=Math.max(nw/drag.w,nh/drag.h);nw=J.clamp(drag.w*k,.01,4);nh=J.clamp(drag.h*k,.01,4);}
+        const dx=sx*(nw-drag.w)*w/2,dy=sy*(nh-drag.h)*h/2;
+        s.cx=J.clamp(drag.cx+(dx*Math.cos(a)-dy*Math.sin(a))/w,-1,2);s.cy=J.clamp(drag.cy+(dx*Math.sin(a)+dy*Math.cos(a))/h,-1,2);s.w=nw;s.h=nh;
       }
       draw();
     });
     const end=()=>{if(!drag)return;drag=null;fields();save();};
-    canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+    stage.addEventListener('pointerup',end);
+    stage.addEventListener('pointercancel',()=>{if(!drag)return;const s=drag.shape;for(const k of ['cx','cy','w','h','angle'])s[k]=drag[k];drag=null;fields();draw();});
+    const maskResize=new ResizeObserver(positionMaskHandles);maskResize.observe(canvas);dialog.addEventListener('close',()=>maskResize.disconnect(),{once:true});
     // Motion: the moving / revealing media techniques, applied to the mask over this cut (all off by default).
     function motionFields(){
       const box=section.querySelector('.cut-mask-motion'),grid=box.querySelector('.cut-details-grid'),m=mask.motion;
@@ -41563,6 +41595,7 @@ function openCutDetails(layer,index,part=0) {
   const label = key => names[key] ? L(...names[key]) : key;
   const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
+    rememberDetail();
     clearTimeout(previewTimer);
     current=refreshPreview();
     render();
@@ -41794,7 +41827,7 @@ function openCutDetails(layer,index,part=0) {
     formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
-    fieldEditor(grid,'start',start,v=>{start=v;});
+    fieldEditor(grid,'start',start,v=>{start=v;rememberDetail();});
     const time=grid.querySelector('input');time.previousSibling.textContent=L('開始位置（s · リンク先も移動）','Start (s; linked cuts move together)');time.min=group?.min??0;time.max=group?.max??S.plan.duration;time.disabled=!group;
     // cuts終了時間: editable only with 「次cutsPlayまで」 off (then it may pass the next cut's start).
     if(!lyric || Number.isInteger(cut.part)) {
@@ -41807,7 +41840,7 @@ function openCutDetails(layer,index,part=0) {
       endInput=grid.lastChild.querySelector('input');endInput.disabled=auto;endInput.min=String(+(start+.04).toFixed(3));endInput.max=String(+S.plan.duration.toFixed(3));
     }
     {
-      fieldEditor(grid,'lock',locked,v=>{locked=v;});
+      fieldEditor(grid,'lock',locked,v=>{locked=v;rememberDetail();});
       grid.lastChild.querySelector('span').textContent=lyric?L('line のArrangementをロック','Lock line composition'):L('cutsをロック','Lock cut');
     }
     for(const field of nativeKeys) {
@@ -41848,7 +41881,11 @@ function openCutDetails(layer,index,part=0) {
       }
       panels.get(category[0]).append(node);
     }
-    grid.replaceWith(tabs);
+    const historyRow=document.createElement('div');historyRow.className='cut-details-history';
+    const undo=document.createElement('button');undo.type='button';undo.dataset.detailUndo='';undo.textContent=L('元に戻す','Undo');undo.onclick=()=>moveDetailHistory(-1);
+    const redo=document.createElement('button');redo.type='button';redo.dataset.detailRedo='';redo.textContent=L('やり直す','Redo');redo.onclick=()=>moveDetailHistory(1);
+    const reset=document.createElement('button');reset.type='button';reset.textContent=L('リセット','Reset');reset.onclick=()=>{delete draft.details;preview();};
+    historyRow.append(undo,redo,reset);grid.replaceWith(historyRow,tabs);syncDetailHistory();
     const selectTab=(id,focus=false)=>{
       activeDetailTab=id;
       for(const [key,panel] of panels){panel.hidden=key!==id;const button=tabButtons.get(key);button.setAttribute('aria-selected',String(key===id));button.tabIndex=key===id?0:-1;}
@@ -41876,9 +41913,8 @@ function openCutDetails(layer,index,part=0) {
     }
     for(const select of form.querySelectorAll('select'))attachDetailSearch(select);
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
-    const reset=document.createElement('button');reset.type='button';reset.textContent=L('詳細編集をリセット','Reset detail overrides');reset.onclick=()=>{delete draft.details;preview();};
     const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
-    const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');reset.className='cut-details-reset';buttons.append(reset,apply,cancel);
+    const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');buttons.append(apply,cancel);
     formHost.scrollTop=scrollTop;
     form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
       applyDisabledChoices(S.project);

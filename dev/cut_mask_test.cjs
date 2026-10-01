@@ -143,10 +143,11 @@ let s=await shape();const cb=await section.locator('canvas').boundingBox(),toPag
 const rad=s.angle*Math.PI/180,hx=s.cx+(s.w/2*Math.cos(rad)*cb.width-s.h/2*Math.sin(rad)*cb.height)/cb.width,hy=s.cy+(s.w/2*Math.sin(rad)*cb.width+s.h/2*Math.cos(rad)*cb.height)/cb.height;
 await page.mouse.move(...toPage(hx,hy));await page.mouse.down();await page.mouse.move(...toPage(hx+.08,hy+.02),{steps:4});await page.mouse.up();
 let t=await shape();assert.ok(t.w>s.w*1.2&&Math.abs(t.h/t.w-s.h/s.w)<.01,'locked handle resize '+JSON.stringify([s,t]));
-// Dragging around the shape rotates it (rotation cursor on hover); Shift snaps to 15°.
-s=t;const ring=[s.cx+(s.w/2*cb.width+14)/cb.width,s.cy];await page.mouse.move(...toPage(...ring));
-assert.equal(await section.locator('canvas').evaluate(c=>c.style.cursor),'var(--rotate-cursor)');
-await page.mouse.down();await page.mouse.move(...toPage(s.cx,s.cy+(s.w/2*cb.width+14)/cb.height),{steps:8});await page.mouse.up();
+// Dedicated handle rotates (rotation cursor on hover).
+s=t;const grip=section.locator('.area-rotate-handle.e'),gb=await grip.boundingBox();
+await page.mouse.move(gb.x+gb.width/2,gb.y+gb.height/2);assert.match(await grip.evaluate(c=>getComputedStyle(c).cursor),/data:image/);
+const center=toPage(s.cx,s.cy),dx=gb.x+gb.width/2-center[0],dy=gb.y+gb.height/2-center[1];
+await page.mouse.down();await page.mouse.move(center[0]-dy,center[1]+dx,{steps:8});await page.mouse.up();
 t=await shape();assert.ok(Math.abs(t.angle-s.angle-90)<3,'rotated '+s.angle+' -> '+t.angle);assert.deepEqual([t.cx,t.cy,t.w,t.h],[s.cx,s.cy,s.w,s.h]);
 await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=+await section.locator('[data-mask-shape="h"]').inputValue();
 await section.locator('[data-mask-shape="w"]').fill('30');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
@@ -162,7 +163,7 @@ assert.equal(await section.locator('[data-mask-field="feather"]').inputValue(),'
 await section.locator('[data-mask-field="feather"]').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));});
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Cut:':'カット：'));
-assert.ok(await section.locator('.cut-mask-target-row [data-mask-field=target]').count());assert.ok(await section.locator('.cut-mask-target-row .cut-mask-hint').count());assert.ok(await section.locator('.cut-mask-aspect [data-mask-shape=lockAspect]').count());assert.equal(await section.locator('.cut-mask-canvas').evaluate(el=>el.previousElementSibling.className),'cut-mask-aspect');assert.equal(await section.locator('.cut-mask-controls').evaluate(el=>el.children[1].className),'cut-mask-target-row');
+assert.ok(await section.locator('.cut-mask-target-row [data-mask-field=target]').count());assert.ok(await section.locator('.cut-mask-target-row .cut-mask-hint').count());assert.ok(await section.locator('.cut-mask-aspect [data-mask-shape=lockAspect]').count());assert.equal(await section.locator('.cut-mask-canvas').evaluate(el=>el.parentElement.previousElementSibling.className),'cut-mask-aspect');assert.equal(await section.locator('.cut-mask-controls').evaluate(el=>el.children[1].className),'cut-mask-target-row');
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].details.mask;return {enabled:m.enabled,target:m.target,invert:m.invert,types:m.shapes.map(s=>s.type),plan:!!J.ui.plan.media.cuts[0].mask};});
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});

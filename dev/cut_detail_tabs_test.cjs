@@ -22,7 +22,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
     assert.equal(await modal.locator('[role=tabpanel]:visible').count(),1);
     assert.equal(await modal.locator(`[data-detail-tab-panel="${id}"]`).isVisible(),true);
    }
-   assert.equal(await modal.locator('.cut-details-actions button').nth(1).getAttribute('class'),'primary');
+   assert.equal(await modal.locator('.cut-details-actions button').nth(0).getAttribute('class'),'primary');
    await modal.locator('[data-detail-tab="placement"]').click();
    const sizeField=layer==='lyrics'?'area.w':'placement.w';
    await modal.locator(`[data-detail-field="${sizeField}"]`).fill('65');
