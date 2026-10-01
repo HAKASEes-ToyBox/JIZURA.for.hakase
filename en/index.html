@@ -42368,7 +42368,7 @@ function openCutDetails(layer,index,part=0) {
       const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : /^effectEvents\.\d+$/.test(path) ? eventName(value) : /^\d+$/.test(field) ? L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       const decoration=/^decor\.\d+$/.test(path),allowed=decoration?new Set(['id',...J.decorDetailFields(value.id)]):null;
-      const shown=decoration?{...J.decorDetailDefaults(cut.seed),...value}:value;
+      const shown=decoration?{id:value.id,...J.decorDetailDefaults(cut.seed),...value}:value;
       for(const [child,v] of Object.entries(shown)) {
         if(allowed && !allowed.has(child))continue;
         if(decoration && value.id==='counter' && shown.mode!=='count' && ['from','to'].includes(child))continue;

@@ -11,6 +11,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
  const dialog=page.locator('#cutDetailsDialog'),field=path=>dialog.locator(`[data-detail-field="${path}"]`);
  await timelineAction(page,'[data-layer=lyrics]','details');await dialog.locator('[data-detail-tab=decor]').click();
  const shown=async i=>dialog.locator(`[data-detail-section="decor.${i}"] [data-detail-field]`).evaluateAll(xs=>xs.map(x=>x.dataset.detailField.split('.').at(-1)).sort());
+ assert.equal(await dialog.locator('[data-detail-section="decor.0"] [data-detail-field]').first().getAttribute('data-detail-field'),'decor.0.id','decoration type is the first field');
  assert.deepEqual(await shown(0),['id','n']);assert.deepEqual(await shown(1),['accent','corner','id']);assert.deepEqual(await shown(2),['id','n','seed']);
  assert.deepEqual(await shown(5),['corner','id','low','r','right','v'],'positioning helper fields are included');assert.deepEqual(await shown(6),['corner','id','seed','v'],'overridden placement flags are excluded');assert.deepEqual(await shown(7),['accent','id','right','seed','v'],'handLoop helper reads are included');assert.deepEqual(await shown(8),['id']);
  for(const i of [3,4])await dialog.locator(`[data-detail-section="decor.${i}"]`).evaluate(el=>el.open=true);
