@@ -4,6 +4,8 @@
 
 Turn lyrics into animated lyric videos in your browser. JIZURA combines layouts, entrances, holds, exits, decorations, text treatments, backgrounds, camera moves, effects and transitions. Change the seed or press **Create a variation** to explore another arrangement.
 
+Background and foreground cut details include **Person cutout**: choose RVM MobileNetV3 for live action or SkyTNT ISNet for anime, generate a mask with progress and cancellation, then enable person-only display, removal, or text/foreground behind the person. Masks follow source placement, effects and playback, and are included in portable projects. The models run locally and download on first use (about 4 MB / 176 MB). ISNet uses CPU/WASM and is expensive for video; iPhone hardware has not been tested. External models have separate licenses, including GPL-3.0 for RVM; see [third-party notices](THIRD_PARTY_NOTICES.md) and [implementation notes (Japanese)](docs/person-cutout.md).
+
 **[Open the English fork app](https://hirazisora.github.io/JIZURA/en/)** · [日本語版](https://hirazisora.github.io/JIZURA/) · [Japanese guide](README.md)
 
 The English and Japanese browser editions share the same project format and saved browser data. Use the language links at the top of the editor to switch editions without changing your lyrics or settings. English After Effects panels are available as [ScriptUI](https://hirazisora.github.io/JIZURA/JIZURA_AE_en.jsx) and [CEP](https://hirazisora.github.io/JIZURA/JIZURA_CEP_en.zip) downloads. The AE JSON format is the same in both languages.
