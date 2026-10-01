@@ -3,10 +3,11 @@
 'use strict';
 const clone=x=>JSON.parse(JSON.stringify(x));
 J.favoriteAPI={
-  spec(){return {format:'jizura-cut-effects',version:1,kinds:['lyrics','media'],payload:{format:'jizura-cut-effects',version:1,kind:'lyrics',native:{},details:{drawing:J.drawingSpec.example}},drawing:J.drawingSpec,detailKeys:J.cutDetailKeys,workflow:['Read spec/catalog/theme candidates','Capture a compatible cut or author details.drawing','Validate','Save favorite','Preview multiple times','Revise','Export .jizuraichifav'],notes:['Payloads contain effects, not target lyrics, timing or placement.','drawing is a JSON drawing program, not JavaScript.','Theme checks cover stock effects; visually review custom drawings against the theme.']};},
+  spec(){return {format:'jizura-cut-effects',version:1,kinds:['lyrics','media'],components:J.customEffectSpec,payload:{format:'jizura-cut-effects',version:1,kind:'lyrics',native:{},details:{layout:'center',enter:'pop',hold:'still',exit:'shrink',decor:[{id:J.customEffectSpec.example.id}]},components:[J.customEffectSpec.example]},drawing:J.drawingSpec,detailKeys:J.cutDetailKeys,workflow:J.customEffectSpec.workflow,notes:['Use stock IDs and standard cut parameters first. Define only missing components and reference their IDs in the matching standard slots.','components embeds definitions for portability; project.customEffects owns imported definitions.','details.drawing is the legacy whole-cut format; prefer components.','JSON only, no executable JavaScript. Theme tags are declarations; visually review theme fit.']};},
   validate(payload){return J.readCutEffects(JSON.stringify(payload));},
   save(project,{name,payload,id}){
     const valid=this.validate(payload),list=project.effectFavorites ||= [];
+    if(valid.components)J.importCustomEffects(project,valid.components);
     if(id&&!list.some(f=>f.id===id))throw Error('Favorite not found');
     const number=(project.favoriteSequence||0)+1;
     const entry={id:id||J.favoriteId(),name:typeof name==='string'&&name.trim()?name.trim():'Favorite '+number,payload:valid};
@@ -17,6 +18,7 @@ J.favoriteAPI={
   async import(project,file,mode='append'){
     if(!['append','replace'].includes(mode))throw Error('mode must be append or replace');
     const loaded=await J.readEffectFavorites(file),entries=loaded.favorites.map(f=>({...f,id:J.favoriteId()}));
+    J.importCustomEffects(project,J.combineCustomEffects(loaded.project.customEffects||[],...entries.map(f=>f.payload.components||[])));
     const fonts=(loaded.project.userFonts||[]).filter(f=>!(project.userFonts||[]).some(old=>old.key===f.key));
     for(const entry of loaded.files)if(entry.kind==='font'&&fonts.some(f=>f.key===entry.id))await J.saveFontFile(entry.id,entry.file);
     await J.restoreFontFiles(fonts);
@@ -32,7 +34,7 @@ J.favoriteAPI={
     if(!Number.isFinite(time)||time<0||!Number.isInteger(width)||width<160||width>1920)throw Error('Invalid time or width');
     const layer=target?.layer||(payload.kind==='lyrics'?'lyrics':'media');
     if(!['lyrics','foreground','media'].includes(layer)||payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('Incompatible preview target');
-    const p=target?clone({...project,effectFavorites:[]}):J.defaultProject();let sampleId;
+    const p=target?clone({...project,effectFavorites:[]}):J.defaultProject();J.importCustomEffects(p,payload.components||project?.customEffects||[]);let sampleId;
     try{
       if(!target){
         p.lyrics=payload.kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.title='';p.durationOverride=3;p.res=640;p.aspect='16:9';p.overrides={0:{single:true}};p.fx={...p.fx,hud:'off',texture:0,chroma:0,glitch:0,decor:0};p.lyricEffects.autoPlacement=false;
@@ -50,7 +52,7 @@ J.favoriteAPI={
       const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(Math.min(width,1920*plan.W/plan.H)));cv.height=Math.max(1,Math.round(cv.width*plan.H/plan.W));
       new J.Renderer().frame(cv.getContext('2d'),plan,cut.start+time,{scale:cv.width/plan.W,noHud:true});
       return {data:cv.toDataURL('image/png').split(',')[1],width:cv.width,height:cv.height,time,duration};
-    }finally{if(sampleId)J.mediaAssets.delete(sampleId);}
+    }finally{if(sampleId)J.mediaAssets.delete(sampleId);J.activateCustomEffects(project||J.ui?.project||{});}
   }
 };
 })();

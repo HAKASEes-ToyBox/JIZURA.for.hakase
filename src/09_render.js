@@ -398,12 +398,14 @@ class Renderer {
     const effectCut = J.cutAt(plan,tq);
     const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style;
     const active = plan.events.filter(ev => t >= ev.t && t < ev.t + Math.max(ev.dur, 1 / plan.fps));
-    const needScratch = active.some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
+    const baseEvent=ev=>J.FXE[ev.type]?.customBase?{...ev,type:J.FXE[ev.type].customBase}:ev;
+    const needScratch = active.map(baseEvent).some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
     const S = needScratch ? this.ensure(this.scratch, cw, ch) : null;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
     const copy = () => { const sx = S.getContext('2d'); sx.globalCompositeOperation = 'copy'; sx.drawImage(ctx.canvas, 0, 0); sx.globalCompositeOperation = 'source-over'; };
     const clock24 = Math.floor(t * 24);           // glitch randomness changes at most 24 times a second at any output fps
-    for (const ev of active) {
+    for (const event of active) {
+      const ev=baseEvent(event);
       const k = (t - ev.t) / Math.max(ev.dur, 1e-3);
       const st2 = clock24;
       const D = J.FXE[ev.type];
@@ -413,7 +415,7 @@ class Renderer {
           D.draw(ctx, ev, k, { cw, ch, S, sc, st, step: st2, t, scale, renderer: this, allowFilter, opt, tmp: (w, h) => this.ensure(this.tiny, w, h), tmp2: (w, h) => this.ensure(this.small2 || (this.small2 = mk(2, 2)), w, h) });
         } catch (e) { console.warn('fx', ev.type, e); }
         ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.imageSmoothingEnabled = true;
-        continue;
+        J.drawCustomEvent?.(ctx,event,k,sc);continue;
       }
       if (ev.type === 'slice') {
         copy();
@@ -452,6 +454,7 @@ class Renderer {
         tx.imageSmoothingEnabled = true; tx.drawImage(S, 0, 0, T.width, T.height);
         ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 0.85 * (1 - k); ctx.drawImage(T, 0, 0, cw, ch); ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true;
       }
+      J.drawCustomEvent?.(ctx,event,k,sc);
     }
     // bloom
     const glow = (st.glow ?? 0.6) * 0.5 * (fx.texture ?? 0.6);

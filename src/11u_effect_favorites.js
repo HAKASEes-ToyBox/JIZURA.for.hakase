@@ -28,15 +28,17 @@ J.requestFavoriteName=initial=>new Promise(resolve=>{
   document.body.append(dialog);dialog.showModal();input.select();
 });
 J.exportEffectFavorites=project=>{
-  const preset=J.defaultProject();preset.lyrics='';preset.effectFavorites=clone(project.effectFavorites||[]);preset.favoriteSequence=project.favoriteSequence||0;
+  const preset=J.defaultProject();preset.lyrics='';preset.effectFavorites=clone(project.effectFavorites||[]);preset.favoriteSequence=project.favoriteSequence||0;preset.customEffects=clone(project.customEffects||[]);
   preset.userFonts=clone(project.userFonts||[]);preset.compositeFonts=clone(project.compositeFonts||[]);
   return J.packProject(preset,null);
 };
 J.readEffectFavorites=async file=>{
   const loaded=await J.unpackProject(file),raw=loaded.project.effectFavorites||[];
   if(!Array.isArray(raw))throw Error(J.mediaLabel('お気に入りの形式が不正です','Invalid favorites format'));
-  const favorites=J.normalizeEffectFavorites(raw);
+  const components=J.validateCustomEffects(loaded.project.customEffects||[]);
+  const favorites=J.withCustomEffects(components,()=>J.normalizeEffectFavorites(raw));
   if(favorites.length!==raw.length)throw Error(J.mediaLabel('読み込めない演出が含まれています','Some favorite effects cannot be imported'));
+  loaded.project.customEffects=J.combineCustomEffects(components,...favorites.map(f=>f.payload.components||[]));
   return {...loaded,favorites};
 };
 J.chooseFavoriteImport=count=>new Promise(resolve=>{
@@ -117,10 +119,11 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
       for(const f of fonts)if(!J.FONTS[f.key])J.addUserFont(f.key,f.label,f.family,f.weight||400);
       project.compositeFonts=[...(project.compositeFonts||[]),...(loaded.project.compositeFonts||[]).filter(f=>!(project.compositeFonts||[]).some(old=>old.key===f.key))];
       J.setCompositeFonts(project.compositeFonts);
+      J.importCustomEffects(project,J.combineCustomEffects(loaded.project.customEffects||[],...loaded.favorites.map(f=>f.payload.components||[])));
       if(mode==='replace')list.length=0;
       list.push(...loaded.favorites.map(f=>({...f,id:J.favoriteId()})));
       project.favoriteSequence=Math.max(project.favoriteSequence||0,loaded.project.favoriteSequence||0,list.length);
-      changed();await ensureSample();if(dead)return;render();
+      changed();configure?.();await ensureSample();if(dead)return;render();
       status.textContent=L(`${loaded.favorites.length}件をインポートしました`, `Imported ${loaded.favorites.length} favorites`);
     }catch(e){status.textContent=L('読み込めませんでした：','Could not import: ')+e.message;}
     finally{transferBusy(false);}
@@ -162,7 +165,7 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
   dialog.addEventListener('close',()=>{document.removeEventListener('click',outsideDelete,true);dead=true;token++;cancelAnimationFrame(frame);observer.disconnect();active=null;queue.length=0;if(sampleId)J.mediaAssets.delete(sampleId);dialog.remove();closed();});
   Object.defineProperty(dialog,'favoritePreview',{get:()=>active&&({plan:active.plan,cut:active.cut})});
   function sample(kind){
-    const p=J.defaultProject();p.title='';p.lyrics=kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.durationOverride=3;p.aspect='16:9';p.res=640;
+    const p=J.defaultProject();p.customEffects=clone(project.customEffects||[]);p.title='';p.lyrics=kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.durationOverride=3;p.aspect='16:9';p.res=640;
     p.overrides={0:{single:true}};
     if(kind==='media'){
       const m=p.media=J.normalizeMedia(null);m.items=[{id:sampleId,name:'Preview',type:'image'}];m.manualCuts=true;m.cutCount=1;m.timing.lineTimes={0:0};m.cutOverrides={0:{itemId:sampleId}};

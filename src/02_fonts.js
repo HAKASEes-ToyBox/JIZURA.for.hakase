@@ -144,7 +144,7 @@ function attachFamily(spec) {
 }
 /* drawing-program nodes of every lyric / media cut (custom favorite effects) */
 const drawingNodes = plan => [plan?.cuts, plan?.media?.cuts, plan?.foreground?.cuts]
-  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []);
+  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []).concat((plan?.customEffects||[]).flatMap(d=>d.program?.nodes||[]));
 /* literal strings drawn by drawing programs; their glyphs must be loaded like lyrics */
 J.drawingText = plan => drawingNodes(plan).map(n => typeof n.text === 'string' && n.text[0] !== '$' ? n.text : '').join('');
 /* font keys a plan draws with: style roles, per-cut font params, drawing programs, mono for HUD */

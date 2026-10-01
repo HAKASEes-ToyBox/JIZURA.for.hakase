@@ -96,12 +96,13 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
     key = pool.length ? rng.pick(pool) : 'none';
   }
   // Keep the cut's source filename; technique labels are read from MEDIA_TECH.
-  const { name, ...recipe } = J.MEDIA_TECH[key] || {};
+  const { name, customDefinition, custom, ...recipe } = J.MEDIA_TECH[key] || {};
   return Object.assign({ technique: key, effectSettings: settings, layout: 'contain', enter: 'cut', hold: 'still', exit: 'cut', treat: 'none', trans: 'none' }, recipe);
 };
 J.mediaTechniqueName = cut => cut.technique === 'legacy' ? label('従来の設定', 'Legacy settings') : J.MEDIA_TECH[cut.technique]?.name || label('演出無し', 'No effects');
 
 J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
+  const customCut=cut;cut=J.resolveCustomMediaCut?.(cut)||cut;
   // Also synchronize old projects and manually selected legacy hold names.
   if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
@@ -154,6 +155,7 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
     sx *= v.sx ?? 1; sy *= v.sy ?? 1;
   }
+  if(J.customMediaMotion){const v=J.customMediaMotion(customCut,p,fade,out,w,h);x+=v.x;y+=v.y;rotation+=v.rotation;scale*=v.scale;sx*=v.sx;sy*=v.sy;alpha*=v.alpha;}
   ctx.translate(x * amount, y * amount); ctx.rotate(rotation * amount); if (skew) ctx.transform(1, 0, Math.tan(skew * amount), 1, 0, 0); ctx.scale(Math.max(0.001, 1 + (scale * sx - 1) * amount), Math.max(0.001, 1 + (scale * sy - 1) * amount)); ctx.globalAlpha *= alpha;
   const mask = (type, q) => {
     if (q >= 1) return;
@@ -181,11 +183,11 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     for (const n of [-2, -1, 1, 2]) { if (cut.treat === 'prism') ctx.filter = `hue-rotate(${n * 65}deg)`; draw(n * w * .035 * treatment); }
     ctx.restore();
   }
-  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front'); return; }
+  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);return; }
   if (cut.treat === 'triptych' && treatment > 0) { for (const n of [-1, 0, 1]) draw(n * w / 3, 0, w / 3, h / 3); }
   else if (cut.treat === 'glitch' && treatment > 0) {
     for (let i = 0; i < 12; i++) { ctx.save(); ctx.beginPath(); ctx.rect(-w, -h / 2 + i * h / 12, w * 2, h / 12 + .5); ctx.clip(); draw(Math.sin(Math.floor(p * 32) * 19 + i * 31 + cut.seed) * w * .035 * treatment); ctx.restore(); }
   } else draw();
-  decor('front');
+  decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);
 };
 })();

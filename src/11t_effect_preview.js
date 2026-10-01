@@ -24,7 +24,7 @@ function ensureDialog(){
 J.makeEffectPreviewPlan=(group,key,layer='lyrics',id,settings)=>{
   // Media phases last at most 30% of a cut, so long entrance/exit times get longer preview cuts.
   const cutLength=layer!=='lyrics'&&settings?.duration>.9?Math.ceil(settings.duration/.3*10)/10:3;
-  const project=J.defaultProject();project.lyrics='[00:00]プレビュー|ルビ\n[00:03]プレビュー|ルビ';project.durationOverride=cutLength*2;
+  const project=J.defaultProject();project.customEffects=JSON.parse(JSON.stringify(J.ui?.project.customEffects||[]));project.lyrics='[00:00]プレビュー|ルビ\n[00:03]プレビュー|ルビ';project.durationOverride=cutLength*2;
   project.title='';project.aspect='16:9';project.res=640;project.fps=30;project.seed=2468;
   project.fx={...project.fx,hud:'off',texture:0,chroma:0,glitch:0,decor:0,onTwos:false,koma:0};
   for(const i of [0,1])project.overrides[i]={single:true,layout:'center',enter:'cut',hold:'still',exit:'cut',treat:'none',bg:'none',cam:'none',trans:'none',decor:group==='decor'?[key]:[]};

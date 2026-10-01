@@ -71,6 +71,7 @@ function mergeProject(p) {
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
   o.timing.cutTimes = o.timing.cutTimes || {};
+  o.customEffects=J.validateCustomEffects(o.customEffects||[]);J.activateCustomEffects(o);
   const en = J.defaultProject().enabled;
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
@@ -82,6 +83,7 @@ function mergeProject(p) {
   delete o.jevPrompt;
   migrateLyricBlankCuts(o);
   o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
+  o.customEffects=J.combineCustomEffects(o.customEffects,...o.effectFavorites.map(f=>f.payload.components||[]));J.activateCustomEffects(o);
   o.favoriteSequence = Math.max(o.effectFavorites.length,Math.floor(+o.favoriteSequence)||0);
   o.timelineLinks = Array.isArray(p && p.timelineLinks) ? p.timelineLinks : [];
   o.media = J.normalizeMedia(p && p.media);
@@ -99,7 +101,7 @@ function mergeProject(p) {
   return o;
 }
 function setBadges(d) {
-  return (d && d.extra ? '<span class="set-badge ex" title="最初の公開版のあとに追加">追加</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
+  return (d && d.custom ? '<span class="set-badge ex" title="'+J.mediaLabel('取り込んだ独自演出','Imported custom effect')+'">'+J.mediaLabel('追加','Added')+'</span>' : '') + (d && d.wa ? '<span class="set-badge" title="和風の演出">和</span>' : '');
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
 function pendingMediaDeletes() { try { const ids = JSON.parse(localStorage.getItem(MEDIA_DELETE_KEY) || '[]'); return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : []; } catch (e) { return []; } }
@@ -1118,7 +1120,12 @@ function openCutDetails(layer,index,part=0) {
     untilNext:['次カット再生まで','Until the next cut'],endTime:['終了位置（秒）','End position (s)'],technique:['手法','Technique'],entrance:['登場','Entrance'],departure:['退場','Exit'],itemId:['素材','Asset'],frontmost:['最前に表示','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['動画をループ再生','Loop video'],videoStart:['素材の再生開始位置（秒）','Source start time (s)'],videoDuration:['動画の長さ（秒）','Video duration (s)'],chromaKey:['クロマキー合成','Chroma key'],chromaColor:['クロマキー色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:['種類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
-  const label = key => names[key] ? L(...names[key]) : J.detailFieldLabel(key);
+  const label = key => ({enterP:L('登場の詳細','Entrance parameters'),holdP:L('保持の詳細','Hold parameters'),exitP:L('退場の詳細','Exit parameters'),techniqueP:L('手法の詳細','Technique parameters'),entranceP:L('登場の詳細','Entrance parameters'),departureP:L('退場の詳細','Exit parameters')}[key]) || (names[key] ? L(...names[key]) : J.detailFieldLabel(key));
+  function customParameterLabel(path,field){
+    const [root,index]=path.split('.'),g={params:'layout',enterP:'enter',holdP:'hold',exitP:'exit',treatP:'treat',bgP:'bg',camP:'cam',transP:'trans',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[root];
+    const def=root==='decor'?J.DECOR[current.decor?.[+index]?.id]:g?(lyric?J.registry(g)[current[g]]:J.MEDIA_TECH[current[g]]):null;
+    const names=def?.customDefinition?.labels?.[field];return names?L(names.ja||field,names.en||names.ja||field):null;
+  }
   const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
     rememberDetail();
@@ -1294,7 +1301,7 @@ function openCutDetails(layer,index,part=0) {
       const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : /^effectEvents\.\d+$/.test(path) ? eventName(value) : /^\d+$/.test(field) ? L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       const decoration=/^decor\.\d+$/.test(path),allowed=decoration?new Set(['id',...J.decorDetailFields(value.id)]):null;
-      const shown=decoration?{id:value.id,...J.decorDetailDefaults(cut.seed),...value}:value;
+      const shown=decoration?{id:value.id,...J.decorDetailDefaults(cut.seed),...J.DECOR[value.id]?.customDefinition?.params,...value}:value;
       for(const [child,v] of Object.entries(shown)) {
         if(allowed && !allowed.has(child))continue;
         if(decoration && value.id==='counter' && shown.mode!=='count' && ['from','to'].includes(child))continue;
@@ -1328,13 +1335,14 @@ function openCutDetails(layer,index,part=0) {
       return;
     }
     const percent=typeof value==='number' && (field==='contentScale'||/^(area|placement)\.(w|h)$/.test(path)), factor=percent?100:1;
-    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=(/^fonts\.[^.]+\.\d+$/.test(path)?L(`フォント ${Number(field)+1}`,`Font ${Number(field)+1}`):/^\d+$/.test(field)?L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`):label(field))+(percent?L('（％）',' (%)'):'');row.append(text);
+    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=(customParameterLabel(path,field)||(/^fonts\.[^.]+\.\d+$/.test(path)?L(`フォント ${Number(field)+1}`,`Font ${Number(field)+1}`):/^\d+$/.test(field)?L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`):label(field)))+(percent?L('（％）',' (%)'):'');row.append(text);
     if(path.startsWith('palette.')){
       const colorNames={bg:['背景色','Background color'],fg:['文字色','Text color'],sub:['補助文字色','Secondary text color'],accent:['アクセント色','Accent color'],accent2:['アクセント色2','Accent color 2'],ink:['装飾色','Decoration color'],dim:['背景文字色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
       if(colorNames[field])text.textContent=L(...colorNames[field]);
     }
-    const decorMode=/^decor\.\d+\.mode$/.test(path);
-    const decorId=decorMode?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    const decorationId=/^decor\.\d+\.mode$/.test(path)?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    const decorId=J.DECOR[decorationId]?.customDefinition?.base||decorationId;
+    const decorMode=['counter','indexNum'].includes(decorId);
     if(decorMode)value=value==='count'?'count':'index';
     const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('カットの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
     const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
@@ -1350,7 +1358,7 @@ function openCutDetails(layer,index,part=0) {
       onChange(v);
       if(/^decor\.\d+\.(id|mode)$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
       if(choices && !path.includes('.')) {
-        const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
+        const param={enter:'enterP',hold:'holdP',exit:'exitP',technique:'techniqueP',entrance:'entranceP',departure:'departureP',layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
         if(field==='technique'&&draft.details)for(const key of ['hold','treat','trans','transP'])delete draft.details[key];
         preview();
@@ -1412,6 +1420,8 @@ function openCutDetails(layer,index,part=0) {
     maskEditor(grid);
     for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
       if(field==='mask'||field==='fontParams') continue;// masks have their own editor; font paths follow layout font controls
+      const parameterSlot={enterP:'enter',holdP:'hold',exitP:'exit',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[field];
+      if(parameterSlot&&!(lyric?J.registry(parameterSlot)[current[parameterSlot]]:J.MEDIA_TECH[current[parameterSlot]])?.custom)continue;
       let value=current[field];
       // Generated post effects live in plan.events until explicitly edited.
       // Read them without freezing random choices just by opening this dialog.
@@ -1430,7 +1440,7 @@ function openCutDetails(layer,index,part=0) {
     const categories=[
       ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
       ['style',L('スタイル','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
-      ['motion',L('モーション','Motion'),['technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
+      ['motion',L('モーション','Motion'),['techniqueP','entranceP','departureP','enterP','holdP','exitP','technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
       ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
       ['decor',L('装飾','Decorations'),['decor']],
       ['mask',L('マスク','Mask'),['mask']],
@@ -2680,10 +2690,10 @@ const MEDIA_EFFECT_GROUPS = {
 function renderMediaLines() {
   const layer = activeMediaLayer() || 'media', m = S.project[layer];
   const ol = $('mediaLineList'); ol.innerHTML = ''; S.mediaLineEls = [];
-  const selectTechnique = (ov, cut) => `<select class="media-technique" aria-label="${J.mediaLabel('画像・動画の手法', 'Media technique')}"><option value="none" ${(ov.technique === 'none' || ov.technique === undefined && cut.technique === 'none') ? 'selected' : ''}>${J.mediaLabel('演出無し', 'No effects')}</option><option value="" ${ov.technique === null ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option>${cut.technique === 'legacy' ? `<option value="legacy" selected>${J.mediaLabel('従来の設定', 'Legacy settings')}</option>` : ''}${J.MEDIA_TECH[cut.technique]?.stage ? `<option value="${cut.technique}" selected>${J.mediaTechniqueName(cut)} (${J.mediaLabel('従来の設定', 'Legacy settings')})</option>` : ''}${Object.entries(MEDIA_EFFECT_GROUPS).filter(([group]) => !['enter', 'exit'].includes(group) && Object.entries(J.MEDIA_TECH).some(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer))).map(([group, name]) => `<optgroup label="${name}">${Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && !def.stage && J.mediaTechAllowed(key, layer)).map(([key, def]) => `<option value="${key}" ${ov.technique === key ? 'selected' : ''}>${def.name}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const selectTechnique = (ov, cut) => `<select class="media-technique" aria-label="${J.mediaLabel('画像・動画の手法', 'Media technique')}"><option value="none" ${(ov.technique === 'none' || ov.technique === undefined && cut.technique === 'none') ? 'selected' : ''}>${J.mediaLabel('演出無し', 'No effects')}</option><option value="" ${ov.technique === null ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option>${cut.technique === 'legacy' ? `<option value="legacy" selected>${J.mediaLabel('従来の設定', 'Legacy settings')}</option>` : ''}${J.MEDIA_TECH[cut.technique]?.stage ? `<option value="${cut.technique}" selected>${J.mediaTechniqueName(cut)} (${J.mediaLabel('従来の設定', 'Legacy settings')})</option>` : ''}${Object.entries(MEDIA_EFFECT_GROUPS).filter(([group]) => !['enter', 'exit'].includes(group) && Object.entries(J.MEDIA_TECH).some(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer))).map(([group, name]) => `<optgroup label="${name}">${Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && !def.stage && J.mediaTechAllowed(key, layer)).map(([key, def]) => `<option value="${key}" ${ov.technique === key ? 'selected' : ''}>${escapeHtml(def.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
   const selectPhase = (ov, cut, stage, field) => {
     const value = ov[field] ?? '', title = MEDIA_EFFECT_GROUPS[stage];
-    return `<label>${title}<select class="media-phase" data-media-phase="${field}" aria-label="${title}"><option value="" ${!value ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option><option value="none" ${value === 'none' ? 'selected' : ''}>${J.mediaLabel('即時（なし）', 'Instant (none)')}</option>${J.mediaPhaseOptions(stage).map(([key, def]) => `<option value="${key}" ${value === key ? 'selected' : ''}>${def.name}</option>`).join('')}</select></label>`;
+    return `<label>${title}<select class="media-phase" data-media-phase="${field}" aria-label="${title}"><option value="" ${!value ? 'selected' : ''}>${J.mediaLabel('自動', 'Auto')}</option><option value="none" ${value === 'none' ? 'selected' : ''}>${J.mediaLabel('即時（なし）', 'Instant (none)')}</option>${J.mediaPhaseOptions(stage).map(([key, def]) => `<option value="${key}" ${value === key ? 'selected' : ''}>${escapeHtml(def.name)}</option>`).join('')}</select></label>`;
 
   };
   const addButton = index => {
@@ -3401,7 +3411,7 @@ function renderMediaEffects(layer) {
     section.innerHTML = `<summary><span class="tg-name">${name}</span><span class="tg-cnt mono">${count(settings.enabled)}</span></summary><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
     for (const [key, def] of items) {
-      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${def.name}</span>`;
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${escapeHtml(def.name)}${setBadges(def)}</span>`;
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.enabled[key] = e.target.checked; S.project[layer].effects = next;
         section.querySelector('.tg-cnt').textContent = count(next.enabled); replan();
@@ -3427,6 +3437,7 @@ function renderMediaEffects(layer) {
     for (const [key, def] of items) {
       const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
       row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
+      row.querySelector('span').insertAdjacentHTML('beforeend',setBadges(def));
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.decorEnabled[key] = e.target.checked; S.project[layer].effects = next;
         section.querySelector('.tg-cnt').textContent = count(next); replan();

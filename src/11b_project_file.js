@@ -14,7 +14,7 @@ const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不�
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','themeBalance','style','mood','extra','wa','horror','typo','kinetic','keyBg',
   'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
-  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence'];
+  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence','customEffects'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
   const result = {};
@@ -39,6 +39,8 @@ J.applyProjectSettings = (current, source) => {
   });
   for (const key of settingKeys) if (settings[key] !== undefined) result[key] = settings[key];
   for (const layer of ['media','foreground']) Object.assign(result[layer],settings[layer]);
+  // Retained cuts still need their custom component definitions.
+  result.customEffects=clone(current.customEffects||[]);J.importCustomEffects(result,settings.customEffects||[]);
   // Existing cuts may still refer to fonts absent from the preset.
   for (const key of ['userFonts','compositeFonts']) {
     const imported = result[key] || [];

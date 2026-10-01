@@ -2,8 +2,8 @@
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
-const mediaKeys=['drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
+const lyricKeys=['enterP','holdP','exitP','drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
+const mediaKeys=['techniqueP','entranceP','departureP','drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
   const result = [];
@@ -27,15 +27,19 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
-  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
+  return {format:'jizura-cut-effects',version:1,kind,details,...(J.customEffectDependencies?.(cut).length?{components:J.customEffectDependencies(cut)}:{}),native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
 };
 J.readCutEffects=text=>{
-  if(typeof text!=='string'||text.length>262144)throw Error('invalid');
+  if(typeof text!=='string'||text.length>2359296)throw Error('invalid');
   const data=JSON.parse(text,(key,value)=>{
     if(['__proto__','constructor','prototype'].includes(key))throw Error('invalid');
     return value;
   });
   if(data?.format!=='jizura-cut-effects'||data.version!==1||!['lyrics','media'].includes(data.kind)||!data.details||typeof data.details!=='object'||Array.isArray(data.details))throw Error('invalid');
+  if(data.components){
+    const components=J.validateCustomEffects(data.components),plain={...data};delete plain.components;
+    return J.withCustomEffects(components,()=>({...J.readCutEffects(JSON.stringify(plain)),components}));
+  }
   const payload=J.cutEffectsPayload({...data.details,...data.native},data.kind);
   const d=payload.details,n=payload.native;
   if(d.drawing) d.drawing=J.validateDrawing(d.drawing);
@@ -72,6 +76,7 @@ J.clearPastedLyricEffects = (project, line = null) => {
 };
 J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('incompatible');
+  if(payload.components)J.importCustomEffects(project,payload.components);
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
     // Keep target text and display area while retaining the exact visual parameters.

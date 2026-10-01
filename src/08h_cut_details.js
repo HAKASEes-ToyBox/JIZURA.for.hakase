@@ -3,8 +3,8 @@
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['drawing','text','note','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
-  media: ['drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
+  lyrics: ['enterP','holdP','exitP','drawing','text','note','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
+  media: ['techniqueP','entranceP','departureP','drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
 // The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
 J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;

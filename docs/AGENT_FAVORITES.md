@@ -2,9 +2,9 @@
 
 ## 作成から利用まで
 
-1. MCPの `session_create` → `favorite_spec` と `catalog` を読む。
+1. MCPの `session_create` → `custom_effect_spec`、`favorite_spec`、`catalog` を読む。
 2. 既存演出を調整する場合は、テーマを設定してカットを作り、`favorite_save` に `layer` / `index` を渡して保存する。
-3. 新しい描画を作る場合は、下記の `details.drawing` を含むpayloadを作成する。
+3. 標準の開始・保持・終了・背景・装飾等のIDとパラメータを使う。足りない要素だけを下記のコンポーネントとして作成し、`custom_effect_validate` → `custom_effect_import` で登録する。装飾は `decor`、登場は `enter` のように対応する要素へ登録する。
 4. `favorite_validate` で検証し、`favorite_save` で保存。返されたIDを保持する。
 5. `favorite_preview` にIDと `time`（カット内の秒数）を渡す。MCPからPNG画像が返るので、登場・中盤・退場の複数時点を実際に確認する。`layer` / `index` を省略するとサンプル歌詞・画像、指定するとそのカットが対象になる。プロジェクトは変更しない。
 6. 改善時は `favorite_save` に同じIDと修正版payloadを渡す。
@@ -13,9 +13,78 @@
 
 `asset_import` の `kind: "favorites"` でも専用ファイル／通常プロジェクトから読み込める。`mode` は `append` または `replace`。`favorite_list` / `favorite_apply` / `favorite_delete` も利用できる。
 
-お気に入りファイルはお気に入りとフォント情報を入れたJIZURAコンテナ。ファイル構造を自作せず、APIのエクスポートを使用する。歌詞・素材・カットは含まない。
+お気に入りファイルはお気に入り・独自効果定義・フォント情報を入れたJIZURAコンテナ。ファイル構造を自作せず、APIのエクスポートを使用する。歌詞・素材・カットは含まない。
 
-## 描画プログラム v1
+## 標準要素へ登録する独自効果 v1
+
+`custom_effect_spec` が現在の仕様。`custom_effect_list` で登録済み定義を取得する。定義は `project.customEffects` に保持され、通常プロジェクト、設定のみ、お気に入りの書き出し・読み込みに含まれる。お気に入りファイルのインポート時にも各効果一覧へ登録される。
+
+| group | 適用先・設定欄 |
+|---|---|
+| `layout` | 歌詞のレイアウト／スタイルタブ |
+| `enter`, `hold`, `exit` | 歌詞の登場・保持・退場／モーションタブ |
+| `decor` | 歌詞・前景・背景の装飾／装飾タブ |
+| `bg`, `treat`, `cam`, `fx`, `trans` | 歌詞の背景・加工・カメラ・画面効果・つなぎ |
+| `media`, `mediaEnter`, `mediaExit` | 前景・背景の手法・登場・退場／モーションタブ |
+
+標準の効果はそのIDを直接使う。独自部分を加える場合は `base` に同じグループの標準IDを指定できる。独自のレイアウト文字にも標準の登場・保持・退場と文字加工が適用される。`program.mode="replace"` は当該要素の基本描画だけを置き換え、他の要素は維持する。前景・背景の素材、画面効果、つなぎに付けるprogramは `overlay` で追加する。
+
+```json
+{
+  "version": 1,
+  "id": "custom_pop_dots",
+  "group": "decor",
+  "name": "ポップのドット",
+  "nameEn": "Pop dots",
+  "tags": ["pop"],
+  "layer": "front",
+  "params": {"radius": 0.08},
+  "labels": {"radius": {"ja": "円の半径", "en": "Circle radius"}},
+  "program": {
+    "version": 1,
+    "mode": "overlay",
+    "nodes": [{"type": "ellipse", "x": 0.15, "y": 0.2,
+      "w": {"param": "radius"}, "h": {"param": "radius"},
+      "fill": "accent", "scale": {"from": 0, "to": 1, "ease": "out"}}]
+  }
+}
+```
+
+`custom_effect_import` に `components: [上の定義]` を渡す。詳細→手法の装飾、および前景・背景の装飾一覧に［追加］付きで表示され、通常のチェック・再抽選・プレビューで使える。標準効果の旧［追加］表示は付かない。
+
+標準と独自を組み合わせたお気に入りpayload：
+
+```json
+{
+  "format": "jizura-cut-effects", "version": 1, "kind": "lyrics",
+  "native": {},
+  "details": {
+    "layout": "center", "enter": "pop", "hold": "still", "exit": "shrink",
+    "decor": [{"id": "custom_pop_dots", "radius": 0.12}]
+  },
+  "components": [{
+    "version": 1, "id": "custom_pop_dots", "group": "decor",
+    "name": "ポップのドット", "tags": ["pop"], "layer": "front",
+    "params": {"radius": 0.08},
+    "program": {"version": 1, "mode": "overlay", "nodes": [
+      {"type": "ellipse", "x": 0.15, "y": 0.2,
+       "w": {"param": "radius"}, "h": {"param": "radius"}, "fill": "accent"}
+    ]}
+  }]
+}
+```
+
+`components` には実際の定義オブジェクトを入れる。カットを `favorite_save(layer,index)` で保存した場合は参照する定義が自動で含まれる。
+
+`custom_effect_preview(id,time)` は標準パイプラインでPNGを返す。対象のカットで見る場合は `layer/index` も指定する。定義だけのプレビュー、組み合わせたお気に入りのプレビュー、実際のカットのプレビューを複数時点で確認する。
+
+`params` は標準のJSONパラメータの初期値。`labels` に表示名を指定できる。歌詞の登場・保持・退場は `details.enterP/holdP/exitP`、前景・背景は `details.techniqueP/entranceP/departureP`、装飾は `details.decor` の各要素のパラメータで調整する。数値をprogram/motionで使う場合は `{ "param": "radius", "default": 0.08 }` として参照する。アニメーションの振幅・端点にも指定できる。
+
+`motion` は `x/y`（表示サイズの比率）、`rotation`（度）、`scale/sx/sy/opacity`（倍率）。登場・退場はフェーズ内の進捗、保持はカット全体の進捗で動く。カメラの不透明度はカット側で指定する。
+
+`tags` または `themes` は必須で、テーマ候補に反映される。テーマ外の効果は取り込み時に自動候補から外れる。タグは作者の申告なので、エージェントは実際の画像でテーマへの適合を評価する。同じIDで異なる定義の取り込みは拒否されるため、改版は新しいIDを使う。お気に入り上書き時も、既存カットが参照する効果定義は維持する。
+
+## 従来のカット全体の描画プログラム v1（互換用）
 
 独自描画はJSONのCanvas2D命令で記述する。JavaScriptソースの実行ではない。静止図形だけでなく、時間に応じた移動・拡縮・回転・透過・文字配置・素材描画を新規作成できる。
 
@@ -65,7 +134,7 @@
 
 `value + amplitude × sin(進捗 × cycles × 2π + phase)`。phaseはラジアン。
 
-既存レイアウト等のパラメータは `favorite_spec.detailKeys` と `catalog`、対象カットの状態を参照。存在しないIDを作らない。独自プログラムの見た目がテーマに合うかはエージェント自身が画像を評価する。監査では独自描画を含むカットについて視覚評価を促す警告を返す。
+既存レイアウト等のパラメータは `favorite_spec.detailKeys` と `catalog`、対象カットの状態を参照。標準IDはcatalogから取得し、独自IDはコンポーネントを登録してから使う。独自プログラムの見た目がテーマに合うかはエージェント自身が画像を評価する。監査では独自描画を含むカットについて視覚評価を促す警告を返す。
 
 ## ブラウザAPI
 

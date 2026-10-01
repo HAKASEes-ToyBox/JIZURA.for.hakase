@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test.mjs"
+    "test": "node test.mjs",
+    "test:custom-effects": "node custom-effects-test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",

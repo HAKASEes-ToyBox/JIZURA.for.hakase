@@ -1574,7 +1574,7 @@ function attachFamily(spec) {
 }
 /* drawing-program nodes of every lyric / media cut (custom favorite effects) */
 const drawingNodes = plan => [plan?.cuts, plan?.media?.cuts, plan?.foreground?.cuts]
-  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []);
+  .flatMap(cuts => cuts || []).flatMap(c => c.drawing?.nodes || []).concat((plan?.customEffects||[]).flatMap(d=>d.program?.nodes||[]));
 /* literal strings drawn by drawing programs; their glyphs must be loaded like lyrics */
 J.drawingText = plan => drawingNodes(plan).map(n => typeof n.text === 'string' && n.text[0] !== '$' ? n.text : '').join('');
 /* font keys a plan draws with: style roles, per-cut font params, drawing programs, mono for HUD */
@@ -3910,7 +3910,7 @@ J.defaultProject = () => ({
   timing: { bpm: 0, offset: 0.4, snap: true, tail: 0.9, lineTimes: {}, cutTimes: {}, lineScale: 1 },
   overrides: {},
   lyricCutOptions: {},
-  effectFavorites: [], favoriteSequence: 0,
+  effectFavorites: [], favoriteSequence: 0, customEffects: [],
   lyricEffects: { autoPlacement: true, avoidForeground: true, avoidanceStrength: 1, lyricAvoidanceStrength: 1, randomBlend: false, randomOpacity: false, opacityMin: 0, opacityMax: 100 },
   timelineLinks: [],
   layerVisibility: {foreground:true,lyrics:true,media:true},
@@ -6373,12 +6373,13 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
     key = pool.length ? rng.pick(pool) : 'none';
   }
   // Keep the cut's source filename; technique labels are read from MEDIA_TECH.
-  const { name, ...recipe } = J.MEDIA_TECH[key] || {};
+  const { name, customDefinition, custom, ...recipe } = J.MEDIA_TECH[key] || {};
   return Object.assign({ technique: key, effectSettings: settings, layout: 'contain', enter: 'cut', hold: 'still', exit: 'cut', treat: 'none', trans: 'none' }, recipe);
 };
 J.mediaTechniqueName = cut => cut.technique === 'legacy' ? label('従来の設定', 'Legacy settings') : J.MEDIA_TECH[cut.technique]?.name || label('演出無し', 'No effects');
 
 J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
+  const customCut=cut;cut=J.resolveCustomMediaCut?.(cut)||cut;
   // Also synchronize old projects and manually selected legacy hold names.
   if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
@@ -6431,6 +6432,7 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
     sx *= v.sx ?? 1; sy *= v.sy ?? 1;
   }
+  if(J.customMediaMotion){const v=J.customMediaMotion(customCut,p,fade,out,w,h);x+=v.x;y+=v.y;rotation+=v.rotation;scale*=v.scale;sx*=v.sx;sy*=v.sy;alpha*=v.alpha;}
   ctx.translate(x * amount, y * amount); ctx.rotate(rotation * amount); if (skew) ctx.transform(1, 0, Math.tan(skew * amount), 1, 0, 0); ctx.scale(Math.max(0.001, 1 + (scale * sx - 1) * amount), Math.max(0.001, 1 + (scale * sy - 1) * amount)); ctx.globalAlpha *= alpha;
   const mask = (type, q) => {
     if (q >= 1) return;
@@ -6458,12 +6460,12 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     for (const n of [-2, -1, 1, 2]) { if (cut.treat === 'prism') ctx.filter = `hue-rotate(${n * 65}deg)`; draw(n * w * .035 * treatment); }
     ctx.restore();
   }
-  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front'); return; }
+  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);return; }
   if (cut.treat === 'triptych' && treatment > 0) { for (const n of [-1, 0, 1]) draw(n * w / 3, 0, w / 3, h / 3); }
   else if (cut.treat === 'glitch' && treatment > 0) {
     for (let i = 0; i < 12; i++) { ctx.save(); ctx.beginPath(); ctx.rect(-w, -h / 2 + i * h / 12, w * 2, h / 12 + .5); ctx.clip(); draw(Math.sin(Math.floor(p * 32) * 19 + i * 31 + cut.seed) * w * .035 * treatment); ctx.restore(); }
   } else draw();
-  decor('front');
+  decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);
 };
 })();
 
@@ -7877,8 +7879,8 @@ J.drawMediaVariation = (ctx, source, fit, cut, p, amount) => {
 (() => {
 'use strict';
 J.cutDetailKeys = {
-  lyrics: ['drawing','text','note','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
-  media: ['drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
+  lyrics: ['enterP','holdP','exitP','drawing','text','note','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','params','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','area','motionScale','contentScale','fonts','palette','fontParams','seed','effectEvents','effectStyle','effectFx','mask'],
+  media: ['techniqueP','entranceP','departureP','drawing','enter','exit','independentPhases','layout','hold','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','decor','mask'],
 };
 // The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
 J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
@@ -7982,8 +7984,8 @@ J.planMedia = function(project, plan, audioDuration, layer='media') {
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
-const mediaKeys=['drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
+const lyricKeys=['enterP','holdP','exitP','drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
+const mediaKeys=['techniqueP','entranceP','departureP','drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
   const result = [];
@@ -8007,15 +8009,19 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
-  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
+  return {format:'jizura-cut-effects',version:1,kind,details,...(J.customEffectDependencies?.(cut).length?{components:J.customEffectDependencies(cut)}:{}),native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
 };
 J.readCutEffects=text=>{
-  if(typeof text!=='string'||text.length>262144)throw Error('invalid');
+  if(typeof text!=='string'||text.length>2359296)throw Error('invalid');
   const data=JSON.parse(text,(key,value)=>{
     if(['__proto__','constructor','prototype'].includes(key))throw Error('invalid');
     return value;
   });
   if(data?.format!=='jizura-cut-effects'||data.version!==1||!['lyrics','media'].includes(data.kind)||!data.details||typeof data.details!=='object'||Array.isArray(data.details))throw Error('invalid');
+  if(data.components){
+    const components=J.validateCustomEffects(data.components),plain={...data};delete plain.components;
+    return J.withCustomEffects(components,()=>({...J.readCutEffects(JSON.stringify(plain)),components}));
+  }
   const payload=J.cutEffectsPayload({...data.details,...data.native},data.kind);
   const d=payload.details,n=payload.native;
   if(d.drawing) d.drawing=J.validateDrawing(d.drawing);
@@ -8052,6 +8058,7 @@ J.clearPastedLyricEffects = (project, line = null) => {
 };
 J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('incompatible');
+  if(payload.components)J.importCustomEffects(project,payload.components);
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
     // Keep target text and display area while retaining the exact visual parameters.
@@ -9229,12 +9236,14 @@ class Renderer {
     const effectCut = J.cutAt(plan,tq);
     const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style;
     const active = plan.events.filter(ev => t >= ev.t && t < ev.t + Math.max(ev.dur, 1 / plan.fps));
-    const needScratch = active.some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
+    const baseEvent=ev=>J.FXE[ev.type]?.customBase?{...ev,type:J.FXE[ev.type].customBase}:ev;
+    const needScratch = active.map(baseEvent).some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
     const S = needScratch ? this.ensure(this.scratch, cw, ch) : null;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
     const copy = () => { const sx = S.getContext('2d'); sx.globalCompositeOperation = 'copy'; sx.drawImage(ctx.canvas, 0, 0); sx.globalCompositeOperation = 'source-over'; };
     const clock24 = Math.floor(t * 24);           // glitch randomness changes at most 24 times a second at any output fps
-    for (const ev of active) {
+    for (const event of active) {
+      const ev=baseEvent(event);
       const k = (t - ev.t) / Math.max(ev.dur, 1e-3);
       const st2 = clock24;
       const D = J.FXE[ev.type];
@@ -9244,7 +9253,7 @@ class Renderer {
           D.draw(ctx, ev, k, { cw, ch, S, sc, st, step: st2, t, scale, renderer: this, allowFilter, opt, tmp: (w, h) => this.ensure(this.tiny, w, h), tmp2: (w, h) => this.ensure(this.small2 || (this.small2 = mk(2, 2)), w, h) });
         } catch (e) { console.warn('fx', ev.type, e); }
         ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.imageSmoothingEnabled = true;
-        continue;
+        J.drawCustomEvent?.(ctx,event,k,sc);continue;
       }
       if (ev.type === 'slice') {
         copy();
@@ -9283,6 +9292,7 @@ class Renderer {
         tx.imageSmoothingEnabled = true; tx.drawImage(S, 0, 0, T.width, T.height);
         ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 0.85 * (1 - k); ctx.drawImage(T, 0, 0, cw, ch); ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true;
       }
+      J.drawCustomEvent?.(ctx,event,k,sc);
     }
     // bloom
     const glow = (st.glow ?? 0.6) * 0.5 * (fx.texture ?? 0.6);
@@ -9666,7 +9676,7 @@ const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不�
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','themeBalance','style','mood','extra','wa','horror','typo','kinetic','keyBg',
   'seed','aspect','res','fps','videoSize','videoSizeMode','quality','includeAudio','fx','enabled',
-  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence'];
+  'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence','customEffects'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
   const result = {};
@@ -9691,6 +9701,8 @@ J.applyProjectSettings = (current, source) => {
   });
   for (const key of settingKeys) if (settings[key] !== undefined) result[key] = settings[key];
   for (const layer of ['media','foreground']) Object.assign(result[layer],settings[layer]);
+  // Retained cuts still need their custom component definitions.
+  result.customEffects=clone(current.customEffects||[]);J.importCustomEffects(result,settings.customEffects||[]);
   // Existing cuts may still refer to fonts absent from the preset.
   for (const key of ['userFonts','compositeFonts']) {
     const imported = result[key] || [];
@@ -40321,7 +40333,7 @@ function ensureDialog(){
 J.makeEffectPreviewPlan=(group,key,layer='lyrics',id,settings)=>{
   // Media phases last at most 30% of a cut, so long entrance/exit times get longer preview cuts.
   const cutLength=layer!=='lyrics'&&settings?.duration>.9?Math.ceil(settings.duration/.3*10)/10:3;
-  const project=J.defaultProject();project.lyrics='[00:00]プレビュー|ルビ\n[00:03]プレビュー|ルビ';project.durationOverride=cutLength*2;
+  const project=J.defaultProject();project.customEffects=JSON.parse(JSON.stringify(J.ui?.project.customEffects||[]));project.lyrics='[00:00]プレビュー|ルビ\n[00:03]プレビュー|ルビ';project.durationOverride=cutLength*2;
   project.title='';project.aspect='16:9';project.res=640;project.fps=30;project.seed=2468;
   project.fx={...project.fx,hud:'off',texture:0,chroma:0,glitch:0,decor:0,onTwos:false,koma:0};
   for(const i of [0,1])project.overrides[i]={single:true,layout:'center',enter:'cut',hold:'still',exit:'cut',treat:'none',bg:'none',cam:'none',trans:'none',decor:group==='decor'?[key]:[]};
@@ -40449,15 +40461,17 @@ J.requestFavoriteName=initial=>new Promise(resolve=>{
   document.body.append(dialog);dialog.showModal();input.select();
 });
 J.exportEffectFavorites=project=>{
-  const preset=J.defaultProject();preset.lyrics='';preset.effectFavorites=clone(project.effectFavorites||[]);preset.favoriteSequence=project.favoriteSequence||0;
+  const preset=J.defaultProject();preset.lyrics='';preset.effectFavorites=clone(project.effectFavorites||[]);preset.favoriteSequence=project.favoriteSequence||0;preset.customEffects=clone(project.customEffects||[]);
   preset.userFonts=clone(project.userFonts||[]);preset.compositeFonts=clone(project.compositeFonts||[]);
   return J.packProject(preset,null);
 };
 J.readEffectFavorites=async file=>{
   const loaded=await J.unpackProject(file),raw=loaded.project.effectFavorites||[];
   if(!Array.isArray(raw))throw Error(J.mediaLabel('お気に入りの形式が不正です','Invalid favorites format'));
-  const favorites=J.normalizeEffectFavorites(raw);
+  const components=J.validateCustomEffects(loaded.project.customEffects||[]);
+  const favorites=J.withCustomEffects(components,()=>J.normalizeEffectFavorites(raw));
   if(favorites.length!==raw.length)throw Error(J.mediaLabel('読み込めない演出が含まれています','Some favorite effects cannot be imported'));
+  loaded.project.customEffects=J.combineCustomEffects(components,...favorites.map(f=>f.payload.components||[]));
   return {...loaded,favorites};
 };
 J.chooseFavoriteImport=count=>new Promise(resolve=>{
@@ -40538,10 +40552,11 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
       for(const f of fonts)if(!J.FONTS[f.key])J.addUserFont(f.key,f.label,f.family,f.weight||400);
       project.compositeFonts=[...(project.compositeFonts||[]),...(loaded.project.compositeFonts||[]).filter(f=>!(project.compositeFonts||[]).some(old=>old.key===f.key))];
       J.setCompositeFonts(project.compositeFonts);
+      J.importCustomEffects(project,J.combineCustomEffects(loaded.project.customEffects||[],...loaded.favorites.map(f=>f.payload.components||[])));
       if(mode==='replace')list.length=0;
       list.push(...loaded.favorites.map(f=>({...f,id:J.favoriteId()})));
       project.favoriteSequence=Math.max(project.favoriteSequence||0,loaded.project.favoriteSequence||0,list.length);
-      changed();await ensureSample();if(dead)return;render();
+      changed();configure?.();await ensureSample();if(dead)return;render();
       status.textContent=L(`${loaded.favorites.length}件をインポートしました`, `Imported ${loaded.favorites.length} favorites`);
     }catch(e){status.textContent=L('読み込めませんでした：','Could not import: ')+e.message;}
     finally{transferBusy(false);}
@@ -40583,7 +40598,7 @@ J.openEffectFavorites=({project,target,compose,changed,configure,apply,closed})=
   dialog.addEventListener('close',()=>{document.removeEventListener('click',outsideDelete,true);dead=true;token++;cancelAnimationFrame(frame);observer.disconnect();active=null;queue.length=0;if(sampleId)J.mediaAssets.delete(sampleId);dialog.remove();closed();});
   Object.defineProperty(dialog,'favoritePreview',{get:()=>active&&({plan:active.plan,cut:active.cut})});
   function sample(kind){
-    const p=J.defaultProject();p.title='';p.lyrics=kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.durationOverride=3;p.aspect='16:9';p.res=640;
+    const p=J.defaultProject();p.customEffects=clone(project.customEffects||[]);p.title='';p.lyrics=kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.durationOverride=3;p.aspect='16:9';p.res=640;
     p.overrides={0:{single:true}};
     if(kind==='media'){
       const m=p.media=J.normalizeMedia(null);m.items=[{id:sampleId,name:'Preview',type:'image'}];m.manualCuts=true;m.cutCount=1;m.timing.lineTimes={0:0};m.cutOverrides={0:{itemId:sampleId}};
@@ -40718,7 +40733,7 @@ const colors=['fg','bg','accent','accent2','sub','ink','dim'];
 const types=['rect','ellipse','line','text','arcText','source'];
 const numeric=['x','y','w','h','rotation','scale','opacity','lineWidth','size','arc','contrast','bounce'];
 const allowed=new Set(['type',...numeric,'fill','stroke','text','font']);
-J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
+J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Numbers and animation endpoints may use {param:"amount",default:1}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
 J.validateDrawing=program=>{
   const fail=message=>{throw Error('Drawing program: '+message);};
   if(!program||program.version!==1||!['replace','overlay'].includes(program.mode)||!Array.isArray(program.nodes)||program.nodes.length>64||JSON.stringify(program).length>32768)fail('invalid version, mode or node limit');
@@ -40726,9 +40741,11 @@ J.validateDrawing=program=>{
   function number(v){
     if(typeof v==='number'){if(!Number.isFinite(v)||Math.abs(v)>10000)fail('number out of range');return;}
     if(!v||typeof v!=='object'||Array.isArray(v))fail('invalid numeric value');
+    if('param' in v){if(typeof v.param!=='string'||!/^[a-zA-Z][a-zA-Z0-9_]{0,40}$/.test(v.param)||Object.keys(v).some(k=>!['param','default'].includes(k))||v.default!==undefined&&!Number.isFinite(v.default))fail('invalid parameter reference');return;}
     const lerp='from' in v,keys=lerp?['from','to','ease']:['value','amplitude','cycles','phase'];
-    for(const [key,n] of Object.entries(v)){if(!keys.includes(key))fail('unknown animation field '+key);if(key==='ease'){if(!['linear','in','out','inOut'].includes(n))fail('invalid ease');}else if(typeof n!=='number'||!Number.isFinite(n)||Math.abs(n)>10000)fail('invalid animation number');}
-    if(lerp&&(!Number.isFinite(v.from)||!Number.isFinite(v.to))||!lerp&&!Number.isFinite(v.value))fail('missing animation endpoints');
+    const scalar=n=>Number.isFinite(n)||n&&typeof n==='object'&&'param' in n;
+    for(const [key,n] of Object.entries(v)){if(!keys.includes(key))fail('unknown animation field '+key);if(key==='ease'){if(!['linear','in','out','inOut'].includes(n))fail('invalid ease');}else{if(!scalar(n))fail('invalid animation number');number(n);}}
+    if(lerp&&(!scalar(v.from)||!scalar(v.to))||!lerp&&!scalar(v.value))fail('missing animation endpoints');
   }
   for(const node of program.nodes){
     if(!node||!types.includes(node.type))fail('invalid node type');
@@ -40743,13 +40760,16 @@ J.validateDrawing=program=>{
   return JSON.parse(JSON.stringify(program));
 };
 const checked=new WeakSet();
-J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null})=>{
+J.drawingValue=(v,p=0,params={},fallback=0)=>{
+  if(v===undefined)return fallback;if(typeof v==='number')return v;
+  if('param' in v)return Number.isFinite(params[v.param])?params[v.param]:(v.default??fallback);
+  const scalar=(n,f)=>J.drawingValue(n,p,params,f);
+  if('from' in v){let t=J.clamp(p);if(v.ease==='in')t*=t;else if(v.ease==='out')t=1-(1-t)**2;else if(v.ease==='inOut')t=t*t*(3-2*t);const from=scalar(v.from,0);return from+(scalar(v.to,0)-from)*t;}
+  return scalar(v.value,0)+scalar(v.amplitude,0)*Math.sin(p*scalar(v.cycles,1)*Math.PI*2+scalar(v.phase,0));
+};
+J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null,params={},drawText=null})=>{
   if(!checked.has(program)){J.validateDrawing(program);checked.add(program);}
-  const value=(v,fallback)=>{
-    if(v===undefined)return fallback;if(typeof v==='number')return v;
-    if('from' in v){let t=J.clamp(p);if(v.ease==='in')t*=t;else if(v.ease==='out')t=1-(1-t)**2;else if(v.ease==='inOut')t=t*t*(3-2*t);return v.from+(v.to-v.from)*t;}
-    return v.value+(v.amplitude||0)*Math.sin(p*(v.cycles??1)*Math.PI*2+(v.phase||0));
-  };
+  const value=(v,fallback)=>J.drawingValue(v,p,params,fallback);
   const color=c=>sc[c]||c||sc.fg||'#ffffff',u=Math.min(W,H);
   for(const node of program.nodes){
     ctx.save();try{
@@ -40767,14 +40787,16 @@ J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null}
           const size=Math.max(1,base*(i%2===0?1+contrast:1-contrast));
           ctx.save();ctx.translate(Math.cos(angle)*(rx+pulse),Math.sin(angle)*(ry+pulse));ctx.rotate(angle+Math.PI/2);
           ctx.font=`${f?.weight||900} ${size}px ${f?.family||'sans-serif'}`;
-          if(node.stroke)ctx.strokeText(ch,0,0);ctx.fillText(ch,0,0);ctx.restore();
+          if(drawText)drawText({text:ch,font:node.font||font,size,color:color(node.fill),mi:i});
+          else{if(node.stroke)ctx.strokeText(ch,0,0);ctx.fillText(ch,0,0);}ctx.restore();
         });
       }else if(node.type==='text'){
         const str=node.text==='$note'?note:node.text==='$text'||node.text===undefined?text:node.text;
         const size=Math.max(1,Math.abs(value(node.size,.12)*u)),f=J.FONTS[node.font||font];
         ctx.font=`${f?.weight||600} ${size}px ${f?.family||'sans-serif'}`;ctx.textAlign='center';ctx.textBaseline='middle';
         // Fit uniformly, never squeeze the glyph aspect ratio.
-        const fit=Math.min(1,Math.abs(w)/Math.max(1,ctx.measureText(str).width));ctx.scale(fit,fit);ctx.fillText(str,0,0);
+        const fit=Math.min(1,Math.abs(w)/Math.max(1,ctx.measureText(str).width));ctx.scale(fit,fit);
+        if(drawText)drawText({text:str,font:node.font||font,size,color:color(node.fill),mi:0});else ctx.fillText(str,0,0);
       }else if(node.type==='source'){if(source){const sw=source.videoWidth||source.naturalWidth||source.width,sh=source.videoHeight||source.naturalHeight||source.height;if(sw&&sh){const fit=Math.min(Math.abs(w)/sw,Math.abs(h)/sh);ctx.drawImage(source,-sw*fit/2,-sh*fit/2,sw*fit,sh*fit);}}}
       else{ctx.beginPath();if(node.type==='rect')ctx.rect(0,0,w,h);else if(node.type==='ellipse')ctx.ellipse(0,0,Math.abs(w)/2,Math.abs(h)/2,0,0,Math.PI*2);else{ctx.moveTo(0,0);ctx.lineTo(w,h);}if(node.type!=='line'&&node.fill)ctx.fill();if(node.stroke||node.type==='line')ctx.stroke();}
     }finally{ctx.restore();}
@@ -40795,15 +40817,170 @@ J.paintMediaEffect=function(ctx,source,fit,cut,p,fade,out){
 };
 })();
 
+/* Project-owned effect components. Portable JSON, composed through stock pipelines. */
+(() => {
+'use strict';
+const clone=x=>JSON.parse(JSON.stringify(x)),mediaGroups=['media','mediaEnter','mediaExit'];
+const groups=[...J.GROUP_KEYS,...mediaGroups],fallback={layout:'center',enter:'cut',hold:'still',exit:'cut',treat:'none',bg:'none',cam:'push',trans:'wipe'};
+const registry=g=>mediaGroups.includes(g)?J.MEDIA_TECH:J.registry(g);
+const motionKeys=['x','y','rotation','scale','sx','sy','opacity'];
+let signature='',active=[];
+J.customEffectSpec={format:'jizura-effect-components',version:1,groups,id:'custom_ followed by letters, numbers or underscores (max 80)',
+  fields:['version','id','group','name','nameEn','tags','themes','base','params','labels','motion','program','layer'],
+  params:'Standard JSON parameter defaults (numbers, booleans, strings, arrays, objects). program/motion may reference a numeric {param:"amount",default:1}; labels maps parameter keys to {ja,en}.',
+  targets:'Stock lyric groups target lyrics; decor also targets media. media/mediaEnter/mediaExit target images and videos in foreground/background.',
+  base:'Existing stock ID in the same group. Reuse stock effects/parameters first; author only missing components. Custom IDs cannot be bases.',
+  motion:{groups:['enter','hold','exit','treat','cam',...mediaGroups],fields:motionKeys,coordinates:'x/y fractions of target width/height; rotation degrees; scale/sx/sy/opacity multipliers',progress:'enter/exit: phase progress, hold: cut progress'},
+  program:{groups:['layout','decor','bg','fx','trans',...mediaGroups],spec:J.drawingSpec,notes:'Layout text uses stock enter/hold/exit and treatment. Decor layer front/back. Media programs overlay the stock material. trans/fx keep stock rendering; programs add to it.'},
+  workflow:['Read catalog and theme candidates','Use stock IDs for existing effects','Define only missing elements in their proper group','Validate/import components','Combine stock and custom IDs in a standard favorite payload','Preview entrance/hold/exit and refine','Save project or export favorites (definitions included)'],
+  example:{version:1,id:'custom_pop_dots',group:'decor',name:'ポップのドット',nameEn:'Pop dots',tags:['pop'],layer:'front',params:{radius:.08},labels:{radius:{ja:'円の半径',en:'Circle radius'}},program:{version:1,mode:'overlay',nodes:[{type:'ellipse',x:.15,y:.2,w:{param:'radius'},h:{param:'radius'},fill:'accent',scale:{from:0,to:1,ease:'out'}}]}}};
+J.validateCustomEffects=value=>{
+  const fail=m=>{throw Error('Custom effects: '+m);};
+  if(!Array.isArray(value)||value.length>128||JSON.stringify(value).length>2097152)fail('invalid list or size');
+  const list=JSON.parse(JSON.stringify(value),(key,v)=>{if(['__proto__','prototype','constructor'].includes(key))fail('unsafe key');return v;}),ids=new Set();
+  for(const d of list){
+    if(!d||d.version!==1||!groups.includes(d.group)||typeof d.id!=='string'||!/^custom_[A-Za-z0-9_]{1,73}$/.test(d.id)||ids.has(d.id))fail('invalid version, group or duplicate ID');ids.add(d.id);
+    if(Object.keys(d).some(k=>!J.customEffectSpec.fields.includes(k)))fail('unknown field');
+    if(typeof d.name!=='string'||!d.name.trim()||d.name.length>200||d.nameEn!==undefined&&(typeof d.nameEn!=='string'||d.nameEn.length>200))fail('invalid name');
+    for(const [key,table] of [['tags',J.MOODS],['themes',J.THEMES]])if(d[key]!==undefined&&(!Array.isArray(d[key])||d[key].some(k=>typeof k!=='string'||!Object.hasOwn(table,k))))fail('invalid '+key);
+    if(!d.tags?.length&&!d.themes?.length)fail('tags or themes required for theme filtering');
+    if(d.base!==undefined){const b=registry(d.group)[d.base];if(typeof d.base!=='string'||!Object.hasOwn(registry(d.group),d.base)||!b||b.custom||d.base.startsWith('custom_')||mediaGroups.includes(d.group)&&(d.group==='media'?!!b.stage:b.stage!==(d.group==='mediaEnter'?'enter':'exit')))fail('invalid stock base: '+d.group+'/'+d.base);}
+    function parameter(v,depth=0){if(depth>4)return false;if(typeof v==='number')return Number.isFinite(v)&&Math.abs(v)<=10000;if(typeof v==='boolean')return true;if(typeof v==='string')return v.length<=2000;if(Array.isArray(v))return v.length<=64&&v.every(x=>parameter(x,depth+1));return !!v&&typeof v==='object'&&Object.keys(v).length<=40&&Object.entries(v).every(([k,x])=>/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k)&&parameter(x,depth+1));}
+    if(d.params!==undefined&&(!d.params||Array.isArray(d.params)||typeof d.params!=='object'||!parameter(d.params)))fail('invalid params');
+    if(d.labels!==undefined&&(!d.labels||Array.isArray(d.labels)||Object.entries(d.labels).some(([k,v])=>!Object.hasOwn(d.params||{},k)||!v||Object.keys(v).some(k=>!['ja','en'].includes(k))||Object.values(v).some(s=>typeof s!=='string'||s.length>120))))fail('invalid labels');
+    if(d.layer!==undefined&&(d.group!=='decor'||!['front','back'].includes(d.layer)))fail('invalid decoration layer');
+    if(d.motion){if(!J.customEffectSpec.motion.groups.includes(d.group)||typeof d.motion!=='object'||Array.isArray(d.motion)||Object.keys(d.motion).some(k=>!motionKeys.includes(k)))fail('motion not supported by this group');for(const v of Object.values(d.motion))J.validateDrawing({version:1,mode:'overlay',nodes:[{type:'rect',x:v}]});}
+    if(d.program){if(!J.customEffectSpec.program.groups.includes(d.group))fail('program not supported by this group');d.program=J.validateDrawing(d.program);if([...mediaGroups,'fx','trans'].includes(d.group)&&d.program.mode!=='overlay')fail('this group uses overlay programs');}
+    if(d.group==='cam'&&d.motion?.opacity!==undefined)fail('camera opacity is not supported; use cut opacity');
+    if(mediaGroups.includes(d.group)&&!d.base)fail('media requires a stock recipe base');
+    if(['trans','fx'].includes(d.group)&&!d.base)fail('trans/fx require a stock base');
+    if(!d.base&&!d.program&&!d.motion)fail('component must define base, program or motion');
+  }
+  return list;
+};
+function tracks(d,p,params,W,H){const v=(k,f)=>J.drawingValue(d.motion?.[k],p,params,f);return {x:v('x',0)*W,y:v('y',0)*H,rotation:v('rotation',0)*Math.PI/180,scale:v('scale',1),sx:v('sx',1),sy:v('sy',1),alpha:J.clamp(v('opacity',1))};}
+function paint(d,env,params,source=null,progress=null,layout=false){
+  if(!d.program)return;
+  J.drawProgram(env.ctx,d.program,{W:env.W,H:env.H,p:progress??J.clamp(env.lt/Math.max(.01,env.cut.dur)),text:env.cut.text||'',note:env.cut.note||'',sc:env.sc,source,params,font:params.font||env.st?.fonts?.display?.[0],
+    drawText:layout?it=>J.mainDraw(env,{...it,x:0,y:0,rot:0,track:0,lead:1.2}):null});
+}
+function install(d){
+  const g=d.group,b=registry(g)[d.base??fallback[g]],defaults=d.params||{};
+  if(mediaGroups.includes(g)){
+    const stage=g==='mediaEnter'?'enter':g==='mediaExit'?'exit':null;
+    J.MEDIA_TECH[d.id]={...b,name:J.mediaLabel(d.name,d.nameEn||d.name),custom:true,customDefinition:d,...(stage?{group:stage,stage,motion:d.id,[stage]:d.id}:{})};return;
+  }
+  const def={...(b||{}),name:J.mediaLabel(d.name,d.nameEn||d.name),custom:true,customDefinition:d,tags:d.tags||[],w:b?.w??1};
+  delete def.extra;delete def.set;delete def.wa;delete def.special;
+  if(['layout','bg','treat','cam','trans'].includes(g))def.plan=(...a)=>({...(!d.program||d.program.mode==='overlay'?b?.plan?.(...a):{}),...defaults});
+  if(['enter','hold','exit','treat'].includes(g))def.apply=(env,it,p,context)=>{
+    const params={...defaults,...env.cut[g+'P']};
+    b?.apply?.(env,it,g==='treat'?{...params,...p}:p,context);
+    const progress=g==='hold'||g==='treat'?J.clamp(env.lt/Math.max(.01,env.cut.dur)):p;
+    const v=tracks(d,progress,params,env.W,env.H);
+    it.x+=v.x;it.y+=v.y;it.rot=(it.rot||0)+v.rotation;it.sx=(it.sx??1)*v.scale*v.sx;it.sy=(it.sy??1)*v.scale*v.sy;it.alpha=(it.alpha??1)*v.alpha;
+  };
+  if(g==='layout')def.render=env=>{
+    const params={...defaults,...env.cut.params};let bb;
+    if(!d.program||d.program.mode==='overlay')bb=b?.render?.(env);
+    paint(d,env,params,null,null,true);return bb||{x0:0,y0:0,x1:env.W,y1:env.H,cx:env.W/2,cy:env.H/2};
+  };
+  if(g==='decor'){def.layer=d.layer||b?.layer||'front';def.detailFields=[...new Set([...(b&&(!d.program||d.program.mode==='overlay')?J.decorDetailFields(d.base):[]),...Object.keys(defaults)])];def.draw=(env,bb,P)=>{const params={...defaults,...P};if(!d.program||d.program.mode==='overlay')b?.draw?.(env,bb,params);paint(d,env,params);};}
+  if(g==='bg')def.draw=(env,P)=>{const params={...defaults,...P};if(!d.program||d.program.mode==='overlay')b?.draw?.(env,params);paint(d,env,params);};
+  if(g==='cam')def.get=env=>{const params={...defaults,...env.cut.camP},v=tracks(d,J.clamp(env.lt/Math.max(.01,env.cut.dur)),params,env.W,env.H),base=b?.get?.(env,params)||{};return {...base,x:(base.x||0)+v.x,y:(base.y||0)+v.y,rot:(base.rot||0)+v.rotation/J.DEG,s:(base.s??1)*v.scale,sx:(base.sx??1)*v.sx,sy:(base.sy??1)*v.sy};};
+  if(g==='trans')def.draw=(ctx,A,B,p,I)=>{b.draw(ctx,A,B,p,I);if(d.program){ctx.save();try{ctx.globalAlpha*=Math.sin(Math.PI*J.clamp(p));J.drawProgram(ctx,d.program,{W:ctx.canvas.width,H:ctx.canvas.height,p,source:B,params:{...defaults,...I.P}});}finally{ctx.restore();}}};
+  if(g==='fx'){
+    def.customBase=d.base;
+    if(d.program)def.draw=(ctx,ev,p,I)=>{b?.draw?.(ctx,ev,p,I);ctx.save();try{J.drawProgram(ctx,d.program,{W:I.cw,H:I.ch,p,sc:I.sc,params:{...defaults,...ev.params}});}finally{ctx.restore();}};
+  }
+  J.register(g,d.id,def,'custom');
+}
+J.activateCustomEffects=project=>{
+  const value=project?.customEffects||[],next=JSON.stringify(value);if(next===signature)return;
+  const list=J.validateCustomEffects(value);
+  for(const d of active){delete registry(d.group)[d.id];if(!mediaGroups.includes(d.group)){const order=J.order(d.group),i=order.indexOf(d.id);if(i>=0)order.splice(i,1);}}
+  for(const d of list)install(d);active=list;signature=next;
+};
+J.withCustomEffects=(list,fn)=>{const old=clone(active);J.activateCustomEffects({customEffects:list});try{return fn();}finally{J.activateCustomEffects({customEffects:old});}};
+const canonical=v=>JSON.stringify(v&&typeof v==='object'?(Array.isArray(v)?v.map(x=>JSON.parse(canonical(x))):Object.fromEntries(Object.keys(v).sort().map(k=>[k,JSON.parse(canonical(v[k]))]))):v);
+J.combineCustomEffects=(...lists)=>{
+  const merged=[];
+  for(const list of lists)for(const d of J.validateCustomEffects(list)){const same=merged.find(x=>x.id===d.id);if(same&&canonical(same)!==canonical(d))throw Error('Custom effect ID conflict: '+d.id);if(!same)merged.push(d);}
+  return J.validateCustomEffects(merged);
+};
+J.importCustomEffects=(project,value)=>{
+  const list=J.validateCustomEffects(value),merged=J.combineCustomEffects(project.customEffects||[],list);
+  project.customEffects=J.validateCustomEffects(merged);J.activateCustomEffects(project);
+  const themes=J.themeIds(project),matches=d=>!themes.length||themes.some(key=>d.themes?.includes(key)||(d.tags||[]).some(t=>J.THEMES[key].moods.includes(t)));
+  for(const d of list){if(mediaGroups.includes(d.group)){for(const layer of ['foreground','media']){const settings=project[layer].effects ||= {};settings.enabled ||= {};settings.enabled[d.id]??=matches(d);}}else{project.enabled ||= {};project.enabled[d.group] ||= {};project.enabled[d.group][d.id]??=matches(d);}}
+  return clone(list);
+};
+J.customEffectDependencies=value=>{const ids=new Set();const visit=v=>{if(typeof v==='string')ids.add(v);else if(v&&typeof v==='object')Object.values(v).forEach(visit);};visit(value);return clone(active.filter(d=>ids.has(d.id)));};
+function cutParams(cut,layer){
+  const pairs=layer==='lyrics'?[['enter','enterP'],['hold','holdP'],['exit','exitP']]:[['technique','techniqueP'],['entrance','entranceP'],['departure','departureP']];
+  for(const [key,param] of pairs){const d=(layer==='lyrics'?J.registry(key)[cut[key]]:J.MEDIA_TECH[cut[key]])?.customDefinition;if(d?.params)cut[param]={...d.params,...cut[param]};}
+  for(const entry of cut.decor||[]){const d=J.DECOR[entry.id]?.customDefinition;if(d?.params)for(const [k,v] of Object.entries(d.params))entry[k]??=v;}
+}
+const details=J.applyCutDetails;J.applyCutDetails=(cut,value,plan,layer)=>{details(cut,value,plan,layer);cutParams(cut,layer);};
+const planMedia=J.planMedia;J.planMedia=(project,...args)=>{J.activateCustomEffects(project);const result=planMedia(project,...args);for(const cut of result.cuts)cutParams(cut,'media');return result;};
+const plan=J.plan;J.plan=(project,...args)=>{J.activateCustomEffects(project);const result=plan(project,...args);result.customEffects=clone(active);return result;};
+const omakase=J.omakase;J.omakase=(project,...args)=>{J.activateCustomEffects(project);return omakase(project,...args);};
+const frame=J.Renderer.prototype.frame;J.Renderer.prototype.frame=function(ctx,plan,...args){const previous=active;J.activateCustomEffects({customEffects:plan.customEffects||[]});try{return frame.call(this,ctx,plan,...args);}finally{J.activateCustomEffects({customEffects:previous});}};
+const candidates=J.themeCandidates;J.themeCandidates=(project,key)=>{
+  J.activateCustomEffects(project);const result=candidates(project,key);if(!result)return result;
+  const theme=J.THEMES[key],matches=d=>d.themes?.includes(key)||(d.tags||[]).some(t=>theme.moods.includes(t));
+  for(const d of active)if(matches(d)){if(mediaGroups.includes(d.group)){if(!result.media.includes(d.id))result.media.push(d.id);}else if(!result.lyrics[d.group].includes(d.id))result.lyrics[d.group].push(d.id);}
+  return result;
+};
+// Media components augment the normal recipe and its alpha-aware motion pipeline.
+J.customMediaMotion=(cut,p,fade,out,W,H)=>{
+  const result={x:0,y:0,rotation:0,scale:1,sx:1,sy:1,alpha:1};
+  for(const [field,progress,param] of [['technique',p,'techniqueP'],['enter',fade,'entranceP'],['exit',1-out,'departureP']]){
+    const d=J.MEDIA_TECH[cut[field]]?.customDefinition;if(!d)continue;
+    const v=tracks(d,field==='exit'?out:progress,{...d.params,...cut[param]},W,H);
+    for(const k of ['x','y','rotation'])result[k]+=v[k];for(const k of ['scale','sx','sy','alpha'])result[k]*=v[k];
+  }
+  return result;
+};
+J.resolveCustomMediaCut=cut=>{
+  const c={...cut};for(const field of ['enter','exit']){const d=J.MEDIA_TECH[c[field]]?.customDefinition;if(d)c[field]=J.MEDIA_TECH[d.base]?.motion||'cut';}return c;
+};
+J.drawCustomMedia=(ctx,source,fit,cut,p,fade,out)=>{
+  for(const [field,progress,param] of [['technique',p,'techniqueP'],['enter',fade,'entranceP'],['exit',out,'departureP']]){
+    const d=J.MEDIA_TECH[cut[field]]?.customDefinition;if(!d?.program)continue;
+    if(field==='enter'&&fade>=1||field==='exit'&&out<=0)continue;
+    ctx.save();try{ctx.translate(-fit[0]/2,-fit[1]/2);J.drawProgram(ctx,d.program,{W:fit[0],H:fit[1],p:progress,source,sc:cut.decorStage?.style?.schemes?.[0]||{fg:'#ffffff',bg:'#000000',accent:'#f5a50c',accent2:'#16f4d4'},params:{...d.params,...cut[param]}});}finally{ctx.restore();}
+  }
+};
+J.drawCustomEvent=(ctx,event,p,sc)=>{
+  const d=J.FXE[event.type]?.customDefinition;if(!d?.program)return;
+  ctx.save();try{J.drawProgram(ctx,d.program,{W:ctx.canvas.width,H:ctx.canvas.height,p,sc,params:{...d.params,...event.params}});}finally{ctx.restore();}
+};
+J.customEffectsAPI={spec:()=>J.customEffectSpec,validate:J.validateCustomEffects,import:J.importCustomEffects,list:project=>clone(project.customEffects||[]),
+  payload(project,id,kind='lyrics'){
+    const d=project.customEffects?.find(d=>d.id===id);if(!d)throw Error('Custom effect not found');
+    if(kind==='media'&&d.group!=='decor'&&!mediaGroups.includes(d.group))throw Error('This component targets lyrics');
+    const media=mediaGroups.includes(d.group)||kind==='media';
+    const payload={format:'jizura-cut-effects',version:1,kind,details:media?{}:{layout:'center',enter:'cut',hold:'still',exit:'cut',treat:'none',bg:'none',cam:'push',trans:'none',decor:[]},native:media?{technique:'none',entrance:'none',departure:'none'}:{},components:clone(project.customEffects)};
+    if(mediaGroups.includes(d.group)){payload.kind='media';payload.native[d.group==='media'?'technique':d.group==='mediaEnter'?'entrance':'departure']=d.id;payload.details.effectSettings={motion:1,treatment:1,duration:.45};}
+    else if(d.group==='decor')payload.details.decor=[{id:d.id,...d.params}];
+    else if(d.group==='fx')payload.details.effectEvents=[{type:d.id,offset:.5,amp:1,dur:1}];
+    else payload.details[d.group]=d.id;
+    return payload;
+  }
+};
+})();
+
 /* Public browser API for agent-authored, portable favorite effects. */
 (() => {
 'use strict';
 const clone=x=>JSON.parse(JSON.stringify(x));
 J.favoriteAPI={
-  spec(){return {format:'jizura-cut-effects',version:1,kinds:['lyrics','media'],payload:{format:'jizura-cut-effects',version:1,kind:'lyrics',native:{},details:{drawing:J.drawingSpec.example}},drawing:J.drawingSpec,detailKeys:J.cutDetailKeys,workflow:['Read spec/catalog/theme candidates','Capture a compatible cut or author details.drawing','Validate','Save favorite','Preview multiple times','Revise','Export .jizuraichifav'],notes:['Payloads contain effects, not target lyrics, timing or placement.','drawing is a JSON drawing program, not JavaScript.','Theme checks cover stock effects; visually review custom drawings against the theme.']};},
+  spec(){return {format:'jizura-cut-effects',version:1,kinds:['lyrics','media'],components:J.customEffectSpec,payload:{format:'jizura-cut-effects',version:1,kind:'lyrics',native:{},details:{layout:'center',enter:'pop',hold:'still',exit:'shrink',decor:[{id:J.customEffectSpec.example.id}]},components:[J.customEffectSpec.example]},drawing:J.drawingSpec,detailKeys:J.cutDetailKeys,workflow:J.customEffectSpec.workflow,notes:['Use stock IDs and standard cut parameters first. Define only missing components and reference their IDs in the matching standard slots.','components embeds definitions for portability; project.customEffects owns imported definitions.','details.drawing is the legacy whole-cut format; prefer components.','JSON only, no executable JavaScript. Theme tags are declarations; visually review theme fit.']};},
   validate(payload){return J.readCutEffects(JSON.stringify(payload));},
   save(project,{name,payload,id}){
     const valid=this.validate(payload),list=project.effectFavorites ||= [];
+    if(valid.components)J.importCustomEffects(project,valid.components);
     if(id&&!list.some(f=>f.id===id))throw Error('Favorite not found');
     const number=(project.favoriteSequence||0)+1;
     const entry={id:id||J.favoriteId(),name:typeof name==='string'&&name.trim()?name.trim():'Favorite '+number,payload:valid};
@@ -40814,6 +40991,7 @@ J.favoriteAPI={
   async import(project,file,mode='append'){
     if(!['append','replace'].includes(mode))throw Error('mode must be append or replace');
     const loaded=await J.readEffectFavorites(file),entries=loaded.favorites.map(f=>({...f,id:J.favoriteId()}));
+    J.importCustomEffects(project,J.combineCustomEffects(loaded.project.customEffects||[],...entries.map(f=>f.payload.components||[])));
     const fonts=(loaded.project.userFonts||[]).filter(f=>!(project.userFonts||[]).some(old=>old.key===f.key));
     for(const entry of loaded.files)if(entry.kind==='font'&&fonts.some(f=>f.key===entry.id))await J.saveFontFile(entry.id,entry.file);
     await J.restoreFontFiles(fonts);
@@ -40829,7 +41007,7 @@ J.favoriteAPI={
     if(!Number.isFinite(time)||time<0||!Number.isInteger(width)||width<160||width>1920)throw Error('Invalid time or width');
     const layer=target?.layer||(payload.kind==='lyrics'?'lyrics':'media');
     if(!['lyrics','foreground','media'].includes(layer)||payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('Incompatible preview target');
-    const p=target?clone({...project,effectFavorites:[]}):J.defaultProject();let sampleId;
+    const p=target?clone({...project,effectFavorites:[]}):J.defaultProject();J.importCustomEffects(p,payload.components||project?.customEffects||[]);let sampleId;
     try{
       if(!target){
         p.lyrics=payload.kind==='lyrics'?'[00:00]プレビュー|ルビ':'';p.title='';p.durationOverride=3;p.res=640;p.aspect='16:9';p.overrides={0:{single:true}};p.fx={...p.fx,hud:'off',texture:0,chroma:0,glitch:0,decor:0};p.lyricEffects.autoPlacement=false;
@@ -40847,7 +41025,7 @@ J.favoriteAPI={
       const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(Math.min(width,1920*plan.W/plan.H)));cv.height=Math.max(1,Math.round(cv.width*plan.H/plan.W));
       new J.Renderer().frame(cv.getContext('2d'),plan,cut.start+time,{scale:cv.width/plan.W,noHud:true});
       return {data:cv.toDataURL('image/png').split(',')[1],width:cv.width,height:cv.height,time,duration};
-    }finally{if(sampleId)J.mediaAssets.delete(sampleId);}
+    }finally{if(sampleId)J.mediaAssets.delete(sampleId);J.activateCustomEffects(project||J.ui?.project||{});}
   }
 };
 })();
@@ -41168,6 +41346,7 @@ function mergeProject(p) {
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
   o.timing.cutTimes = o.timing.cutTimes || {};
+  o.customEffects=J.validateCustomEffects(o.customEffects||[]);J.activateCustomEffects(o);
   const en = J.defaultProject().enabled;
   for (const g of Object.keys(en)) en[g] = Object.assign(en[g], ((p && p.enabled) || {})[g] || {});
   o.enabled = en;
@@ -41179,6 +41358,7 @@ function mergeProject(p) {
   delete o.jevPrompt;
   migrateLyricBlankCuts(o);
   o.effectFavorites = J.normalizeEffectFavorites(o.effectFavorites);
+  o.customEffects=J.combineCustomEffects(o.customEffects,...o.effectFavorites.map(f=>f.payload.components||[]));J.activateCustomEffects(o);
   o.favoriteSequence = Math.max(o.effectFavorites.length,Math.floor(+o.favoriteSequence)||0);
   o.timelineLinks = Array.isArray(p && p.timelineLinks) ? p.timelineLinks : [];
   o.media = J.normalizeMedia(p && p.media);
@@ -41196,7 +41376,7 @@ function mergeProject(p) {
   return o;
 }
 function setBadges(d) {
-  return (d && d.extra ? '<span class="set-badge ex" title="Added after the original release">New</span>' : '') + (d && d.wa ? '<span class="set-badge" title="Japanese motifs">JP</span>' : '');
+  return (d && d.custom ? '<span class="set-badge ex" title="'+J.mediaLabel('取り込んだ独自Effects','Imported custom effect')+'">'+J.mediaLabel('New','Added')+'</span>' : '') + (d && d.wa ? '<span class="set-badge" title="Japanese motifs">JP</span>' : '');
 }
 function loadLocal() { try { const s = localStorage.getItem(LS_KEY); if (s) return mergeProject(JSON.parse(s)); } catch (e) {} return mergeProject(null); }
 function pendingMediaDeletes() { try { const ids = JSON.parse(localStorage.getItem(MEDIA_DELETE_KEY) || '[]'); return Array.isArray(ids) ? ids.filter(id => typeof id === 'string') : []; } catch (e) { return []; } }
@@ -42215,7 +42395,12 @@ function openCutDetails(layer,index,part=0) {
     untilNext:['次cutsPlayまで','Until the next cut'],endTime:['終了位置（s）','End position (s)'],technique:['手法','Technique'],entrance:['Entrance','Entrance'],departure:['Exit','Exit'],itemId:['素材','Asset'],frontmost:['Show above foreground','Frontmost'],blend:['合成方法','Blend mode'],opacity:['不透明度（％）','Opacity (%)'],videoLoop:['Loop video','Loop video'],videoStart:['素材のPlay開始位置（s）','Source start time (s)'],videoDuration:['Video duration (s)','Video duration (s)'],chromaKey:['Chroma key','Chroma key'],chromaColor:['Chroma key色','Key color'],
     font:['フォント','Font'],size:['サイズ','Size'],scale:['倍率','Scale'],rotation:['回転','Rotation'],color:['色','Color'],alpha:['不透明度','Opacity'],seed:['乱数シード','Random seed'],n:['個数','Count'],id:[' types類','Type'],sx:['横方向倍率','Horizontal scale'],sy:['縦方向倍率','Vertical scale'],
   };
-  const label = key => names[key] ? L(...names[key]) : J.detailFieldLabel(key);
+  const label = key => ({enterP:L('Entranceの詳細','Entrance parameters'),holdP:L('Holdの詳細','Hold parameters'),exitP:L('Exitの詳細','Exit parameters'),techniqueP:L('手法の詳細','Technique parameters'),entranceP:L('Entranceの詳細','Entrance parameters'),departureP:L('Exitの詳細','Exit parameters')}[key]) || (names[key] ? L(...names[key]) : J.detailFieldLabel(key));
+  function customParameterLabel(path,field){
+    const [root,index]=path.split('.'),g={params:'layout',enterP:'enter',holdP:'hold',exitP:'exit',treatP:'treat',bgP:'bg',camP:'cam',transP:'trans',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[root];
+    const def=root==='decor'?J.DECOR[current.decor?.[+index]?.id]:g?(lyric?J.registry(g)[current[g]]:J.MEDIA_TECH[current[g]]):null;
+    const names=def?.customDefinition?.labels?.[field];return names?L(names.ja||field,names.en||names.ja||field):null;
+  }
   const nativeKeys = lyric ? ['frontmost','blend','opacity'] : ['itemId','technique','entrance','departure','blend','opacity','placement','videoLoop','videoStart','videoDuration','chromaKey','chromaColor'];
   function preview() {
     rememberDetail();
@@ -42391,7 +42576,7 @@ function openCutDetails(layer,index,part=0) {
       const title=document.createElement('summary'); title.textContent=/^decor\.\d+$/.test(path) ? (J.DECOR[value.id]?.name || value.id) : /^effectEvents\.\d+$/.test(path) ? eventName(value) : /^\d+$/.test(field) ? L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`) : label(field); if(path!=='decor')section.append(title);
       const grid=document.createElement('div'); grid.className='cut-details-grid';section.append(grid);parent.append(section);
       const decoration=/^decor\.\d+$/.test(path),allowed=decoration?new Set(['id',...J.decorDetailFields(value.id)]):null;
-      const shown=decoration?{id:value.id,...J.decorDetailDefaults(cut.seed),...value}:value;
+      const shown=decoration?{id:value.id,...J.decorDetailDefaults(cut.seed),...J.DECOR[value.id]?.customDefinition?.params,...value}:value;
       for(const [child,v] of Object.entries(shown)) {
         if(allowed && !allowed.has(child))continue;
         if(decoration && value.id==='counter' && shown.mode!=='count' && ['from','to'].includes(child))continue;
@@ -42425,13 +42610,14 @@ function openCutDetails(layer,index,part=0) {
       return;
     }
     const percent=typeof value==='number' && (field==='contentScale'||/^(area|placement)\.(w|h)$/.test(path)), factor=percent?100:1;
-    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=(/^fonts\.[^.]+\.\d+$/.test(path)?L(`フォント ${Number(field)+1}`,`Font ${Number(field)+1}`):/^\d+$/.test(field)?L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`):label(field))+(percent?L('（％）',' (%)'):'');row.append(text);
+    const row=document.createElement('label');row.className='cut-detail-field';const text=document.createElement('span');text.textContent=(customParameterLabel(path,field)||(/^fonts\.[^.]+\.\d+$/.test(path)?L(`フォント ${Number(field)+1}`,`Font ${Number(field)+1}`):/^\d+$/.test(field)?L(`項目 ${Number(field)+1}`,`Item ${Number(field)+1}`):label(field)))+(percent?L('（％）',' (%)'):'');row.append(text);
     if(path.startsWith('palette.')){
       const colorNames={bg:['Background色','Background color'],fg:['Text色','Text color'],sub:['SecondaryText色','Secondary text color'],accent:['Accent色','Accent color'],accent2:['Accent色2','Accent color 2'],ink:['Decoration色','Decoration color'],dim:['BackgroundText色','Background text color'],ghostA:['色ずれA','Chromatic color A'],ghostB:['色ずれB','Chromatic color B']};
       if(colorNames[field])text.textContent=L(...colorNames[field]);
     }
-    const decorMode=/^decor\.\d+\.mode$/.test(path);
-    const decorId=decorMode?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    const decorationId=/^decor\.\d+\.mode$/.test(path)?current.decor?.[Number(path.split('.')[1])]?.id:null;
+    const decorId=J.DECOR[decorationId]?.customDefinition?.base||decorationId;
+    const decorMode=['counter','indexNum'].includes(decorId);
     if(decorMode)value=value==='count'?'count':'index';
     const modeChoices=decorMode?(decorId==='indexNum'?[["index",L('少なく回転','Fewer digit rolls')],["count",L('多く回転','More digit rolls')]]:[["index",L('cutsの通し番号','Cut number')],["count",L('開始値から終了値へ変化','Animate from start to end')]]):null;
     const choices=modeChoices || (/^fonts\.[^.]+\.\d+$/.test(path)||(path.startsWith('params.')&&typeof value==='string'&&J.FONTS[value])?Object.entries(J.FONTS).map(([id,d])=>[id,d.name||id]):/^effectEvents\.\d+\.type$/.test(path)?Object.entries(J.FXE).map(([id,d])=>[id,d.name||id]):field==='id'&&!path.startsWith('decor.')?null:options(field)); const input=document.createElement(choices?'select':field==='text'?'textarea':'input');input.dataset.detailField=path;
@@ -42447,7 +42633,7 @@ function openCutDetails(layer,index,part=0) {
       onChange(v);
       if(/^decor\.\d+\.(id|mode)$/.test(path)||/^effectEvents\.\d+\.type$/.test(path))preview();
       if(choices && !path.includes('.')) {
-        const param={layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
+        const param={enter:'enterP',hold:'holdP',exit:'exitP',technique:'techniqueP',entrance:'entranceP',departure:'departureP',layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
         if(field==='technique'&&draft.details)for(const key of ['hold','treat','trans','transP'])delete draft.details[key];
         preview();
@@ -42509,6 +42695,8 @@ function openCutDetails(layer,index,part=0) {
     maskEditor(grid);
     for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
       if(field==='mask'||field==='fontParams') continue;// masks have their own editor; font paths follow layout font controls
+      const parameterSlot={enterP:'enter',holdP:'hold',exitP:'exit',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[field];
+      if(parameterSlot&&!(lyric?J.registry(parameterSlot)[current[parameterSlot]]:J.MEDIA_TECH[current[parameterSlot]])?.custom)continue;
       let value=current[field];
       // Generated post effects live in plan.events until explicitly edited.
       // Read them without freezing random choices just by opening this dialog.
@@ -42527,7 +42715,7 @@ function openCutDetails(layer,index,part=0) {
     const categories=[
       ['basic',L('基本','Basic'),['start','untilNext','endTime','lock','text','note','itemId','frontmost','blend','opacity','videoLoop','videoStart','videoDuration','chromaKey','chromaColor']],
       ['style',L('Style','Style'),['layout','params','scheme','fonts','palette','fontParams','effectStyle']],
-      ['motion',L('モーション','Motion'),['technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
+      ['motion',L('モーション','Motion'),['techniqueP','entranceP','departureP','enterP','holdP','exitP','technique','entrance','departure','enter','hold','exit','inDur','outDur','stagger','motionScale','cam','camP','independentPhases']],
       ['effects',L('Treatment · Effects','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
       ['decor',L('Decoration','Decorations'),['decor']],
       ['mask',L('マスク','Mask'),['mask']],
@@ -43777,10 +43965,10 @@ const MEDIA_EFFECT_GROUPS = {
 function renderMediaLines() {
   const layer = activeMediaLayer() || 'media', m = S.project[layer];
   const ol = $('mediaLineList'); ol.innerHTML = ''; S.mediaLineEls = [];
-  const selectTechnique = (ov, cut) => `<select class="media-technique" aria-label="${J.mediaLabel('画像 · 動画の手法', 'Media technique')}"><option value="none" ${(ov.technique === 'none' || ov.technique === undefined && cut.technique === 'none') ? 'selected' : ''}>${J.mediaLabel('Effects無し', 'No effects')}</option><option value="" ${ov.technique === null ? 'selected' : ''}>${J.mediaLabel('Auto', 'Auto')}</option>${cut.technique === 'legacy' ? `<option value="legacy" selected>${J.mediaLabel('従来の設定', 'Legacy settings')}</option>` : ''}${J.MEDIA_TECH[cut.technique]?.stage ? `<option value="${cut.technique}" selected>${J.mediaTechniqueName(cut)} (${J.mediaLabel('従来の設定', 'Legacy settings')})</option>` : ''}${Object.entries(MEDIA_EFFECT_GROUPS).filter(([group]) => !['enter', 'exit'].includes(group) && Object.entries(J.MEDIA_TECH).some(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer))).map(([group, name]) => `<optgroup label="${name}">${Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && !def.stage && J.mediaTechAllowed(key, layer)).map(([key, def]) => `<option value="${key}" ${ov.technique === key ? 'selected' : ''}>${def.name}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  const selectTechnique = (ov, cut) => `<select class="media-technique" aria-label="${J.mediaLabel('画像 · 動画の手法', 'Media technique')}"><option value="none" ${(ov.technique === 'none' || ov.technique === undefined && cut.technique === 'none') ? 'selected' : ''}>${J.mediaLabel('Effects無し', 'No effects')}</option><option value="" ${ov.technique === null ? 'selected' : ''}>${J.mediaLabel('Auto', 'Auto')}</option>${cut.technique === 'legacy' ? `<option value="legacy" selected>${J.mediaLabel('従来の設定', 'Legacy settings')}</option>` : ''}${J.MEDIA_TECH[cut.technique]?.stage ? `<option value="${cut.technique}" selected>${J.mediaTechniqueName(cut)} (${J.mediaLabel('従来の設定', 'Legacy settings')})</option>` : ''}${Object.entries(MEDIA_EFFECT_GROUPS).filter(([group]) => !['enter', 'exit'].includes(group) && Object.entries(J.MEDIA_TECH).some(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer))).map(([group, name]) => `<optgroup label="${name}">${Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && !def.stage && J.mediaTechAllowed(key, layer)).map(([key, def]) => `<option value="${key}" ${ov.technique === key ? 'selected' : ''}>${escapeHtml(def.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
   const selectPhase = (ov, cut, stage, field) => {
     const value = ov[field] ?? '', title = MEDIA_EFFECT_GROUPS[stage];
-    return `<label>${title}<select class="media-phase" data-media-phase="${field}" aria-label="${title}"><option value="" ${!value ? 'selected' : ''}>${J.mediaLabel('Auto', 'Auto')}</option><option value="none" ${value === 'none' ? 'selected' : ''}>${J.mediaLabel('Instant（None）', 'Instant (none)')}</option>${J.mediaPhaseOptions(stage).map(([key, def]) => `<option value="${key}" ${value === key ? 'selected' : ''}>${def.name}</option>`).join('')}</select></label>`;
+    return `<label>${title}<select class="media-phase" data-media-phase="${field}" aria-label="${title}"><option value="" ${!value ? 'selected' : ''}>${J.mediaLabel('Auto', 'Auto')}</option><option value="none" ${value === 'none' ? 'selected' : ''}>${J.mediaLabel('Instant（None）', 'Instant (none)')}</option>${J.mediaPhaseOptions(stage).map(([key, def]) => `<option value="${key}" ${value === key ? 'selected' : ''}>${escapeHtml(def.name)}</option>`).join('')}</select></label>`;
 
   };
   const addButton = index => {
@@ -44498,7 +44686,7 @@ function renderMediaEffects(layer) {
     section.innerHTML = `<summary><span class="tg-name">${name}</span><span class="tg-cnt mono">${count(settings.enabled)}</span></summary><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('All on', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('All off', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('Invert', 'Invert')}</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
     for (const [key, def] of items) {
-      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${def.name}</span>`;
+      const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${escapeHtml(def.name)}${setBadges(def)}</span>`;
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.enabled[key] = e.target.checked; S.project[layer].effects = next;
         section.querySelector('.tg-cnt').textContent = count(next.enabled); replan();
@@ -44524,6 +44712,7 @@ function renderMediaEffects(layer) {
     for (const [key, def] of items) {
       const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
       row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
+      row.querySelector('span').insertAdjacentHTML('beforeend',setBadges(def));
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.decorEnabled[key] = e.target.checked; S.project[layer].effects = next;
         section.querySelector('.tg-cnt').textContent = count(next); replan();
