@@ -44882,6 +44882,10 @@ function renderMediaEffects(layer) {
   const box = $(layer + 'EffectsPanel'); if (!box) return;
   const settings = J.mediaEffectSettings(S.project, layer), L = J.mediaLabel;
   const q=($(layer+'EffectFilter').value||'').trim(),matches=J.detailSearchQuery(q);
+  const search=$(layer+'EffectFilter'),searchRow=search.closest('.row'),searchFocused=document.activeElement===search;
+  const selection=[search.selectionStart,search.selectionEnd];
+  // Retain the search input while rebuilding the panel; place it after settings.
+  searchRow.remove();
   const layerNote = layer === 'foreground' ? L('前景の画像・動画に適用します。', 'Applies to foreground images and videos.') : L('背景の画像・動画に適用します。', 'Applies to background images and videos.');
   const shuffleLabel = layer === 'foreground' ? L('前景をシャッフル', 'Shuffle foreground') : L('背景をシャッフル', 'Shuffle background');
   const setting = key => box.querySelector(`[data-media-setting="${key}"]`);
@@ -44897,6 +44901,7 @@ function renderMediaEffects(layer) {
     const row = document.createElement('label'); row.className = 'slider'; row.innerHTML = `<span>${name}</span><input data-media-setting="${key}" type="range" min="${key === 'duration' ? .05 : 0}" max="${max}" step="${step}" value="${settings[key]}"><output>${settings[key]}</output>`;
     row.querySelector('input').addEventListener('input', e => { const next = J.mediaEffectSettings(S.project, layer); next[key] = +e.target.value; S.project[layer].effects = next; row.querySelector('output').textContent = e.target.value; markUndoGroup('mediaEffects:' + layer + ':' + key); replanSoon(100); }); box.querySelector('.media-effect-sliders').appendChild(row);
   }
+  box.appendChild(searchRow);
   const groups = MEDIA_EFFECT_GROUPS;
   for (const [group, name] of Object.entries(groups)) {
     const items = Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer));
@@ -44977,6 +44982,7 @@ function renderMediaEffects(layer) {
   action('shuffle').onclick = () => { shuffleMediaEffects([layer]); S.project[layer].seed++; replan(); };
   const all = value => { const next = J.mediaEffectSettings(S.project, layer); next.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).filter(key => J.mediaTechAllowed(key, layer)).map(key => [key, value])); S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   action('enable').onclick = () => all(true); action('disable').onclick = () => all(false);
+  if(searchFocused){search.focus({preventScroll:true});search.setSelectionRange(...selection);}
 }
 
 /* ---------------- sync all inputs from project ---------------- */
