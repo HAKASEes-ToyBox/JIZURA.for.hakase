@@ -40,9 +40,28 @@ J.validateCustomEffects=value=>{
   return list;
 };
 function tracks(d,p,params,W,H){const v=(k,f)=>J.drawingValue(d.motion?.[k],p,params,f);return {x:v('x',0)*W,y:v('y',0)*H,rotation:v('rotation',0)*Math.PI/180,scale:v('scale',1),sx:v('sx',1),sy:v('sy',1),alpha:J.clamp(v('opacity',1))};}
+// The lyric's text box at rest (after its entrance), measured once per cut and size by running the layout
+// under an empty clip. Decorations in frame text/textX/textY follow it on both layers, so they keep their
+// place when the font size, the text or the display area changes, without riding the entrance animation.
+const restBoxes=new WeakMap();
+J.restTextBox=env=>{
+  const cut=env.cut;if(!cut||cut.effectsOnly||!cut.text)return null;
+  let sizes=restBoxes.get(cut);if(!sizes)restBoxes.set(cut,sizes=new Map());
+  const key=Math.round(env.W)+'x'+Math.round(env.H);if(sizes.has(key))return sizes.get(key);
+  const L=J.LAYOUTS[cut.layout]||J.LAYOUTS.center,ctx=env.ctx,saved={lt:env.lt,ltb:env.ltb,pIn:env.pIn,pOut:env.pOut};
+  const rest=Math.max(0,Math.min(cut.dur-(cut.outDur||0)-.01,Math.max((cut.inDur||0)+.35,cut.dur*.4)));
+  let bb=null;sizes.set(key,null);   // guards re-entry from layouts that draw decor themselves
+  ctx.save();
+  try{ctx.beginPath();ctx.rect(0,0,0,0);ctx.clip();Object.assign(env,{lt:rest,ltb:rest,pIn:J.clamp(rest/Math.max(.01,cut.inDur)),pOut:0});bb=L.render(env);}
+  catch(e){bb=null;}finally{ctx.restore();Object.assign(env,saved);}
+  const box=bb&&bb.x1>bb.x0&&bb.y1>bb.y0?{x0:bb.x0,y0:bb.y0,x1:bb.x1,y1:bb.y1}:null;
+  sizes.set(key,box);return box;
+};
+const usesText=program=>program.nodes.some(n=>n.frame&&n.frame!=='area');
 function paint(d,env,params,source=null,progress=null,layout=false){
-  if(!d.program)return;
-  J.drawProgram(env.ctx,d.program,{W:env.W,H:env.H,p:progress??J.clamp(env.lt/Math.max(.01,env.cut.dur)),text:env.cut.text||'',note:env.cut.note||'',sc:env.sc,source,params,font:params.font||env.st?.fonts?.display?.[0],
+  if(!d.program)return null;
+  const box=!layout&&usesText(d.program)?J.restTextBox(env):null;
+  return J.drawProgram(env.ctx,d.program,{W:env.W,H:env.H,box,p:progress??J.clamp(env.lt/Math.max(.01,env.cut.dur)),text:env.cut.text||'',note:env.cut.note||'',sc:env.sc,source,params,font:params.font||env.st?.fonts?.display?.[0],
     drawText:layout?it=>J.mainDraw(env,{...it,x:0,y:0,rot:0,track:0,lead:1.2}):null});
 }
 function install(d){
@@ -64,7 +83,9 @@ function install(d){
   if(g==='layout')def.render=env=>{
     const params={...defaults,...env.cut.params};let bb;
     if(!d.program||d.program.mode==='overlay')bb=b?.render?.(env);
-    paint(d,env,params,null,null,true);return bb||{x0:0,y0:0,x1:env.W,y1:env.H,cx:env.W/2,cy:env.H/2};
+    const drawn=paint(d,env,params,null,null,true);
+    if(!bb&&drawn)bb={...drawn,cx:(drawn.x0+drawn.x1)/2,cy:(drawn.y0+drawn.y1)/2,boxes:[]};
+    return bb||{x0:0,y0:0,x1:env.W,y1:env.H,cx:env.W/2,cy:env.H/2};
   };
   if(g==='decor'){def.layer=d.layer||b?.layer||'front';def.detailFields=[...new Set([...(b&&(!d.program||d.program.mode==='overlay')?J.decorDetailFields(d.base):[]),...Object.keys(defaults)])];def.draw=(env,bb,P)=>{const params={...defaults,...P};if(!d.program||d.program.mode==='overlay')b?.draw?.(env,bb,params);paint(d,env,params);};}
   if(g==='bg')def.draw=(env,P)=>{const params={...defaults,...P};if(!d.program||d.program.mode==='overlay')b?.draw?.(env,params);paint(d,env,params);};
