@@ -23,14 +23,14 @@ const XF = {
   transpose: { shape: s => ({ ...s, cx: s.cy, cy: s.cx, w: s.h, h: s.w, angle: POLYGONS.has(s.type) ? s.angle : -s.angle }), rect: r => r && { x: r.y, y: r.x, w: r.h, h: r.w } },
 };
 // Bounding box of shapes in stage fractions, traced through the mask's own outline code.
-const boundsOf = shapes => {
+const boundsOf = (shapes, aspect = 1) => {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   const pt = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
   J.maskShapePath({
     beginPath() {}, closePath() {}, moveTo: pt, lineTo: pt, arcTo: (x, y) => pt(x, y),
     ellipse(cx, cy, rx, ry, a) { const c = Math.cos(a), s = Math.sin(a), hx = Math.hypot(rx * c, ry * s), hy = Math.hypot(rx * s, ry * c); pt(cx - hx, cy - hy); pt(cx + hx, cy + hy); },
-  }, shapes, 1, 1);
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }, shapes, aspect, 1);
+  return { x: x0/aspect, y: y0, w: (x1 - x0)/aspect, h: y1 - y0 };
 };
 J.maskBounds = boundsOf;
 const clip = r => { const x = clamp(r.x, 0, 1), y = clamp(r.y, 0, 1), x2 = clamp(r.x + r.w, 0, 1), y2 = clamp(r.y + r.h, 0, 1); return { x, y, w: x2 - x, h: y2 - y }; };
@@ -133,8 +133,7 @@ const LAYOUTS = [
   }),
   // a slanted ribbon across the stage
   layout('slash', [.6, .5], (r, S) => {
-    // The mask rotates in stage-fraction space; choose the angle that reads as the wanted slope on screen.
-    const slope = -r.range(10, 18) * Math.PI / 180, angle = Math.atan(Math.tan(slope) * S) * 180 / Math.PI;
+    const angle = -r.range(10, 18);
     const zone = r.chance(.5) ? { x: .04, y: .06, w: .36, h: .24 } : { x: .6, y: .7, w: .36, h: .24 };
     return { shapes: [shape('rect', .5, .5, 1.7, r.range(.3, .38), angle)], obstacles: [{ x: 0, y: .42, w: .42, h: .5 }, { x: .33, y: .28, w: .34, h: .44 }, { x: .58, y: .1, w: .42, h: .5 }], zone };
   }),
@@ -202,12 +201,12 @@ J.layoutPlacement = (def, cut, plan, fit) => {
   const ops = [...flipX ? ['mirrorX'] : [], ...flipY ? ['mirrorY'] : [], ...transposed ? ['transpose'] : []];
   const apply = (value, kind) => ops.reduce((v, op) => v && XF[op][kind](v), value);
   const shapes = o.shapes.map(s => apply(s, 'shape'));
-  const window = clip(union(shapes.map(s => boundsOf([s]))));
+  const window = clip(union(shapes.map(s => boundsOf([s],S))));
   // Explicit obstacles are written like the shapes (landscape); the default is the finished window's box.
   const obstacles = (o.obstacles ? o.obstacles.map(r => apply(r, 'rect')) : [grow(window, .01)]).map(round);
   const zone = usable(round(o.zone && clip(apply(o.zone, 'rect'))), S);
   // The foreground sits in the largest window; among equals, the one nearest the middle of them all.
-  const boxes = shapes.map(s => clip(boundsOf([s]))), most = Math.max(...boxes.map(b => b.w * b.h)), mid = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
+  const boxes = shapes.map(s => clip(boundsOf([s],S))), most = Math.max(...boxes.map(b => b.w * b.h)), mid = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
   const largest = boxes.filter(b => b.w * b.h >= most * .95).reduce((a, b) => Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y) < Math.hypot(a.x + a.w / 2 - mid.x, a.y + a.h / 2 - mid.y) ? b : a);
   // Place the source over the window's box (over the whole stage for an inverted window), zoomed by a seeded amount.
   const cover = o.invert ? { x: 0, y: 0, w: 1, h: 1 } : window;

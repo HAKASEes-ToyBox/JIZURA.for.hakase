@@ -4986,14 +4986,14 @@ const XF = {
   transpose: { shape: s => ({ ...s, cx: s.cy, cy: s.cx, w: s.h, h: s.w, angle: POLYGONS.has(s.type) ? s.angle : -s.angle }), rect: r => r && { x: r.y, y: r.x, w: r.h, h: r.w } },
 };
 // Bounding box of shapes in stage fractions, traced through the mask's own outline code.
-const boundsOf = shapes => {
+const boundsOf = (shapes, aspect = 1) => {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   const pt = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
   J.maskShapePath({
     beginPath() {}, closePath() {}, moveTo: pt, lineTo: pt, arcTo: (x, y) => pt(x, y),
     ellipse(cx, cy, rx, ry, a) { const c = Math.cos(a), s = Math.sin(a), hx = Math.hypot(rx * c, ry * s), hy = Math.hypot(rx * s, ry * c); pt(cx - hx, cy - hy); pt(cx + hx, cy + hy); },
-  }, shapes, 1, 1);
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }, shapes, aspect, 1);
+  return { x: x0/aspect, y: y0, w: (x1 - x0)/aspect, h: y1 - y0 };
 };
 J.maskBounds = boundsOf;
 const clip = r => { const x = clamp(r.x, 0, 1), y = clamp(r.y, 0, 1), x2 = clamp(r.x + r.w, 0, 1), y2 = clamp(r.y + r.h, 0, 1); return { x, y, w: x2 - x, h: y2 - y }; };
@@ -5096,8 +5096,7 @@ const LAYOUTS = [
   }),
   // a slanted ribbon across the stage
   layout('slash', [.6, .5], (r, S) => {
-    // The mask rotates in stage-fraction space; choose the angle that reads as the wanted slope on screen.
-    const slope = -r.range(10, 18) * Math.PI / 180, angle = Math.atan(Math.tan(slope) * S) * 180 / Math.PI;
+    const angle = -r.range(10, 18);
     const zone = r.chance(.5) ? { x: .04, y: .06, w: .36, h: .24 } : { x: .6, y: .7, w: .36, h: .24 };
     return { shapes: [shape('rect', .5, .5, 1.7, r.range(.3, .38), angle)], obstacles: [{ x: 0, y: .42, w: .42, h: .5 }, { x: .33, y: .28, w: .34, h: .44 }, { x: .58, y: .1, w: .42, h: .5 }], zone };
   }),
@@ -5165,12 +5164,12 @@ J.layoutPlacement = (def, cut, plan, fit) => {
   const ops = [...flipX ? ['mirrorX'] : [], ...flipY ? ['mirrorY'] : [], ...transposed ? ['transpose'] : []];
   const apply = (value, kind) => ops.reduce((v, op) => v && XF[op][kind](v), value);
   const shapes = o.shapes.map(s => apply(s, 'shape'));
-  const window = clip(union(shapes.map(s => boundsOf([s]))));
+  const window = clip(union(shapes.map(s => boundsOf([s],S))));
   // Explicit obstacles are written like the shapes (landscape); the default is the finished window's box.
   const obstacles = (o.obstacles ? o.obstacles.map(r => apply(r, 'rect')) : [grow(window, .01)]).map(round);
   const zone = usable(round(o.zone && clip(apply(o.zone, 'rect'))), S);
   // The foreground sits in the largest window; among equals, the one nearest the middle of them all.
-  const boxes = shapes.map(s => clip(boundsOf([s]))), most = Math.max(...boxes.map(b => b.w * b.h)), mid = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
+  const boxes = shapes.map(s => clip(boundsOf([s],S))), most = Math.max(...boxes.map(b => b.w * b.h)), mid = { x: window.x + window.w / 2, y: window.y + window.h / 2 };
   const largest = boxes.filter(b => b.w * b.h >= most * .95).reduce((a, b) => Math.hypot(b.x + b.w / 2 - mid.x, b.y + b.h / 2 - mid.y) < Math.hypot(a.x + a.w / 2 - mid.x, a.y + a.h / 2 - mid.y) ? b : a);
   // Place the source over the window's box (over the whole stage for an inverted window), zoomed by a seeded amount.
   const cover = o.invert ? { x: 0, y: 0, w: 1, h: 1 } : window;
@@ -8236,13 +8235,14 @@ J.maskMediaSource = (source, cut, t, plan) => {
   const [sw, sh] = dims(source); if (!sw || !sh) return source;
   const k = Math.min(1, 2048 / Math.max(sw, sh)), [c, x] = buffer('source', sw * k, sh * k);
   x.drawImage(source, 0, 0, c.width, c.height);
-  J.applyMaskToCanvas(c, mask, new DOMMatrix([c.width, 0, 0, c.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
+  // Rotate in source pixels before placement rotates the finished material.
+  J.applyMaskToCanvas(c, mask, new DOMMatrix(), c.width, c.height, Number.isFinite(t) ? { cut, t, plan } : null);
   return c;
 };
 // "カット": mask a finished media layer canvas in stage fractions.
 J.maskMediaLayer = (canvas, cut, t, plan) => {
   const mask = J.activeMask(cut); if (!mask || mask.target !== 'cut') return;
-  J.applyMaskToCanvas(canvas, mask, new DOMMatrix([canvas.width, 0, 0, canvas.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
+  J.applyMaskToCanvas(canvas, mask, new DOMMatrix(), canvas.width, canvas.height, Number.isFinite(t) ? { cut, t, plan } : null);
 };
 })();
 
@@ -42577,7 +42577,9 @@ function openCutDetails(layer,index,part=0) {
     const rw=480,rh=Math.round(rw*plan.H/plan.W);maskRef.width=rw;maskRef.height=rh;
     const rx=maskRef.getContext('2d');rx.setTransform(1,0,0,1,0,0);rx.clearRect(0,0,rw,rh);
     J.masksSuspended=true;
-    try{maskRefRenderer.frame(rx,soloPlan(plan,c),(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
+    const referenceCut=lyric&&target==='source'&&c.area?{...c,area:{...c.area,angle:0}}:c;
+    const referencePlan=referenceCut===c?soloPlan(plan,c):{...soloPlan(plan,c),cuts:plan.cuts.map(cut=>cut.index===c.index?referenceCut:cut)};
+    try{maskRefRenderer.frame(rx,referencePlan,(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
     finally{J.masksSuspended=false;}
     if(lyric&&target==='source'){const a=c.area||{x:0,y:0,w:1,h:1};return maskRefInfo={image:maskRef,sx:a.x*rw,sy:a.y*rh,sw:a.w*rw,sh:a.h*rh,aspect:a.w*plan.W/(a.h*plan.H)};}
     return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
@@ -42631,7 +42633,7 @@ function openCutDetails(layer,index,part=0) {
       // Darken what the mask hides.
       const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
       sx.fillStyle='#000';sx.fillRect(0,0,w,ch);
-      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix([w,0,0,ch,0,0]),1,1);
+      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix(),w,ch);
       if(mask.enabled){x.save();x.globalAlpha=.62*mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();

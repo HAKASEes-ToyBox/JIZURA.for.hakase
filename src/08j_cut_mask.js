@@ -124,12 +124,13 @@ J.maskMediaSource = (source, cut, t, plan) => {
   const [sw, sh] = dims(source); if (!sw || !sh) return source;
   const k = Math.min(1, 2048 / Math.max(sw, sh)), [c, x] = buffer('source', sw * k, sh * k);
   x.drawImage(source, 0, 0, c.width, c.height);
-  J.applyMaskToCanvas(c, mask, new DOMMatrix([c.width, 0, 0, c.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
+  // Rotate in source pixels before placement rotates the finished material.
+  J.applyMaskToCanvas(c, mask, new DOMMatrix(), c.width, c.height, Number.isFinite(t) ? { cut, t, plan } : null);
   return c;
 };
 // "カット": mask a finished media layer canvas in stage fractions.
 J.maskMediaLayer = (canvas, cut, t, plan) => {
   const mask = J.activeMask(cut); if (!mask || mask.target !== 'cut') return;
-  J.applyMaskToCanvas(canvas, mask, new DOMMatrix([canvas.width, 0, 0, canvas.height, 0, 0]), 1, 1, Number.isFinite(t) ? { cut, t, plan } : null);
+  J.applyMaskToCanvas(canvas, mask, new DOMMatrix(), canvas.width, canvas.height, Number.isFinite(t) ? { cut, t, plan } : null);
 };
 })();

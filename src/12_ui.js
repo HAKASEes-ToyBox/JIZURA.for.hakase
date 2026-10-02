@@ -975,7 +975,9 @@ function openCutDetails(layer,index,part=0) {
     const rw=480,rh=Math.round(rw*plan.H/plan.W);maskRef.width=rw;maskRef.height=rh;
     const rx=maskRef.getContext('2d');rx.setTransform(1,0,0,1,0,0);rx.clearRect(0,0,rw,rh);
     J.masksSuspended=true;
-    try{maskRefRenderer.frame(rx,soloPlan(plan,c),(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
+    const referenceCut=lyric&&target==='source'&&c.area?{...c,area:{...c.area,angle:0}}:c;
+    const referencePlan=referenceCut===c?soloPlan(plan,c):{...soloPlan(plan,c),cuts:plan.cuts.map(cut=>cut.index===c.index?referenceCut:cut)};
+    try{maskRefRenderer.frame(rx,referencePlan,(c.start+Math.min(c.end,plan.duration))/2,{scale:rw/plan.W,noHud:true,...soloOptions});}catch(e){}
     finally{J.masksSuspended=false;}
     if(lyric&&target==='source'){const a=c.area||{x:0,y:0,w:1,h:1};return maskRefInfo={image:maskRef,sx:a.x*rw,sy:a.y*rh,sw:a.w*rw,sh:a.h*rh,aspect:a.w*plan.W/(a.h*plan.H)};}
     return maskRefInfo={image:maskRef,sx:0,sy:0,sw:rw,sh:rh,aspect:plan.W/plan.H};
@@ -1029,7 +1031,7 @@ function openCutDetails(layer,index,part=0) {
       // Darken what the mask hides.
       const shade=document.createElement('canvas');shade.width=w;shade.height=ch;const sx=shade.getContext('2d');
       sx.fillStyle='#000';sx.fillRect(0,0,w,ch);
-      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix([w,0,0,ch,0,0]),1,1);
+      J.applyMaskToCanvas(shade,{...mask,invert:!mask.invert,opacity:100},new DOMMatrix(),w,ch);
       if(mask.enabled){x.save();x.globalAlpha=.62*mask.opacity/100;x.drawImage(shade,0,0);x.restore();}
       mask.shapes.forEach((s,i)=>{
         x.lineWidth=i===maskSelected?2:1.2;x.strokeStyle=i===maskSelected?'#ffb000':'#4fe3ff';J.maskShapePath(x,[s],w,ch);x.stroke();

@@ -43,7 +43,7 @@ const result=await page.evaluate(()=>{
   check(cut.bgLayout.sig===JSON.stringify(m),'signature '+tag);
   const r=J.mediaPlacementRect(cut.placement,400,300,W,H);
   check(Math.abs(r.w*W/(r.h*H)-400/300)<1e-8,'aspect '+tag);
-  const bb=J.maskBounds(m.shapes),stage={x:0,y:0,w:1,h:1},win={x:Math.max(0,bb.x),y:Math.max(0,bb.y),w:Math.min(1,bb.x+bb.w)-Math.max(0,bb.x),h:Math.min(1,bb.y+bb.h)-Math.max(0,bb.y)};
+  const bb=J.maskBounds(m.shapes,W/H),stage={x:0,y:0,w:1,h:1},win={x:Math.max(0,bb.x),y:Math.max(0,bb.y),w:Math.min(1,bb.x+bb.w)-Math.max(0,bb.x),h:Math.min(1,bb.y+bb.h)-Math.max(0,bb.y)};
   check(inside(r,m.invert?stage:win),'source covers the window '+tag+' '+JSON.stringify(r)+JSON.stringify(win));
   for(const box of [...cut.bgLayout.obstacles,cut.bgLayout.zone].filter(Boolean))check(box.x>=-1e-6&&box.y>=-1e-6&&box.x+box.w<=1+1e-6&&box.y+box.h<=1+1e-6&&box.w>0&&box.h>0,'scene box in the stage '+tag+JSON.stringify(box));
   check(win.w>=.05&&win.h>=.05,'window size '+tag);
@@ -80,7 +80,7 @@ const result=await page.evaluate(()=>{
   const def=J.BACKGROUND_LAYOUTS.find(l=>l.id===id);J.backgroundLayoutPool=()=>[{...def,weight:1e7}];let tested=0,ok=0,comp=0;
   for(let seed=1;seed<=6;seed++){const pl=plan(setup(seed,'16:9','both')),bg=pl.media.cuts[0],fg=pl.foreground.cuts[0];if(!bg.bgLayout)continue;tested++;
    comp+=/^bgfit:/.test(fg.composition)&&JSON.stringify(fg.compositionZone)===JSON.stringify(bg.bgLayout.zone)?1:0;
-   const bb=J.maskBounds(bg.mask.shapes),c={x:fg.placement.cx,y:fg.placement.cy};if(c.x>=bb.x-.02&&c.x<=bb.x+bb.w+.02&&c.y>=bb.y-.02&&c.y<=bb.y+bb.h+.02)ok++;}
+   const bb=J.maskBounds(bg.mask.shapes,pl.W/pl.H),c={x:fg.placement.cx,y:fg.placement.cy};if(c.x>=bb.x-.02&&c.x<=bb.x+bb.w+.02&&c.y>=bb.y-.02&&c.y<=bb.y+bb.h+.02)ok++;}
   check(tested>=5&&comp===tested,'foreground composition follows the layout '+id+' '+comp+'/'+tested);check(ok===tested,'foreground centred in the window '+id+' '+ok+'/'+tested);
  }
  J.backgroundLayoutPool=real;
@@ -120,6 +120,9 @@ assert.ok(beforeEdit.sig,'layout cut to edit');
 await page.locator('#modePro').click();await page.locator('#closeSettingsDrawer').click();
 await page.locator('#sourceMedia').click().catch(()=>{});
 await page.locator('#mediaLineList .foreground-placement-open').first().click();
+// Applying an unchanged automatic placement keeps it automatic; make an actual edit.
+await page.locator('#mediaAreaWidth').fill(String(+await page.locator('#mediaAreaWidth').inputValue()+1));
+await page.locator('#mediaAreaWidth').dispatchEvent('change');
 await page.locator('#areaApplyOne').click();
 const edited=await page.evaluate(()=>{const o=J.ui.project.media.cutOverrides[0],c=J.ui.plan.media.cuts[0];return {manual:c.placementMode,mask:JSON.stringify(o.details?.mask&&J.normalizeMask(o.details.mask)),planMask:JSON.stringify(c.mask),bg:c.bgLayout};});
 assert.equal(edited.manual,'manual');assert.equal(edited.mask,beforeEdit.sig,'the window is kept');assert.equal(edited.planMask,beforeEdit.sig);assert.equal(edited.bg,undefined,'no longer an automatic layout');
