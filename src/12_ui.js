@@ -3372,12 +3372,25 @@ async function runExport(kind) {
   EXP_BTNS.forEach(id => { $(id).disabled = true; });
   const onProgress = (p, m) => { boxes.forEach(b => { b.querySelector('.exp-bar').style.width = (p * 100).toFixed(1) + '%'; }); setText(m); };
   const t0 = performance.now();
+  let fileStream=null;
   try {
+    // Ask while the export click still has user activation. Stream large MP4s
+    // straight to this file instead of holding the whole movie in browser RAM.
+    if(kind==='mp4'&&typeof window.showSaveFilePicker==='function'){
+      try{
+        const handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'MP4',accept:{'video/mp4':['.mp4']}}]});
+        fileStream=await handle.createWritable();
+      }catch(e){
+        // Embedded pages can expose the API while disallowing its picker.
+        if(e?.name!=='SecurityError')throw e;
+      }
+    }
     await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
     if (kind === 'mp4') {
-      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal });
-      txt.textContent = `完成 ${(r.blob.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
-      const res = await J.saveFile(filename, r.blob);
+      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream });
+      fileStream=null;
+      txt.textContent = `完成 ${(r.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
+      const res = r.saved?'saved':await J.saveFile(filename, r.blob);
       if (res === 'declined') txt.textContent += '（保存はキャンセルされました）';
     } else {
       const blob = await J.exportPNGZip({ plan: S.plan, project: S.project, transparent: kind === 'pnga', onProgress, signal: ac.signal });
@@ -3385,6 +3398,8 @@ async function runExport(kind) {
       await J.saveFile(filename, blob);
     }
   } catch (e) {
+    if(fileStream)try{await fileStream.abort();}catch{}
+    if(e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
   } finally {
