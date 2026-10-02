@@ -65,13 +65,20 @@ async function resample(buffer, sr, duration) {
 }
 
 /* ---------- MP4 ---------- */
-J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signal }) => {
+// One source for the UI labels, codec probe and actual video encoder (bits/s).
+J.videoBitrate = (project, quality=project.quality||'high', fps=project.fps) => {
+  const [w,h]=J.outputSize(project),px=w*h*fps;
+  const bitrate=quality==='custom' ? (project.exportBitrate ?? px*.28)
+    : px*(quality==='max' ? .42 : quality==='high' ? .28 : .16);
+  if(!Number.isFinite(bitrate)||bitrate<1||bitrate>Number.MAX_SAFE_INTEGER)throw new Error(J.mediaLabel('ビットレートは正の数で指定してください。','Enter a positive bitrate.'));
+  return Math.round(bitrate);
+};
+J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal }) => {
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
   const fps = plan.fps;
-  const px = w * h * fps;
-  const bitrate = Math.round(px * (quality === 'max' ? 0.42 : quality === 'high' ? 0.28 : 0.16));
+  const bitrate = J.videoBitrate(project,quality,fps);
   const vc = await J.pickVideoCodec(w, h, fps, bitrate);
   if (!vc) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
   let ac = null;

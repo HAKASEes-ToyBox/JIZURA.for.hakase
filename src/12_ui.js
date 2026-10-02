@@ -3247,6 +3247,15 @@ function renderTech() {
 }
 
 /* ---------------- output tab ---------------- */
+function syncQuality() {
+  const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate')};
+  for(const option of $('outQuality').options){
+    let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
+    option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
+  }
+  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
+  $('outBitrate').closest('label').hidden=S.project.quality!=='custom';
+}
 function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
   $('eAspect').value = S.project.aspect; $('eRes').value = String(S.project.res); $('eFps').value = String(S.project.fps);
@@ -3263,6 +3272,7 @@ function syncOut() {
   }
   for (const id of ['outAspect', 'outRes', 'eAspect', 'eRes']) $(id).disabled = !!size;
   $('outQuality').value = S.project.quality || 'high'; $('outAudio').checked = S.project.includeAudio !== false;
+  syncQuality();
   const k = J.keyMode(S.project) || 'off';
   $('outKey').value = k; $('eKey').value = k;
   const kb = $('keyBadge');
@@ -3271,7 +3281,8 @@ function syncOut() {
 }
 async function codecNote() {
   const [w, h] = J.outputSize(S.project);
-  const vc = await J.pickVideoCodec(w, h, S.project.fps, 12e6);
+  let bitrate;try{bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate);
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
@@ -3291,13 +3302,14 @@ function openExportDialog(kind) {
   $('outKey').closest('label').hidden = kind === 'pnga';
   $('exportSettings').querySelector('.key-note').hidden = kind === 'pnga';
   $('codecNote').hidden = !mp4;
-  syncOut(); codecNote(); $('exportDlg').showModal();
+  syncOut();if(!mp4)$('outBitrate').closest('label').hidden=true;codecNote(); $('exportDlg').showModal();
 }
 function restoreExportSettings() {
   $('exportSettingsHome').appendChild($('exportSettings'));
   for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
   for (const id of ['outQuality','outAudio','outKey']) $(id).closest('label').hidden = false;
   $('exportSettings').querySelector('.key-note').hidden = false;
+  syncQuality();
 }
 function baseName() {
   const k = J.keyMode(S.project);
@@ -3336,6 +3348,7 @@ function confirmHiddenLayers() {
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
+  if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
   if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
@@ -4173,7 +4186,17 @@ function bind() {
     });
   }
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
-  $('outQuality').addEventListener('change', e => { S.project.quality = e.target.value; autosave(); });
+  $('outQuality').addEventListener('change', e => {
+    S.project.quality=e.target.value;
+    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(S.project,'high');
+    syncQuality();codecNote();autosave();
+  });
+  $('outBitrate').addEventListener('input',e=>{
+    S.project.exportBitrate=Number(e.target.value)*1e6;
+    const selection=$('outQuality').querySelector('[value="custom"]');
+    selection.textContent=J.mediaLabel('任意ビットレート','Custom bitrate')+(e.target.validity.valid?` (${+e.target.value} Mbps)`:'');
+    codecNote();autosave();
+  });
   ['outKey', 'eKey'].forEach(id => $(id).addEventListener('change', e => {
     S.project.keyBg = e.target.value; syncOut(); replan(); flushSave();
     const k = J.keyMode(S.project);

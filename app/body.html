@@ -286,7 +286,8 @@
           <label class="field field-wide">動画サイズ<select id="outVideoSize"><option value="legacy">画面比と解像度から指定</option><option value="1920x1080">1920 × 1080（フルHD）</option><option value="1280x720">1280 × 720（HD）</option><option value="3840x2160">3840 × 2160（4K）</option><option value="1080x1920">1080 × 1920（縦型）</option><option value="1080x1080">1080 × 1080（正方形）</option><option value="1080x1350">1080 × 1350（4:5）</option><option value="custom">自由入力</option></select></label>
           <label class="field video-size-custom" hidden>幅（px）<input id="outVideoWidth" type="number" min="16" max="8192" step="2"></label><label class="field video-size-custom" hidden>高さ（px）<input id="outVideoHeight" type="number" min="16" max="8192" step="2"></label>
           <label class="field">fps<select id="outFps"><option>24</option><option>30</option><option>60</option></select></label>
-          <label class="field">画質<select id="outQuality"><option value="standard">標準</option><option value="high">高</option><option value="max">最高</option></select></label>
+          <label class="field">画質<select id="outQuality"><option value="standard">標準</option><option value="high">高</option><option value="max">最高</option><option value="custom">任意ビットレート</option></select></label>
+          <label class="field" hidden>ビットレート（Mbps）<input id="outBitrate" type="number" min="0.001" step="any" required></label>
           <label class="field field-wide">背景<select id="outKey"><option value="off">通常（スタイルの背景）</option><option value="green">グリーンバック（合成用）</option><option value="black">ブラックバック（合成用）</option></select></label>
         </div>
         <p class="note key-note">グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。</p>
