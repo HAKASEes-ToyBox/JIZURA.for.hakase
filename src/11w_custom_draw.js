@@ -8,7 +8,7 @@ const numeric=['x','y','w','h','ox','oy','rotation','scale','opacity','lineWidth
 // units:"short" measures w/h in the frame's shorter edge, so circles stay round in any aspect ratio.
 const frames=['area','text','textX','textY'],unitModes=['frame','short'];
 const allowed=new Set(['type',...numeric,'fill','stroke','text','font','frame','units']);
-J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',frames:{frame:frames,units:unitModes,ox:'offset added after frame placement, in shorter-edge units',notes:'frame text/textX/textY (decor only) follow the resting lyric text box, so decorations track font size and area changes; other targets fall back to the area. units short keeps w/h proportional (aspect-safe shapes). size, lineWidth and bounce use the frame shorter edge.'},numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Numbers and animation endpoints may use {param:"amount",default:1}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
+J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',frames:{frame:frames,units:unitModes,ox:'offset added after frame placement, in shorter-edge units',notes:'frame text/textX/textY (decor only) follow the resting lyric text box, so decorations track font size and area changes; other targets fall back to the area. units short keeps w/h proportional (aspect-safe shapes). size, lineWidth and bounce use the frame shorter edge.'},numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Numbers and animation endpoints may use {param:"amount",default:1}, optionally scaled by mul ({param:"size",default:1,mul:0.4} = size × 0.4). Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
 J.validateDrawing=program=>{
   const fail=message=>{throw Error('Drawing program: '+message);};
   if(!program||program.version!==1||!['replace','overlay'].includes(program.mode)||!Array.isArray(program.nodes)||program.nodes.length>64||JSON.stringify(program).length>32768)fail('invalid version, mode or node limit');
@@ -16,7 +16,7 @@ J.validateDrawing=program=>{
   function number(v){
     if(typeof v==='number'){if(!Number.isFinite(v)||Math.abs(v)>10000)fail('number out of range');return;}
     if(!v||typeof v!=='object'||Array.isArray(v))fail('invalid numeric value');
-    if('param' in v){if(typeof v.param!=='string'||!/^[a-zA-Z][a-zA-Z0-9_]{0,40}$/.test(v.param)||Object.keys(v).some(k=>!['param','default'].includes(k))||v.default!==undefined&&!Number.isFinite(v.default))fail('invalid parameter reference');return;}
+    if('param' in v){if(typeof v.param!=='string'||!/^[a-zA-Z][a-zA-Z0-9_]{0,40}$/.test(v.param)||Object.keys(v).some(k=>!['param','default','mul'].includes(k))||v.default!==undefined&&!Number.isFinite(v.default)||v.mul!==undefined&&(!Number.isFinite(v.mul)||Math.abs(v.mul)>10000))fail('invalid parameter reference');return;}
     const lerp='from' in v,keys=lerp?['from','to','ease']:['value','amplitude','cycles','phase'];
     const scalar=n=>Number.isFinite(n)||n&&typeof n==='object'&&'param' in n;
     for(const [key,n] of Object.entries(v)){if(!keys.includes(key))fail('unknown animation field '+key);if(key==='ease'){if(!['linear','in','out','inOut'].includes(n))fail('invalid ease');}else{if(!scalar(n))fail('invalid animation number');number(n);}}
@@ -39,7 +39,8 @@ J.validateDrawing=program=>{
 const checked=new WeakSet();
 J.drawingValue=(v,p=0,params={},fallback=0)=>{
   if(v===undefined)return fallback;if(typeof v==='number')return v;
-  if('param' in v)return Number.isFinite(params[v.param])?params[v.param]:(v.default??fallback);
+  // {param,default,mul}: the parameter (or its default) times mul, so one size parameter can scale a whole shape
+  if('param' in v){const n=Number.isFinite(params[v.param])?params[v.param]:(v.default??fallback);return v.mul===undefined?n:n*v.mul;}
   const scalar=(n,f)=>J.drawingValue(n,p,params,f);
   if('from' in v){let t=J.clamp(p);if(v.ease==='in')t*=t;else if(v.ease==='out')t=1-(1-t)**2;else if(v.ease==='inOut')t=t*t*(3-2*t);const from=scalar(v.from,0);return from+(scalar(v.to,0)-from)*t;}
   return scalar(v.value,0)+scalar(v.amplitude,0)*Math.sin(p*scalar(v.cycles,1)*Math.PI*2+scalar(v.phase,0));

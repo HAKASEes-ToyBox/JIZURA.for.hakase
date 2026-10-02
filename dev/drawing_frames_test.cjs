@@ -1,7 +1,8 @@
 // Drawing programs stay intact when the display area or the lyric size changes:
 //   units:"short" keeps w/h proportional (round circles in any aspect), frame:"text" places decor on the
 //   lyric's resting text box, ox/oy offset in short-edge units, and layout programs report the text box
-//   they drew so stock decor and frame:"text" components can follow custom layouts.
+//   they drew so stock decor and frame:"text" components can follow custom layouts; {param,mul} scales a
+//   parameter so one size value can resize a multi-part shape.
 const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
 const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
@@ -23,7 +24,9 @@ try{
   {const cv=canvas(200,100);J.drawProgram(cv.getContext('2d'),{version:1,mode:'overlay',nodes:[{type:'rect',frame:'text',x:.25,y:.25,w:.5,h:.5,fill:'#00ff00'}]},{W:200,H:100});out.fallback=greenBox(cv);}
   // 3 layout programs return the box of the text they drew (here: the stub's local box, translated)
   {const cv=canvas(400,200);out.drawn=J.drawProgram(cv.getContext('2d'),{version:1,mode:'replace',nodes:[{type:'text',text:'$text',x:.5,y:.5,w:1,size:.2}]},{W:400,H:200,text:'AB',drawText:()=>({x0:-30,y0:-10,x1:30,y1:10})});}
-  // 4 validation
+  // 4 validation; parameter references scaled by mul (one size parameter resizes a multi-part shape)
+  out.mul=[J.drawingValue({param:'size',mul:.5},0,{size:4}),J.drawingValue({param:'size',default:2,mul:3},0,{}),J.drawingValue({value:{param:'size',mul:2},amplitude:0},0,{size:1.5})];
+  out.badMul=(()=>{try{J.validateDrawing({version:1,mode:'overlay',nodes:[{type:'rect',x:{param:'size',mul:'2'}}]});return false;}catch{return true;}})();
   out.badFrame=(()=>{try{J.validateDrawing({version:1,mode:'overlay',nodes:[{type:'rect',frame:'screen'}]});return false;}catch{return true;}})();
   out.badUnits=(()=>{try{J.validateDrawing({version:1,mode:'overlay',nodes:[{type:'rect',units:'px'}]});return false;}catch{return true;}})();
   // 5 a decor component on the text box follows the lyric in landscape and portrait, and at a smaller scale
@@ -46,6 +49,8 @@ try{
  assert.deepEqual(r.fallback,{x0:50,y0:25,x1:150,y1:75},'falls back to the area');
  assert.deepEqual(r.drawn,{x0:170,y0:90,x1:230,y1:110},'layout program reports the drawn text box');
  assert.ok(r.badFrame&&r.badUnits,'invalid frame/units rejected');
+ assert.deepEqual(r.mul,[2,6,3],'param × mul');
+ assert.ok(r.badMul,'non-numeric mul rejected');
  for(const {W,H,box} of r.decor){
   assert.ok(box,'decor drawn on the text box '+W+'x'+H);
   const cx=(box.x0+box.x1)/2,cy=(box.y0+box.y1)/2;
