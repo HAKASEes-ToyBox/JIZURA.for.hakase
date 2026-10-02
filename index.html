@@ -42271,6 +42271,8 @@ function openCutDetails(layer,index,part=0) {
     clearTimeout(previewTimer);current=refreshPreview();render();const restoredFocus=dialog.querySelector(focusSelector);(restoredFocus&&!restoredFocus.disabled?restoredFocus:dialog).focus({preventScroll:true});
   }
   dialog.addEventListener('keydown',e=>{
+    // Enter in an input commits its value without implicitly clicking Apply.
+    if(e.key==='Enter'&&e.target instanceof HTMLInputElement&&!e.isComposing)e.preventDefault();
     if((e.ctrlKey||e.metaKey)&&!e.altKey&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();moveDetailHistory(e.key.toLowerCase()==='y'||e.shiftKey?1:-1);}
   });
   const schedulePreview=()=>{rememberDetail();clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
