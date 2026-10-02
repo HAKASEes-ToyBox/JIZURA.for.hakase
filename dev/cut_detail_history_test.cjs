@@ -11,6 +11,10 @@ const {timelineAction}=require('./ui_helpers.cjs');
  await undo.click();assert.equal(await input().inputValue(),'50');await redo.click();assert.equal(await input().inputValue(),'20');await page.keyboard.press('Control+z');assert.equal(await input().inputValue(),'50');await page.keyboard.press('Control+Shift+z');assert.equal(await input().inputValue(),'20');
  await reset.click();assert.equal(await input().inputValue(),'100');await undo.click();assert.equal(await input().inputValue(),'20');
  await input().fill('60');assert.ok(await redo.isDisabled());await page.keyboard.press('Control+z');assert.equal(await input().inputValue(),'20');await page.keyboard.press('Control+Shift+z');assert.equal(await input().inputValue(),'60');
+ // Form rebuilds / disabled buttons can leave keyboard events targeting body.
+ for(const [shortcut,value] of [['Control+z','20'],['Control+y','60'],['Meta+z','20'],['Meta+Shift+z','60']]){
+  await page.evaluate(()=>document.activeElement.blur());await page.keyboard.press(shortcut);assert.equal(await input().inputValue(),value,shortcut+' routes to modal even without focused input');assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),original,'modal shortcut leaves global project unchanged');
+ }
  const rect=dialog.locator('.cut-mask-handles .area-edit-rect'),before=await dialog.locator('[data-mask-shape=cx]').inputValue();assert.equal(await rect.locator('.area-edit-handle').count(),4);assert.equal(await rect.locator('.area-rotate-handle').count(),4);
  let box=await rect.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+15,box.y+box.height/2+8,{steps:4});await page.mouse.up();
  const moved=await dialog.locator('[data-mask-shape=cx]').inputValue();assert.notEqual(moved,before);await undo.click();assert.equal(await dialog.locator('[data-mask-shape=cx]').inputValue(),before);await redo.click();assert.equal(await dialog.locator('[data-mask-shape=cx]').inputValue(),moved);

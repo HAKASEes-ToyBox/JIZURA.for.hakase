@@ -42274,8 +42274,14 @@ function openCutDetails(layer,index,part=0) {
   dialog.addEventListener('keydown',e=>{
     // Enter in an input commits its value without implicitly clicking Apply.
     if(e.key==='Enter'&&e.target instanceof HTMLInputElement&&!e.isComposing)e.preventDefault();
-    if((e.ctrlKey||e.metaKey)&&!e.altKey&&['z','y'].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();moveDetailHistory(e.key.toLowerCase()==='y'||e.shiftKey?1:-1);}
   });
+  // Rebuilding the form can leave focus on body. Route modal history before
+  // document shortcuts, even when the event does not bubble through the dialog.
+  const detailShortcut=e=>{
+    if(!dialog.open||!(e.ctrlKey||e.metaKey)||e.altKey||e.isComposing||!['KeyZ','KeyY'].includes(e.code))return;
+    e.preventDefault();e.stopImmediatePropagation();moveDetailHistory(e.code==='KeyY'||e.shiftKey?1:-1);
+  };
+  document.addEventListener('keydown',detailShortcut,true);
   const schedulePreview=()=>{rememberDetail();clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(dialog.open)refreshPreview();},120);};
   // "Show the edited cut only": other layers are switched off and other lyric cuts are left out
   // of a shallow plan copy (the cut keeps its own background effect and transition).
@@ -42976,6 +42982,7 @@ function openCutDetails(layer,index,part=0) {
     };
   }
   dialog.addEventListener('close',()=>{
+    document.removeEventListener('keydown',detailShortcut,true);
     personController?.abort();
     cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
     // Hand shared video elements back to the editor's own time.
@@ -45669,6 +45676,7 @@ function bind() {
     }
     const tag = (e.target && e.target.tagName) || '';
     const typing = (e.target && e.target.isContentEditable) || /INPUT|TEXTAREA|SELECT/.test(tag) && e.target.type !== 'range' && e.target.type !== 'checkbox';
+    if(document.querySelector('dialog[open]')&&!e.altKey&&(e.ctrlKey||e.metaKey)&&['KeyZ','KeyY'].includes(e.code))return;
     if (!typing && !e.altKey && (e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undoMove(e.shiftKey ? 1 : -1); return; }
     if (!typing && !e.altKey && e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); undoMove(1); return; }
     if (S.tap && (e.code === 'Space' || e.code === 'Enter') && !typing) { e.preventDefault(); tapNow(); return; }
