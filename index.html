@@ -44381,6 +44381,17 @@ function renderTech() {
 }
 
 /* ---------------- output tab ---------------- */
+function syncExportSettingsVisibility() {
+  const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
+  const mp4=!inDialog||S.exportKind==='mp4',transparent=inDialog&&S.exportKind==='pnga';
+  $('outQuality').closest('label').hidden=!mp4;
+  $('outAudio').closest('label').hidden=!mp4;
+  $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
+  $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
+  $('outKey').closest('label').hidden=transparent;
+  $('exportSettings').querySelector('.key-note').hidden=transparent;
+  $('codecNote').hidden=!mp4;
+}
 function syncQuality() {
   const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
@@ -44389,9 +44400,8 @@ function syncQuality() {
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
   $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
-  $('outBitrate').closest('label').hidden=S.project.quality!=='custom';
   $('outQP').value=String(S.project.exportQP ?? 12);
-  $('outQP').closest('label').hidden=$('outQPNote').hidden=S.project.quality!=='qp';
+  syncExportSettingsVisibility();
 }
 function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
@@ -44438,18 +44448,11 @@ function openExportDialog(kind) {
   $('exportDlgTitle').textContent = J.mediaLabel(mp4 ? 'MP4 を書き出す' : kind === 'pnga' ? '透過PNG（ZIP・背景なし）' : '連番PNG（ZIP）', mp4 ? 'Export MP4' : kind === 'pnga' ? 'Transparent PNG (ZIP)' : 'PNG sequence (ZIP)');
   $('exportDialogContent').appendChild($('exportSettings'));
   for (const [id,type] of [['btnMP4','mp4'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
-  $('outQuality').closest('label').hidden = !mp4;
-  $('outAudio').closest('label').hidden = !mp4;
-  $('outKey').closest('label').hidden = kind === 'pnga';
-  $('exportSettings').querySelector('.key-note').hidden = kind === 'pnga';
-  $('codecNote').hidden = !mp4;
-  syncOut();if(!mp4){$('outBitrate').closest('label').hidden=true;$('outQP').closest('label').hidden=$('outQPNote').hidden=true;}codecNote(); $('exportDlg').showModal();
+  syncOut();codecNote(); $('exportDlg').showModal();
 }
 function restoreExportSettings() {
   $('exportSettingsHome').appendChild($('exportSettings'));
   for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
-  for (const id of ['outQuality','outAudio','outKey']) $(id).closest('label').hidden = false;
-  $('exportSettings').querySelector('.key-note').hidden = false;
   syncQuality();
 }
 function baseName() {
