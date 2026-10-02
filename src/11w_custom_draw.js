@@ -3,9 +3,12 @@
 'use strict';
 const colors=['fg','bg','accent','accent2','sub','ink','dim'];
 const types=['rect','ellipse','line','text','arcText','source'];
-const numeric=['x','y','w','h','rotation','scale','opacity','lineWidth','size','arc','contrast','bounce'];
-const allowed=new Set(['type',...numeric,'fill','stroke','text','font']);
-J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Numbers and animation endpoints may use {param:"amount",default:1}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
+const numeric=['x','y','w','h','ox','oy','rotation','scale','opacity','lineWidth','size','arc','contrast','bounce'];
+// frame: what x/y/w/h are fractions of — the display area, or (decor) the lyric's resting text box, or one axis of it.
+// units:"short" measures w/h in the frame's shorter edge, so circles stay round in any aspect ratio.
+const frames=['area','text','textX','textY'],unitModes=['frame','short'];
+const allowed=new Set(['type',...numeric,'fill','stroke','text','font','frame','units']);
+J.drawingSpec={version:1,mode:['replace','overlay'],nodes:types,colors,coordinates:'Normalized to the target display area / fitted material. Rotation in degrees. Text centered; size is fraction of the shorter edge.',frames:{frame:frames,units:unitModes,ox:'offset added after frame placement, in shorter-edge units',notes:'frame text/textX/textY (decor only) follow the resting lyric text box, so decorations track font size and area changes; other targets fall back to the area. units short keeps w/h proportional (aspect-safe shapes). size, lineWidth and bounce use the frame shorter edge.'},numericFields:numeric,numericValue:'A finite number, or {from,to,ease:"linear"|"in"|"out"|"inOut"}, or {value,amplitude,cycles,phase}. Numbers and animation endpoints may use {param:"amount",default:1}. Animation progress spans the cut (0..1); sine phase in radians.',text:['$text','$note','literal string'],limits:{nodes:64,bytes:32768},example:{version:1,mode:'replace',nodes:[{type:'rect',x:.1,y:.35,w:.8,h:.3,fill:'accent',scale:{from:.8,to:1,ease:'out'}},{type:'text',text:'$text',x:.5,y:.5,size:.12,fill:'fg',rotation:{value:0,amplitude:3,cycles:1}}]}};
 J.validateDrawing=program=>{
   const fail=message=>{throw Error('Drawing program: '+message);};
   if(!program||program.version!==1||!['replace','overlay'].includes(program.mode)||!Array.isArray(program.nodes)||program.nodes.length>64||JSON.stringify(program).length>32768)fail('invalid version, mode or node limit');
@@ -27,6 +30,8 @@ J.validateDrawing=program=>{
       if(['fill','stroke'].includes(key)&&!colors.includes(v)&&!/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v))fail('invalid color');
       if(key==='text'&&(typeof v!=='string'||v.length>4000))fail('invalid text');
       if(key==='font'&&(typeof v!=='string'||!v.length||v.length>200))fail('invalid font key');
+      if(key==='frame'&&!frames.includes(v))fail('invalid frame');
+      if(key==='units'&&!unitModes.includes(v))fail('invalid units');
     }
   }
   return JSON.parse(JSON.stringify(program));
@@ -39,13 +44,22 @@ J.drawingValue=(v,p=0,params={},fallback=0)=>{
   if('from' in v){let t=J.clamp(p);if(v.ease==='in')t*=t;else if(v.ease==='out')t=1-(1-t)**2;else if(v.ease==='inOut')t=t*t*(3-2*t);const from=scalar(v.from,0);return from+(scalar(v.to,0)-from)*t;}
   return scalar(v.value,0)+scalar(v.amplitude,0)*Math.sin(p*scalar(v.cycles,1)*Math.PI*2+scalar(v.phase,0));
 };
-J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null,params={},drawText=null})=>{
+J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null,params={},drawText=null,box=null})=>{
   if(!checked.has(program)){J.validateDrawing(program);checked.add(program);}
   const value=(v,fallback)=>J.drawingValue(v,p,params,fallback);
-  const color=c=>sc[c]||c||sc.fg||'#ffffff',u=Math.min(W,H);
+  const color=c=>sc[c]||c||sc.fg||'#ffffff';
+  const area={x0:0,y0:0,x1:W,y1:H},tbox=box&&box.x1>box.x0&&box.y1>box.y0?box:null;
+  // Layout programs report the box of the text they drew (in program coordinates) for decor and treatments.
+  const base=drawText&&ctx.getTransform?ctx.getTransform().inverse():null;let drawn=null;
+  const track=r=>{if(!base||!r||!(r.x1>r.x0))return;const m=base.multiply(ctx.getTransform());
+    for(const [px,py] of [[r.x0,r.y0],[r.x1,r.y0],[r.x0,r.y1],[r.x1,r.y1]]){const q=m.transformPoint({x:px,y:py});drawn=drawn?{x0:Math.min(drawn.x0,q.x),y0:Math.min(drawn.y0,q.y),x1:Math.max(drawn.x1,q.x),y1:Math.max(drawn.y1,q.y)}:{x0:q.x,y0:q.y,x1:q.x,y1:q.y};}};
   for(const node of program.nodes){
     ctx.save();try{
-      const x=value(node.x,.5)*W,y=value(node.y,.5)*H,w=value(node.w,.5)*W,h=value(node.h,.5)*H;
+      const f=node.frame&&node.frame!=='area'&&tbox?node.frame:'area';
+      const fx=f==='text'||f==='textX'?tbox:area,fy=f==='text'||f==='textY'?tbox:area;
+      const fw=fx.x1-fx.x0,fh=fy.y1-fy.y0,u=Math.max(1,Math.min(fw,fh)),short=node.units==='short';
+      const x=fx.x0+value(node.x,.5)*fw+value(node.ox,0)*u,y=fy.y0+value(node.y,.5)*fh+value(node.oy,0)*u;
+      const w=value(node.w,.5)*(short?u:fw),h=value(node.h,.5)*(short?u:fh);
       ctx.translate(x,y);ctx.rotate(value(node.rotation,0)*Math.PI/180);const scale=value(node.scale,1);ctx.scale(scale,scale);ctx.globalAlpha*=J.clamp(value(node.opacity,1));
       ctx.fillStyle=color(node.fill);ctx.strokeStyle=color(node.stroke);ctx.lineWidth=Math.max(.01,value(node.lineWidth,.005)*u);
       if(node.type==='arcText'){
@@ -59,7 +73,7 @@ J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null,
           const size=Math.max(1,base*(i%2===0?1+contrast:1-contrast));
           ctx.save();ctx.translate(Math.cos(angle)*(rx+pulse),Math.sin(angle)*(ry+pulse));ctx.rotate(angle+Math.PI/2);
           ctx.font=`${f?.weight||900} ${size}px ${f?.family||'sans-serif'}`;
-          if(drawText)drawText({text:ch,font:node.font||font,size,color:color(node.fill),mi:i});
+          if(drawText)track(drawText({text:ch,font:node.font||font,size,color:color(node.fill),mi:i}));
           else{if(node.stroke)ctx.strokeText(ch,0,0);ctx.fillText(ch,0,0);}ctx.restore();
         });
       }else if(node.type==='text'){
@@ -68,11 +82,12 @@ J.drawProgram=(ctx,program,{W,H,p=0,text='',note='',source=null,sc={},font=null,
         ctx.font=`${f?.weight||600} ${size}px ${f?.family||'sans-serif'}`;ctx.textAlign='center';ctx.textBaseline='middle';
         // Fit uniformly, never squeeze the glyph aspect ratio.
         const fit=Math.min(1,Math.abs(w)/Math.max(1,ctx.measureText(str).width));ctx.scale(fit,fit);
-        if(drawText)drawText({text:str,font:node.font||font,size,color:color(node.fill),mi:0});else ctx.fillText(str,0,0);
+        if(drawText)track(drawText({text:str,font:node.font||font,size,color:color(node.fill),mi:0}));else ctx.fillText(str,0,0);
       }else if(node.type==='source'){if(source){const sw=source.videoWidth||source.naturalWidth||source.width,sh=source.videoHeight||source.naturalHeight||source.height;if(sw&&sh){const fit=Math.min(Math.abs(w)/sw,Math.abs(h)/sh);ctx.drawImage(source,-sw*fit/2,-sh*fit/2,sw*fit,sh*fit);}}}
       else{ctx.beginPath();if(node.type==='rect')ctx.rect(0,0,w,h);else if(node.type==='ellipse')ctx.ellipse(0,0,Math.abs(w)/2,Math.abs(h)/2,0,0,Math.PI*2);else{ctx.moveTo(0,0);ctx.lineTo(w,h);}if(node.type!=='line'&&node.fill)ctx.fill();if(node.stroke||node.type==='line')ctx.stroke();}
     }finally{ctx.restore();}
   }
+  return drawn;
 };
 const drawCut=J.Renderer.prototype.drawCut;
 J.Renderer.prototype.drawCut=function(env){
