@@ -7902,6 +7902,44 @@ J.cutDetailKeys = {
 };
 // The look of a cut at lock time: its effect payload (see the effect clipboard), without text or placement.
 J.cutLockSnapshot = (cut, layer, plan) => J.cutEffectsPayload(cut, layer, plan).details;
+// Resolved automatic choices travel with their cut options (including insert,
+// delete, undo and project save). Pool/timing changes affect the next explicit
+// draw, rather than silently changing a cut already on the timeline.
+const copyEffects=value=>JSON.parse(JSON.stringify(value));
+const effectKey=(project,layer,index)=>JSON.stringify(layer==='lyrics'
+  ?[project.seed,project.overrides?.[index]?.seed||0]
+  :[project.seed,project[layer]?.seed,project[layer]?.cutOverrides?.[index]?.seed||0]);
+const effectParams={layout:'params',enter:'enterP',hold:'holdP',exit:'exitP',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'};
+function stableDetails(project,layer,cut,options,locked){
+  const saved=options?.autoEffects;
+  if(locked||!saved||saved.key!==effectKey(project,layer,layer==='lyrics'?cut.line:cut.index))return {};
+  const result=copyEffects(saved.details),explicit=options.details||{};
+  for(const [field,param] of Object.entries(effectParams))if(Object.hasOwn(explicit,field)&&explicit[field]!==result[field])delete result[param];
+  if(layer==='lyrics'){
+    const override=project.overrides?.[cut.line]||{};
+    for(const [field,param] of Object.entries(effectParams))if(override[field]&&override[field]!==result[field]){result[field]=override[field];delete result[param];}
+    if(Array.isArray(override.decor))result.decor=copyEffects(cut.decor);
+  }else{
+    const override={...project[layer]?.overrides?.[cut.itemId],...options};
+    if(override.technique!=null&&override.technique!==saved.native.technique)return {};
+    for(const [field,phase,param] of [['entrance','enter','entranceP'],['departure','exit','departureP']])if(override[field]!=null&&override[field]!==saved.native[field]){delete result[phase];delete result[param];}
+    for(const field of ['technique','entrance','departure'])if(override[field]==null)cut[field]=saved.native[field];
+  }
+  return result;
+}
+J.captureAutoEffects=(project,plan)=>{
+  for(const layer of ['lyrics','media','foreground'])for(const cut of (layer==='lyrics'?plan.cuts:plan[layer]?.cuts)||[]){
+    if(layer==='lyrics'&&(!Number.isInteger(cut.part)||cut.line<0))continue;
+    const index=layer==='lyrics'?cut.line:cut.index,options=layer==='lyrics'
+      ?((project.lyricCutOptions||={})[`${cut.line}:${cut.part}`]||={})
+      :((project[layer].cutOverrides||={})[index]||={});
+    const key=effectKey(project,layer,index);
+    if(options.autoEffects?.key===key)continue;
+    const payload=J.cutEffectsPayload(cut,layer,plan),details=payload.details;
+    for(const field of ['drawing','effectStyle','effectFx','fonts','palette','fontParams','motionScale','contentScale','effectSettings','bpm','beatOffset'])delete details[field];
+    options.autoEffects={key,details,native:payload.native};
+  }
+};
 J.applyCutDetails = (cut, details, plan, layer) => {
   if (!details || typeof details !== 'object') return;
   if(details.drawing){J.validateDrawing(details.drawing);if(layer!=='lyrics'&&cut.technique==='legacy')cut.technique='none';}
@@ -7963,9 +8001,9 @@ J.plan = function(project, ...args) {
   // A locked cut keeps the look captured when it was locked (J.cutLockSnapshot); the user's own
   // detail edits still apply on top of it.
   for (const cut of plan.cuts) if (Number.isInteger(cut.part) && cut.line >= 0) {
-    const details=project.lyricCutOptions?.[`${cut.line}:${cut.part}`]?.details;
+    const options=project.lyricCutOptions?.[`${cut.line}:${cut.part}`],details=options?.details;
     const locked=project.overrides?.[cut.line]?.lock ? project.overrides[cut.line].lockedEffects?.[cut.part] : null;
-    J.applyCutDetails(cut,locked ? {...locked,...(details || {})} : details,plan,'lyrics');
+    J.applyCutDetails(cut,{...stableDetails(project,'lyrics',cut,options,locked),...(locked||{}),...(details||{})},plan,'lyrics');
   }
   // Events belong to their originating cut, including accents before its boundary.
   for (const cut of plan.cuts) if (Array.isArray(cut.effectEvents)) {
@@ -7997,10 +8035,19 @@ J.plan = function(project, ...args) {
 };
 const planMedia = J.planMedia;
 J.planMedia = function(project, plan, audioDuration, layer='media') {
-  const result = planMedia(project,plan,audioDuration,layer);
+  const overrides={...project[layer]?.cutOverrides};
+  for(const [index,options] of Object.entries(overrides)){
+    const saved=options.autoEffects;
+    if(options.lock||!saved||saved.key!==effectKey(project,layer,+index))continue;
+    const resolved={...project[layer]?.overrides?.[options.itemId],...options};
+    overrides[index]={...options};
+    for(const field of ['technique','entrance','departure'])if(resolved[field]==null)overrides[index][field]=saved.native[field];
+  }
+  const input={...project,[layer]:{...project[layer],cutOverrides:overrides}};
+  const result = planMedia(input,plan,audioDuration,layer);
   for (const cut of result.cuts) {
     const options=project[layer]?.cutOverrides?.[cut.index],locked=options?.lock ? options.lockedEffects : null;
-    J.applyCutDetails(cut,locked ? {...locked,...(options.details || {})} : options?.details,plan,layer);
+    J.applyCutDetails(cut,{...stableDetails(project,layer,cut,options,locked),...(locked||{}),...(options?.details||{})},plan,layer);
   }
   return result;
 };
@@ -41812,6 +41859,7 @@ function composePlan(project) {
 function replan() {
   closeTimelineCutMenu();
   S.plan = composePlan(S.project);
+  J.captureAutoEffects(S.project,S.plan);
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
   if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
@@ -41905,7 +41953,7 @@ function sizeViewport() {
 // Detail previews share the imported videos with the main renderer. Their seeked
 // events request main redraws, which must not reset the videos to the main clock.
 function syncMainMediaPreview() {
-  if(!$('cutDetailsDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');

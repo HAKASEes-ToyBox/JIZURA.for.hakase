@@ -210,6 +210,7 @@ function composePlan(project) {
 function replan() {
   closeTimelineCutMenu();
   S.plan = composePlan(S.project);
+  J.captureAutoEffects(S.project,S.plan);
   if (S.tap && S.tap.append && !S.audio) extendTapPreview(S.t);
   langNote();
   if (S.t > S.plan.duration) S.t = Math.max(0, S.plan.duration - 1e-3);
@@ -303,7 +304,7 @@ function sizeViewport() {
 // Detail previews share the imported videos with the main renderer. Their seeked
 // events request main redraws, which must not reset the videos to the main clock.
 function syncMainMediaPreview() {
-  if(!$('cutDetailsDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
