@@ -511,13 +511,6 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-tabs button { padding: 7px 10px; font-size: 12px; }
 .cut-details-tabs button[aria-selected=true] { color: #ffb000; border-color: #ffb000; background: #302719; }
 .cut-details-tab-panel[hidden] { display: none; }
-.person-cutout-controls { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:14px 0; }
-.person-cutout-editor > button { margin:4px 8px 8px 0; }
-.person-cutout-editor progress { display:block; width:100%; height:14px; accent-color:var(--amber); }
-.person-cutout-editor progress[hidden] { display:none; }
-.person-cutout-editor [data-person-status] { overflow-wrap:anywhere; font-size:13px; }
-.person-cutout-options { display:grid; gap:14px; padding-top:18px; margin-top:18px; border-top:1px solid var(--line2); }
-.person-cutout-options .check { display:flex; gap:8px; align-items:center; }
 @media (max-width: 860px) { .cut-details-tabs { top: -16px; } }
 @media (max-width: 600px) { .cut-details-tabs { top: -12px; gap: 4px; } .cut-details-tabs button { padding: 6px 8px; font-size: 11px; } }
 @media (max-width: 860px) {
