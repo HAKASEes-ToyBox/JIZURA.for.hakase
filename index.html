@@ -1146,12 +1146,12 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         </div>
         <div class="pick-sets">
         </div>
-        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="手法を名前で絞り込み" style="flex:1" aria-label="手法を名前で絞り込み"><span id="techTotal" class="muted mono"></span></div>
+        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="search" placeholder="あいまい検索" style="flex:1;min-width:0" aria-label="あいまい検索"><span id="techTotal" class="muted mono"></span></div>
         <div id="techLists"></div>
       </div>
 
-      <div class="tabpane" data-pane="foregroundFx" hidden><div id="foregroundEffectsPanel" class="media-effects-panel"></div></div>
-      <div class="tabpane" data-pane="mediaFx" hidden><div id="mediaEffectsPanel" class="media-effects-panel"></div></div>
+      <div class="tabpane" data-pane="foregroundFx" hidden><div class="row" style="margin-bottom:10px"><input id="foregroundEffectFilter" type="search" placeholder="あいまい検索" aria-label="あいまい検索" style="flex:1;min-width:0"></div><div id="foregroundEffectsPanel" class="media-effects-panel"></div></div>
+      <div class="tabpane" data-pane="mediaFx" hidden><div class="row" style="margin-bottom:10px"><input id="mediaEffectFilter" type="search" placeholder="あいまい検索" aria-label="あいまい検索" style="flex:1;min-width:0"></div><div id="mediaEffectsPanel" class="media-effects-panel"></div></div>
 
       <div class="tabpane" data-pane="out" hidden><div id="exportSettingsHome"><div id="exportSettings">
         <div class="fields">
@@ -44616,10 +44616,11 @@ function renderTech() {
   $('lyricOpacityMax').value = lyricEffects.opacityMax;
   const box = $('techLists'); box.innerHTML = '';
   const q = ($('techFilter').value || '').trim().toLowerCase();
+  const matches=J.detailSearchQuery(q);
   let total = 0, onAll = 0;
   GROUPS.forEach(([g, label]) => {
     const tbl = J.registry(g), items = techItems(g), en = S.project.enabled[g] || (S.project.enabled[g] = {});
-    const shown = q ? items.filter(k => (tbl[k].name + ' ' + k).toLowerCase().includes(q)) : items;
+    const shown = items.filter(k => matches(tbl[k].name+' '+k));
     const onN = items.filter(k => en[k] !== false).length;
     total += items.length; onAll += onN;
     if (q && !shown.length) return;
@@ -44880,6 +44881,7 @@ function renderMediaEffects(layer) {
   if (!layer) { for (const target of ['foreground', 'media']) renderMediaEffects(target); return; }
   const box = $(layer + 'EffectsPanel'); if (!box) return;
   const settings = J.mediaEffectSettings(S.project, layer), L = J.mediaLabel;
+  const q=($(layer+'EffectFilter').value||'').trim(),matches=J.detailSearchQuery(q);
   const layerNote = layer === 'foreground' ? L('前景の画像・動画に適用します。', 'Applies to foreground images and videos.') : L('背景の画像・動画に適用します。', 'Applies to background images and videos.');
   const shuffleLabel = layer === 'foreground' ? L('前景をシャッフル', 'Shuffle foreground') : L('背景をシャッフル', 'Shuffle background');
   const setting = key => box.querySelector(`[data-media-setting="${key}"]`);
@@ -44898,17 +44900,18 @@ function renderMediaEffects(layer) {
   const groups = MEDIA_EFFECT_GROUPS;
   for (const [group, name] of Object.entries(groups)) {
     const items = Object.entries(J.MEDIA_TECH).filter(([key, def]) => def.group === group && J.mediaTechAllowed(key, layer));
-    if (!items.length) continue;
+    const shown=items.filter(([key,def])=>matches(def.name+' '+key));
+    if (!shown.length) continue;
     const count = enabled => `${items.filter(([key]) => enabled[key] !== false).length}/${items.length}`;
     const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = group;
-    section.open = openMediaGroups[layer].has(group);
+    section.open = !!q || openMediaGroups[layer].has(group);
     section.addEventListener('toggle', () => {
       if (!section.isConnected) return;
       if (section.open) openMediaGroups[layer].add(group); else openMediaGroups[layer].delete(group);
     });
     section.innerHTML = `<summary><span class="tg-name">${name}</span><span class="tg-cnt mono">${count(settings.enabled)}</span></summary><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
-    for (const [key, def] of items) {
+    for (const [key, def] of shown) {
       const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-tech="${key}" ${settings.enabled[key] !== false ? 'checked' : ''}><span>${escapeHtml(def.name)}${setBadges(def)}</span>`;
       row.querySelector('input').addEventListener('change', e => {
         const next = J.mediaEffectSettings(S.project, layer); next.enabled[key] = e.target.checked; S.project[layer].effects = next;
@@ -44917,7 +44920,7 @@ function renderMediaEffects(layer) {
     }
     section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
       const next = J.mediaEffectSettings(S.project, layer), action = button.dataset.mediaGroupAction;
-      for (const [key] of items) next.enabled[key] = action === 'on' ? true : action === 'off' ? false : next.enabled[key] === false;
+      for (const [key] of shown) next.enabled[key] = action === 'on' ? true : action === 'off' ? false : next.enabled[key] === false;
       S.project[layer].effects = next; openMediaGroups[layer].add(group); renderMediaEffects(layer); replan();
     }));
     section.appendChild(list);
@@ -44926,13 +44929,14 @@ function renderMediaEffects(layer) {
   {
     // Decorations for this layer, laid out like the technique groups; used when "Enable decorations" is on.
     const items = J.order('decor').filter(key => J.DECOR[key]).map(key => [key, J.DECOR[key]]);
+    const shown=items.filter(([key,def])=>matches(def.name+' '+key));
     const count = s => `${items.filter(([key]) => J.mediaDecorOn(s, key)).length}/${items.length}`;
     const section = document.createElement('details'); section.className = 'tgroup media-tech-group'; section.dataset.mediaGroup = 'decor';
-    section.open = openMediaGroups[layer].has('decor');
+    section.open = !!q || openMediaGroups[layer].has('decor');
     section.addEventListener('toggle', () => { if (!section.isConnected) return; if (section.open) openMediaGroups[layer].add('decor'); else openMediaGroups[layer].delete('decor'); });
     section.innerHTML = `<summary><span class="tg-name">${L('装飾', 'Decoration')}</span><span class="tg-cnt mono">${count(settings)}</span></summary><p class="note">${L('「装飾を有効にする」がONのとき、チェックした装飾を「自動」の画像・動画で使います。背面の装飾は素材の下に描かれます。', 'With Enable decorations on, Auto images and videos use the checked decorations. Back decorations are drawn under the source.')}</p><div class="tg-tools"><button type="button" class="ghost small" data-media-group-action="on">${L('すべてON', 'Enable all')}</button><button type="button" class="ghost small" data-media-group-action="off">${L('すべてOFF', 'Disable all')}</button><button type="button" class="ghost small" data-media-group-action="flip">${L('反転', 'Invert')}</button></div>`;
     const list = document.createElement('div'); list.className = 'checks';
-    for (const [key, def] of items) {
+    for (const [key, def] of shown) {
       const row = document.createElement('label'); row.innerHTML = `<input type="checkbox" data-media-decor="${key}" ${J.mediaDecorOn(settings, key) ? 'checked' : ''}><span></span>`;
       row.querySelector('span').textContent = def.name + (def.layer === 'back' ? L('（背面）', ' (back)') : '');
       row.querySelector('span').insertAdjacentHTML('beforeend',setBadges(def));
@@ -44943,10 +44947,10 @@ function renderMediaEffects(layer) {
     }
     section.querySelectorAll('[data-media-group-action]').forEach(button => button.addEventListener('click', () => {
       const next = J.mediaEffectSettings(S.project, layer), act = button.dataset.mediaGroupAction;
-      for (const [key] of items) next.decorEnabled[key] = act === 'on' ? true : act === 'off' ? false : !J.mediaDecorOn(next, key);
+      for (const [key] of shown) next.decorEnabled[key] = act === 'on' ? true : act === 'off' ? false : !J.mediaDecorOn(next, key);
       S.project[layer].effects = next; openMediaGroups[layer].add('decor'); renderMediaEffects(layer); replan();
     }));
-    section.appendChild(list); box.appendChild(section);
+    section.appendChild(list); if(shown.length)box.appendChild(section);
   }
   setting('autoPlacement').onchange =e => { const next = J.mediaEffectSettings(S.project, layer); next.autoPlacement = e.target.checked; S.project[layer].effects = next; renderMediaEffects(layer); replan(); };
   {
@@ -45477,6 +45481,7 @@ function bind() {
   }));
   $('fxFlash').addEventListener('change', e => { S.project.fx.flash = e.target.checked; replan(); });
   $('techFilter').addEventListener('input', () => renderTech());
+  for(const layer of ['foreground','media'])$(layer+'EffectFilter').addEventListener('input',()=>renderMediaEffects(layer));
   $('fxKoma').addEventListener('change', e => { const k = +e.target.value; S.project.fx.koma = k; S.project.fx.onTwos = k > 0; S.project.mood = null; replan(); });
   $('fxHud').addEventListener('change', e => { S.project.fx.hud = e.target.value; replan(); });
   $('seed').addEventListener('change', e => { J.clearPastedLyricEffects(S.project); S.project.seed = parseInt(e.target.value, 10) || 0; replan(); });

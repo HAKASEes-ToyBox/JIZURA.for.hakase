@@ -272,12 +272,12 @@
         </div>
         <div class="pick-sets">
         </div>
-        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="text" placeholder="手法を名前で絞り込み" style="flex:1" aria-label="手法を名前で絞り込み"><span id="techTotal" class="muted mono"></span></div>
+        <div class="row" style="margin-bottom:10px"><input id="techFilter" type="search" placeholder="あいまい検索" style="flex:1;min-width:0" aria-label="あいまい検索"><span id="techTotal" class="muted mono"></span></div>
         <div id="techLists"></div>
       </div>
 
-      <div class="tabpane" data-pane="foregroundFx" hidden><div id="foregroundEffectsPanel" class="media-effects-panel"></div></div>
-      <div class="tabpane" data-pane="mediaFx" hidden><div id="mediaEffectsPanel" class="media-effects-panel"></div></div>
+      <div class="tabpane" data-pane="foregroundFx" hidden><div class="row" style="margin-bottom:10px"><input id="foregroundEffectFilter" type="search" placeholder="あいまい検索" aria-label="あいまい検索" style="flex:1;min-width:0"></div><div id="foregroundEffectsPanel" class="media-effects-panel"></div></div>
+      <div class="tabpane" data-pane="mediaFx" hidden><div class="row" style="margin-bottom:10px"><input id="mediaEffectFilter" type="search" placeholder="あいまい検索" aria-label="あいまい検索" style="flex:1;min-width:0"></div><div id="mediaEffectsPanel" class="media-effects-panel"></div></div>
 
       <div class="tabpane" data-pane="out" hidden><div id="exportSettingsHome"><div id="exportSettings">
         <div class="fields">
