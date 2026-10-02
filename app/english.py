@@ -102,7 +102,7 @@ BODY = {
     'ビットレート（Mbps）': 'Bitrate (Mbps)',
     '画質優先（QP指定）': 'Quality priority (QP)',
     '圧縮の強さ（QP）': 'Compression (QP)',
-    'QPは小さいほど高画質、大きいほど軽量です（0～51、初期値12）。容量・ビットレートは映像によって変わります。無圧縮ではありません。': 'Lower QP means higher quality; higher QP means smaller files (0–51, default 12). File size and bitrate depend on the video. This is not uncompressed output.',
+    '値が小さいほど高画質、大きいほど軽量になります。低QPはPCからの利用を推奨。': 'Lower values mean higher quality; higher values mean smaller files. A PC is recommended for low QP.',
     'グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。': 'Green screen and black background render white text and effects over a solid color, without background patterns, paper texture, particles or vignette. The preview shows the export. Use a chroma key for green or Screen blending / a luma key for black to composite over footage.',
     '曲を動画に含める': 'Include audio in video', '連番PNG（ZIP）': 'PNG sequence (ZIP)',
     '透過PNG（ZIP・背景なし）': 'Transparent PNG (ZIP)',
