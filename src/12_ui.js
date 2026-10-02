@@ -3248,13 +3248,16 @@ function renderTech() {
 
 /* ---------------- output tab ---------------- */
 function syncQuality() {
-  const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate')};
+  const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
+    if(option.value==='qp'){option.textContent=names.qp;continue;}
     let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
   $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
   $('outBitrate').closest('label').hidden=S.project.quality!=='custom';
+  $('outQP').value=String(S.project.exportQP ?? 12);
+  $('outQP').closest('label').hidden=$('outQPNote').hidden=S.project.quality!=='qp';
 }
 function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
@@ -3279,12 +3282,16 @@ function syncOut() {
   kb.hidden = k === 'off';
   if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'グリーンバック' : 'ブラックバック'}`;
 }
+let codecNoteVersion=0;
 async function codecNote() {
+  const version=++codecNoteVersion,isQP=S.project.quality==='qp';
   const [w, h] = J.outputSize(S.project);
-  let bitrate;try{bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
-  const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate);
+  let bitrate;try{if(isQP)J.videoQuantizer(S.project);else bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
+  if(version!==codecNoteVersion)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
 const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
@@ -3302,7 +3309,7 @@ function openExportDialog(kind) {
   $('outKey').closest('label').hidden = kind === 'pnga';
   $('exportSettings').querySelector('.key-note').hidden = kind === 'pnga';
   $('codecNote').hidden = !mp4;
-  syncOut();if(!mp4)$('outBitrate').closest('label').hidden=true;codecNote(); $('exportDlg').showModal();
+  syncOut();if(!mp4){$('outBitrate').closest('label').hidden=true;$('outQP').closest('label').hidden=$('outQPNote').hidden=true;}codecNote(); $('exportDlg').showModal();
 }
 function restoreExportSettings() {
   $('exportSettingsHome').appendChild($('exportSettings'));
@@ -3349,6 +3356,7 @@ async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
   if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
+  if(kind==='mp4'&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
   if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
@@ -4202,6 +4210,9 @@ function bind() {
     const k = J.keyMode(S.project);
     toast(k ? `背景：${k === 'green' ? 'グリーンバック' : 'ブラックバック'}（白い文字と演出だけ）` : '背景：通常（スタイルの配色）');
   }));
+  $('outQP').addEventListener('input',e=>{
+    S.project.exportQP=e.target.value===''?NaN:Number(e.target.value);codecNote();autosave();
+  });
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   $('btnPNG').addEventListener('click', () => runExport('png'));

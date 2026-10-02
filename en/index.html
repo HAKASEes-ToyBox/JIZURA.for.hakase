@@ -1160,11 +1160,13 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           <label class="field field-wide">Video size<select id="outVideoSize"><option value="legacy">Use aspect ratio and resolution</option><option value="1920x1080">1920 × 1080（Full HD）</option><option value="1280x720">1280 × 720（HD）</option><option value="3840x2160">3840 × 2160（4K）</option><option value="1080x1920">1080 × 1920（Portrait）</option><option value="1080x1080">1080 × 1080（Square）</option><option value="1080x1350">1080 × 1350（4:5）</option><option value="custom">Custom size</option></select></label>
           <label class="field video-size-custom" hidden>Width (px)<input id="outVideoWidth" type="number" min="16" max="8192" step="2"></label><label class="field video-size-custom" hidden>Height (px)<input id="outVideoHeight" type="number" min="16" max="8192" step="2"></label>
           <label class="field">fps<select id="outFps"><option>24</option><option>30</option><option>60</option></select></label>
-          <label class="field">Quality<select id="outQuality"><option value="standard">Standard</option><option value="high">High</option><option value="max">Maximum</option><option value="custom">Custom bitrate</option></select></label>
+          <label class="field">Quality<select id="outQuality"><option value="standard">Standard</option><option value="high">High</option><option value="max">Maximum</option><option value="custom">Custom bitrate</option><option value="qp">Quality priority (QP)</option></select></label>
           <label class="field" hidden>Bitrate (Mbps)<input id="outBitrate" type="number" min="0.001" step="any" required></label>
+          <label class="field" hidden>Compression (QP)<input id="outQP" type="number" min="0" max="51" step="1" required></label>
           <label class="field field-wide">Background<select id="outKey"><option value="off">Style background</option><option value="green">Green screen (compositing)</option><option value="black">Black background (compositing)</option></select></label>
         </div>
         <p class="note key-note">Green screen and black background render white text and effects over a solid color, without background patterns, paper texture, particles or vignette. The preview shows the export. Use a chroma key for green or Screen blending / a luma key for black to composite over footage.</p>
+        <p id="outQPNote" class="note" hidden>Lower QP means higher quality; higher QP means smaller files (0–51, default 12). File size and bitrate depend on the video. This is not uncompressed output.</p>
         <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> Include audio in video</label>
         <div class="outbtns">
           <button id="btnMP4" class="primary">Export MP4</button>
@@ -9815,7 +9817,7 @@ J.saveFile = async (filename, data) => {
 };
 
 /* ---------- codec negotiation ---------- */
-J.pickVideoCodec = async (w, h, fps, bitrate) => {
+J.pickVideoCodec = async (w, h, fps, bitrate, {bitrateMode='variable'}={}) => {
   if (typeof VideoEncoder === 'undefined') return null;
   const cands = [
     { codec: 'avc1.640033', mux: 'avc', label: 'H.264 High' },
@@ -9825,9 +9827,12 @@ J.pickVideoCodec = async (w, h, fps, bitrate) => {
     { codec: 'av01.0.12M.08', mux: 'av1', label: 'AV1' },
   ];
   for (const c of cands) {
-    const cfg = { codec: c.codec, width: w, height: h, bitrate, framerate: fps };
+    // Keep H.264's 0–51 QP scale; never substitute another codec or bitrate mode.
+    if(bitrateMode==='quantizer'&&c.mux!=='avc')continue;
+    const cfg = { codec: c.codec, width: w, height: h, framerate: fps, bitrateMode, latencyMode:'quality' };
+    if(bitrateMode!=='quantizer')cfg.bitrate=bitrate;
     if (c.mux === 'avc') cfg.avc = { format: 'avc' };
-    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) return Object.assign({}, c, { cfg }); } catch (e) {}
+    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported && (bitrateMode!=='quantizer'||s.config.bitrateMode==='quantizer')) return Object.assign({}, c, { cfg }); } catch (e) {}
   }
   return null;
 };
@@ -9856,13 +9861,20 @@ J.videoBitrate = (project, quality=project.quality||'high', fps=project.fps) => 
   if(!Number.isFinite(bitrate)||bitrate<1||bitrate>Number.MAX_SAFE_INTEGER)throw new Error(J.mediaLabel('ビットレートは正の数で指定してください。','Enter a positive bitrate.'));
   return Math.round(bitrate);
 };
+J.videoQuantizer = project => {
+  const qp=project.exportQP ?? 12;
+  if(!Number.isInteger(qp)||qp<0||qp>51)throw new Error(J.mediaLabel('QPは0～51の整数で指定してください。','Enter an integer QP from 0 to 51.'));
+  return qp;
+};
 J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal }) => {
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
   const fps = plan.fps;
-  const bitrate = J.videoBitrate(project,quality,fps);
-  const vc = await J.pickVideoCodec(w, h, fps, bitrate);
+  const qp=quality==='qp'?J.videoQuantizer(project):null;
+  const bitrate = qp==null ? J.videoBitrate(project,quality,fps) : undefined;
+  const vc = await J.pickVideoCodec(w, h, fps, bitrate,{bitrateMode:qp==null?'variable':'quantizer'});
+  if(!vc&&qp!=null)throw new Error(J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.'));
   if (!vc) throw new Error('Video encoding (WebCodecs) is unavailable. Open in the latest Chrome or Edge.');
   let ac = null;
   if (audio && audio.buffer && project.includeAudio !== false) ac = await J.pickAudioCodec(48000, Math.min(2, audio.buffer.numberOfChannels));
@@ -9886,7 +9898,7 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
     await J.prepareMediaFrame(plan, i / fps, signal);
     R.frame(ctx, plan, i / fps, { scale });
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
-    venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+    venc.encode(vf, { keyFrame: i % (fps * 2) === 0,...(qp==null?{}:{avc:{quantizer:qp}}) });
     vf.close();
     while (venc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2));
     if (i % 3 === 0) { onProgress && onProgress(i / total, `Frame ${i + 1}/${total}`); await new Promise(r => setTimeout(r, 0)); }
@@ -10014,7 +10026,7 @@ const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','themeBalance','style','mood','extra','wa','horror','typo','kinetic','keyBg',
-  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','exportBitrate','includeAudio','fx','enabled',
+  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','exportBitrate','exportQP','includeAudio','fx','enabled',
   'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence','customEffects'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
@@ -44906,13 +44918,16 @@ function renderTech() {
 
 /* ---------------- output tab ---------------- */
 function syncQuality() {
-  const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate')};
+  const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
+    if(option.value==='qp'){option.textContent=names.qp;continue;}
     let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
   $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
   $('outBitrate').closest('label').hidden=S.project.quality!=='custom';
+  $('outQP').value=String(S.project.exportQP ?? 12);
+  $('outQP').closest('label').hidden=$('outQPNote').hidden=S.project.quality!=='qp';
 }
 function syncOut() {
   $('outAspect').value = S.project.aspect; $('outRes').value = String(S.project.res); $('outFps').value = String(S.project.fps);
@@ -44937,12 +44952,16 @@ function syncOut() {
   kb.hidden = k === 'off';
   if (k !== 'off') kb.innerHTML = `<i style="background:${J.KEY_BG[k]}"></i>${k === 'green' ? 'Green screen' : 'Black background'}`;
 }
+let codecNoteVersion=0;
 async function codecNote() {
+  const version=++codecNoteVersion,isQP=S.project.quality==='qp';
   const [w, h] = J.outputSize(S.project);
-  let bitrate;try{bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
-  const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate);
+  let bitrate;try{if(isQP)J.videoQuantizer(S.project);else bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
+  if(version!==codecNoteVersion)return;
   $('codecNote').textContent = vc ? `This browser exports with ${vc.label} at (${w}×${h} / ${S.project.fps}fps). Keep this tab open during export.` : 'Video encoding (WebCodecs) is unavailable here. Try the latest Chrome or Edge, or export a PNG sequence.';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
   if (!vc) $('eMP4').title = 'MP4 export is unavailable here (Chrome or Edge recommended)';
 }
 const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
@@ -44960,7 +44979,7 @@ function openExportDialog(kind) {
   $('outKey').closest('label').hidden = kind === 'pnga';
   $('exportSettings').querySelector('.key-note').hidden = kind === 'pnga';
   $('codecNote').hidden = !mp4;
-  syncOut();if(!mp4)$('outBitrate').closest('label').hidden=true;codecNote(); $('exportDlg').showModal();
+  syncOut();if(!mp4){$('outBitrate').closest('label').hidden=true;$('outQP').closest('label').hidden=$('outQPNote').hidden=true;}codecNote(); $('exportDlg').showModal();
 }
 function restoreExportSettings() {
   $('exportSettingsHome').appendChild($('exportSettings'));
@@ -45007,6 +45026,7 @@ async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
   if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
+  if(kind==='mp4'&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
   if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
@@ -45860,6 +45880,9 @@ function bind() {
     const k = J.keyMode(S.project);
     toast(k ? `Background：${k === 'green' ? 'Green screen' : 'Black background'}（white text and effects only）` : 'Background：Style colors');
   }));
+  $('outQP').addEventListener('input',e=>{
+    S.project.exportQP=e.target.value===''?NaN:Number(e.target.value);codecNote();autosave();
+  });
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   $('btnPNG').addEventListener('click', () => runExport('png'));

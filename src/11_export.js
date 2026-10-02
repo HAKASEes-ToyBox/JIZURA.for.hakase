@@ -32,7 +32,7 @@ J.saveFile = async (filename, data) => {
 };
 
 /* ---------- codec negotiation ---------- */
-J.pickVideoCodec = async (w, h, fps, bitrate) => {
+J.pickVideoCodec = async (w, h, fps, bitrate, {bitrateMode='variable'}={}) => {
   if (typeof VideoEncoder === 'undefined') return null;
   const cands = [
     { codec: 'avc1.640033', mux: 'avc', label: 'H.264 High' },
@@ -42,9 +42,12 @@ J.pickVideoCodec = async (w, h, fps, bitrate) => {
     { codec: 'av01.0.12M.08', mux: 'av1', label: 'AV1' },
   ];
   for (const c of cands) {
-    const cfg = { codec: c.codec, width: w, height: h, bitrate, framerate: fps };
+    // Keep H.264's 0–51 QP scale; never substitute another codec or bitrate mode.
+    if(bitrateMode==='quantizer'&&c.mux!=='avc')continue;
+    const cfg = { codec: c.codec, width: w, height: h, framerate: fps, bitrateMode, latencyMode:'quality' };
+    if(bitrateMode!=='quantizer')cfg.bitrate=bitrate;
     if (c.mux === 'avc') cfg.avc = { format: 'avc' };
-    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) return Object.assign({}, c, { cfg }); } catch (e) {}
+    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported && (bitrateMode!=='quantizer'||s.config.bitrateMode==='quantizer')) return Object.assign({}, c, { cfg }); } catch (e) {}
   }
   return null;
 };
@@ -73,13 +76,20 @@ J.videoBitrate = (project, quality=project.quality||'high', fps=project.fps) => 
   if(!Number.isFinite(bitrate)||bitrate<1||bitrate>Number.MAX_SAFE_INTEGER)throw new Error(J.mediaLabel('ビットレートは正の数で指定してください。','Enter a positive bitrate.'));
   return Math.round(bitrate);
 };
+J.videoQuantizer = project => {
+  const qp=project.exportQP ?? 12;
+  if(!Number.isInteger(qp)||qp<0||qp>51)throw new Error(J.mediaLabel('QPは0～51の整数で指定してください。','Enter an integer QP from 0 to 51.'));
+  return qp;
+};
 J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal }) => {
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
   const fps = plan.fps;
-  const bitrate = J.videoBitrate(project,quality,fps);
-  const vc = await J.pickVideoCodec(w, h, fps, bitrate);
+  const qp=quality==='qp'?J.videoQuantizer(project):null;
+  const bitrate = qp==null ? J.videoBitrate(project,quality,fps) : undefined;
+  const vc = await J.pickVideoCodec(w, h, fps, bitrate,{bitrateMode:qp==null?'variable':'quantizer'});
+  if(!vc&&qp!=null)throw new Error(J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.'));
   if (!vc) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
   let ac = null;
   if (audio && audio.buffer && project.includeAudio !== false) ac = await J.pickAudioCodec(48000, Math.min(2, audio.buffer.numberOfChannels));
@@ -103,7 +113,7 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
     await J.prepareMediaFrame(plan, i / fps, signal);
     R.frame(ctx, plan, i / fps, { scale });
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
-    venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+    venc.encode(vf, { keyFrame: i % (fps * 2) === 0,...(qp==null?{}:{avc:{quantizer:qp}}) });
     vf.close();
     while (venc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2));
     if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}`); await new Promise(r => setTimeout(r, 0)); }
