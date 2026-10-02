@@ -8,7 +8,7 @@ const motionKeys=['x','y','rotation','scale','sx','sy','opacity'];
 let signature='',active=[];
 J.customEffectSpec={format:'jizura-effect-components',version:1,groups,id:'custom_ followed by letters, numbers or underscores (max 80)',
   fields:['version','id','group','name','nameEn','tags','themes','base','params','labels','motion','program','layer'],
-  params:'Standard JSON parameter defaults (numbers, booleans, strings, arrays, objects). program/motion may reference a numeric {param:"amount",default:1}; labels maps parameter keys to {ja,en}.',
+  params:'Standard JSON parameter defaults (numbers, booleans, strings, arrays, objects). program/motion may reference a numeric {param:"amount",default:1}, scaled by an optional mul ({param:"size",default:1,mul:.4}) so one parameter can resize a multi-part shape; labels maps parameter keys to {ja,en}.',
   targets:'Stock lyric groups target lyrics; decor also targets media. media/mediaEnter/mediaExit target images and videos in foreground/background.',
   base:'Existing stock ID in the same group. Reuse stock effects/parameters first; author only missing components. Custom IDs cannot be bases.',
   motion:{groups:['enter','hold','exit','treat','cam',...mediaGroups],fields:motionKeys,coordinates:'x/y fractions of target width/height; rotation degrees; scale/sx/sy/opacity multipliers',progress:'enter/exit: phase progress, hold: cut progress'},

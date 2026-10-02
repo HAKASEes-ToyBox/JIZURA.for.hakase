@@ -78,7 +78,7 @@
 
 `custom_effect_preview(id,time)` は標準パイプラインでPNGを返す。対象のカットで見る場合は `layer/index` も指定する。定義だけのプレビュー、組み合わせたお気に入りのプレビュー、実際のカットのプレビューを複数時点で確認する。
 
-`params` は標準のJSONパラメータの初期値。`labels` に表示名を指定できる。歌詞の登場・保持・退場は `details.enterP/holdP/exitP`、前景・背景は `details.techniqueP/entranceP/departureP`、装飾は `details.decor` の各要素のパラメータで調整する。数値をprogram/motionで使う場合は `{ "param": "radius", "default": 0.08 }` として参照する。アニメーションの振幅・端点にも指定できる。
+`params` は標準のJSONパラメータの初期値。`labels` に表示名を指定できる。歌詞の登場・保持・退場は `details.enterP/holdP/exitP`、前景・背景は `details.techniqueP/entranceP/departureP`、装飾は `details.decor` の各要素のパラメータで調整する。数値をprogram/motionで使う場合は `{ "param": "radius", "default": 0.08 }` として参照する。アニメーションの振幅・端点にも指定できる。`mul` を付けると値はパラメータ×`mul`になる（例 `{ "param": "size", "default": 1, "mul": 0.4 }`）。複数部品の位置・大きさを同じパラメータの倍数で書けば、詳細編集の1項目で形全体を拡大縮小できる。
 
 `motion` は `x/y`（表示サイズの比率）、`rotation`（度）、`scale/sx/sy/opacity`（倍率）。登場・退場はフェーズ内の進捗、保持はカット全体の進捗で動く。カメラの不透明度はカット側で指定する。
 
