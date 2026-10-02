@@ -2720,8 +2720,23 @@ function removeMediaCut(index, layer = activeMediaLayer() || 'media') {
   replan();
 }
 async function addMediaFiles(files, layer) {
+  files=files.filter(file=>/^(image|video)\//.test(file.type));
+  if(!files.length)return;
+  if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
+  S.projectBusy=true;
   const m = S.project[layer];
-  for (const file of files) {
+  const dialog=document.createElement('dialog');dialog.id='mediaLoadingDialog';dialog.className='insert-cut-dialog media-loading-dialog';
+  const title=document.createElement('h2'),status=document.createElement('p'),progress=document.createElement('progress');
+  title.textContent=layer==='foreground'?J.mediaLabel('前景素材を読み込み中','Loading foreground assets'):J.mediaLabel('背景素材を読み込み中','Loading background assets');
+  status.setAttribute('role','status');status.setAttribute('aria-live','polite');progress.setAttribute('aria-label',J.mediaLabel('素材を読み込み中','Loading assets'));
+  dialog.setAttribute('aria-busy','true');dialog.append(title,status,progress);
+  dialog.addEventListener('cancel',e=>e.preventDefault());
+  // Avoid flashing a dialog for small files, but cover snapshotting, decoding
+  // and browser storage for large files and batches.
+  const timer=setTimeout(()=>{document.body.append(dialog);dialog.showModal();},300);
+  try {
+  for (const [index,file] of files.entries()) {
+    status.textContent=J.mediaLabel('読み込み中','Loading')+` (${index+1}/${files.length})：${file.name}`;
     const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
@@ -2734,10 +2749,14 @@ async function addMediaFiles(files, layer) {
         m.items.push(item);
         m.overrides[item.id] = { ...(m.overrides[item.id] || {}), technique: null };
       }
+      status.textContent=J.mediaLabel('ブラウザに保存中','Saving in browser')+` (${index+1}/${files.length})：${file.name}`;
       await J.storeMedia(item.id, file);
-    } catch (err) { toast(`${file.name}: 読み込めませんでした`); }
+    } catch (err) { toast(`${file.name}: `+J.mediaLabel('読み込めませんでした','Could not load asset')); }
   }
   replan();
+  } finally {
+    clearTimeout(timer);if(dialog.open)dialog.close();dialog.remove();S.projectBusy=false;
+  }
 }
 const MEDIA_EFFECT_GROUPS = {
   enter: J.mediaLabel('登場', 'Entrance'), exit: J.mediaLabel('退場', 'Exit'),

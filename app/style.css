@@ -618,6 +618,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .layer-visibility-controls svg { display: block; width: 18px; height: 18px; }
 
 .insert-cut-dialog { width: min(420px,90vw); }
+.media-loading-dialog p { overflow-wrap:anywhere; }
+.media-loading-dialog progress { display:block; width:100%; height:14px; accent-color:var(--amber); }
 .insert-cut-dialog textarea, .insert-cut-dialog select { display: block; width: 100%; margin-top: 6px; }
 .split-effect-options { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .split-effect-options label { display: flex; align-items: center; gap: 5px; }
