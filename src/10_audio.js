@@ -24,12 +24,17 @@ J.audioWaveFile = (buffer,name) => {
   for(let i=0,at=44;i<length;i++)for(let ch=0;ch<channels;ch++,at+=2){const sample=Math.max(-1,Math.min(1,data[ch][i]));view.setInt16(at,Math.round(sample*(sample<0?32768:32767)),true);}
   return new File([bytes],name.replace(/\.[^.]+$/,'')+'.wav',{type:'audio/wav'});
 };
-J.analyzeAudio = async (file) => {
+J.analyzeAudio = async (file, onProgress = () => {}) => {
+  onProgress({phase:'read'});
   const buf = await file.arrayBuffer();
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC();
   let audioBuffer;
+  onProgress({phase:'decode'});
   try { audioBuffer = await ac.decodeAudioData(buf.slice(0)); } finally { try { ac.close(); } catch (e) {} }
+  onProgress({phase:'analyze'});
+  // Paint the analysis stage before the synchronous beat / waveform calculation.
+  await new Promise(resolve=>setTimeout(resolve,0));
   const sr = audioBuffer.sampleRate, len = audioBuffer.length, ch = audioBuffer.numberOfChannels;
   const mono = new Float32Array(len);
   for (let c = 0; c < ch; c++) { const d = audioBuffer.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / ch; }

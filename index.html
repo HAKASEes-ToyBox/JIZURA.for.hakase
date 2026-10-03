@@ -5533,13 +5533,15 @@ const dbOp = async (mode, cb) => {
 // Read bytes before retaining an asset so saving over the source project cannot
 // invalidate video URLs, IndexedDB entries, or a later project download.
 const mediaSnapshots = new WeakMap();
-J.snapshotMediaFile = file => {
+J.snapshotMediaFile = (file, onProgress = () => {}) => {
   if (!(file instanceof Blob)) return Promise.reject(new Error('Missing media file'));
-  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file);
+  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file).then(copy=>{onProgress(file.size,file.size);return copy;});
   const task = (async () => {
     const parts = [], chunk = 4 * 1024 * 1024;
+    onProgress(0,file.size);
     for (let offset = 0; offset < file.size; offset += chunk) {
       parts.push(new Blob([await file.slice(offset, offset + chunk).arrayBuffer()]));
+      onProgress(Math.min(offset+chunk,file.size),file.size);
     }
     const copy = typeof file.name === 'string'
       ? new File(parts, file.name, { type: file.type, lastModified: file.lastModified })
@@ -5585,8 +5587,9 @@ J.releaseMediaAsset = asset => {
   if (asset.posterElement) asset.posterElement.removeAttribute('src');
   if (asset.url) URL.revokeObjectURL(asset.url);
 };
-J.attachMedia = async (item, file, assets = J.mediaAssets) => {
-  file = await J.snapshotMediaFile(file);
+J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
+  file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
+  onProgress({phase:'decode'});
   return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
@@ -9759,12 +9762,17 @@ J.audioWaveFile = (buffer,name) => {
   for(let i=0,at=44;i<length;i++)for(let ch=0;ch<channels;ch++,at+=2){const sample=Math.max(-1,Math.min(1,data[ch][i]));view.setInt16(at,Math.round(sample*(sample<0?32768:32767)),true);}
   return new File([bytes],name.replace(/\.[^.]+$/,'')+'.wav',{type:'audio/wav'});
 };
-J.analyzeAudio = async (file) => {
+J.analyzeAudio = async (file, onProgress = () => {}) => {
+  onProgress({phase:'read'});
   const buf = await file.arrayBuffer();
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC();
   let audioBuffer;
+  onProgress({phase:'decode'});
   try { audioBuffer = await ac.decodeAudioData(buf.slice(0)); } finally { try { ac.close(); } catch (e) {} }
+  onProgress({phase:'analyze'});
+  // Paint the analysis stage before the synchronous beat / waveform calculation.
+  await new Promise(resolve=>setTimeout(resolve,0));
   const sr = audioBuffer.sampleRate, len = audioBuffer.length, ch = audioBuffer.numberOfChannels;
   const mono = new Float32Array(len);
   for (let c = 0; c < ch; c++) { const d = audioBuffer.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / ch; }
@@ -44281,43 +44289,55 @@ function removeMediaCut(index, layer = activeMediaLayer() || 'media') {
   });
   replan();
 }
+function importProgressDialog(id, heading, delay=0) {
+  const dialog=document.createElement('dialog');dialog.id=id;dialog.className='insert-cut-dialog media-loading-dialog';
+  const title=document.createElement('h2'),status=document.createElement('p'),progress=document.createElement('progress');
+  title.id=id+'Title';title.textContent=heading;dialog.setAttribute('aria-labelledby',title.id);
+  status.setAttribute('role','status');status.setAttribute('aria-live','polite');progress.max=1;progress.setAttribute('aria-label',heading);
+  dialog.setAttribute('aria-busy','true');dialog.append(title,status,progress);
+  dialog.addEventListener('cancel',e=>e.preventDefault());
+  const escape=e=>{if(dialog.open&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();}};
+  document.addEventListener('keydown',escape,true);
+  const show=()=>{document.body.append(dialog);dialog.showModal();};
+  const timer=delay?setTimeout(show,delay):null;if(!delay)show();
+  return {
+    report(text,value=null){status.textContent=text;if(value==null)progress.removeAttribute('value');else progress.value=J.clamp(value,0,1);},
+    close(){clearTimeout(timer);document.removeEventListener('keydown',escape,true);if(dialog.open)dialog.close();dialog.remove();}
+  };
+}
 async function addMediaFiles(files, layer) {
   files=files.filter(file=>/^(image|video)\//.test(file.type));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
   const m = S.project[layer];
-  const dialog=document.createElement('dialog');dialog.id='mediaLoadingDialog';dialog.className='insert-cut-dialog media-loading-dialog';
-  const title=document.createElement('h2'),status=document.createElement('p'),progress=document.createElement('progress');
-  title.textContent=layer==='foreground'?J.mediaLabel('前景素材を読み込み中','Loading foreground assets'):J.mediaLabel('背景素材を読み込み中','Loading background assets');
-  status.setAttribute('role','status');status.setAttribute('aria-live','polite');progress.setAttribute('aria-label',J.mediaLabel('素材を読み込み中','Loading assets'));
-  dialog.setAttribute('aria-busy','true');dialog.append(title,status,progress);
-  dialog.addEventListener('cancel',e=>e.preventDefault());
-  // Avoid flashing a dialog for small files, but cover snapshotting, decoding
-  // and browser storage for large files and batches.
-  const timer=setTimeout(()=>{document.body.append(dialog);dialog.showModal();},300);
+  const loading=importProgressDialog('mediaLoadingDialog',layer==='foreground'?J.mediaLabel('前景素材を読み込み中','Loading foreground assets'):J.mediaLabel('背景素材を読み込み中','Loading background assets'),files.some(J.isVideoFile)?0:300);
   try {
   for (const [index,file] of files.entries()) {
-    status.textContent=J.mediaLabel('読み込み中','Loading')+` (${index+1}/${files.length})：${file.name}`;
+    const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
+    report(J.mediaLabel('読み込み中','Loading'));
     const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
     try {
-      const el = await J.attachMedia(item, file);
+      const el = await J.attachMedia(item, file, J.mediaAssets, p=>{
+        if(p.phase==='read')report(J.mediaLabel('ファイルを読み込み中','Reading file')+(p.total?` ${Math.round(p.loaded/p.total*100)}%`:''),p.total?p.loaded/p.total:null);
+        else report(J.mediaLabel('素材を準備中','Preparing asset'));
+      });
       el.addEventListener('seeked', () => { S.need = true; });
       if (type === 'video') item.duration = el.duration || 0;
       if (!existing) {
         m.items.push(item);
         m.overrides[item.id] = { ...(m.overrides[item.id] || {}), technique: null };
       }
-      status.textContent=J.mediaLabel('ブラウザに保存中','Saving in browser')+` (${index+1}/${files.length})：${file.name}`;
+      report(J.mediaLabel('ブラウザに保存中','Saving in browser'));
       await J.storeMedia(item.id, file);
     } catch (err) { toast(`${file.name}: `+J.mediaLabel('読み込めませんでした','Could not load asset')); }
   }
   replan();
   } finally {
-    clearTimeout(timer);if(dialog.open)dialog.close();dialog.remove();S.projectBusy=false;
+    loading.close();S.projectBusy=false;
   }
 }
 const MEDIA_EFFECT_GROUPS = {
@@ -45902,6 +45922,7 @@ function bind() {
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
 function openAudioImport(file) {
+  if(S.projectBusy||S.exporting){toast(J.mediaLabel('処理が完了してから読み込んでください','Wait for the current operation before importing'));return;}
   pause();
   const L=J.mediaLabel,video=J.isVideoFile(file),dialog=document.createElement('dialog');
   dialog.id='audioImportDialog';dialog.className='insert-cut-dialog';
@@ -45912,22 +45933,36 @@ function openAudioImport(file) {
   dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
 }
 async function loadAudioFile(f,options={matchDuration:true,background:false}) {
+  if(S.projectBusy||S.exporting)return false;
+  S.projectBusy=true;
   const project = S.project, request = S.audioLoad = (S.audioLoad || 0) + 1;
   const previousDuration=S.plan.duration,video=J.isVideoFile(f),assets=new Map();
+  const loading=importProgressDialog('audioLoadingDialog',video?J.mediaLabel('動画を読み込み中','Loading video'):J.mediaLabel('曲を読み込み中','Loading audio'));
+  const report=(text,value=null)=>loading.report(text+'：'+f.name,value);
   $('audioName').textContent = '解析中…';
   try {
     pause();
-    const audio = await J.analyzeAudio(f);
-    const duration=video?await J.videoFileDuration(f):audio.duration;
+    report(J.mediaLabel('ファイルを読み込み中','Reading file'));
+    await new Promise(resolve=>setTimeout(resolve,0));
+    const sourceFile=await J.snapshotMediaFile(f,(loaded,total)=>report(J.mediaLabel('ファイルを読み込み中','Reading file')+(total?` ${Math.round(loaded/total*100)}%`:''),total?loaded/total:null));
+    const audio = await J.analyzeAudio(sourceFile,p=>report(p.phase==='read'?J.mediaLabel('音声を読み込み中','Reading audio'):p.phase==='decode'?J.mediaLabel('音声を展開中','Decoding audio'):J.mediaLabel('拍・波形を解析中','Analyzing beats and waveform')));
+    if(video)report(J.mediaLabel('動画の長さを確認中','Checking video duration'));
+    const duration=video?await J.videoFileDuration(sourceFile):audio.duration;
     if (S.project !== project || S.audioLoad !== request) return false;
-    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):f);
+    report(J.mediaLabel('音声を保存する準備中','Preparing audio for saving'));
+    await new Promise(resolve=>setTimeout(resolve,0));
+    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):sourceFile);
     let item=null;
     if(video&&options.background){
       if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
       item={id:crypto.randomUUID(),name:f.name,size:f.size,type:'video',duration};
-      await J.attachMedia(item,f,assets);await J.storeMedia(item.id,f);
+      report(J.mediaLabel('背景動画を準備中','Preparing background video'));
+      await J.attachMedia(item,sourceFile,assets);
+      report(J.mediaLabel('背景動画をブラウザに保存中','Saving background video in browser'));
+      await J.storeMedia(item.id,sourceFile);
     }
     const audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
+    report(J.mediaLabel('音声をブラウザに保存中','Saving audio in browser'));
     await J.storeMedia(audioAsset.id,audioFile);
     if (S.project !== project || S.audioLoad !== request) return false;
     if(item){
@@ -45941,12 +45976,13 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
     project.durationOverride=options.matchDuration?duration:previousDuration;
     refreshAudioName();
     S.project.timing.snap = true;
+    report(J.mediaLabel('編集画面を更新中','Updating editor'));
     syncUI(); replan();
     return true;
   } catch (err) {
     if (S.project === project && S.audioLoad === request) { refreshAudioName(); toast(J.mediaLabel('曲を読み込めませんでした：','Could not import audio: ') + err.message); }
     return false;
-  } finally {releaseProjectAssets(assets);}
+  } finally {releaseProjectAssets(assets);loading.close();S.projectBusy=false;}
 }
 
 function releaseProjectAssets(assets) {

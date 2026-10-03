@@ -299,13 +299,15 @@ const dbOp = async (mode, cb) => {
 // Read bytes before retaining an asset so saving over the source project cannot
 // invalidate video URLs, IndexedDB entries, or a later project download.
 const mediaSnapshots = new WeakMap();
-J.snapshotMediaFile = file => {
+J.snapshotMediaFile = (file, onProgress = () => {}) => {
   if (!(file instanceof Blob)) return Promise.reject(new Error('Missing media file'));
-  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file);
+  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file).then(copy=>{onProgress(file.size,file.size);return copy;});
   const task = (async () => {
     const parts = [], chunk = 4 * 1024 * 1024;
+    onProgress(0,file.size);
     for (let offset = 0; offset < file.size; offset += chunk) {
       parts.push(new Blob([await file.slice(offset, offset + chunk).arrayBuffer()]));
+      onProgress(Math.min(offset+chunk,file.size),file.size);
     }
     const copy = typeof file.name === 'string'
       ? new File(parts, file.name, { type: file.type, lastModified: file.lastModified })
@@ -351,8 +353,9 @@ J.releaseMediaAsset = asset => {
   if (asset.posterElement) asset.posterElement.removeAttribute('src');
   if (asset.url) URL.revokeObjectURL(asset.url);
 };
-J.attachMedia = async (item, file, assets = J.mediaAssets) => {
-  file = await J.snapshotMediaFile(file);
+J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
+  file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
+  onProgress({phase:'decode'});
   return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
