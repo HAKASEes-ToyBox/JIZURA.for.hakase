@@ -27,13 +27,16 @@ const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
   ctx: null, src: null, startAt: 0,
-  play(buffer, offset) {
+  play(buffer, offset, end = null) {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.stop();
+    const off = end==null ? Math.max(0, Math.min(offset, buffer.duration - 0.01)) : Math.max(0,offset);
+    this.startAt = this.ctx.currentTime - off;
+    if(end!=null&&(off>=buffer.duration||end<=off))return;
     const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.ctx.destination);
-    const off = Math.max(0, Math.min(offset, buffer.duration - 0.01));
-    s.start(0, off); this.src = s; this.startAt = this.ctx.currentTime - off;
+    if(end==null)s.start(0,off);else s.start(0,off,Math.min(end,buffer.duration)-off);
+    this.src = s;
   },
   stop() { if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} this.src = null; } },
   time() { return this.ctx ? this.ctx.currentTime - this.startAt : 0; },
@@ -3288,6 +3291,13 @@ function renderTech() {
 const shortExportActive=()=>$('exportSettings').parentElement.id==='exportDialogContent'&&S.exportKind==='short';
 const activeExportProject=()=>shortExportActive()?J.shortExportProject(S.project):S.project;
 let shortPreview=null;
+const shortPreviewAudio={...AP,ctx:null,src:null,startAt:0};
+const shortPreviewHasAudio=()=>!!S.audio?.buffer&&S.project.includeAudio!==false;
+function playShortPreviewAudio(){
+  const p=shortPreview;if(!p)return;
+  shortPreviewAudio.stop();p.audioClock=shortPreviewHasAudio();p.clock=performance.now()-p.t*1000;
+  if(p.audioClock)shortPreviewAudio.play(S.audio.buffer,p.t,J.shortExportRange(S.plan,S.project.shortExport).end);
+}
 function syncShortPreviewMarkers(){
   const p=shortPreview,time=p?Math.round(p.t*1000)/1000:0,disabled=!!S.exporting||!p?.ready;
   $('shortSetStart').disabled=disabled||time>=S.plan.duration;
@@ -3312,6 +3322,7 @@ function shortRangeValid(){
 function pauseShortPreview(){
   if(!shortPreview)return;
   shortPreview.playing=false;
+  shortPreviewAudio.stop();shortPreview.audioClock=false;
   for(const asset of J.mediaAssets.values())if(asset.type==='video')asset.element.pause();
   $('shortPreviewPlay').textContent='▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel('プレビューを再生','Play preview'));
 }
@@ -3327,13 +3338,21 @@ async function prepareShortPreview(time,play=false){
   p.t=play&&(time<range.start||time>=range.end)?range.start:J.clamp(time,0,S.plan.duration);p.plan=S.plan;syncShortPreviewMarkers();
   $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
   try{
-    await J.prepareMediaFrame(p.plan,Math.min(p.t,Math.max(0,p.plan.duration-.001)),controller.signal);
+    // Resume in the original button gesture, before waiting for video seeks,
+    // so audio can start on iOS after the selected frame is ready.
+    let audioReady=Promise.resolve();
+    if(play&&shortPreviewHasAudio()){
+      if(!shortPreviewAudio.ctx)shortPreviewAudio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+      if(shortPreviewAudio.ctx.state==='suspended')audioReady=shortPreviewAudio.ctx.resume();
+    }
+    await Promise.all([J.prepareMediaFrame(p.plan,Math.min(p.t,Math.max(0,p.plan.duration-.001)),controller.signal),audioReady]);
     if(shortPreview!==p||controller.signal.aborted)return;
     p.ready=true;p.need=true;p.playing=play;p.clock=performance.now()-p.t*1000;
+    if(play)playShortPreviewAudio();
     $('shortExportError').textContent='';
     syncShortPreviewMarkers();
     $('shortPreviewPlay').textContent=play?'❚❚':'▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel(play?'プレビューを一時停止':'プレビューを再生',play?'Pause preview':'Play preview'));
-  }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;}}
+  }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}}
   finally{if(p.controller===controller)p.controller=null;}
 }
 function startShortPreview(){
@@ -3344,8 +3363,8 @@ function startShortPreview(){
     if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
     if(!p.ready)return;
     if(p.playing){
-      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=Math.max(range.start,(now-p.clock)/1000);
-      if(p.t>=range.end){p.t=range.start;p.clock=now-p.t*1000;}
+      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=Math.max(range.start,p.audioClock?shortPreviewAudio.time():(now-p.clock)/1000);
+      if(p.t>=range.end){p.t=range.start;playShortPreviewAudio();}
       J.syncMediaPreview(S.plan,p.t,true);p.need=true;
     }
     if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
@@ -3857,8 +3876,8 @@ function bind() {
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
   $('fileProject').addEventListener('change',()=>{$('projectMenu').open=false;});
   document.querySelectorAll('[data-export-dialog]').forEach(button=>button.addEventListener('click',()=>openExportDialog(button.dataset.exportDialog)));
-  $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
-  $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
+  $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting){stopShortPreview();$('exportDlg').close();}});
+  $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();else stopShortPreview();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
   for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>{
     const gap=Math.min(.001,S.plan.duration);
@@ -4449,7 +4468,7 @@ function bind() {
   $('outQP').addEventListener('input',e=>{
     S.project.exportQP=e.target.value===''?NaN:Number(e.target.value);codecNote();autosave();
   });
-  $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
+  $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked;if(shortPreview?.playing)playShortPreviewAudio();autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
   $('btnShort').addEventListener('click', () => runExport('short'));
   $('btnPNG').addEventListener('click', () => runExport('png'));
