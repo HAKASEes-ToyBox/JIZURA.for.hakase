@@ -3696,6 +3696,8 @@ function bind() {
     for(const img of document.querySelectorAll('img[data-media-thumb]'))if(img.dataset.mediaThumb===e.detail.id)img.src=e.detail.poster;
     S.need=true;
   });
+  window.addEventListener('jizura-media-ready',()=>{S.need=true;});
+  window.addEventListener('jizura-media-error',e=>toast(e.detail.message));
   window.addEventListener('beforeunload', event => {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });
@@ -4416,13 +4418,18 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
     report(J.mediaLabel('ファイルを読み込み中','Reading file'));
     await new Promise(resolve=>setTimeout(resolve,0));
     const sourceFile=await J.snapshotMediaFile(f,(loaded,total)=>report(J.mediaLabel('ファイルを読み込み中','Reading file')+(total?` ${Math.round(loaded/total*100)}%`:''),total?loaded/total:null));
-    const audio = await J.analyzeAudio(sourceFile,p=>report(p.phase==='read'?J.mediaLabel('音声を読み込み中','Reading audio'):p.phase==='decode'?J.mediaLabel('音声を展開中','Decoding audio'):J.mediaLabel('拍・波形を解析中','Analyzing beats and waveform')));
+    let audio=null,audioError=null;
+    try{audio=await J.analyzeAudio(sourceFile,p=>report(p.phase==='read'?J.mediaLabel('音声を読み込み中','Reading audio'):p.phase==='decode'?J.mediaLabel('音声を展開中','Decoding audio'):J.mediaLabel('拍・波形を解析中','Analyzing beats and waveform')));}
+    catch(error){if(!video||!options.background)throw error;audioError=error;}
     if(video)report(J.mediaLabel('動画の長さを確認中','Checking video duration'));
     const duration=video?await J.videoFileDuration(sourceFile):audio.duration;
     if (S.project !== project || S.audioLoad !== request) return false;
-    report(J.mediaLabel('音声を保存する準備中','Preparing audio for saving'));
-    await new Promise(resolve=>setTimeout(resolve,0));
-    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):sourceFile);
+    let audioFile=null;
+    if(audio){
+      report(J.mediaLabel('音声を保存する準備中','Preparing audio for saving'));
+      await new Promise(resolve=>setTimeout(resolve,0));
+      audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):sourceFile);
+    }
     let item=null;
     if(video&&options.background){
       if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
@@ -4432,9 +4439,12 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
       report(J.mediaLabel('背景動画をブラウザに保存中','Saving background video in browser'));
       await J.storeMedia(item.id,sourceFile);
     }
-    const audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
-    report(J.mediaLabel('音声をブラウザに保存中','Saving audio in browser'));
-    await J.storeMedia(audioAsset.id,audioFile);
+    let audioAsset=null;
+    if(audioFile){
+      audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
+      report(J.mediaLabel('音声をブラウザに保存中','Saving audio in browser'));
+      await J.storeMedia(audioAsset.id,audioFile);
+    }
     if (S.project !== project || S.audioLoad !== request) return false;
     if(item){
       const m=project.media,cuts=S.plan.media.cuts,overrides={0:{itemId:item.id,technique:'none',entrance:'none',departure:'none',videoStart:0,videoDuration:duration,videoLoop:false}},times={0:0};
@@ -4443,12 +4453,13 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
       for(const link of project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith('m:'))link[side]='m:'+(+link[side].slice(2)+1);
       for(const [id,asset] of assets){J.mediaAssets.set(id,asset);asset.element.addEventListener('seeked',()=>{S.need=true;});}assets.clear();
     }
-    S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;
+    if(audio){S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;}
     project.durationOverride=options.matchDuration?duration:previousDuration;
     refreshAudioName();
-    S.project.timing.snap = true;
+    if(audio)S.project.timing.snap = true;
     report(J.mediaLabel('編集画面を更新中','Updating editor'));
     syncUI(); replan();
+    if(audioError)toast(J.mediaLabel('動画を読み込みました。音声を取り出せなかったため、曲は変更していません。','Video imported. Audio could not be extracted, so the existing song was kept.'));
     return true;
   } catch (err) {
     if (S.project === project && S.audioLoad === request) { refreshAudioName(); toast(J.mediaLabel('曲を読み込めませんでした：','Could not import audio: ') + err.message); }
