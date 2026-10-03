@@ -6,11 +6,9 @@ from app.english import localize_body, localize_js
 ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)
 read = lambda p: open(p, encoding='utf-8').read()
-anime512_graph = base64.b64encode(open('assets/models/isnetis-512.onnx', 'rb').read()).decode('ascii')
 sources = sorted(glob.glob('src/*.js'))
 js = '\n'.join(read(f) for f in sources)
 js = js.replace('__EFFECT_PREVIEW_IMAGE__', 'data:image/png;base64,' + base64.b64encode(open('assets/effect-preview.png', 'rb').read()).decode('ascii'))
-js = js.replace('__ANIME512_GRAPH__', anime512_graph)
 mux = '/*! mp4-muxer v5.2.2 | MIT License | (c) 2023 Vanilagy | see THIRD_PARTY_NOTICES.md */\n' + read('vendor/mp4-muxer.min.js')
 def build(lang):
     english = lang == 'en'
@@ -27,7 +25,6 @@ def build(lang):
         if marker not in script: raise ValueError('Could not find browser UI entry point')
         script = script.replace(marker, read('app/english.js') + '\n' + marker, 1)
     script = script.replace('__EFFECT_PREVIEW_IMAGE__', 'data:image/png;base64,' + base64.b64encode(open('assets/effect-preview.png', 'rb').read()).decode('ascii'))
-    script = script.replace('__ANIME512_GRAPH__', anime512_graph)
     html = f'''<!doctype html>
 <html lang="{lang}">
 <head>

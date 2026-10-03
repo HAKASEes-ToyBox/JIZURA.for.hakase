@@ -817,7 +817,7 @@ function openCutDetails(layer,index,part=0) {
   let removedDetail = null;
   const openDetails = new Map();
   let activeDetailTab='basic';
-  let personModel=draft.personCutout?.model || 'rvm',personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null,personSync=null;
+  let personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null,personSync=null;
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));dialog.tabIndex=-1;
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
@@ -931,34 +931,33 @@ function openCutDetails(layer,index,part=0) {
   function personEditor(parent){
     if(lyric)return;
     const section=document.createElement('section');section.dataset.detailSection='personCutout';section.className='person-cutout-editor';parent.append(section);
-    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('カット内で再生する範囲だけ人物マスクを作成します。再生時間・開始位置を変えた後は、再実行で不足分だけ追加します。配置・演出に追従し、初回はモデルをダウンロードします。','Generate masks only for the range played in this cut. After changing its duration or source start, run again to add only missing frames. Masks follow placement and effects. The model downloads on first use.');section.append(hint);
+    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('カット内で再生する範囲だけ人物マスクを作成します。再生時間・開始位置を変えた後は再実行してください','Generate masks only for the range played in this cut. Run again after changing its duration or source start.');section.append(hint);
     const controls=document.createElement('div');controls.className='person-cutout-controls';section.append(controls);
     const field=(title,input)=>{const label=document.createElement('label');label.className='cut-detail-field';const text=document.createElement('span');text.textContent=title;label.append(text,input);controls.append(label);};
-    const model=document.createElement('select');model.dataset.personModel='';for(const [id,def] of Object.entries(J.PERSON_MODELS)){const option=document.createElement('option');option.value=id;option.textContent=L(...def.label)+' — '+def.size;model.append(option);}model.value=personModel;model.onchange=()=>{personModel=model.value;personStatus=null;sync();};field(L('モデル','Model'),model);
     const fps=document.createElement('input');fps.type='number';fps.min=1;fps.max=60;fps.step=1;fps.value=personFps;fps.dataset.personFps='';fps.onchange=()=>{personFps=J.clamp(Math.round(+fps.value||24),1,60);fps.value=personFps;personStatus=null;sync();};field(L('動画の解析枚数／秒','Video analysis frames / second'),fps);
-    const note=document.createElement('p');note.className='hint';note.textContent=L('アニメ用は512版・1024版とも初回176MBです。512版は解析が軽く、細部の精度が下がることがあります。重みのキャッシュは共通です。同じ素材・モデル・解析枚数の作成済みフレームを再利用します。モデルや解析枚数を変える場合は、現在の再生範囲を作り直します。解析枚数を下げると速い動きでマスクがずれることがあります。','Both anime variants download 176 MB on first use and share cached weights. The 512 version reduces processing cost but may lose fine detail. Saved frames are reused with the same source, model and analysis rate. Changing model or analysis rate regenerates the current playback range. Lower rates may cause misalignment during fast motion.');section.append(note);
+    const note=document.createElement('p');note.className='hint';note.textContent=L('解析枚数を下げると切り抜きが早く完了しますが、速い動きでマスクがズレやすくなります。','Lowering the analysis rate finishes the cutout sooner, but masks are more likely to misalign during fast motion.');section.append(note);
     const run=document.createElement('button');run.type='button';run.dataset.personRun='';run.textContent=L('人物切り抜きを実行','Generate person mask');
     const stop=document.createElement('button');stop.type='button';stop.dataset.personCancel='';stop.textContent=L('処理を中止','Stop processing');stop.hidden=!personController;stop.onclick=()=>personController?.abort();section.append(run,stop);
     const status=document.createElement('p');status.dataset.personStatus='';status.setAttribute('role','status');status.setAttribute('aria-live','polite');section.append(status);
     const progress=document.createElement('progress');progress.dataset.personProgress='';progress.max=1;progress.hidden=!personController;section.append(progress);
     const options=document.createElement('div');options.className='person-cutout-options';section.append(options);
+    const effectsTitle=document.createElement('h4');effectsTitle.textContent=L('切り抜き効果','Cutout effects');options.append(effectsTitle);
     const setOption=(key,value)=>{draft.personCutout={...draft.personCutout,[key]:value};schedulePreview();};
-    const display=document.createElement('select');display.dataset.personDisplay='';
-    for(const [id,ja,en] of [['none','通常表示','Normal display'],['only','人物のみ表示','Show person only'],['remove','人物を削除（背景に穴が開く）','Remove person (leave a hole)']]){const option=document.createElement('option');option.value=id;option.textContent=L(ja,en);display.append(option);}display.value=draft.personCutout?.display || 'none';display.onchange=()=>setOption('display',display.value);
-    const displayLabel=document.createElement('label');displayLabel.className='cut-detail-field';displayLabel.textContent=L('素材の表示','Source display');displayLabel.append(display);options.append(displayLabel);
+    const display=document.createElement('input');display.type='checkbox';display.dataset.personDisplay='';display.checked=draft.personCutout?.display==='only';display.onchange=()=>setOption('display',display.checked?'only':'none');
+    const displayLabel=document.createElement('label');displayLabel.className='check';const displayText=document.createElement('span');displayText.textContent=L('人物のみ表示','Show person only');displayLabel.append(display,displayText);options.append(displayLabel);
     for(const [key,ja,en] of [['behindLyrics','文字を人物の後ろへ','Place text behind the person'],['behindForeground','前景を人物の後ろへ','Place foreground behind the person']]){
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.dataset.personOption=key;input.checked=!!draft.personCutout?.[key];input.onchange=()=>setOption(key,input.checked);const text=document.createElement('span');text.textContent=L(ja,en);label.append(input,text);options.append(label);
     }
     let available=false,savedEntry=null;
     const sync=()=>{
       const busy=!!personController,ref=J.personCutout({...current,personCutout:draft.personCutout});
-      model.disabled=busy;fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
+      fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
       for(const input of options.querySelectorAll('input,select'))input.disabled=busy||!available;
       if(personStatus){status.textContent=personStatus.text;if(personStatus.value==null)progress.removeAttribute('value');else progress.value=personStatus.value;}
       else {
-        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+L(...J.PERSON_MODELS[ref.model].label)+` (${ref.frameCount} ${L('枚','frames')})`:L('マスク作成後に表示処理をONにできます。','Generate a mask to enable display options.');
+        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+`${ref.frameCount} ${L('枚','frames')}`:L('マスク作成後に切り抜き効果をONにできます。','Generate a mask to enable cutout effects.');
         if(savedEntry){try{
-          if(personModel!==savedEntry.meta.model || personFps!==savedEntry.meta.fps)status.textContent+=' — '+L('モデル・解析枚数の変更により、現在の再生範囲を再作成します。','Changing model or analysis rate will regenerate the current playback range.');
+          if(savedEntry.meta.model!==J.PERSON_MODEL.id || personFps!==savedEntry.meta.fps)status.textContent+=' — '+L('解析設定の変更により、現在の再生範囲を再作成します。','Changed analysis settings will regenerate the current playback range.');
           else {const coverage=J.personMaskCoverage({...previewCut,start},savedEntry);status.textContent+=' — '+(coverage.missing?L(`現在の再生範囲に${coverage.missing}枚不足しています。再実行で追加できます。`,`${coverage.missing} frames missing for the current playback range. Run again to add them.`):L('現在の再生範囲は作成済みです。','The current playback range is already covered.'));}
         }catch(error){status.textContent+=' — '+error.message;}}
       }
@@ -976,7 +975,7 @@ function openCutDetails(layer,index,part=0) {
       const freeze=busy=>{dialog.classList.toggle('person-cutout-busy',busy);for(const [input,disabled] of frozen)input.disabled=busy||disabled;for(const [node,inert] of blocked)node.inert=busy||inert;};
       freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();stop.focus({preventScroll:true});
       try{
-        const result=await J.generatePersonMask(c,personModel,{fps:personFps,signal:controller.signal,onProgress:p=>{
+        const result=await J.generatePersonMask(c,{fps:personFps,signal:controller.signal,onProgress:p=>{
           if(p.phase==='plan'){additional=p.missing;personStatus={text:L(`再生範囲：${p.total}枚／作成済み：${p.reused}枚／追加：${p.missing}枚`,`Playback range: ${p.total} frames / saved: ${p.reused} / additional: ${p.missing}`),value:p.missing?0:1};}
           else if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
           else if(p.phase==='initialize')personStatus={text:L('モデルを初期化しています…','Initializing model…')};
@@ -985,7 +984,7 @@ function openCutDetails(layer,index,part=0) {
           sync();
         }});
         if(controller.signal.aborted || !dialog.open)return;
-        draft.personCutout=result;personStatus={text:additional===0?L('現在の再生範囲はすべて作成済みです。追加の解析は行っていません。','The current playback range is already covered. No additional inference was needed.'):L('再生範囲のマスクを作成しました。下の表示処理をONにできます。','Masks generated for the playback range. Enable display options below.'),value:1};rememberDetail();current=refreshPreview();
+        draft.personCutout=result;personStatus={text:additional===0?L('現在の再生範囲はすべて作成済みです。追加の解析は行っていません。','The current playback range is already covered. No additional inference was needed.'):L('再生範囲のマスクを作成しました。下の切り抜き効果をONにできます。','Masks generated for the playback range. Enable cutout effects below.'),value:1};rememberDetail();current=refreshPreview();
       }catch(error){personStatus={text:error.name==='AbortError'?L('処理を中止しました。既存のマスクは保持しています。','Processing stopped. The existing mask is preserved.'):L('人物切り抜きに失敗しました：','Person mask generation failed: ')+error.message};}
       finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();dialog.querySelector('[data-person-run]')?.focus({preventScroll:true});}}
     };

@@ -2,7 +2,7 @@
 
 BODY = {
     'href="THIRD_PARTY_NOTICES.md"': 'href="../THIRD_PARTY_NOTICES.md"',
-    '人物切り抜きの外部モデル：RVM（GPL-3.0）、SkyTNT Anime Segmentation（Apache-2.0）。': 'External person-cutout models: RVM (GPL-3.0), SkyTNT Anime Segmentation (Apache-2.0). ',
+    '人物切り抜きの外部モデル：RVM（GPL-3.0）。': 'External person-cutout model: RVM (GPL-3.0). ',
     'モデル・ライブラリの利用条件': 'Model and library licenses',
     '設定のみ書き出し': 'Export settings only',
     '設定のみ読み込み': 'Import settings only',

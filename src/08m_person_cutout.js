@@ -3,34 +3,31 @@
 (() => {
 'use strict';
 const L = (...args) => J.mediaLabel(...args), entries = new Map(), loading = new Map();
-const animeWeightsUrl='https://huggingface.co/skytnt/anime-seg/resolve/a0a563c41338cbe0d23dfb4bfc3e243c518e5768/isnetis.onnx';
-J.PERSON_MODELS = {
-  rvm: {label: ['実写向け（RVM MobileNetV3）','Live action (RVM MobileNetV3)'], size: '~4 MB',
-    url: 'https://raw.githubusercontent.com/PeterL1n/RobustVideoMatting/72ed518756950796f10eea6eb6b301df97cef277/model/model.json'},
-  anime512: {label: ['アニメ向け（ISNet 512×512・軽量）','Anime (ISNet 512×512, faster)'], size: '176 MB', inputSize:512,
-    url:animeWeightsUrl, graph:'__ANIME512_GRAPH__',
-    weightsSha256:'f15622d853e8260172812b657053460e20806f04b9e05147d49af7bed31a6e99'},
-  anime: {label: ['アニメ向け（ISNet 1024×1024・従来版）','Anime (ISNet 1024×1024, original)'], size: '176 MB', inputSize:1024,
-    url:animeWeightsUrl},
+J.PERSON_MODEL = {
+  id:'rvm',
+  url:'https://raw.githubusercontent.com/PeterL1n/RobustVideoMatting/72ed518756950796f10eea6eb6b301df97cef277/model/model.json',
 };
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width=w; c.height=h; return c; };
 const dims = s => [s.videoWidth || s.naturalWidth || s.width, s.videoHeight || s.naturalHeight || s.height];
 J.personCutout = cut => {
   const p=cut?.personCutout;
-  return p && p.sourceId===cut.itemId && typeof p.maskId==='string' && J.PERSON_MODELS[p.model] ? p : null;
+  if(!p || p.sourceId!==cut.itemId || typeof p.maskId!=='string' || typeof p.model!=='string' || !p.model)return null;
+  // Saved PNG mattes remain usable without their former inference engine.
+  // Removed display modes fall back to the normal source display.
+  return ['none','only'].includes(p.display)?p:{...p,display:'none'};
 };
 J.personMaskReferences = project => {
   const refs=new Map();
   for(const layer of ['media','foreground'])for(const options of Object.values(project[layer]?.cutOverrides || {})) {
     const p=options.personCutout;
-    if(p?.maskId && p.sourceId && J.PERSON_MODELS[p.model])refs.set(p.maskId,p);
+    if(p?.maskId && p.sourceId && typeof p.model==='string' && p.model)refs.set(p.maskId,p);
   }
   return refs;
 };
 const planMedia=J.planMedia;
 J.planMedia=function(project,plan,audioDuration,layer='media'){
   const result=planMedia(project,plan,audioDuration,layer);
-  for(const cut of result.cuts){const ref=project[layer]?.cutOverrides?.[cut.index]?.personCutout;cut.personCutout=ref?.sourceId===cut.itemId?{...ref}:null;}
+  for(const cut of result.cuts){const ref=project[layer]?.cutOverrides?.[cut.index]?.personCutout;cut.personCutout=J.personCutout({...cut,personCutout:ref?{...ref}:null});}
   return result;
 };
 const encode = new TextEncoder(), decode = new TextDecoder();
@@ -159,16 +156,16 @@ J.personMaskFrame = (cut,t) => {
 };
 const sources=new WeakMap();
 J.personMaskSource = (source,cut,t) => {
-  const ref=J.personCutout(cut);if(!ref || !['only','remove'].includes(ref.display))return source;
+  const ref=J.personCutout(cut);if(!ref || ref.display!=='only')return source;
   const matte=J.personMaskFrame(cut,t);if(!matte)return source;
   const [sw,sh]=dims(source),k=Math.min(1,2048/Math.max(sw,sh));
   let c=sources.get(source);if(!c){c=canvas(1,1);sources.set(source,c);}c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));
-  const x=c.getContext('2d');x.drawImage(source,0,0,c.width,c.height);x.globalCompositeOperation=ref.display==='only'?'destination-in':'destination-out';x.drawImage(matte,0,0,c.width,c.height);x.globalCompositeOperation='source-over';return c;
+  const x=c.getContext('2d');x.drawImage(source,0,0,c.width,c.height);x.globalCompositeOperation='destination-in';x.drawImage(matte,0,0,c.width,c.height);x.globalCompositeOperation='source-over';return c;
 };
 const occlusionCanvas=canvas(1,1),occlusionLayer=canvas(1,1),occlusionOwner={ensure(c,w,h){if(c.width!==w)c.width=w;if(c.height!==h)c.height=h;return c;},personMaskPass:true};
 J.personOccluders = (plan,t,mode,exclude) => ['media','foreground'].flatMap(layer=>plan.layerVisibility?.[layer]===false?[]:J.mediaCutsAt(plan,t,layer).filter(c=>{
   if(c===exclude || c.opacity<=0)return false;
-  const enabled=c=>J.personCutout(c)?.[mode] && J.personCutout(c)?.display!=='remove',prev=plan[layer].cuts[c.index-1];
+  const enabled=c=>J.personCutout(c)?.[mode],prev=plan[layer].cuts[c.index-1];
   return enabled(c) || prev && c.trans && t-c.start<c.transDur && Math.abs(prev.end-c.start)<.06 && enabled(prev);
 }).map(c=>({layer,cut:c})));
 J.maskBehindPersons = (target,plan,t,mode,exclude) => {
@@ -198,7 +195,7 @@ J.prepareMediaFrame=async (plan,t,signal) => {
 };
 // Everything below runs in an isolated worker. No video, model, or matte uploads.
 function personWorker(){
-  let engine,model,states,ratio,backend;
+  let model,states,ratio,backend;
   const progress=(phase,data={})=>postMessage({type:'progress',phase,...data});
   const fetchModel=async url=>{
     let cache;try{cache=await caches.open('jizura-person-models-v1');const hit=await cache.match(url);if(hit){progress('download',{cached:true,url});return await hit.arrayBuffer();}}catch(e){}
@@ -214,54 +211,24 @@ function personWorker(){
     const m=event.data;
     try{
       if(m.type==='init'){
-        engine=m.model;
-        if(engine==='rvm'){
-          importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
-          try{await tf.setBackend('webgl');await tf.ready();backend='WebGL';}catch(e){await tf.setBackend('cpu');await tf.ready();backend='CPU';}
-          const json=JSON.parse(new TextDecoder().decode(await fetchModel(m.url))),specs=[],parts=[];
-          for(const group of json.weightsManifest){specs.push(...group.weights);for(const path of group.paths)parts.push(await fetchModel(new URL(path,m.url).href));}
-          const weights=new Uint8Array(parts.reduce((n,b)=>n+b.byteLength,0));let offset=0;for(const part of parts){weights.set(new Uint8Array(part),offset);offset+=part.byteLength;}
-          progress('initialize');model=await tf.loadGraphModel({load:async()=>({modelTopology:json.modelTopology,weightSpecs:specs,weightData:weights.buffer,format:json.format,signature:json.signature})});
-          states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];ratio=tf.scalar(.5);
-        }else{
-          importScripts('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.all.min.js');
-          ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';ort.env.wasm.numThreads=1;
-          const bytes=await fetchModel(m.url);progress('initialize');
-          const options={executionProviders:['wasm']};let graph=bytes;
-          if(m.graph){
-            // The compact 512 graph references unchanged weights at verified
-            // offsets inside the original ONNX, sharing its existing cache.
-            const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-            if(hash!==m.weightsSha256)throw new Error('ISNet model checksum mismatch. Clear the model cache and retry.');
-            graph=Uint8Array.from(atob(m.graph),c=>c.charCodeAt(0));
-            options.externalData=[{path:'isnetis.onnx',data:new Uint8Array(bytes)}];
-          }
-          // ISNet's ceil-mode MaxPool is unsupported by this WebGPU runtime;
-          // some devices silently produce invalid masks instead of rejecting it.
-          model=await ort.InferenceSession.create(graph,options);backend='CPU';
-        }
+        importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+        try{await tf.setBackend('webgl');await tf.ready();backend='WebGL';}catch(e){await tf.setBackend('cpu');await tf.ready();backend='CPU';}
+        const json=JSON.parse(new TextDecoder().decode(await fetchModel(m.url))),specs=[],parts=[];
+        for(const group of json.weightsManifest){specs.push(...group.weights);for(const path of group.paths)parts.push(await fetchModel(new URL(path,m.url).href));}
+        const weights=new Uint8Array(parts.reduce((n,b)=>n+b.byteLength,0));let offset=0;for(const part of parts){weights.set(new Uint8Array(part),offset);offset+=part.byteLength;}
+        progress('initialize');model=await tf.loadGraphModel({load:async()=>({modelTopology:json.modelTopology,weightSpecs:specs,weightData:weights.buffer,format:json.format,signature:json.signature})});
+        states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];ratio=tf.scalar(.5);
         postMessage({type:'ready',backend});
       }else if(m.type==='reset'){
-        if(engine==='rvm'){tf.dispose(states);states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];}
+        tf.dispose(states);states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];
         postMessage({type:'reset'});
       }else if(m.type==='frame'){
         let alpha,w=m.width,h=m.height;
-        if(engine==='rvm'){
-          const src=tf.tensor(new Float32Array(m.pixels),[1,h,w,3]);let output;
-          try{
-            output=await model.executeAsync({src,r1i:states[0],r2i:states[1],r3i:states[2],r4i:states[3],downsample_ratio:ratio},['pha','r1o','r2o','r3o','r4o']);
-            alpha=await output[0].data();w=output[0].shape[2];h=output[0].shape[1];tf.dispose(states);states=output.slice(1);
-          }finally{src.dispose();output?.[0].dispose();}
-        }else{
-          const input=new ort.Tensor('float32',new Float32Array(m.pixels),[1,3,h,w]);let out;
-          try{
-            out=await model.run({[model.inputNames[0]]:input});
-            const tensor=out[model.outputNames[0]];alpha=tensor.data;h=tensor.dims.at(-2);w=tensor.dims.at(-1);
-          }
-          finally{input.dispose();}
-          const data=new Uint8Array(alpha.length);for(let i=0;i<data.length;i++)data[i]=Math.round(Math.max(0,Math.min(1,alpha[i]))*255);
-          for(const value of Object.values(out))value.dispose();postMessage({type:'matte',width:w,height:h,alpha:data.buffer},[data.buffer]);return;
-        }
+        const src=tf.tensor(new Float32Array(m.pixels),[1,h,w,3]);let output;
+        try{
+          output=await model.executeAsync({src,r1i:states[0],r2i:states[1],r3i:states[2],r4i:states[3],downsample_ratio:ratio},['pha','r1o','r2o','r3o','r4o']);
+          alpha=await output[0].data();w=output[0].shape[2];h=output[0].shape[1];tf.dispose(states);states=output.slice(1);
+        }finally{src.dispose();output?.[0].dispose();}
         const data=new Uint8Array(w*h);for(let i=0;i<data.length;i++)data[i]=Math.round(Math.max(0,Math.min(1,alpha[i]))*255);
         postMessage({type:'matte',width:w,height:h,alpha:data.buffer},[data.buffer]);
       }
@@ -281,9 +248,9 @@ const makeWorker=report=>{
   worker.onerror=e=>fail(new Error(e.message || 'Person inference worker failed'));
   return {request(message,transfer=[]){return new Promise((resolve,reject)=>{pending={resolve,reject};refreshTimeout();worker.postMessage(message,transfer);});},stop(){fail(new DOMException('Cancelled','AbortError'));worker.terminate();}};
 };
-J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) => {
-  const asset=J.mediaAssets.get(cut.itemId),def=J.PERSON_MODELS[modelId];
-  if(!asset || !def || J.isMediaCopy(cut.itemId))throw new Error(L('画像・動画素材を指定してください','Select an image or video asset'));
+J.generatePersonMask = async (cut,{fps=24,signal,onProgress=()=>{}}={}) => {
+  const asset=J.mediaAssets.get(cut.itemId),def=J.PERSON_MODEL,modelId=def.id;
+  if(!asset || J.isMediaCopy(cut.itemId))throw new Error(L('画像・動画素材を指定してください','Select an image or video asset'));
   let worker;const abort=()=>worker?.stop();signal?.addEventListener('abort',abort,{once:true});
   let source,url;
   try{
@@ -308,19 +275,18 @@ J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) 
     onProgress({phase:'plan',total:targets.length,reused,missing:missing.length});
     if(!missing.length)return {...prior};
     if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
-    worker=makeWorker(onProgress);onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url,graph:def.graph,weightsSha256:def.weightsSha256});
-    const iw=def.inputSize||mw,ih=def.inputSize||mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d');
-    const fit=def.inputSize?Math.min(iw/sw,ih/sh):k,fw=Math.min(iw,Math.round(sw*fit)),fh=Math.min(ih,Math.round(sh*fit)),px=Math.floor((iw-fw)/2),py=Math.floor((ih-fh)/2);
+    worker=makeWorker(onProgress);onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',url:def.url});
+    const iw=mw,ih=mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d');
     for(const [n,i] of missing.entries()){
       if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
-      if(n && i!==missing[n-1]+1 && modelId==='rvm')await worker.request({type:'reset'});
+      if(n && i!==missing[n-1]+1)await worker.request({type:'reset'});
       if(duration)await J.seekMediaVideo(source,Math.min(i/fps,duration-.001),signal,cut.name);
-      ix.clearRect(0,0,iw,ih);ix.drawImage(source,px,py,fw,fh);const rgba=ix.getImageData(0,0,iw,ih).data,pixels=new Float32Array(iw*ih*3);
-      for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[def.inputSize?c*iw*ih+n:n*3+c]=rgba[n*4+c]/255;
+      ix.clearRect(0,0,iw,ih);ix.drawImage(source,0,0,iw,ih);const rgba=ix.getImageData(0,0,iw,ih).data,pixels=new Float32Array(iw*ih*3);
+      for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[n*3+c]=rgba[n*4+c]/255;
       const inferenceStart=performance.now(),result=await worker.request({type:'frame',width:iw,height:ih,pixels:pixels.buffer},[pixels.buffer]),inferenceMs=Math.round(performance.now()-inferenceStart);
       alphaCanvas.width=result.width;alphaCanvas.height=result.height;const image=ax.createImageData(result.width,result.height),alpha=new Uint8Array(result.alpha);
       for(let n=0;n<alpha.length;n++){image.data[n*4]=image.data[n*4+1]=image.data[n*4+2]=255;image.data[n*4+3]=alpha[n];}ax.putImageData(image,0,0);
-      ox.clearRect(0,0,mw,mh);ox.drawImage(alphaCanvas,px,py,fw,fh,0,0,mw,mh);
+      ox.clearRect(0,0,mw,mh);ox.drawImage(alphaCanvas,0,0,mw,mh);
       frames.set(i,await new Promise((resolve,reject)=>output.toBlob(blob=>blob?resolve(blob):reject(new Error('Cannot encode person mask')),'image/png')));
       onProgress({phase:'analyze',completed:n+1,total:missing.length,reused,required:targets.length,sourceFrame:i,backend:ready.backend,inferenceMs});
       await new Promise(resolve=>setTimeout(resolve,0));

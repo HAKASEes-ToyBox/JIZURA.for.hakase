@@ -517,6 +517,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .person-cutout-editor progress[hidden] { display:none; }
 .person-cutout-editor [data-person-status] { overflow-wrap:anywhere; font-size:13px; }
 .person-cutout-options { display:grid; gap:14px; padding-top:18px; margin-top:18px; border-top:1px solid var(--line2); }
+.person-cutout-options h4 { margin:0; font-size:13px; }
 .person-cutout-options .check { display:flex; gap:8px; align-items:center; }
 .cut-details-dialog.person-cutout-busy :is(.cut-details-preview,.cut-details-history,.cut-details-tabs,.cut-details-actions,[data-detail-tab-panel]:not([data-detail-tab-panel="personCutout"])) { opacity:.4; filter:grayscale(1); }
 @media (max-width: 860px) { .cut-details-tabs { top: -16px; } }

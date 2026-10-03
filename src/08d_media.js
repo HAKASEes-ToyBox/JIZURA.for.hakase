@@ -522,7 +522,7 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
   const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
-  if(options.personPass && (!personFrame || options.personMode && (!J.personCutout(cut)?.[options.personMode] || J.personCutout(cut)?.display==='remove')))return false;
+  if(options.personPass && (!personFrame || options.personMode && !J.personCutout(cut)?.[options.personMode]))return false;
   if(options.personPass)cut={...cut,decor:[],drawing:null};
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
   const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
@@ -583,7 +583,7 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   };
   const A = canvas(layer + 'PrevLayer'), B = canvas(layer + 'NextLayer');
   const bg = plan.style && plan.style.schemes ? plan.style.schemes[0].bg : '#000';
-  const personAlpha=owner?.personMaskPass || [cut,prev].some(c=>['only','remove'].includes(J.personCutout?.(c)?.display));
+  const personAlpha=owner?.personMaskPass || [cut,prev].some(c=>J.personCutout?.(c)?.display==='only');
   const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media' && !personAlpha) { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
