@@ -473,6 +473,7 @@ FORK_BODY = {
     '全域表示': 'Full area', '角度リセット': 'Reset angle', '画面全域': 'Full screen', '配置決定': 'Set placement', '以降すべて同じ配置': 'Use this placement from here onward',
     '角度（°）': 'Rotation (°)', '全域へリセット': 'Reset to full area',
     '角度をリセット': 'Reset rotation', '編集モード': 'Edit mode',
+    'スクショ': 'Screenshot', 'プレビューをPNGで保存': 'Save preview as PNG',
     'この行だけに適用': 'Apply to this line', 'これ以降全てに適用': 'Apply from here onward',
     '前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',
     '歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',

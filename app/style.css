@@ -838,7 +838,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .favorite-delete:hover { background:#ff7b88; border-color:#ff7b88; }
 .favorite-error:empty { display:none; }
 .favorite-error { color:var(--danger); }
-.preview-options #effectFavorites { margin-right:auto; }
+.preview-options #previewScreenshot { margin-right:auto; }
 .favorite-help:empty { display:none; }
 .favorite-card { cursor:pointer; }
 #effectFavoritesDialog { overscroll-behavior:contain; }

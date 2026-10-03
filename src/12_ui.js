@@ -4011,6 +4011,20 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('effectFavorites').textContent=J.mediaLabel('☆お気に入り演出','☆ Favorite effects');
   $('effectFavorites').onclick=()=>openEffectFavorites();
+  const screenshot=$('previewScreenshot');
+  screenshot.textContent=J.mediaLabel('スクショ','Screenshot');
+  screenshot.title=J.mediaLabel('プレビューをPNGで保存','Save preview as PNG');
+  screenshot.addEventListener('click',async()=>{
+    screenshot.disabled=true;
+    try{
+      const filename=J.exportFilename(`${baseName()}_preview_${S.t.toFixed(3).replace('.','-')}`,'.png');
+      // Encode the displayed canvas directly, including the current video frame
+      // and preview edits. Re-rendering could capture a different frame.
+      const blob=await new Promise((resolve,reject)=>$('view').toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
+      await J.saveFile(filename,blob);
+    }catch(error){toast(J.mediaLabel('スクショを保存できませんでした：','Could not save screenshot: ')+error.message);}
+    finally{screenshot.disabled=false;}
+  });
   $('previewFullscreen').addEventListener('click',async()=>{
     try { await $('viewport').requestFullscreen(); }
     catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }
