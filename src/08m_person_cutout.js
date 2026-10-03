@@ -94,8 +94,20 @@ const frameIndex = (entry,cut,t) => {
   const time=cut.type==='video'?J.mediaVideoTime(cut,t,entry.meta.duration):0;
   return entry.slots.get(cut.type==='video'?sourceFrame(time,entry.meta.fps,entry.meta.duration):0);
 };
+const cachedFrame = (entry,i) => {
+  const img=entry.decoded.get(i);
+  if(img){entry.decoded.delete(i);entry.decoded.set(i,img);}
+  return img;
+};
+const previewFrames=new WeakMap();
+const holdFrame = (entry,cut,i,img) => {
+  let held=previewFrames.get(cut);
+  if(!held || held.entry!==entry){held={entry,index:-1,canvas:canvas(entry.meta.width,entry.meta.height)};previewFrames.set(cut,held);}
+  if(held.index!==i){const x=held.canvas.getContext('2d');x.clearRect(0,0,held.canvas.width,held.canvas.height);x.drawImage(img,0,0);held.index=i;}
+  return held;
+};
 const decodeFrame = (entry,i) => {
-  if(entry.decoded.has(i)){const img=entry.decoded.get(i);entry.decoded.delete(i);entry.decoded.set(i,img);return Promise.resolve(img);}
+  const cached=cachedFrame(entry,i);if(cached)return Promise.resolve(cached);
   if(!entry.pending.has(i)){
     const f=entry.meta.frames[i],blob=entry.blob.slice(entry.start+f.offset,entry.start+f.offset+f.size,'image/png');
     const work=(async()=>{
@@ -116,16 +128,30 @@ J.preparePersonMask = async (cut,t,strict=false) => {
   if(!entry){if(strict && (ref.display!=='none'||ref.behindLyrics||ref.behindForeground))throw new Error(L('人物マスクが見つかりません。人物切り抜きで再作成してください：','Person mask is missing. Generate it again: ')+cut.name);return;}
   const i=frameIndex(entry,cut,t);
   if(i===undefined){if(strict && (ref.display!=='none'||ref.behindLyrics||ref.behindForeground))throw new Error(L('再生範囲の人物マスクが不足しています。人物切り抜きを再実行してください：','Person masks are missing for this playback range. Run person cutout again: ')+cut.name);return;}
-  await decodeFrame(entry,i);
+  const img=await decodeFrame(entry,i);
+  if(strict)holdFrame(entry,cut,i,img);
+};
+const prefetchFrames = (entry,cut,t) => {
+  if(cut.type!=='video')return;
+  for(let n=1;n<=2;n++){
+    const next=t+n/entry.meta.fps;if(next>=cut.end)break;
+    const i=frameIndex(entry,cut,next);if(i===undefined)break;
+    if(!entry.decoded.has(i) && !entry.pending.has(i))decodeFrame(entry,i).catch(()=>{});
+  }
 };
 J.personMaskFrame = (cut,t) => {
-  const ref=J.personCutout(cut);if(!ref)return null;
+  const ref=J.personCutout(cut);if(!ref){if(cut)previewFrames.delete(cut);return null;}
   const entry=entries.get(ref.maskId);
-  if(!entry){J.preparePersonMask(cut,t).catch(()=>{});return null;}
-  const i=frameIndex(entry,cut,t),img=entry.decoded.get(i);
-  if(i===undefined)return null;
+  if(!entry){previewFrames.delete(cut);J.preparePersonMask(cut,t).catch(()=>{});return null;}
+  const i=frameIndex(entry,cut,t);
+  // An absent source slot is a genuinely missing mask, not a PNG decode delay.
+  if(i===undefined){previewFrames.delete(cut);return null;}
+  const img=cachedFrame(entry,i),held=img?holdFrame(entry,cut,i,img):previewFrames.get(cut);
   if(!img)decodeFrame(entry,i).catch(()=>{});
-  return img || null;
+  prefetchFrames(entry,cut,t);
+  // Keep a canvas copy: the bounded decoded cache may close the old ImageBitmap.
+  // Strict export preparation still awaits the exact source slot above.
+  return img || (held?.entry===entry?held.canvas:null);
 };
 const sources=new WeakMap();
 J.personMaskSource = (source,cut,t) => {
