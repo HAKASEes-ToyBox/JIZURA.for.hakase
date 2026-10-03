@@ -15,7 +15,7 @@ const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),ass
    document.createElement=function(tag,...args){
     const el=original(tag,...args);
     if(tag==='video')Object.defineProperties(el,{
-     videoWidth:{value:120},videoHeight:{value:80},duration:{value:4},readyState:{value:1},
+     videoWidth:{value:120},videoHeight:{value:80},duration:{value:4},readyState:{value:1,writable:true},
      src:{set(){setTimeout(()=>el.dispatchEvent(new Event('loadedmetadata')),30);}}
     });
     return el;
@@ -26,6 +26,17 @@ const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),ass
   await page.waitForFunction(()=>J.ui.project.title==='Metadata-only video'&&!J.ui.projectBusy,null,{timeout:5000});
   assert.equal(await page.locator('#projectLoadingDialog').count(),0);
   assert.equal(await page.evaluate(()=>J.mediaAssets.get('metadata-video').element.readyState),1);
+  // A metadata-only decoder has a valid fallback, even before iOS produces frames.
+  await page.waitForFunction(()=>{const img=document.querySelector('#mediaList img[data-media-thumb="metadata-video"]');return img?.complete&&img.naturalWidth===96;});
+  assert.match(await page.locator('#mediaList img').getAttribute('src'),/^data:image\/svg\+xml,/);
+  // When the delayed frame arrives, update existing list/cut thumbnails in place.
+  await page.evaluate(()=>{
+    const video=J.mediaAssets.get('metadata-video').element,draw=CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage=function(source,...args){if(source===video){this.fillStyle='red';this.fillRect(0,0,this.canvas.width,this.canvas.height);}else draw.call(this,source,...args);};
+    video.readyState=2;video.dispatchEvent(new Event('loadeddata'));
+  });
+  await page.waitForFunction(()=>{const img=document.querySelector('#mediaList img[data-media-thumb="metadata-video"]');return img?.src.startsWith('data:image/png')&&img.complete&&img.naturalWidth===96;});
+  assert.equal(await page.locator('.media-ln-thumb[data-media-thumb="metadata-video"]').getAttribute('src'),await page.locator('#mediaList img').getAttribute('src'));
   await page.locator('#fileProject').setInputFiles({name:'broken.jizuraichi',mimeType:'application/octet-stream',buffer:fixture.subarray(0,10)});
   await page.waitForFunction(()=>!J.ui.projectBusy);
   assert(await page.locator('#projectLoadingDialog').isVisible());

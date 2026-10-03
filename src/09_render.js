@@ -71,6 +71,7 @@ class Renderer {
       for (const cut of J.mediaCutsAt(plan, t, 'foreground').filter(c => J.mediaAssets.has(c.itemId))) {
         lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
         J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit, cut);
+        if(!opt.previewEdit && J.maskBehindPersons)J.maskBehindPersons(layer,plan,t,'behindForeground',cut);
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = cut.opacity / 100;
         ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
         ctx.drawImage(layer, 0, 0); ctx.restore();
@@ -193,7 +194,8 @@ class Renderer {
       // cut's opacity. Reuse the buffer even for long groups of retained lyrics.
       let target = ctx;
       const mask = J.activeMask ? J.activeMask(cut) : null;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask) {
+      const personOcclusion = !opt.copyLyrics && J.personOccluders?.(plan,t,'behindLyrics').length;
+      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -257,6 +259,7 @@ class Renderer {
         }
         // The cut mask applies to the finished cut, after its effects, in stage units.
         if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H, { cut, t: tq, plan });
+        if(personOcclusion)J.maskBehindPersons(target.canvas,plan,t,'behindLyrics');
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }

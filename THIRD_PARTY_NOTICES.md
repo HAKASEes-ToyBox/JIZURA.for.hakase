@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Optional person segmentation (downloaded at runtime)
+
+Images, videos and generated masks are processed locally. RVM model weights and the TensorFlow.js runtime are fetched only when the user generates a mask; pretrained weights are not bundled in this repository.
+
+- **Robust Video Matting / MobileNetV3**, by Shanchuan Lin, Linjie Yang, Imran Saleemi and Soumyadip Sengupta. [Official repository](https://github.com/PeterL1n/RobustVideoMatting). Its repository license is **GPL-3.0**; the README records the code's re-release under GPL-3.0. A separate license solely for pretrained weights is not stated. The TFJS int8 model is retrieved from the official `gh-pages` commit `72ed518756950796f10eea6eb6b301df97cef277`, under `model/`. [Full license](assets/licenses/RobustVideoMatting-GPL-3.0.txt).
+- **TensorFlow.js 4.22.0**, by the TensorFlow authors, **Apache-2.0**. [Source](https://github.com/tensorflow/tfjs/tree/tfjs-v4.22.0), loaded from jsDelivr. [Full license](assets/licenses/TensorFlowJS-Apache-2.0.txt).
+The original JIZURA MIT notices remain applicable to its original code. Do not describe a distribution integrating RVM as solely MIT licensed; assess and comply with the GPL requirements for the distributed combination, including applicable corresponding-source obligations. This notice does not grant a different license for upstream components. See also [person cutout implementation notes](docs/person-cutout.md).
+
 ## mp4-muxer 5.2.2 (bundled)
 
 `vendor/mp4-muxer.min.js` is embedded in `index.html` and is used to write MP4 files.

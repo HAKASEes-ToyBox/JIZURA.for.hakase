@@ -9,7 +9,7 @@ const {openSource}=require('./ui_helpers.cjs');
  });
  await openSource(page,'foreground');await page.locator('#mediaFiles').setInputFiles([{name:'first.png',mimeType:'image/png',buffer:Buffer.from('image')},{name:'second.mp4',mimeType:'video/mp4',buffer:Buffer.from('video')}]);
  const dialog=page.locator('#mediaLoadingDialog');await dialog.waitFor({state:'visible',timeout:5000}).catch(async e=>{console.log(errors,await page.evaluate(()=>({stage:window.importStage,busy:J.ui.projectBusy,toast:document.getElementById('toast').textContent,dialogs:[...document.querySelectorAll('dialog')].map(d=>d.id)})));throw e;});assert.ok((await dialog.locator('h2').textContent()).includes(locale?'foreground':'前景'));assert.ok((await dialog.locator('[role=status]').textContent()).includes('(1/2)：first.png'));assert.equal(await dialog.locator('progress').getAttribute('value'),null);
- await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),true,'loading cannot be dismissed before completion');await page.mouse.click(2,2);assert.equal(await dialog.isVisible(),true);
+ for(let i=0;i<3;i++){await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),true,'loading cannot be dismissed before completion');}await page.mouse.click(2,2);assert.equal(await dialog.isVisible(),true);
  await page.evaluate(()=>releaseImport());await page.waitForFunction(()=>importStage==='store:first.png');assert.ok((await dialog.locator('[role=status]').textContent()).includes(locale?'Saving in browser':'ブラウザに保存中'));
  await page.evaluate(()=>releaseImport());await page.waitForFunction(()=>importStage==='attach:second.mp4');assert.ok((await dialog.locator('[role=status]').textContent()).includes('(2/2)：second.mp4'));
  await page.evaluate(()=>releaseImport());await page.waitForFunction(()=>importStage==='store:second.mp4');await page.evaluate(()=>releaseImport());await dialog.waitFor({state:'detached'});assert.equal(await page.evaluate(()=>J.ui.project.foreground.items.length),2);assert.equal(await page.evaluate(()=>!!J.ui.projectBusy),false);
@@ -19,5 +19,14 @@ const {openSource}=require('./ui_helpers.cjs');
  // Decode failures and fast imports both clear busy state without leaving a modal.
  await page.evaluate(()=>importMode='fail');await page.locator('#mediaFiles').setInputFiles({name:'bad.mp4',mimeType:'video/mp4',buffer:Buffer.from('bad')});await page.waitForFunction(()=>!J.ui.projectBusy);assert.equal(await dialog.count(),0);assert.ok((await page.locator('#toast').textContent()).includes('bad.mp4'));
  await page.evaluate(()=>importMode='fast');await page.locator('#mediaFiles').setInputFiles({name:'fast.png',mimeType:'image/png',buffer:Buffer.from('fast')});await page.waitForFunction(()=>!J.ui.projectBusy);await page.waitForTimeout(350);assert.equal(await dialog.count(),0);assert.equal(await page.evaluate(()=>J.ui.project.media.items.length),2);
+ // Read-byte progress is visible immediately for videos and becomes indeterminate
+ // while preparing / saving, rather than claiming the whole import is complete.
+ await page.evaluate(()=>{importMode='slow';J.attachMedia=async(item,file,assets,report)=>{
+  report({phase:'read',loaded:1,total:4});importStage='read-progress';await new Promise(resolve=>{continueImport=resolve});
+  report({phase:'decode'});importStage='prepare-progress';await new Promise(resolve=>{continueImport=resolve});
+  const c=document.createElement('canvas');c.width=64;c.height=36;item.width=64;item.height=36;assets.set(item.id,{element:c,type:'image',file});return c;
+ };});
+ await page.locator('#mediaFiles').setInputFiles({name:'progress.mp4',mimeType:'video/mp4',buffer:Buffer.from('video')});assert.equal(await dialog.isVisible(),true,'Video loading must display the modal immediately');assert.equal(await dialog.locator('progress').getAttribute('value'),'0.25');assert.ok((await dialog.locator('[role=status]').textContent()).includes('25%'));
+ await page.evaluate(()=>releaseImport());await page.waitForFunction(()=>importStage==='prepare-progress');assert.equal(await dialog.locator('progress').getAttribute('value'),null);assert.ok((await dialog.locator('[role=status]').textContent()).includes(locale?'Preparing asset':'素材を準備中'));await page.evaluate(()=>releaseImport());await page.waitForFunction(()=>importStage==='store:progress.mp4');assert.equal(await dialog.isVisible(),true);await page.evaluate(()=>releaseImport());await dialog.waitFor({state:'detached'});assert.equal(await page.evaluate(()=>!!J.ui.projectBusy),false);
  assert.deepEqual(errors,[]);console.log('PASS media loading '+(locale||'ja')+' '+width);await page.close();
  }}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

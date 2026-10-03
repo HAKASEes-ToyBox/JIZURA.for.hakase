@@ -59,11 +59,11 @@ J.pickAudioCodec = async (sr, chn) => {
   return null;
 };
 
-async function resample(buffer, sr, duration) {
+async function resample(buffer, sr, duration, start = 0) {
   const chn = Math.min(2, buffer.numberOfChannels);
   const len = Math.ceil(duration * sr);
   const oc = new OfflineAudioContext(chn, len, sr);
-  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); src.start(0);
+  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); if(start<buffer.duration)src.start(0,start);
   return oc.startRendering();
 }
 
@@ -112,7 +112,9 @@ J.createMP4Output = fileStream => {
     async abort(){parts=[];await queue;if(fileStream)try{await fileStream.abort();}catch{}}
   };
 };
-J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal, fileStream }) => {
+J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal, fileStream, short }) => {
+  if(short)project=J.shortExportProject(project,short);
+  const range=short?J.shortExportRange(plan,short):{start:0,end:plan.duration},duration=range.end-range.start;
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
@@ -136,15 +138,20 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d', { alpha: false });
   const R = new J.Renderer();
-  const total = Math.max(1, Math.round(plan.duration * fps));
-  const scale = w / plan.W;
+  const total = Math.max(1, Math.round(duration * fps));
+  const source=short?document.createElement('canvas'):canvas;
+  if(short){const fit=Math.min(w/plan.W,h/plan.H);source.width=Math.max(1,Math.round(plan.W*fit));source.height=Math.max(1,Math.round(plan.H*fit));}
+  const sourceCtx=short?source.getContext('2d',{alpha:false}):ctx,portrait=short?new J.ShortFrameRenderer():null;
+  const scale = source.width / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
   try {
   for (let i = 0; i < total; i++) {
     if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
-    await J.prepareMediaFrame(plan, i / fps, signal);
-    R.frame(ctx, plan, i / fps, { scale });
+    const time=range.start+i/fps;
+    await J.prepareMediaFrame(plan, time, signal);
+    R.frame(sourceCtx, plan, time, { scale });
+    if(portrait)portrait.frame(ctx,source,short);
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
     try{venc.encode(vf, { keyFrame: i % (fps * 2) === 0,...(qp==null?{}:{avc:{quantizer:qp}}) });}
     finally{vf.close();}
@@ -158,7 +165,7 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
   await output.drain();
   if (ac) {
     onProgress && onProgress(0.99, '音声をエンコード中');
-    const rs = await resample(audio.buffer, ac.sr, plan.duration);
+    const rs = await resample(audio.buffer, ac.sr, duration, range.start);
     const chn = rs.numberOfChannels;
     aenc = new AudioEncoder({ output: (chunk, meta) => {try{muxer.addAudioChunk(chunk,meta);}catch(e){err=e;}}, error: e => { err = e; } });
     aenc.configure({ codec: ac.codec, sampleRate: ac.sr, numberOfChannels: chn, bitrate: 192000 });

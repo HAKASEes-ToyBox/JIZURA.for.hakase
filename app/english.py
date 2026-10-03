@@ -1,6 +1,9 @@
 """English copy for the browser edition. The Japanese source stays authoritative."""
 
 BODY = {
+    'href="THIRD_PARTY_NOTICES.md"': 'href="../THIRD_PARTY_NOTICES.md"',
+    '人物切り抜きの外部モデル：RVM（GPL-3.0）。': 'External person-cutout model: RVM (GPL-3.0). ',
+    'モデル・ライブラリの利用条件': 'Model and library licenses',
     '設定のみ書き出し': 'Export settings only',
     '設定のみ読み込み': 'Import settings only',
     '歌詞・曲': 'Lyrics & music',
@@ -367,6 +370,13 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    'ここから': 'Start here', 'ここまで': 'End here',
+    'ショート用出力': 'Export for Shorts', 'ショート用MP4を書き出す': 'Export Shorts MP4',
+    '元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。': 'Keep the original composition centered and fill the space above and below in a 9:16 portrait video.',
+    '開始（秒）': 'Start (seconds)', '終了（秒）': 'End (seconds)', '縦型の動画サイズ': 'Portrait video size', '上下の補間': 'Fill above and below',
+    '元動画を拡大した背景': 'Enlarged original video', '元動画を上下に並べる': 'Repeat the original above and below',
+    '拡散（映像の色を余白へ広げる）': 'Ambient diffusion (spread edge colors)', 'ぼかし度合い': 'Blur amount',
+    'ショート用出力のプレビュー': 'Shorts export preview', 'ショート用プレビューの再生位置': 'Shorts preview position', 'プレビューを再生': 'Play preview',
     "歌詞を挿入": "Insert lyrics",
     "前景を挿入": "Insert foreground",
     "背景を挿入": "Insert background",
@@ -470,6 +480,7 @@ FORK_BODY = {
     '全域表示': 'Full area', '角度リセット': 'Reset angle', '画面全域': 'Full screen', '配置決定': 'Set placement', '以降すべて同じ配置': 'Use this placement from here onward',
     '角度（°）': 'Rotation (°)', '全域へリセット': 'Reset to full area',
     '角度をリセット': 'Reset rotation', '編集モード': 'Edit mode',
+    'スクショ': 'Screenshot', 'プレビューをPNGで保存': 'Save preview as PNG',
     'この行だけに適用': 'Apply to this line', 'これ以降全てに適用': 'Apply from here onward',
     '前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',
     '歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',

@@ -19,6 +19,7 @@
       <details class="header-menu" id="outputMenu">
         <summary>出力</summary><div class="header-menu-items">
           <button id="menuMP4" data-export-dialog="mp4">MP4 を書き出す</button>
+          <button id="menuShort" data-export-dialog="short">ショート用出力</button>
           <button id="menuPNG" data-export-dialog="png">連番PNG（ZIP）</button>
           <button id="menuPNGA" data-export-dialog="pnga">透過PNG（ZIP・背景なし）</button>
           <button id="btnAE" title="After Effects パネル用の構成データを書き出す">AE用に書き出し</button>
@@ -125,7 +126,7 @@
         </div>
         <button id="tapStop" class="ghost">終了する</button>
       </div>
-      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">編集モード</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入り演出</button><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">編集モード</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入り演出</button><button id="previewScreenshot" type="button" class="ghost small" title="プレビューをPNGで保存">スクショ</button><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="再生">▶</button>
         <span id="timeNow" class="tc">00:00.00</span><span class="tc muted">/</span><button id="timeDur" class="tc muted duration-value" type="button" title="動画全体の長さを入力（空欄で自動）" aria-label="動画全体の長さを入力">00:00.00</button><input id="timeDurInput" class="tc duration-input" type="text" inputmode="decimal" aria-label="動画全体の長さ（秒または分:秒、空欄で自動）" hidden>
@@ -295,6 +296,7 @@
         <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
         <div class="outbtns">
           <button id="btnMP4" class="primary">MP4 を書き出す</button>
+          <button id="btnShort" class="primary" hidden>ショート用MP4を書き出す</button>
           <button id="btnPNG">連番PNG（ZIP）</button>
           <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
         </div>
@@ -330,6 +332,7 @@
       <h3 id="termsForkTitle">字面一 JIZURA ONE STOP EDITION</h3>
       <p>このfork版は、ワンストップでのリリックビデオ作成をコンセプトに<br>オリジナル版JIZURAに機能を追加したものです。<br>編集・書き出しはブラウザ内で処理します。</p>
       <p>fork版のソースコード：<a href="https://github.com/hirazisora/JIZURA" target="_blank" rel="noopener">https://github.com/hirazisora/JIZURA</a></p>
+      <p>人物切り抜きの外部モデル：RVM（GPL-3.0）。<a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">モデル・ライブラリの利用条件</a></p>
       <p class="muted mono">© 2026 hirazisora · MIT</p>
     </section>
     <div class="terms-foot"><button value="close" class="primary" autofocus>閉じる</button></div>
@@ -359,8 +362,35 @@
 
 <dialog id="exportDlg" class="terms export-dialog" aria-labelledby="exportDlgTitle">
  <h2 id="exportDlgTitle">出力</h2>
+ <p id="shortExportDescription" class="note" hidden>元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
+ <section id="shortExportOptions" class="short-export-options" hidden>
+  <div class="short-preview">
+   <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
+  </div>
+  <div class="short-timeline">
+     <div class="short-range-values"><label for="shortStartValue">開始（秒） <input id="shortStartValue" type="number" min="0" step="any" inputmode="decimal" value="0.000" required></label><label for="shortEndValue">終了（秒） <input id="shortEndValue" type="number" min="0" step="any" inputmode="decimal" value="0.000" required></label></div>
+     <div id="shortRange" class="short-range">
+      <span class="short-range-track"><span class="short-range-selection"></span></span>
+      <input id="shortStart" type="range" min="0" max="1" step="0.001" value="0" aria-label="開始（秒）">
+      <input id="shortEnd" type="range" min="0" max="1" step="0.001" value="1" aria-label="終了（秒）">
+      <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
+     </div>
+     <div class="short-timeline-transport">
+      <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
+      <div class="short-preview-markers"><button id="shortSetStart" type="button" class="ghost small">ここから</button><button id="shortSetEnd" type="button" class="ghost small">ここまで</button></div>
+     </div>
+  </div>
+  <div class="short-fill-settings">
+   <div class="fields">
+    <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
+    <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
+    <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
+   </div>
+   <p id="shortExportError" class="short-export-error" role="status"></p>
+  </div>
+ </section>
  <div id="exportDialogContent"></div>
  <div class="terms-foot"><button id="btnCloseExport" type="button">閉じる</button></div>
 </dialog>

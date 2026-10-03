@@ -27,13 +27,16 @@ const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
   ctx: null, src: null, startAt: 0,
-  play(buffer, offset) {
+  play(buffer, offset, end = null) {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.stop();
+    const off = end==null ? Math.max(0, Math.min(offset, buffer.duration - 0.01)) : Math.max(0,offset);
+    this.startAt = this.ctx.currentTime - off;
+    if(end!=null&&(off>=buffer.duration||end<=off))return;
     const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.ctx.destination);
-    const off = Math.max(0, Math.min(offset, buffer.duration - 0.01));
-    s.start(0, off); this.src = s; this.startAt = this.ctx.currentTime - off;
+    if(end==null)s.start(0,off);else s.start(0,off,Math.min(end,buffer.duration)-off);
+    this.src = s;
   },
   stop() { if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} this.src = null; } },
   time() { return this.ctx ? this.ctx.currentTime - this.startAt : 0; },
@@ -68,6 +71,7 @@ function mergeProject(p) {
   const d = J.defaultProject();
   const o = Object.assign(d, p || {});
   if (o.videoSize) { const [w, h] = J.outputSize(o); o.videoSize = { w, h }; }
+  o.shortExport=J.shortExportSettings(o.shortExport);
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
   o.timing.cutTimes = o.timing.cutTimes || {};
@@ -203,7 +207,7 @@ function composePlan(project) {
   }
   for (const layer of ['media', 'foreground']) {
     plan[layer].duration = plan.duration;
-    const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
+    const last = plan[layer].cuts.at(-1); if (last && !last.manualEnd && last.videoDuration == null) last.end = plan.duration;
   }
   return plan;
 }
@@ -304,7 +308,7 @@ function sizeViewport() {
 // Detail previews share the imported videos with the main renderer. Their seeked
 // events request main redraws, which must not reset the videos to the main clock.
 function syncMainMediaPreview() {
-  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
@@ -817,6 +821,7 @@ function openCutDetails(layer,index,part=0) {
   let removedDetail = null;
   const openDetails = new Map();
   let activeDetailTab='basic';
+  let personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null,personSync=null;
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));dialog.tabIndex=-1;
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
@@ -841,7 +846,12 @@ function openCutDetails(layer,index,part=0) {
   previewSeek.addEventListener('input',()=>{previewTime=Number(previewSeek.value)/1000*previewLength();previewLast=performance.now();});
   const findCut=plan=>lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
   const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);{if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
-  function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
+  function refreshPreview(){
+    const range=c=>JSON.stringify([c.start,c.end,c.itemId,c.videoStart,c.videoLoop]),before=range(previewCut);
+    previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;
+    if(before!==range(previewCut))personStatus=null;
+    if(!personController)personSync?.();return previewCut;
+  }
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
   const detailState=()=>JSON.stringify({draft,locked,start,disabledChoices});
@@ -856,6 +866,7 @@ function openCutDetails(layer,index,part=0) {
     if(detailHistory.length>100)detailHistory.shift();detailHistoryIndex=detailHistory.length-1;syncDetailHistory();
   }
   function moveDetailHistory(delta){
+    if(personController)return;
     const next=detailHistoryIndex+delta;if(next<0||next>=detailHistory.length)return;
     const focused=document.activeElement,attribute=['data-detail-field','data-mask-field','data-mask-shape','data-mask-motion','data-detail-undo','data-detail-redo'].find(a=>focused?.hasAttribute(a));
     const focusSelector=attribute?`[${attribute}="${CSS.escape(focused.getAttribute(attribute))}"]`:'[data-detail-undo]';
@@ -869,7 +880,11 @@ function openCutDetails(layer,index,part=0) {
   // Rebuilding the form can leave focus on body. Route modal history before
   // document shortcuts, even when the event does not bubble through the dialog.
   const detailShortcut=e=>{
-    if(!dialog.open||!(e.ctrlKey||e.metaKey)||e.altKey||e.isComposing||!['KeyZ','KeyY'].includes(e.code))return;
+    if(!dialog.open)return;
+    // Repeated Escape can make the browser's cancel event non-cancelable.
+    // Stop its default close action before it reaches that native pathway.
+    if(personController&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();return;}
+    if(!(e.ctrlKey||e.metaKey)||e.altKey||e.isComposing||!['KeyZ','KeyY'].includes(e.code))return;
     e.preventDefault();e.stopImmediatePropagation();moveDetailHistory(e.code==='KeyY'||e.shiftKey?1:-1);
   };
   document.addEventListener('keydown',detailShortcut,true);
@@ -917,6 +932,71 @@ function openCutDetails(layer,index,part=0) {
     return size>=1?null:{x:clampTo(r.x+r.w/2),y:clampTo(r.y+r.h/2),size};
   }
   const zoomCanvas=document.createElement('canvas');
+  function personEditor(parent){
+    if(lyric)return;
+    const section=document.createElement('section');section.dataset.detailSection='personCutout';section.className='person-cutout-editor';parent.append(section);
+    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('カット内で再生する範囲だけ人物マスクを作成します。再生時間・開始位置を変えた後は再実行してください','Generate masks only for the range played in this cut. Run again after changing its duration or source start.');section.append(hint);
+    const controls=document.createElement('div');controls.className='person-cutout-controls';section.append(controls);
+    const field=(title,input)=>{const label=document.createElement('label');label.className='cut-detail-field';const text=document.createElement('span');text.textContent=title;label.append(text,input);controls.append(label);};
+    const fps=document.createElement('input');fps.type='number';fps.min=1;fps.max=60;fps.step=1;fps.value=personFps;fps.dataset.personFps='';fps.onchange=()=>{personFps=J.clamp(Math.round(+fps.value||24),1,60);fps.value=personFps;personStatus=null;sync();};field(L('動画の解析枚数／秒','Video analysis frames / second'),fps);
+    const note=document.createElement('p');note.className='hint';note.textContent=L('解析枚数を下げると切り抜きが早く完了しますが、速い動きでマスクがズレやすくなります。','Lowering the analysis rate finishes the cutout sooner, but masks are more likely to misalign during fast motion.');section.append(note);
+    const run=document.createElement('button');run.type='button';run.dataset.personRun='';run.textContent=L('人物切り抜きを実行','Generate person mask');
+    const stop=document.createElement('button');stop.type='button';stop.dataset.personCancel='';stop.textContent=L('処理を中止','Stop processing');stop.hidden=!personController;stop.onclick=()=>personController?.abort();section.append(run,stop);
+    const status=document.createElement('p');status.dataset.personStatus='';status.setAttribute('role','status');status.setAttribute('aria-live','polite');section.append(status);
+    const progress=document.createElement('progress');progress.dataset.personProgress='';progress.max=1;progress.hidden=!personController;section.append(progress);
+    const options=document.createElement('div');options.className='person-cutout-options';section.append(options);
+    const effectsTitle=document.createElement('h4');effectsTitle.textContent=L('切り抜き効果','Cutout effects');options.append(effectsTitle);
+    const effectsHint=document.createElement('p');effectsHint.className='hint';effectsHint.textContent=L('マスク作成後に切り抜き効果をONにできます。','Generate a mask to enable cutout effects.');options.append(effectsHint);
+    const setOption=(key,value)=>{draft.personCutout={...draft.personCutout,[key]:value};schedulePreview();};
+    const display=document.createElement('input');display.type='checkbox';display.dataset.personDisplay='';display.checked=draft.personCutout?.display==='only';display.onchange=()=>setOption('display',display.checked?'only':'none');
+    const displayLabel=document.createElement('label');displayLabel.className='check';const displayText=document.createElement('span');displayText.textContent=L('人物のみ表示','Show person only');displayLabel.append(display,displayText);options.append(displayLabel);
+    for(const [key,ja,en] of [['behindLyrics','文字を人物の後ろへ','Place text behind the person'],['behindForeground','前景を人物の後ろへ','Place foreground behind the person']]){
+      const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.dataset.personOption=key;input.checked=!!draft.personCutout?.[key];input.onchange=()=>setOption(key,input.checked);const text=document.createElement('span');text.textContent=L(ja,en);label.append(input,text);options.append(label);
+    }
+    let available=false,savedEntry=null;
+    const sync=()=>{
+      const busy=!!personController,ref=J.personCutout({...current,personCutout:draft.personCutout});
+      fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
+      for(const input of options.querySelectorAll('input,select'))input.disabled=busy||!available;
+      effectsHint.hidden=busy||available;
+      if(personStatus){status.textContent=personStatus.text;if(personStatus.value==null)progress.removeAttribute('value');else progress.value=personStatus.value;}
+      else {
+        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+`${ref.frameCount} ${L('枚','frames')}`:'';
+        if(savedEntry){try{
+          if(savedEntry.meta.model!==J.PERSON_MODEL.id || personFps!==savedEntry.meta.fps)status.textContent+=' — '+L('解析設定の変更により、現在の再生範囲を再作成します。','Changed analysis settings will regenerate the current playback range.');
+          else {const coverage=J.personMaskCoverage({...previewCut,start},savedEntry);status.textContent+=' — '+(coverage.missing?L(`現在の再生範囲に${coverage.missing}枚不足しています。再実行で追加できます。`,`${coverage.missing} frames missing for the current playback range. Run again to add them.`):L('現在の再生範囲は作成済みです。','The current playback range is already covered.'));}
+        }catch(error){status.textContent+=' — '+error.message;}}
+      }
+      status.hidden=!status.textContent;
+    };
+    personSync=sync;
+    const ref=J.personCutout({...current,personCutout:draft.personCutout});
+    if(ref)J.loadPersonMask(ref).then(entry=>{savedEntry=entry;available=!!entry;if(!entry)status.textContent=L('保存済みマスクが見つかりません。再作成してください。','Saved mask is missing. Generate it again.');else sync();}).catch(()=>{status.textContent=L('保存済みマスクを読み込めません。再作成してください。','Cannot load the saved mask. Generate it again.');});
+    run.onclick=async()=>{
+      if(personController)return;
+      clearTimeout(previewTimer);current=refreshPreview();const c={...current,start,personCutout:draft.personCutout},controller=new AbortController();personController=controller;const playingBefore=previewPlaying;previewPlaying=false;syncPreviewPlay();let additional=null;
+      // Keep the progress and Stop control accessible; block every other modal
+      // region, including preview controls, tabs and both footer actions.
+      const frozen=[...dialog.querySelectorAll('input,select,textarea,button')].filter(input=>!input.closest('.person-cutout-editor')).map(input=>[input,input.disabled]);
+      const blocked=[...dialog.querySelectorAll('.cut-details-preview,.cut-details-history,.cut-details-tabs,.cut-details-actions,[data-detail-tab-panel]:not([data-detail-tab-panel="personCutout"])')].map(node=>[node,node.inert]);
+      const freeze=busy=>{dialog.classList.toggle('person-cutout-busy',busy);for(const [input,disabled] of frozen)input.disabled=busy||disabled;for(const [node,inert] of blocked)node.inert=busy||inert;};
+      freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();stop.focus({preventScroll:true});
+      try{
+        const result=await J.generatePersonMask(c,{fps:personFps,signal:controller.signal,onProgress:p=>{
+          if(p.phase==='plan'){additional=p.missing;personStatus={text:L(`再生範囲：${p.total}枚／作成済み：${p.reused}枚／追加：${p.missing}枚`,`Playback range: ${p.total} frames / saved: ${p.reused} / additional: ${p.missing}`),value:p.missing?0:1};}
+          else if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
+          else if(p.phase==='initialize')personStatus={text:L('モデルを初期化しています…','Initializing model…')};
+          else if(p.phase==='analyze')personStatus={text:L('人物マスクを作成しています：','Generating person masks: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%)`+(p.reused?L(` — 作成済み${p.reused}枚を再利用`,` — reusing ${p.reused} saved frames`):'')+` — ${p.backend}`,value:p.completed/p.total};
+          else if(p.phase==='save')personStatus={text:L('マスクを保存しています…','Saving mask…')};
+          sync();
+        }});
+        if(controller.signal.aborted || !dialog.open)return;
+        draft.personCutout=result;personStatus={text:additional===0?L('現在の再生範囲はすべて作成済みです。追加の解析は行っていません。','The current playback range is already covered. No additional inference was needed.'):L('再生範囲のマスクを作成しました。下の切り抜き効果をONにできます。','Masks generated for the playback range. Enable cutout effects below.'),value:1};rememberDetail();current=refreshPreview();
+      }catch(error){personStatus={text:error.name==='AbortError'?L('処理を中止しました。既存のマスクは保持しています。','Processing stopped. The existing mask is preserved.'):L('人物切り抜きに失敗しました：','Person mask generation failed: ')+error.message};}
+      finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();dialog.querySelector('[data-person-run]')?.focus({preventScroll:true});}}
+    };
+    sync();
+  }
   // ---- Mask editor: circles / rectangles placed on a reference image of the mask's frame ----
   const maskRef=document.createElement('canvas'),maskRefRenderer=new J.Renderer();
   let maskRefKey=null,maskRefInfo=null,maskSelected=0;
@@ -1372,6 +1452,7 @@ function openCutDetails(layer,index,part=0) {
         const param={enter:'enterP',hold:'holdP',exit:'exitP',technique:'techniqueP',entrance:'entranceP',departure:'departureP',layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
         if(field==='technique'&&draft.details)for(const key of ['hold','treat','trans','transP'])delete draft.details[key];
+        if(field==='itemId' && draft.personCutout?.sourceId!==input.value){delete draft.personCutout;personStatus=null;}
         preview();
       }
     });
@@ -1404,7 +1485,7 @@ function openCutDetails(layer,index,part=0) {
     formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
-    fieldEditor(grid,'start',start,v=>{start=v;rememberDetail();});
+    fieldEditor(grid,'start',start,v=>{start=v;rememberDetail();personStatus=null;personSync?.();});
     const time=grid.querySelector('input');time.previousSibling.textContent=L('開始位置（秒・リンク先も移動）','Start (s; linked cuts move together)');time.min=group?.min??0;time.max=group?.max??S.plan.duration;time.disabled=!group;
     // カット終了時間: editable only with 「次カット再生まで」 off (then it may pass the next cut's start).
     if(!lyric || Number.isInteger(cut.part)) {
@@ -1429,6 +1510,7 @@ function openCutDetails(layer,index,part=0) {
       fieldEditor(grid,field,clone(value??(field==='opacity'?100:'')),v=>write(field,['itemId','technique','entrance','departure'].includes(field)&&v===''?null:v,true));
     }
     maskEditor(grid);
+    personEditor(grid);
     for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
       if(field==='mask'||field==='fontParams') continue;// masks have their own editor; font paths follow layout font controls
       const parameterSlot={enterP:'enter',holdP:'hold',exitP:'exit',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[field];
@@ -1456,6 +1538,7 @@ function openCutDetails(layer,index,part=0) {
       ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
       ['decor',L('装飾','Decorations'),['decor']],
       ['mask',L('マスク','Mask'),['mask']],
+      ['personCutout',L('人物切り抜き','Person cutout'),['personCutout']],
       ['placement',L('配置・サイズ','Position / size'),['area','placement','contentScale']],
       ['other',L('その他','Other'),[]],
     ];
@@ -1502,10 +1585,10 @@ function openCutDetails(layer,index,part=0) {
     }
     for(const select of form.querySelectorAll('select'))attachDetailSearch(select);
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
-    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>{if(!personController)dialog.close();};
     const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');buttons.append(apply,cancel);
     formHost.scrollTop=scrollTop;
-    form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
+    form.onsubmit=e=>{e.preventDefault();if(personController||!form.reportValidity())return;
       applyDisabledChoices(S.project);
       if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft;
       {
@@ -1518,8 +1601,11 @@ function openCutDetails(layer,index,part=0) {
       replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
     };
   }
+  // Backdrop dismissal dispatches cancel too, sharing the Escape guard.
+  dialog.addEventListener('cancel',e=>{if(personController)e.preventDefault();});
   dialog.addEventListener('close',()=>{
     document.removeEventListener('keydown',detailShortcut,true);
+    personController?.abort();
     cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
     // Hand shared video elements back to the editor's own time.
     J.syncMediaPreview(S.plan,S.t,false);S.need=true;
@@ -1595,6 +1681,7 @@ function removeLyricCut(line,part) {
 function setMediaCutAsset(layer,index,itemId) {
   if(S.exporting || S.tap)return;
   const m=S.project[layer];
+  if(m.cutOverrides[index]?.personCutout?.sourceId!==itemId && m.cutOverrides[index])delete m.cutOverrides[index].personCutout;
   // Freeze the displayed order before switching from shuffled to manual selection.
   if(m.randomOrder){
     for(const cut of S.plan[layer].cuts)mediaOv(cut.index,{itemId:cut.itemId || null},layer);
@@ -2385,7 +2472,7 @@ function mediaThumb(item, cls = '') {
   if (J.isMediaCopy(item.id)) return `<span class="missing ${cls}" title="${escapeHtml(item.name)}" aria-label="${escapeHtml(item.name)}">↻</span>`;
   const asset = J.mediaAssets.get(item.id);
   if (!asset) return `<span class="missing">素材なし</span>`;
-  return `<img class="${cls}" src="${asset.poster || asset.url}" alt="">`;
+  return `<img class="${cls}" data-media-thumb="${escapeHtml(item.id)}" src="${escapeHtml(asset.poster || asset.url)}" alt="">`;
 }
 function renderMediaList() {
   const layer = activeMediaLayer() || 'media', m = S.project[layer];
@@ -2673,43 +2760,55 @@ function removeMediaCut(index, layer = activeMediaLayer() || 'media') {
   });
   replan();
 }
+function importProgressDialog(id, heading, delay=0) {
+  const dialog=document.createElement('dialog');dialog.id=id;dialog.className='insert-cut-dialog media-loading-dialog';
+  const title=document.createElement('h2'),status=document.createElement('p'),progress=document.createElement('progress');
+  title.id=id+'Title';title.textContent=heading;dialog.setAttribute('aria-labelledby',title.id);
+  status.setAttribute('role','status');status.setAttribute('aria-live','polite');progress.max=1;progress.setAttribute('aria-label',heading);
+  dialog.setAttribute('aria-busy','true');dialog.append(title,status,progress);
+  dialog.addEventListener('cancel',e=>e.preventDefault());
+  const escape=e=>{if(dialog.open&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();}};
+  document.addEventListener('keydown',escape,true);
+  const show=()=>{document.body.append(dialog);dialog.showModal();};
+  const timer=delay?setTimeout(show,delay):null;if(!delay)show();
+  return {
+    report(text,value=null){status.textContent=text;if(value==null)progress.removeAttribute('value');else progress.value=J.clamp(value,0,1);},
+    close(){clearTimeout(timer);document.removeEventListener('keydown',escape,true);if(dialog.open)dialog.close();dialog.remove();}
+  };
+}
 async function addMediaFiles(files, layer) {
   files=files.filter(file=>/^(image|video)\//.test(file.type));
   if(!files.length)return;
   if(S.projectBusy || S.exporting){toast(J.mediaLabel('処理が完了してから素材を追加してください','Wait for the current operation before adding assets'));return;}
   S.projectBusy=true;
   const m = S.project[layer];
-  const dialog=document.createElement('dialog');dialog.id='mediaLoadingDialog';dialog.className='insert-cut-dialog media-loading-dialog';
-  const title=document.createElement('h2'),status=document.createElement('p'),progress=document.createElement('progress');
-  title.textContent=layer==='foreground'?J.mediaLabel('前景素材を読み込み中','Loading foreground assets'):J.mediaLabel('背景素材を読み込み中','Loading background assets');
-  status.setAttribute('role','status');status.setAttribute('aria-live','polite');progress.setAttribute('aria-label',J.mediaLabel('素材を読み込み中','Loading assets'));
-  dialog.setAttribute('aria-busy','true');dialog.append(title,status,progress);
-  dialog.addEventListener('cancel',e=>e.preventDefault());
-  // Avoid flashing a dialog for small files, but cover snapshotting, decoding
-  // and browser storage for large files and batches.
-  const timer=setTimeout(()=>{document.body.append(dialog);dialog.showModal();},300);
+  const loading=importProgressDialog('mediaLoadingDialog',layer==='foreground'?J.mediaLabel('前景素材を読み込み中','Loading foreground assets'):J.mediaLabel('背景素材を読み込み中','Loading background assets'),files.some(J.isVideoFile)?0:300);
   try {
   for (const [index,file] of files.entries()) {
-    status.textContent=J.mediaLabel('読み込み中','Loading')+` (${index+1}/${files.length})：${file.name}`;
+    const report=(text,value=null)=>loading.report(text+` (${index+1}/${files.length})：${file.name}`,value);
+    report(J.mediaLabel('読み込み中','Loading'));
     const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : null;
     if (!type) continue;
     const existing = m.items.find(x => x.name === file.name && x.size === file.size && !J.mediaAssets.has(x.id));
     const item = existing || { id: crypto.randomUUID(), name: file.name, size: file.size, type };
     try {
-      const el = await J.attachMedia(item, file);
+      const el = await J.attachMedia(item, file, J.mediaAssets, p=>{
+        if(p.phase==='read')report(J.mediaLabel('ファイルを読み込み中','Reading file')+(p.total?` ${Math.round(p.loaded/p.total*100)}%`:''),p.total?p.loaded/p.total:null);
+        else report(J.mediaLabel('素材を準備中','Preparing asset'));
+      });
       el.addEventListener('seeked', () => { S.need = true; });
       if (type === 'video') item.duration = el.duration || 0;
       if (!existing) {
         m.items.push(item);
         m.overrides[item.id] = { ...(m.overrides[item.id] || {}), technique: null };
       }
-      status.textContent=J.mediaLabel('ブラウザに保存中','Saving in browser')+` (${index+1}/${files.length})：${file.name}`;
+      report(J.mediaLabel('ブラウザに保存中','Saving in browser'));
       await J.storeMedia(item.id, file);
     } catch (err) { toast(`${file.name}: `+J.mediaLabel('読み込めませんでした','Could not load asset')); }
   }
   replan();
   } finally {
-    clearTimeout(timer);if(dialog.open)dialog.close();dialog.remove();S.projectBusy=false;
+    loading.close();S.projectBusy=false;
   }
 }
 const MEDIA_EFFECT_GROUPS = {
@@ -2793,6 +2892,7 @@ async function restoreMediaAssets() {
     if (J.mediaAssets.has(item.id)) continue;
     try { const blob = await J.loadMedia(item.id); if (blob) { const el = await J.attachMedia(item, blob); el.addEventListener('seeked', () => { S.need = true; }); } } catch (e) {}
   }
+  for(const ref of J.personMaskReferences(S.project).values())try{await J.loadPersonMask(ref);}catch(e){}
   replan();
 }
 function setOv(i, patch) {
@@ -3188,25 +3288,160 @@ function renderTech() {
 }
 
 /* ---------------- output tab ---------------- */
+const shortExportActive=()=>$('exportSettings').parentElement.id==='exportDialogContent'&&S.exportKind==='short';
+const activeExportProject=()=>shortExportActive()?J.shortExportProject(S.project):S.project;
+let shortPreview=null;
+const shortPreviewAudio={...AP,ctx:null,src:null,startAt:0};
+const shortPreviewHasAudio=()=>!!S.audio?.buffer&&S.project.includeAudio!==false;
+function playShortPreviewAudio(){
+  const p=shortPreview;if(!p)return;
+  shortPreviewAudio.stop();p.audioClock=shortPreviewHasAudio();p.clock=performance.now()-p.t*1000;
+  if(p.audioClock)shortPreviewAudio.play(S.audio.buffer,p.t,J.shortExportRange(S.plan,S.project.shortExport).end);
+}
+function syncShortPreviewMarkers(){
+  const p=shortPreview,time=p?Math.round(p.t*1000)/1000:0,disabled=!!S.exporting||!p?.ready||!shortRangeValid();
+  $('shortSetStart').disabled=disabled||time>=S.plan.duration;
+  $('shortSetEnd').disabled=disabled||time<=0;
+}
+function setShortBoundary(id){
+  const p=shortPreview;if(!p?.ready||S.exporting)return;
+  const duration=S.plan.duration,gap=Math.min(.001,duration),time=J.clamp(Math.round(p.t*1000)/1000,0,duration);
+  if(id==='shortStart'){
+    if(time>=duration)return;
+    $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Math.min(duration,time+gap)));
+  }else{
+    if(time<=0)return;
+    $('shortStart').value=String(Math.min(Number($('shortStart').value),Math.max(0,time-gap)));
+  }
+  $(id).value=String(time);syncShortRange();updateShortExport();prepareShortPreview(time);
+}
+function shortRangeValid(){
+  try{
+    if(!$('shortStartValue').checkValidity()||!$('shortEndValue').checkValidity())throw new Error(J.mediaLabel('開始・終了を動画の範囲内で指定してください。','Choose a start and end within the video.'));
+    J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;
+  }
+  catch(error){$('shortExportError').textContent=error.message;return false;}
+}
+function pauseShortPreview(){
+  if(!shortPreview)return;
+  shortPreview.playing=false;
+  shortPreviewAudio.stop();shortPreview.audioClock=false;
+  for(const asset of J.mediaAssets.values())if(asset.type==='video')asset.element.pause();
+  $('shortPreviewPlay').textContent='▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel('プレビューを再生','Play preview'));
+}
+function stopShortPreview(){
+  if(!shortPreview)return;
+  pauseShortPreview();shortPreview.controller?.abort();cancelAnimationFrame(shortPreview.raf);shortPreview=null;
+}
+async function prepareShortPreview(time,play=false){
+  const p=shortPreview;if(!p||S.exporting)return;p.plan=S.plan;
+  if(!shortRangeValid()){pauseShortPreview();p.controller?.abort();return;}
+  pauseShortPreview();p.controller?.abort();const controller=new AbortController();p.controller=controller;p.ready=false;p.error='';
+  const range=J.shortExportRange(S.plan,S.project.shortExport);
+  p.t=play&&(time<range.start||time>=range.end)?range.start:J.clamp(time,0,S.plan.duration);p.plan=S.plan;syncShortPreviewMarkers();
+  $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+  try{
+    // Resume in the original button gesture, before waiting for video seeks,
+    // so audio can start on iOS after the selected frame is ready.
+    let audioReady=Promise.resolve();
+    if(play&&shortPreviewHasAudio()){
+      if(!shortPreviewAudio.ctx)shortPreviewAudio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+      if(shortPreviewAudio.ctx.state==='suspended')audioReady=shortPreviewAudio.ctx.resume();
+    }
+    await Promise.all([J.prepareMediaFrame(p.plan,Math.min(p.t,Math.max(0,p.plan.duration-.001)),controller.signal),audioReady]);
+    if(shortPreview!==p||controller.signal.aborted)return;
+    p.ready=true;p.need=true;p.playing=play;p.clock=performance.now()-p.t*1000;
+    if(play)playShortPreviewAudio();
+    $('shortExportError').textContent='';
+    syncShortPreviewMarkers();
+    $('shortPreviewPlay').textContent=play?'❚❚':'▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel(play?'プレビューを一時停止':'プレビューを再生',play?'Pause preview':'Play preview'));
+  }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}}
+  finally{if(p.controller===controller)p.controller=null;}
+}
+function startShortPreview(){
+  stopShortPreview();if(!shortExportActive())return;
+  const p=shortPreview={renderer:new J.Renderer(),portrait:new J.ShortFrameRenderer(),source:document.createElement('canvas'),t:S.project.shortExport.start,plan:S.plan,ready:false,need:true,playing:false};
+  const tick=now=>{
+    if(shortPreview!==p)return;p.raf=requestAnimationFrame(tick);if(S.exporting)return;
+    if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
+    if(!p.ready)return;
+    if(p.playing){
+      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=Math.max(range.start,p.audioClock?shortPreviewAudio.time():(now-p.clock)/1000);
+      if(p.t>=range.end){p.t=range.start;playShortPreviewAudio();}
+      J.syncMediaPreview(S.plan,p.t,true);p.need=true;
+    }
+    if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
+    p.need=false;p.lastDraw=now;
+    try{
+      const canvas=$('shortExportPreview'),fit=Math.min(canvas.width/S.plan.W,canvas.height/S.plan.H),sw=Math.max(1,Math.round(S.plan.W*fit)),sh=Math.max(1,Math.round(S.plan.H*fit));
+      if(p.source.width!==sw||p.source.height!==sh){p.source.width=sw;p.source.height=sh;}
+      p.renderer.frame(p.source.getContext('2d',{alpha:false}),S.plan,Math.min(p.t,Math.max(0,S.plan.duration-.001)),{scale:sw/S.plan.W});
+      p.portrait.frame(canvas.getContext('2d',{alpha:false}),p.source,S.project.shortExport);
+      $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+      syncShortPreviewMarkers();
+    }catch(error){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}
+  };
+  p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
+}
+function syncShortRange(fromSliders=true){
+  if(fromSliders){
+    $('shortStartValue').value=Number($('shortStart').value).toFixed(3);$('shortEndValue').value=Number($('shortEnd').value).toFixed(3);
+  }else{
+    for(const [slider,input] of [['shortStart','shortStartValue'],['shortEnd','shortEndValue']])if(Number.isFinite($(input).valueAsNumber))$(slider).value=String($(input).valueAsNumber);
+  }
+  const duration=S.plan.duration,start=Number($('shortStart').value),end=Number($('shortEnd').value);
+  $('shortRange').style.setProperty('--range-start',`${start/duration*100}%`);
+  $('shortRange').style.setProperty('--range-end',`${end/duration*100}%`);
+}
+function initShortExport(){
+  const s=J.shortExportSettings(S.project.shortExport),duration=S.plan.duration;
+  if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
+  S.project.shortExport=s;
+  $('shortStart').max=$('shortEnd').max=String(duration);
+  $('shortStartValue').max=$('shortEndValue').max=String(duration);
+  $('shortStartValue').value=String(s.start);$('shortEndValue').value=String(s.end??duration);syncShortRange(false);
+  $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
+  $('shortExportError').textContent='';
+  $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
+  $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(duration);
+}
+function updateShortExport(rangeChanged=false){
+  const start=$('shortStartValue').value,end=$('shortEndValue').value;
+  S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
+  $('shortBlurValue').value=$('shortBlur').value;
+  syncShortRange(false);
+  const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
+  if(!valid){pauseShortPreview();shortPreview?.controller?.abort();syncShortPreviewMarkers();}
+  else{
+    $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(S.plan.duration);
+    if(rangeChanged)prepareShortPreview(S.project.shortExport.start);else if(shortPreview)shortPreview.need=true;
+  }
+  syncQuality();codecNote();autosave();
+}
 function syncExportSettingsVisibility() {
   const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
-  const mp4=!inDialog||S.exportKind==='mp4',transparent=inDialog&&S.exportKind==='pnga';
+  const short=shortExportActive(),mp4=!inDialog||S.exportKind==='mp4'||short,transparent=inDialog&&S.exportKind==='pnga';
+  $('shortExportOptions').hidden=!short;
+  $('shortExportDescription').hidden=!short;
+  for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
+  for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
   $('outAudio').closest('label').hidden=!mp4;
   $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
   $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
-  $('outKey').closest('label').hidden=transparent;
-  $('exportSettings').querySelector('.key-note').hidden=transparent;
+  $('outKey').closest('label').hidden=transparent||short;
+  $('exportSettings').querySelector('.key-note').hidden=transparent||short;
   $('codecNote').hidden=!mp4;
 }
 function syncQuality() {
+  const project=activeExportProject();
   const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
     if(option.value==='qp'){option.textContent=names.qp;continue;}
-    let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
+    let rate;try{rate=J.videoBitrate(project,option.value);}catch{rate=null;}
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
-  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
+  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(project,'high'))/1e6);
   $('outQP').value=String(S.project.exportQP ?? 12);
   syncExportSettingsVisibility();
 }
@@ -3236,31 +3471,39 @@ function syncOut() {
 let codecNoteVersion=0;
 async function codecNote() {
   const version=++codecNoteVersion,isQP=S.project.quality==='qp';
-  const [w, h] = J.outputSize(S.project);
-  let bitrate;try{if(isQP)J.videoQuantizer(S.project);else bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const project=activeExportProject(),[w, h] = J.outputSize(project);
+  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;$('eMP4').disabled=true;return;}
   const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
-  if(version!==codecNoteVersion)return;
+  if(version!==codecNoteVersion||S.exporting)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  $('btnShort').disabled=!vc||shortExportActive()&&!shortRangeValid();
   if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA', 'eMP4'];
 function openExportDialog(kind) {
   if (S.exporting) return;
   pause();
-  const mp4 = kind === 'mp4';
+  const mp4 = kind === 'mp4'||kind==='short';
   S.exportKind = kind;
-  $('exportFilename').value = baseName() + (mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
+  $('exportDlg').classList.toggle('short-export-dialog',kind==='short');
+  if(kind==='short')initShortExport();
+  $('exportFilename').value = baseName() + (kind==='short'?'_short.mp4':mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
   $('exportDlgTitle').textContent = J.mediaLabel(mp4 ? 'MP4 を書き出す' : kind === 'pnga' ? '透過PNG（ZIP・背景なし）' : '連番PNG（ZIP）', mp4 ? 'Export MP4' : kind === 'pnga' ? 'Transparent PNG (ZIP)' : 'PNG sequence (ZIP)');
+  if(kind==='short')$('exportDlgTitle').textContent=J.mediaLabel('ショート用出力','Export for Shorts');
   $('exportDialogContent').appendChild($('exportSettings'));
-  for (const [id,type] of [['btnMP4','mp4'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
+  for (const [id,type] of [['btnMP4','mp4'],['btnShort','short'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
   syncOut();codecNote(); $('exportDlg').showModal();
+  if(kind==='short')startShortPreview();
 }
 function restoreExportSettings() {
+  stopShortPreview();
+  $('exportDlg').classList.remove('short-export-dialog');
   $('exportSettingsHome').appendChild($('exportSettings'));
+  $('btnShort').hidden=true;
   for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
-  syncQuality();
+  syncQuality();codecNote();syncMainMediaPreview();S.need=true;
 }
 function baseName() {
   const k = J.keyMode(S.project);
@@ -3299,14 +3542,17 @@ function confirmHiddenLayers() {
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
-  if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
-  if(kind==='mp4'&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  const mp4=kind==='mp4'||kind==='short';
+  if(mp4&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
+  if(mp4&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  if(kind==='short'&&(!$('shortStartValue').reportValidity()||!$('shortEndValue').reportValidity()||!shortRangeValid()))return;
   if(!confirmHiddenLayers())return;
-  const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
+  const filename = J.exportFilename($('exportFilename').value, mp4 ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
   pause();
+  if(kind==='short')stopShortPreview();
   const ac = new AbortController(); S.exporting = ac;
-  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),$('exportFilename')].map(el=>[el,el.disabled]);
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('exportFilename')].map(el=>[el,el.disabled]);
   settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
@@ -3320,7 +3566,7 @@ async function runExport(kind) {
   try {
     // Ask while the export click still has user activation. Stream large MP4s
     // straight to this file instead of holding the whole movie in browser RAM.
-    if(kind==='mp4'&&typeof window.showSaveFilePicker==='function'){
+    if(mp4&&typeof window.showSaveFilePicker==='function'){
       try{
         const handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'MP4',accept:{'video/mp4':['.mp4']}}]});
         fileStream=await handle.createWritable();
@@ -3330,8 +3576,8 @@ async function runExport(kind) {
       }
     }
     await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
-    if (kind === 'mp4') {
-      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream });
+    if (mp4) {
+      const r = await J.exportMP4({ plan: S.plan, project: activeExportProject(), audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream,short:kind==='short'?{...S.project.shortExport}:null });
       fileStream=null;
       txt.textContent = `完成 ${(r.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
       const res = r.saved?'saved':await J.saveFile(filename, r.blob);
@@ -3343,7 +3589,7 @@ async function runExport(kind) {
     }
   } catch (e) {
     if(fileStream)try{await fileStream.abort();}catch{}
-    if(e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
+    if(ac.signal.aborted||e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
   } finally {
@@ -3351,6 +3597,7 @@ async function runExport(kind) {
     settingsInputs.forEach(([el,disabled])=>{el.disabled=disabled;}); $('btnCloseExport').disabled = false;
     EXP_BTNS.forEach(id => { $(id).disabled = false; });
     codecNote();
+    if(kind==='short')startShortPreview();
   }
 }
 
@@ -3596,6 +3843,12 @@ function bind() {
   storageWarning.textContent = J.mediaLabel('ブラウザ内に素材を保存できないため、一時保存で編集中です。曲・素材は再読み込みで失われます。ページを閉じる前に素材入りプロジェクトを保存してください。', 'Browser storage is unavailable. Imported audio and media are kept only for this session and will be lost on reload. Save a project with assets before closing this page.');
   document.querySelector('#app > .bar').appendChild(storageWarning);
   window.addEventListener('jizura-media-storage', () => { storageWarning.hidden = !J.hasTemporaryMedia(); });
+  window.addEventListener('jizura-media-poster',e=>{
+    for(const img of document.querySelectorAll('img[data-media-thumb]'))if(img.dataset.mediaThumb===e.detail.id)img.src=e.detail.poster;
+    S.need=true;
+  });
+  window.addEventListener('jizura-media-ready',()=>{S.need=true;});
+  window.addEventListener('jizura-media-error',e=>toast(e.detail.message));
   window.addEventListener('beforeunload', event => {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });
@@ -3631,9 +3884,47 @@ function bind() {
   $('fileProject').closest('label').addEventListener('keydown', e => {if(e.key==='Enter'||e.key===' '){e.preventDefault();$('fileProject').click();}});
   $('fileProject').addEventListener('change',()=>{$('projectMenu').open=false;});
   document.querySelectorAll('[data-export-dialog]').forEach(button=>button.addEventListener('click',()=>openExportDialog(button.dataset.exportDialog)));
-  $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
-  $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
+  $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting){stopShortPreview();$('exportDlg').close();}});
+  $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();else stopShortPreview();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
+  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>{
+    const gap=Math.min(.001,S.plan.duration);
+    if(id==='shortStart')$('shortStart').value=String(Math.min(Number($('shortStart').value),Number($('shortEnd').value)-gap));
+    else $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Number($('shortStart').value)+gap));
+    syncShortRange();updateShortExport(true);
+  });
+  for(const id of ['shortStartValue','shortEndValue'])$(id).addEventListener('input',()=>updateShortExport(true));
+  // Range endpoints and the playhead share one keyboard-accessible track.
+  // Drag a circular endpoint to trim; elsewhere, click or drag to seek.
+  const shortRange=$('shortRange');let rangeDrag=null;
+  const moveShortRange=e=>{
+    if(!rangeDrag||e.pointerId!==rangeDrag.pointer||$(rangeDrag.id).disabled)return;
+    const rect=shortRange.getBoundingClientRect(),fraction=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1),input=$(rangeDrag.id);
+    input.value=String(fraction*S.plan.duration);input.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  shortRange.addEventListener('pointerdown',e=>{
+    if(e.button!==0||$('shortStart').disabled||$('shortEnd').disabled)return;
+    e.preventDefault();
+    const rect=shortRange.getBoundingClientRect(),time=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1)*S.plan.duration;
+    const startDistance=Math.abs(time-Number($('shortStart').value)),endDistance=Math.abs(time-Number($('shortEnd').value));
+    const nearEndpoint=Math.min(startDistance,endDistance)/S.plan.duration*Math.max(1,rect.width-20)<=10&&Math.abs(e.clientY-rect.top-22)<=10;
+    const id=nearEndpoint?(startDistance<endDistance?'shortStart':'shortEnd'):'shortPreviewSeek';
+    rangeDrag={id,pointer:e.pointerId};$(id).focus({preventScroll:true});shortRange.setPointerCapture(e.pointerId);moveShortRange(e);
+  });
+  shortRange.addEventListener('pointermove',moveShortRange);
+  const endRangeDrag=e=>{if(rangeDrag?.pointer===e.pointerId)rangeDrag=null;};
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])shortRange.addEventListener(event,endRangeDrag);
+  for(const id of ['shortFill','shortRes'])$(id).addEventListener('change',()=>updateShortExport());
+  $('shortBlur').addEventListener('input',()=>updateShortExport());
+  $('shortPreviewPlay').addEventListener('click',()=>{
+    if(!shortPreview)return;
+    if(shortPreview.playing||shortPreview.controller){shortPreview.controller?.abort();pauseShortPreview();}
+    else prepareShortPreview(shortPreview.t,true);
+  });
+  $('shortPreviewSeek').addEventListener('input',e=>prepareShortPreview(Number(e.target.value)));
+  $('shortSetStart').addEventListener('click',()=>setShortBoundary('shortStart'));
+  $('shortSetEnd').addEventListener('click',()=>setShortBoundary('shortEnd'));
+  document.fonts?.addEventListener('loadingdone',()=>{if(shortPreview)shortPreview.need=true;});
   // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
   const themeBalanceNote = () => {
     const L = J.mediaLabel, unified = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified';
@@ -3909,6 +4200,20 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('effectFavorites').textContent=J.mediaLabel('☆お気に入り演出','☆ Favorite effects');
   $('effectFavorites').onclick=()=>openEffectFavorites();
+  const screenshot=$('previewScreenshot');
+  screenshot.textContent=J.mediaLabel('スクショ','Screenshot');
+  screenshot.title=J.mediaLabel('プレビューをPNGで保存','Save preview as PNG');
+  screenshot.addEventListener('click',async()=>{
+    screenshot.disabled=true;
+    try{
+      const filename=J.exportFilename(`${baseName()}_preview_${S.t.toFixed(3).replace('.','-')}`,'.png');
+      // Encode the displayed canvas directly, including the current video frame
+      // and preview edits. Re-rendering could capture a different frame.
+      const blob=await new Promise((resolve,reject)=>$('view').toBlob(blob=>blob?resolve(blob):reject(new Error(J.mediaLabel('PNGを作成できませんでした','Could not create PNG'))),'image/png'));
+      await J.saveFile(filename,blob);
+    }catch(error){toast(J.mediaLabel('スクショを保存できませんでした：','Could not save screenshot: ')+error.message);}
+    finally{screenshot.disabled=false;}
+  });
   $('previewFullscreen').addEventListener('click',async()=>{
     try { await $('viewport').requestFullscreen(); }
     catch { $('viewport').classList.add('preview-fullscreen');document.body.classList.add('preview-fullscreen-open');sizeViewport(); }
@@ -4155,7 +4460,7 @@ function bind() {
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
   $('outQuality').addEventListener('change', e => {
     S.project.quality=e.target.value;
-    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(S.project,'high');
+    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(activeExportProject(),'high');
     syncQuality();codecNote();autosave();
   });
   $('outBitrate').addEventListener('input',e=>{
@@ -4172,8 +4477,9 @@ function bind() {
   $('outQP').addEventListener('input',e=>{
     S.project.exportQP=e.target.value===''?NaN:Number(e.target.value);codecNote();autosave();
   });
-  $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
+  $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked;if(shortPreview?.playing)playShortPreviewAudio();autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
+  $('btnShort').addEventListener('click', () => runExport('short'));
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
@@ -4293,6 +4599,7 @@ function bind() {
 
 /* song file -> beat analysis (file input, or a host such as the After Effects panel) */
 function openAudioImport(file) {
+  if(S.projectBusy||S.exporting){toast(J.mediaLabel('処理が完了してから読み込んでください','Wait for the current operation before importing'));return;}
   pause();
   const L=J.mediaLabel,video=J.isVideoFile(file),dialog=document.createElement('dialog');
   dialog.id='audioImportDialog';dialog.className='insert-cut-dialog';
@@ -4303,23 +4610,45 @@ function openAudioImport(file) {
   dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
 }
 async function loadAudioFile(f,options={matchDuration:true,background:false}) {
+  if(S.projectBusy||S.exporting)return false;
+  S.projectBusy=true;
   const project = S.project, request = S.audioLoad = (S.audioLoad || 0) + 1;
   const previousDuration=S.plan.duration,video=J.isVideoFile(f),assets=new Map();
+  const loading=importProgressDialog('audioLoadingDialog',video?J.mediaLabel('動画を読み込み中','Loading video'):J.mediaLabel('曲を読み込み中','Loading audio'));
+  const report=(text,value=null)=>loading.report(text+'：'+f.name,value);
   $('audioName').textContent = '解析中…';
   try {
     pause();
-    const audio = await J.analyzeAudio(f);
-    const duration=video?await J.videoFileDuration(f):audio.duration;
+    report(J.mediaLabel('ファイルを読み込み中','Reading file'));
+    await new Promise(resolve=>setTimeout(resolve,0));
+    const sourceFile=await J.snapshotMediaFile(f,(loaded,total)=>report(J.mediaLabel('ファイルを読み込み中','Reading file')+(total?` ${Math.round(loaded/total*100)}%`:''),total?loaded/total:null));
+    let audio=null,audioError=null;
+    try{audio=await J.analyzeAudio(sourceFile,p=>report(p.phase==='read'?J.mediaLabel('音声を読み込み中','Reading audio'):p.phase==='decode'?J.mediaLabel('音声を展開中','Decoding audio'):J.mediaLabel('拍・波形を解析中','Analyzing beats and waveform')));}
+    catch(error){if(!video||!options.background)throw error;audioError=error;}
+    if(video)report(J.mediaLabel('動画の長さを確認中','Checking video duration'));
+    const duration=video?await J.videoFileDuration(sourceFile):audio.duration;
     if (S.project !== project || S.audioLoad !== request) return false;
-    const audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):f);
+    let audioFile=null;
+    if(audio){
+      report(J.mediaLabel('音声を保存する準備中','Preparing audio for saving'));
+      await new Promise(resolve=>setTimeout(resolve,0));
+      audioFile=await J.snapshotMediaFile(video?J.audioWaveFile(audio.buffer,f.name):sourceFile);
+    }
     let item=null;
     if(video&&options.background){
       if(S.plan.media.cuts.length>=1000)throw new Error(J.mediaLabel('背景カット数の上限に達しました','Background cut limit reached'));
       item={id:crypto.randomUUID(),name:f.name,size:f.size,type:'video',duration};
-      await J.attachMedia(item,f,assets);await J.storeMedia(item.id,f);
+      report(J.mediaLabel('背景動画を準備中','Preparing background video'));
+      await J.attachMedia(item,sourceFile,assets);
+      report(J.mediaLabel('背景動画をブラウザに保存中','Saving background video in browser'));
+      await J.storeMedia(item.id,sourceFile);
     }
-    const audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
-    await J.storeMedia(audioAsset.id,audioFile);
+    let audioAsset=null;
+    if(audioFile){
+      audioAsset={id:'audio_'+crypto.randomUUID(),name:audioFile.name,type:audioFile.type};
+      report(J.mediaLabel('音声をブラウザに保存中','Saving audio in browser'));
+      await J.storeMedia(audioAsset.id,audioFile);
+    }
     if (S.project !== project || S.audioLoad !== request) return false;
     if(item){
       const m=project.media,cuts=S.plan.media.cuts,overrides={0:{itemId:item.id,technique:'none',entrance:'none',departure:'none',videoStart:0,videoDuration:duration,videoLoop:false}},times={0:0};
@@ -4328,16 +4657,18 @@ async function loadAudioFile(f,options={matchDuration:true,background:false}) {
       for(const link of project.timelineLinks)for(const side of ['a','b'])if(link[side].startsWith('m:'))link[side]='m:'+(+link[side].slice(2)+1);
       for(const [id,asset] of assets){J.mediaAssets.set(id,asset);asset.element.addEventListener('seeked',()=>{S.need=true;});}assets.clear();
     }
-    S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;
+    if(audio){S.audio=audio;S.audioFile=audioFile;project.audioAsset=audioAsset;}
     project.durationOverride=options.matchDuration?duration:previousDuration;
     refreshAudioName();
-    S.project.timing.snap = true;
+    if(audio)S.project.timing.snap = true;
+    report(J.mediaLabel('編集画面を更新中','Updating editor'));
     syncUI(); replan();
+    if(audioError)toast(J.mediaLabel('動画を読み込みました。音声を取り出せなかったため、曲は変更していません。','Video imported. Audio could not be extracted, so the existing song was kept.'));
     return true;
   } catch (err) {
     if (S.project === project && S.audioLoad === request) { refreshAudioName(); toast(J.mediaLabel('曲を読み込めませんでした：','Could not import audio: ') + err.message); }
     return false;
-  } finally {releaseProjectAssets(assets);}
+  } finally {releaseProjectAssets(assets);loading.close();S.projectBusy=false;}
 }
 
 function releaseProjectAssets(assets) {
@@ -4405,6 +4736,10 @@ async function openProjectFile(file,report=()=>{}) {
       await step(L('素材を保存しています：','Saving asset: ')+entry.name,()=>entry.kind==='font'?J.saveFontFile(entry.id,entry.file):J.storeMedia(entry.id,entry.file));
     }
     await step(L('フォントを復元しています','Restoring fonts'),()=>J.restoreFontFiles(project.userFonts));
+    for(const ref of J.personMaskReferences(project).values()){
+      const blob=files.get('person:'+ref.maskId) || await J.loadMedia(ref.maskId);
+      if(blob)await J.attachPersonMask(ref,blob);
+    }
     replaceProject(project,audio,audioFile,assets);
   } catch (err) { releaseProjectAssets(assets); throw err; }
 }
