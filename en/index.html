@@ -8944,10 +8944,33 @@ J.planMedia=function(project,plan,audioDuration,layer='media'){
   return result;
 };
 const encode = new TextEncoder(), decode = new TextDecoder();
+const MAX_MASK_FRAMES=216000;
+const sourceFrame = (time,fps,duration) => J.clamp(Math.floor(time*fps+1e-6),0,Math.max(0,Math.ceil(duration*fps)-1));
+// Source-frame slots are stable when a cut is moved, trimmed, extended or looped.
+J.personMaskTargets = (cut,duration,fps) => {
+  if(cut.type!=='video' || !duration)return [0];
+  const length=cut.end-cut.start;
+  if(!Number.isFinite(length) || length<=0)throw new Error(L('カットの再生時間を指定してください','Specify the cut playback duration'));
+  const slots=new Set(),offset=J.mediaVideoTime(cut,cut.start,duration),last=sourceFrame(Math.max(0,duration-.001),fps,duration);
+  const add=(from,to)=>{
+    const first=sourceFrame(from,fps,duration),end=Math.min(last,Math.max(first,Math.ceil(to*fps-1e-7)-1));
+    if(end-first+1>MAX_MASK_FRAMES)throw new Error(L('解析範囲が長すぎます。カットを短くしてください。','Analysis range is too long. Shorten the cut.'));
+    for(let i=first;i<=end;i++)slots.add(i);
+  };
+  if(cut.videoLoop && length>=duration)add(0,duration);
+  else if(cut.videoLoop && offset+length>duration){add(offset,duration);add(0,offset+length-duration);}
+  else add(offset,Math.min(duration,offset+length));
+  if(slots.size>MAX_MASK_FRAMES)throw new Error(L('解析範囲が長すぎます。カットを短くしてください。','Analysis range is too long. Shorten the cut.'));
+  return [...slots].sort((a,b)=>a-b);
+};
+J.personMaskCoverage = (cut,entry) => {
+  const targets=J.personMaskTargets(cut,entry.meta.duration,entry.meta.fps),missing=targets.filter(i=>!entry.slots.has(i));
+  return {total:targets.length,reused:targets.length-missing.length,missing:missing.length};
+};
 J.packPersonMask = (meta, frames) => {
-  let offset=0;
-  const index=frames.map(f=>{const entry={offset,size:f.size};offset+=f.size;return entry;});
-  const bytes=encode.encode(JSON.stringify({...meta,version:1,frames:index})), header=new Uint8Array(12);
+  let offset=0;const {indices,...base}=meta;
+  const index=frames.map((f,i)=>{const entry={...(indices?{index:indices[i]}:{}),offset,size:f.size};offset+=f.size;return entry;});
+  const bytes=encode.encode(JSON.stringify({...base,version:indices?2:1,frames:index})), header=new Uint8Array(12);
   header.set(encode.encode('JIZMAT01'));new DataView(header.buffer).setUint32(8,bytes.length,true);
   return new Blob([header,bytes,...frames],{type:'application/x-jizura-matte'});
 };
@@ -8957,11 +8980,15 @@ J.readPersonMask = async (blob, ref) => {
   const head=new Uint8Array(await blob.slice(0,12).arrayBuffer()),length=new DataView(head.buffer).getUint32(8,true),start=12+length;
   if(decode.decode(head.slice(0,8))!=='JIZMAT01' || length>8*1024*1024 || start>blob.size)throw fail();
   const meta=JSON.parse(await blob.slice(12,start).text());
-  if(meta.version!==1 || meta.sourceId!==ref.sourceId || meta.model!==ref.model || !Number.isFinite(meta.duration) || meta.duration<0 || !Number.isFinite(meta.fps) || meta.fps<1 || meta.fps>60 || !Number.isInteger(meta.width) || !Number.isInteger(meta.height) || meta.width<1 || meta.height<1 || meta.width>1024 || meta.height>1024 || !Array.isArray(meta.frames) || !meta.frames.length || meta.frames.length>216000)throw fail();
-  let end=0;
-  for(const f of meta.frames){if(!Number.isSafeInteger(f.offset)||f.offset!==end||!Number.isSafeInteger(f.size)||f.size<1||start+end+f.size>blob.size)throw fail();end+=f.size;}
+  if(![1,2].includes(meta.version) || meta.sourceId!==ref.sourceId || meta.model!==ref.model || !Number.isFinite(meta.duration) || meta.duration<0 || !Number.isFinite(meta.fps) || meta.fps<1 || meta.fps>60 || !Number.isInteger(meta.width) || !Number.isInteger(meta.height) || meta.width<1 || meta.height<1 || meta.width>1024 || meta.height>1024 || !Array.isArray(meta.frames) || !meta.frames.length || meta.frames.length>MAX_MASK_FRAMES)throw fail();
+  let end=0,last=-1;const slots=new Map(),limit=Math.max(0,Math.ceil(meta.duration*meta.fps)-1);
+  for(const [i,f] of meta.frames.entries()){
+    const index=meta.version===2?f.index:i;
+    if(!Number.isSafeInteger(index)||index<=last||meta.version===2&&index>limit||!Number.isSafeInteger(f.offset)||f.offset!==end||!Number.isSafeInteger(f.size)||f.size<1||start+end+f.size>blob.size)throw fail();
+    slots.set(index,i);last=index;end+=f.size;
+  }
   if(start+end!==blob.size)throw fail();
-  return {blob,meta,start,decoded:new Map(),pending:new Map()};
+  return {blob,meta,start,slots,decoded:new Map(),pending:new Map()};
 };
 J.attachPersonMask = async (ref,blob) => {
   const entry=await J.readPersonMask(blob,ref),old=entries.get(ref.maskId);
@@ -8979,7 +9006,7 @@ J.loadPersonMask = ref => {
 J.personMaskBlob = async ref => (await J.loadPersonMask(ref))?.blob;
 const frameIndex = (entry,cut,t) => {
   const time=cut.type==='video'?J.mediaVideoTime(cut,t,entry.meta.duration):0;
-  return J.clamp(Math.floor(time*entry.meta.fps+1e-6),0,entry.meta.frames.length-1);
+  return entry.slots.get(cut.type==='video'?sourceFrame(time,entry.meta.fps,entry.meta.duration):0);
 };
 const decodeFrame = (entry,i) => {
   if(entry.decoded.has(i)){const img=entry.decoded.get(i);entry.decoded.delete(i);entry.decoded.set(i,img);return Promise.resolve(img);}
@@ -9001,13 +9028,16 @@ J.preparePersonMask = async (cut,t,strict=false) => {
   const ref=J.personCutout(cut);if(!ref)return;
   const entry=await J.loadPersonMask(ref);
   if(!entry){if(strict && (ref.display!=='none'||ref.behindLyrics||ref.behindForeground))throw new Error(L('人物マスクが見つかりません。人物切り抜きで再作成してください：','Person mask is missing. Generate it again: ')+cut.name);return;}
-  await decodeFrame(entry,frameIndex(entry,cut,t));
+  const i=frameIndex(entry,cut,t);
+  if(i===undefined){if(strict && (ref.display!=='none'||ref.behindLyrics||ref.behindForeground))throw new Error(L('再生範囲の人物マスクが不足しています。人物切り抜きを再実行してください：','Person masks are missing for this playback range. Run person cutout again: ')+cut.name);return;}
+  await decodeFrame(entry,i);
 };
 J.personMaskFrame = (cut,t) => {
   const ref=J.personCutout(cut);if(!ref)return null;
   const entry=entries.get(ref.maskId);
   if(!entry){J.preparePersonMask(cut,t).catch(()=>{});return null;}
   const i=frameIndex(entry,cut,t),img=entry.decoded.get(i);
+  if(i===undefined)return null;
   if(!img)decodeFrame(entry,i).catch(()=>{});
   return img || null;
 };
@@ -9086,6 +9116,9 @@ function personWorker(){
           model=await ort.InferenceSession.create(bytes,{executionProviders:['wasm']});backend='CPU';
         }
         postMessage({type:'ready',backend});
+      }else if(m.type==='reset'){
+        if(engine==='rvm'){tf.dispose(states);states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];}
+        postMessage({type:'reset'});
       }else if(m.type==='frame'){
         let alpha,w=m.width,h=m.height;
         if(engine==='rvm'){
@@ -9126,7 +9159,7 @@ const makeWorker=report=>{
 J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) => {
   const asset=J.mediaAssets.get(cut.itemId),def=J.PERSON_MODELS[modelId];
   if(!asset || !def || J.isMediaCopy(cut.itemId))throw new Error(L('画像・動画素材を指定してください','Select an image or video asset'));
-  const worker=makeWorker(onProgress),abort=()=>worker.stop();signal?.addEventListener('abort',abort,{once:true});
+  let worker;const abort=()=>worker?.stop();signal?.addEventListener('abort',abort,{once:true});
   let source,url;
   try{
     if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
@@ -9138,14 +9171,24 @@ J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) 
     }else source=asset.element;
     const [sw,sh]=dims(source),duration=asset.type==='video'?source.duration:0;
     if(!sw||!sh||!Number.isFinite(duration))throw new Error(L('素材のサイズ・長さを取得できません','Cannot read source dimensions or duration'));
-    fps=J.clamp(Math.round(fps),1,60);const count=duration?Math.ceil(duration*fps):1;
-    if(count>216000)throw new Error(L('動画が長すぎます。短い素材に分割してください。','Video is too long. Split it into shorter files.'));
-    onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url});
+    fps=J.clamp(Math.round(fps),1,60);
     const k=Math.min(1,512/Math.max(sw,sh)),mw=Math.max(1,Math.round(sw*k)),mh=Math.max(1,Math.round(sh*k));
-    const iw=modelId==='anime'?1024:mw,ih=modelId==='anime'?1024:mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d'),frames=[];
+    const prior=J.personCutout(cut),loaded=prior?.model===modelId?await J.loadPersonMask(prior).catch(()=>null):null;
+    const existing=loaded && loaded.meta.model===modelId && loaded.meta.fps===fps && loaded.meta.width===mw && loaded.meta.height===mh && Math.abs(loaded.meta.duration-duration)<1e-6?loaded:null;
+    const targets=J.personMaskTargets(cut,duration,fps),missing=targets.filter(i=>!existing?.slots.has(i)),frames=new Map();
+    if(existing)for(const [slot,i] of existing.slots){const f=existing.meta.frames[i];frames.set(slot,existing.blob.slice(existing.start+f.offset,existing.start+f.offset+f.size,'image/png'));}
+    if(frames.size+missing.length>MAX_MASK_FRAMES)throw new Error(L('保存するマスクが多すぎます。解析枚数を下げて再作成してください。','Too many saved masks. Reduce the analysis rate and regenerate.'));
+    const reused=targets.length-missing.length;
+    if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+    onProgress({phase:'plan',total:targets.length,reused,missing:missing.length});
+    if(!missing.length)return {...prior};
+    if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+    worker=makeWorker(onProgress);onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url});
+    const iw=modelId==='anime'?1024:mw,ih=modelId==='anime'?1024:mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d');
     const fit=modelId==='anime'?Math.min(iw/sw,ih/sh):k,fw=Math.min(iw,Math.round(sw*fit)),fh=Math.min(ih,Math.round(sh*fit)),px=Math.floor((iw-fw)/2),py=Math.floor((ih-fh)/2);
-    for(let i=0;i<count;i++){
+    for(const [n,i] of missing.entries()){
       if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+      if(n && i!==missing[n-1]+1 && modelId==='rvm')await worker.request({type:'reset'});
       if(duration)await J.seekMediaVideo(source,Math.min(i/fps,duration-.001),signal,cut.name);
       ix.clearRect(0,0,iw,ih);ix.drawImage(source,px,py,fw,fh);const rgba=ix.getImageData(0,0,iw,ih).data,pixels=new Float32Array(iw*ih*3);
       for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[modelId==='anime'?c*iw*ih+n:n*3+c]=rgba[n*4+c]/255;
@@ -9153,16 +9196,17 @@ J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) 
       alphaCanvas.width=result.width;alphaCanvas.height=result.height;const image=ax.createImageData(result.width,result.height),alpha=new Uint8Array(result.alpha);
       for(let n=0;n<alpha.length;n++){image.data[n*4]=image.data[n*4+1]=image.data[n*4+2]=255;image.data[n*4+3]=alpha[n];}ax.putImageData(image,0,0);
       ox.clearRect(0,0,mw,mh);ox.drawImage(alphaCanvas,px,py,fw,fh,0,0,mw,mh);
-      frames.push(await new Promise((resolve,reject)=>output.toBlob(blob=>blob?resolve(blob):reject(new Error('Cannot encode person mask')),'image/png')));
-      onProgress({phase:'analyze',completed:i+1,total:count,backend:ready.backend});
+      frames.set(i,await new Promise((resolve,reject)=>output.toBlob(blob=>blob?resolve(blob):reject(new Error('Cannot encode person mask')),'image/png')));
+      onProgress({phase:'analyze',completed:n+1,total:missing.length,reused,required:targets.length,sourceFrame:i,backend:ready.backend});
       await new Promise(resolve=>setTimeout(resolve,0));
     }
     if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
     onProgress({phase:'save'});
-    const ref={maskId:'person_'+crypto.randomUUID(),sourceId:cut.itemId,model:modelId,display:'none',behindLyrics:false,behindForeground:false,fps,width:mw,height:mh,frameCount:count,duration};
-    const blob=J.packPersonMask({sourceId:ref.sourceId,model:modelId,fps,width:mw,height:mh,duration},frames);
+    const indices=[...frames.keys()].sort((a,b)=>a-b);
+    const ref={...(existing?prior:{}),maskId:'person_'+crypto.randomUUID(),sourceId:cut.itemId,model:modelId,display:existing?prior.display:'none',behindLyrics:existing?!!prior.behindLyrics:false,behindForeground:existing?!!prior.behindForeground:false,fps,width:mw,height:mh,frameCount:frames.size,duration};
+    const blob=J.packPersonMask({sourceId:ref.sourceId,model:modelId,fps,width:mw,height:mh,duration,indices},indices.map(i=>frames.get(i)));
     await J.storeMedia(ref.maskId,blob);await J.attachPersonMask(ref,blob);await J.preparePersonMask({...cut,personCutout:ref},cut.start);return ref;
-  }finally{worker.stop();signal?.removeEventListener('abort',abort);if(url){source.pause();source.removeAttribute('src');source.load();URL.revokeObjectURL(url);}}
+  }finally{worker?.stop();signal?.removeEventListener('abort',abort);if(url){source.pause();source.removeAttribute('src');source.load();URL.revokeObjectURL(url);}}
 };
 })();
 
@@ -41918,7 +41962,7 @@ function composePlan(project) {
   }
   for (const layer of ['media', 'foreground']) {
     plan[layer].duration = plan.duration;
-    const last = plan[layer].cuts.at(-1); if (last && last.videoDuration == null) last.end = plan.duration;
+    const last = plan[layer].cuts.at(-1); if (last && !last.manualEnd && last.videoDuration == null) last.end = plan.duration;
   }
   return plan;
 }
@@ -42532,7 +42576,7 @@ function openCutDetails(layer,index,part=0) {
   let removedDetail = null;
   const openDetails = new Map();
   let activeDetailTab='basic';
-  let personModel=draft.personCutout?.model || 'rvm',personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null;
+  let personModel=draft.personCutout?.model || 'rvm',personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null,personSync=null;
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('cutsの詳細編集','Edit cut details'));dialog.tabIndex=-1;
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
@@ -42557,7 +42601,12 @@ function openCutDetails(layer,index,part=0) {
   previewSeek.addEventListener('input',()=>{previewTime=Number(previewSeek.value)/1000*previewLength();previewLast=performance.now();});
   const findCut=plan=>lyric ? plan.cuts.find(c=>c.line===index&&c.part===part) : plan[layer]?.cuts[index];
   const draftProject=()=>{const project=clone(S.project);applyDisabledChoices(project);{if(lyric)project.lyricCutOptions[key]=draft;else project[layer].cutOverrides[index]=draft;}return project;};
-  function refreshPreview(){previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;return previewCut;}
+  function refreshPreview(){
+    const range=c=>JSON.stringify([c.start,c.end,c.itemId,c.videoStart,c.videoLoop]),before=range(previewCut);
+    previewPlan=composePlan(draftProject());previewCut=findCut(previewPlan)||previewCut;
+    if(before!==range(previewCut))personStatus=null;
+    if(!personController)personSync?.();return previewCut;
+  }
   Object.defineProperty(dialog,'cutPreview',{value:Object.freeze({get plan(){return previewPlan;},get cut(){return previewCut;}})});// read-only hook for tests
   // Number and text edits only rebuild the preview; the form is left as it is.
   const detailState=()=>JSON.stringify({draft,locked,start,disabledChoices});
@@ -42637,12 +42686,12 @@ function openCutDetails(layer,index,part=0) {
   function personEditor(parent){
     if(lyric)return;
     const section=document.createElement('section');section.dataset.detailSection='personCutout';section.className='person-cutout-editor';parent.append(section);
-    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('素材全体から人物マスクを作成します。配置 · EffectsやPlay範囲を変えても追従します。初回はモデルをダウンロードします。','Generate a person mask for the entire source. It follows placement, effects and source playback changes. The model downloads on first use.');section.append(hint);
+    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('cuts内でPlayする範囲だけ人物マスクを作成します。Play時間 · 開始位置を変えた後は、再実line で不足分だけNewします。配置 · Effectsに追従し、初回はモデルをダウンロードします。','Generate masks only for the range played in this cut. After changing its duration or source start, run again to add only missing frames. Masks follow placement and effects. The model downloads on first use.');section.append(hint);
     const controls=document.createElement('div');controls.className='person-cutout-controls';section.append(controls);
     const field=(title,input)=>{const label=document.createElement('label');label.className='cut-detail-field';const text=document.createElement('span');text.textContent=title;label.append(text,input);controls.append(label);};
-    const model=document.createElement('select');model.dataset.personModel='';for(const [id,def] of Object.entries(J.PERSON_MODELS)){const option=document.createElement('option');option.value=id;option.textContent=L(...def.label)+' — '+def.size;model.append(option);}model.value=personModel;model.onchange=()=>{personModel=model.value;};field(L('モデル','Model'),model);
-    const fps=document.createElement('input');fps.type='number';fps.min=1;fps.max=60;fps.step=1;fps.value=personFps;fps.dataset.personFps='';fps.onchange=()=>{personFps=J.clamp(Math.round(+fps.value||24),1,60);fps.value=personFps;};field(L('動画の解析枚数／s','Video analysis frames / second'),fps);
-    const note=document.createElement('p');note.className='hint';note.textContent=L('アニメ用は176MBです。動画は長さと解析枚数に応じて時間がかかります。解析枚数を下げると動きの速い箇所でマスクがずれることがあります。','The anime model is 176 MB. Video processing time depends on duration and frame rate. Lower analysis rates may cause mask misalignment during fast motion.');section.append(note);
+    const model=document.createElement('select');model.dataset.personModel='';for(const [id,def] of Object.entries(J.PERSON_MODELS)){const option=document.createElement('option');option.value=id;option.textContent=L(...def.label)+' — '+def.size;model.append(option);}model.value=personModel;model.onchange=()=>{personModel=model.value;personStatus=null;sync();};field(L('モデル','Model'),model);
+    const fps=document.createElement('input');fps.type='number';fps.min=1;fps.max=60;fps.step=1;fps.value=personFps;fps.dataset.personFps='';fps.onchange=()=>{personFps=J.clamp(Math.round(+fps.value||24),1,60);fps.value=personFps;personStatus=null;sync();};field(L('動画の解析枚数／s','Video analysis frames / second'),fps);
+    const note=document.createElement('p');note.className='hint';note.textContent=L('アニメ用は176MBです。同じ素材 · モデル · 解析枚数の作成済みフレームを再利用します。モデルや解析枚数を変える場合は、現在のPlay範囲を作り直します。解析枚数を下げると速い動きでマスクがずれることがあります。','The anime model is 176 MB. Saved frames are reused with the same source, model and analysis rate. Changing model or analysis rate regenerates the current playback range. Lower rates may cause misalignment during fast motion.');section.append(note);
     const run=document.createElement('button');run.type='button';run.dataset.personRun='';run.textContent=L('人物切り抜きを実line ','Generate person mask');
     const stop=document.createElement('button');stop.type='button';stop.dataset.personCancel='';stop.textContent=L('処理を中止','Stop processing');stop.hidden=!personController;stop.onclick=()=>personController?.abort();section.append(run,stop);
     const status=document.createElement('p');status.dataset.personStatus='';status.setAttribute('role','status');status.setAttribute('aria-live','polite');section.append(status);
@@ -42655,31 +42704,39 @@ function openCutDetails(layer,index,part=0) {
     for(const [key,ja,en] of [['behindLyrics','Textを人物の後ろへ','Place text behind the person'],['behindForeground','Foregroundを人物の後ろへ','Place foreground behind the person']]){
       const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.dataset.personOption=key;input.checked=!!draft.personCutout?.[key];input.onchange=()=>setOption(key,input.checked);const text=document.createElement('span');text.textContent=L(ja,en);label.append(input,text);options.append(label);
     }
-    let available=false;
+    let available=false,savedEntry=null;
     const sync=()=>{
       const busy=!!personController,ref=J.personCutout({...current,personCutout:draft.personCutout});
       model.disabled=busy;fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
       for(const input of options.querySelectorAll('input,select'))input.disabled=busy||!available;
       if(personStatus){status.textContent=personStatus.text;if(personStatus.value==null)progress.removeAttribute('value');else progress.value=personStatus.value;}
-      else status.textContent=ref?L('保存済みマスク：','Saved mask: ')+L(...J.PERSON_MODELS[ref.model].label)+` (${ref.frameCount} ${L('枚','frames')})`:L('マスク作成後に表示処理をONにできます。','Generate a mask to enable display options.');
+      else {
+        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+L(...J.PERSON_MODELS[ref.model].label)+` (${ref.frameCount} ${L('枚','frames')})`:L('マスク作成後に表示処理をONにできます。','Generate a mask to enable display options.');
+        if(savedEntry){try{
+          if(personModel!==savedEntry.meta.model || personFps!==savedEntry.meta.fps)status.textContent+=' — '+L('モデル · 解析枚数の変更により、現在のPlay範囲を再作成します。','Changing model or analysis rate will regenerate the current playback range.');
+          else {const coverage=J.personMaskCoverage({...previewCut,start},savedEntry);status.textContent+=' — '+(coverage.missing?L(`現在のPlay範囲に${coverage.missing}枚不足しています。再実line でNewできます。`,`${coverage.missing} frames missing for the current playback range. Run again to add them.`):L('現在のPlay範囲は作成済みです。','The current playback range is already covered.'));}
+        }catch(error){status.textContent+=' — '+error.message;}}
+      }
     };
+    personSync=sync;
     const ref=J.personCutout({...current,personCutout:draft.personCutout});
-    if(ref)J.loadPersonMask(ref).then(entry=>{available=!!entry;if(!entry)status.textContent=L('保存済みマスクが見つかりません。再作成してください。','Saved mask is missing. Generate it again.');else sync();}).catch(()=>{status.textContent=L('保存済みマスクを読み込めません。再作成してください。','Cannot load the saved mask. Generate it again.');});
+    if(ref)J.loadPersonMask(ref).then(entry=>{savedEntry=entry;available=!!entry;if(!entry)status.textContent=L('保存済みマスクが見つかりません。再作成してください。','Saved mask is missing. Generate it again.');else sync();}).catch(()=>{status.textContent=L('保存済みマスクを読み込めません。再作成してください。','Cannot load the saved mask. Generate it again.');});
     run.onclick=async()=>{
       if(personController)return;
-      const c={...current},controller=new AbortController();personController=controller;const playingBefore=previewPlaying;previewPlaying=false;syncPreviewPlay();
+      clearTimeout(previewTimer);current=refreshPreview();const c={...current,start,personCutout:draft.personCutout},controller=new AbortController();personController=controller;const playingBefore=previewPlaying;previewPlaying=false;syncPreviewPlay();let additional=null;
       const freeze=busy=>{for(const input of formHost.querySelectorAll('input,select,textarea,button'))if(!input.hasAttribute('data-person-cancel') && input.textContent!==L('キャンセル','Cancel')){if(busy){input.dataset.personWasDisabled=String(input.disabled);input.disabled=true;}else if(input.dataset.personWasDisabled!==undefined){input.disabled=input.dataset.personWasDisabled==='true';delete input.dataset.personWasDisabled;}}};
       freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();
       try{
         const result=await J.generatePersonMask(c,personModel,{fps:personFps,signal:controller.signal,onProgress:p=>{
-          if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
+          if(p.phase==='plan'){additional=p.missing;personStatus={text:L(`Play範囲：${p.total}枚／作成済み：${p.reused}枚／New：${p.missing}枚`,`Playback range: ${p.total} frames / saved: ${p.reused} / additional: ${p.missing}`),value:p.missing?0:1};}
+          else if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
           else if(p.phase==='initialize')personStatus={text:L('モデルを初期化しています…','Initializing model…')};
-          else if(p.phase==='analyze')personStatus={text:L('人物マスクを作成しています：','Generating mask: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%) — ${p.backend}`,value:p.completed/p.total};
+          else if(p.phase==='analyze')personStatus={text:L('不足分の人物マスクを作成しています：','Generating missing masks: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%)`+(p.reused?L(` — 作成済み${p.reused}枚を再利用`,` — reusing ${p.reused} saved frames`):'')+` — ${p.backend}`,value:p.completed/p.total};
           else if(p.phase==='save')personStatus={text:L('マスクを保存しています…','Saving mask…')};
           sync();
         }});
         if(controller.signal.aborted || !dialog.open)return;
-        draft.personCutout=result;personStatus={text:L('マスクを作成しました。下の表示処理をONにできます。','Mask generated. Enable display options below.'),value:1};rememberDetail();current=refreshPreview();
+        draft.personCutout=result;personStatus={text:additional===0?L('現在のPlay範囲はすべて作成済みです。Newの解析はline っていません。','The current playback range is already covered. No additional inference was needed.'):L('Play範囲のマスクを作成しました。下の表示処理をONにできます。','Masks generated for the playback range. Enable display options below.'),value:1};rememberDetail();current=refreshPreview();
       }catch(error){personStatus={text:error.name==='AbortError'?L('処理を中止しました。既存のマスクはHoldしています。','Processing stopped. The existing mask is preserved.'):L('人物切り抜きに失敗しました：','Person mask generation failed: ')+error.message};}
       finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();}}
     };
@@ -43173,7 +43230,7 @@ function openCutDetails(layer,index,part=0) {
     formHost.replaceChildren();const form=document.createElement('form');formHost.append(form);
     const grid=document.createElement('div');grid.className='cut-details-grid';form.append(grid);
     const group=boundaryGroupLimits(boundaryRef(layer,cut));
-    fieldEditor(grid,'start',start,v=>{start=v;rememberDetail();});
+    fieldEditor(grid,'start',start,v=>{start=v;rememberDetail();personStatus=null;personSync?.();});
     const time=grid.querySelector('input');time.previousSibling.textContent=L('開始位置（s · リンク先も移動）','Start (s; linked cuts move together)');time.min=group?.min??0;time.max=group?.max??S.plan.duration;time.disabled=!group;
     // cuts終了時間: editable only with 「次cutsPlayまで」 off (then it may pass the next cut's start).
     if(!lyric || Number.isInteger(cut.part)) {

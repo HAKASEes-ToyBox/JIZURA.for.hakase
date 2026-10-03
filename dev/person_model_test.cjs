@@ -24,11 +24,18 @@ const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('nod
     }
     const item={id:'real-person-test',type,name:file.name};await J.attachMedia(item,file);
     let last='',cached=false;const report=p=>{const key=p.phase==='download'?p.phase+':'+Math.floor((p.loaded||0)/10485760):p.phase;if(key!==last || p.cached){last=key;console.log('PERSON '+JSON.stringify(p));}cached ||= !!p.cached;};
-    const cut={itemId:item.id,name:item.name,type,start:0,end:3},ref=await J.generatePersonMask(cut,engine,{fps:4,onProgress:report});
+    const cut={itemId:item.id,name:item.name,type,start:0,end:type==='video'?.25:3,videoStart:type==='video'?.25:0,videoLoop:true};let ref=await J.generatePersonMask(cut,engine,{fps:4,onProgress:report});
+    let incremental;
+    if(type==='video'){
+      const initial=await J.loadPersonMask(ref),initialSlots=[...initial.slots.keys()];ref.display='only';ref.behindLyrics=true;
+      const progress=[];ref=await J.generatePersonMask({...cut,end:.75,personCutout:ref},engine,{fps:4,onProgress:p=>{progress.push(p);report(p);}});
+      const added=progress.filter(p=>p.phase==='analyze').map(p=>p.sourceFrame);incremental={initialSlots,added,preserved:ref.display==='only'&&ref.behindLyrics};
+    }
     await J.preparePersonMask({...cut,personCutout:ref},0);const matte=J.personMaskFrame({...cut,personCutout:ref},0),cv=document.createElement('canvas');cv.width=ref.width;cv.height=ref.height;cv.getContext('2d').drawImage(matte,0,0);const data=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let min=255,max=0;for(let i=3;i<data.length;i+=4){min=Math.min(min,data[i]);max=Math.max(max,data[i]);}
-    return {ref,min,max,cached,png:cv.toDataURL('image/png')};
+    return {ref,min,max,cached,incremental,png:cv.toDataURL('image/png')};
    },model);
    assert.equal(result.ref.frameCount,model.endsWith('-video')?3:1);assert.ok(result.min<result.max,'model outputs a nonconstant alpha mask: '+JSON.stringify({min:result.min,max:result.max}));
+   if(model.endsWith('-video'))assert.deepEqual(result.incremental,{initialSlots:[1],added:[0,2],preserved:true});
    if(seen.has(engine))assert.equal(result.cached,true,'reuse persisted model cache');seen.add(engine);
    if(process.env.PERSON_TEST_OUTPUT)fs.writeFileSync(process.env.PERSON_TEST_OUTPUT+'/person-'+model+'-matte.png',Buffer.from(result.png.split(',')[1],'base64'));
    console.log('PASS '+model+' '+JSON.stringify({...result,png:undefined,elapsedMs:Date.now()-start}));
