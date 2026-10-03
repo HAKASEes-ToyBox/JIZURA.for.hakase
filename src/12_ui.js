@@ -876,7 +876,11 @@ function openCutDetails(layer,index,part=0) {
   // Rebuilding the form can leave focus on body. Route modal history before
   // document shortcuts, even when the event does not bubble through the dialog.
   const detailShortcut=e=>{
-    if(!dialog.open||!(e.ctrlKey||e.metaKey)||e.altKey||e.isComposing||!['KeyZ','KeyY'].includes(e.code))return;
+    if(!dialog.open)return;
+    // Repeated Escape can make the browser's cancel event non-cancelable.
+    // Stop its default close action before it reaches that native pathway.
+    if(personController&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();return;}
+    if(!(e.ctrlKey||e.metaKey)||e.altKey||e.isComposing||!['KeyZ','KeyY'].includes(e.code))return;
     e.preventDefault();e.stopImmediatePropagation();moveDetailHistory(e.code==='KeyY'||e.shiftKey?1:-1);
   };
   document.addEventListener('keydown',detailShortcut,true);
@@ -965,8 +969,12 @@ function openCutDetails(layer,index,part=0) {
     run.onclick=async()=>{
       if(personController)return;
       clearTimeout(previewTimer);current=refreshPreview();const c={...current,start,personCutout:draft.personCutout},controller=new AbortController();personController=controller;const playingBefore=previewPlaying;previewPlaying=false;syncPreviewPlay();let additional=null;
-      const freeze=busy=>{for(const input of formHost.querySelectorAll('input,select,textarea,button'))if(!input.hasAttribute('data-person-cancel') && input.textContent!==L('キャンセル','Cancel')){if(busy){input.dataset.personWasDisabled=String(input.disabled);input.disabled=true;}else if(input.dataset.personWasDisabled!==undefined){input.disabled=input.dataset.personWasDisabled==='true';delete input.dataset.personWasDisabled;}}};
-      freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();
+      // Keep the progress and Stop control accessible; block every other modal
+      // region, including preview controls, tabs and both footer actions.
+      const frozen=[...dialog.querySelectorAll('input,select,textarea,button')].filter(input=>!input.closest('.person-cutout-editor')).map(input=>[input,input.disabled]);
+      const blocked=[...dialog.querySelectorAll('.cut-details-preview,.cut-details-history,.cut-details-tabs,.cut-details-actions,[data-detail-tab-panel]:not([data-detail-tab-panel="personCutout"])')].map(node=>[node,node.inert]);
+      const freeze=busy=>{dialog.classList.toggle('person-cutout-busy',busy);for(const [input,disabled] of frozen)input.disabled=busy||disabled;for(const [node,inert] of blocked)node.inert=busy||inert;};
+      freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();stop.focus({preventScroll:true});
       try{
         const result=await J.generatePersonMask(c,personModel,{fps:personFps,signal:controller.signal,onProgress:p=>{
           if(p.phase==='plan'){additional=p.missing;personStatus={text:L(`再生範囲：${p.total}枚／作成済み：${p.reused}枚／追加：${p.missing}枚`,`Playback range: ${p.total} frames / saved: ${p.reused} / additional: ${p.missing}`),value:p.missing?0:1};}
@@ -979,7 +987,7 @@ function openCutDetails(layer,index,part=0) {
         if(controller.signal.aborted || !dialog.open)return;
         draft.personCutout=result;personStatus={text:additional===0?L('現在の再生範囲はすべて作成済みです。追加の解析は行っていません。','The current playback range is already covered. No additional inference was needed.'):L('再生範囲のマスクを作成しました。下の表示処理をONにできます。','Masks generated for the playback range. Enable display options below.'),value:1};rememberDetail();current=refreshPreview();
       }catch(error){personStatus={text:error.name==='AbortError'?L('処理を中止しました。既存のマスクは保持しています。','Processing stopped. The existing mask is preserved.'):L('人物切り抜きに失敗しました：','Person mask generation failed: ')+error.message};}
-      finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();}}
+      finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();dialog.querySelector('[data-person-run]')?.focus({preventScroll:true});}}
     };
     sync();
   }
@@ -1571,10 +1579,10 @@ function openCutDetails(layer,index,part=0) {
     }
     for(const select of form.querySelectorAll('select'))attachDetailSearch(select);
     const buttons=document.createElement('div');buttons.className='cut-details-actions';form.append(buttons);
-    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>dialog.close();
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent=L('キャンセル','Cancel');cancel.onclick=()=>{if(!personController)dialog.close();};
     const apply=document.createElement('button');apply.type='submit';apply.className='primary';apply.textContent=L('適用','Apply');buttons.append(apply,cancel);
     formHost.scrollTop=scrollTop;
-    form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;
+    form.onsubmit=e=>{e.preventDefault();if(personController||!form.reportValidity())return;
       applyDisabledChoices(S.project);
       if(lyric) S.project.lyricCutOptions[key]=draft; else S.project[layer].cutOverrides[index]=draft;
       {
@@ -1587,6 +1595,8 @@ function openCutDetails(layer,index,part=0) {
       replan();if(disabledChoices.length){renderTech();renderMediaEffects();}dialog.close();
     };
   }
+  // Backdrop dismissal dispatches cancel too, sharing the Escape guard.
+  dialog.addEventListener('cancel',e=>{if(personController)e.preventDefault();});
   dialog.addEventListener('close',()=>{
     document.removeEventListener('keydown',detailShortcut,true);
     personController?.abort();

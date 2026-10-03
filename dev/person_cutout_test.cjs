@@ -49,12 +49,32 @@ const {timelineAction}=require('./ui_helpers.cjs');
   await timelineAction(page,'[data-layer="media"][data-index="0"]','details');const modal=page.locator('#cutDetailsDialog');await modal.locator('[data-detail-tab="personCutout"]').click();
   assert.equal(await modal.locator('[data-person-model] option').count(),3);await modal.locator('[data-person-display]').selectOption('only');await modal.locator('[data-person-option="behindLyrics"]').check();
   // Exercise UI progress and completion without downloading models in this regression suite.
-  await page.evaluate(()=>{J.generatePersonMask=async(c,m,o)=>{o.onProgress({phase:'analyze',completed:1,total:2,backend:'Test'});await new Promise(r=>setTimeout(r,120));const ref=J.ui.project.media.cutOverrides[0].personCutout;return {...ref,model:m};};});
+  await page.evaluate(()=>{J.generatePersonMask=async(c,m,o)=>{o.onProgress({phase:'analyze',completed:1,total:2,backend:'Test'});await new Promise(resolve=>{window.finishPersonTest=resolve;});const ref=J.ui.project.media.cutOverrides[0].personCutout;return {...ref,model:m};};});
+  const assertBusy=async()=>{
+   const state=await modal.evaluate(d=>({open:d.open,busy:d.classList.contains('person-cutout-busy'),otherDisabled:[...d.querySelectorAll('input,select,textarea,button')].filter(e=>!e.closest('.person-cutout-editor')).every(e=>e.disabled),groups:[...d.querySelectorAll('.cut-details-preview,.cut-details-history,.cut-details-tabs,.cut-details-actions')].map(e=>({inert:e.inert,opacity:+getComputedStyle(e).opacity})),stopActive:!d.querySelector('[data-person-cancel]').disabled&&!d.querySelector('[data-person-cancel]').closest('[inert]')}));
+   assert.equal(state.open,true);assert.equal(state.busy,true);assert.equal(state.otherDisabled,true);assert.equal(state.stopActive,true);assert.equal(state.groups.length,4);assert.ok(state.groups.every(e=>e.inert&&e.opacity<1),'preview, history, tabs and footer are inert and greyed out');
+   assert.equal(await modal.locator('.cut-details-actions button').first().isDisabled(),true);assert.equal(await modal.locator('.cut-details-actions button').last().isDisabled(),true);
+   const projectBefore=await page.evaluate(()=>JSON.stringify(J.ui.project));
+   await modal.evaluate(d=>d.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+   assert.equal(await page.evaluate(()=>JSON.stringify(J.ui.project)),projectBefore,'implicit/form submission cannot Apply during generation');
+   await page.mouse.click(1,1);assert.equal(await modal.evaluate(d=>d.open),true,'backdrop cannot dismiss a running job');
+   for(let i=0;i<3;i++){await page.keyboard.press('Escape');assert.equal(await modal.evaluate(d=>d.open),true,'repeated Escape cannot dismiss a running job');}
+   await page.keyboard.press('Control+z');assert.equal(await modal.locator('button[type=submit]').isDisabled(),true,'undo cannot change the source during generation');
+  };
+  const assertIdle=async()=>{
+   await page.waitForFunction(()=>!document.querySelector('#cutDetailsDialog').classList.contains('person-cutout-busy'));
+   assert.equal(await modal.evaluate(d=>[...d.querySelectorAll('[inert]')].length),0);assert.equal(await modal.locator('.cut-details-actions button').first().isDisabled(),false);assert.equal(await modal.locator('.cut-details-actions button').last().isDisabled(),false);
+   assert.equal(await modal.locator('[data-cut-preview-play]').isDisabled(),false);assert.equal(await modal.locator('[data-detail-field="endTime"]').isDisabled(),true,'an originally disabled field remains disabled');
+   await page.waitForFunction(()=>!document.querySelector('[data-person-display]').disabled);
+  };
   await modal.locator('[data-person-run]').click();assert.match(await modal.locator('[data-person-status]').textContent(),/50%/);assert.equal(await modal.locator('[data-person-display]').isDisabled(),true);
-  await page.keyboard.press('Control+z');assert.equal(await modal.locator('button[type=submit]').isDisabled(),true,'undo cannot change the source during generation');
-  await modal.locator('[data-person-run]').waitFor({state:'visible'});await page.waitForTimeout(200);await modal.locator('[data-person-display]').selectOption('only');await modal.locator('[data-person-option="behindLyrics"]').check();
+  await assertBusy();await page.setViewportSize({width:390,height:844});await assertBusy();
+  if(process.env.PERSON_TEST_OUTPUT)await modal.screenshot({path:process.env.PERSON_TEST_OUTPUT+'/person-cutout-'+(locale?'en':'ja')+'-busy-mobile.png'});
+  await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>finishPersonTest());await assertIdle();await modal.locator('[data-person-display]').selectOption('only');await modal.locator('[data-person-option="behindLyrics"]').check();
   await page.evaluate(()=>{J.generatePersonMask=async(c,m,o)=>{o.onProgress({phase:'analyze',completed:1,total:10,backend:'Test'});return new Promise((resolve,reject)=>o.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true}));};});
-  await modal.locator('[data-person-run]').click();await modal.locator('[data-person-cancel]').click();await page.waitForTimeout(100);assert.equal(await modal.locator('[data-person-display]').isDisabled(),false);assert.equal(await modal.locator('[data-person-display]').inputValue(),'only','cancellation preserves existing settings');
+  await page.setViewportSize({width:390,height:844});await modal.locator('[data-person-run]').click();await assertBusy();await modal.locator('[data-person-cancel]').click();await assertIdle();assert.equal(await modal.locator('[data-person-display]').inputValue(),'only','cancellation preserves existing settings');await page.setViewportSize({width:1280,height:900});
+  await page.evaluate(()=>{J.generatePersonMask=()=>new Promise((resolve,reject)=>{window.failPersonTest=()=>reject(new Error('Test inference failure'));});});
+  await modal.locator('[data-person-run]').click();await assertBusy();await page.evaluate(()=>failPersonTest());await assertIdle();assert.match(await modal.locator('[data-person-status]').textContent(),/Test inference failure/);assert.equal(await modal.locator('[data-person-display]').inputValue(),'only','failure preserves existing settings');
   if(process.env.PERSON_TEST_OUTPUT){await page.setViewportSize({width:390,height:844});await modal.locator('[data-person-display]').scrollIntoViewIfNeeded();await modal.screenshot({path:process.env.PERSON_TEST_OUTPUT+'/person-cutout-'+(locale?'en':'ja')+'-mobile.png'});await page.setViewportSize({width:1280,height:900});}
   await modal.locator('button[type=submit]').click();assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].personCutout.display),'only');
   const bytes=await page.evaluate(async()=>Array.from(new Uint8Array(await (await J.packProject(J.ui.project)).arrayBuffer()))),fresh=await browser.newPage();
@@ -63,6 +83,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
   const restored=await fresh.evaluate(async()=>{const cut=J.ui.plan.media.cuts[0];await J.preparePersonMask(cut,0,true);return [cut.personCutout.display,!!J.personMaskFrame(cut,0),J.mediaAssets.size];});assert.deepEqual(restored,['only',true,2]);
   await fresh.reload();await fresh.waitForFunction(()=>J.mediaAssets.size===2);assert.equal(await fresh.evaluate(async()=>{const cut=J.ui.plan.media.cuts[0];await J.preparePersonMask(cut,0,true);return !!J.personMaskFrame(cut,0);}),true,'mask survives browser reload');await fresh.close();
   await timelineAction(page,'[data-layer="foreground"][data-index="0"]','details');await page.locator('[data-detail-tab="personCutout"]').click();assert.equal(await page.locator('[data-person-display]').isDisabled(),true);await page.locator('#cutDetailsDialog .cut-details-actions button').last().click();
-  assert.deepEqual(errors,[]);await page.close();console.log('PASS '+(locale||'ja')+' person masks: pixels, transforms, source timing, links, portable persistence, UI progress and controls');
+  await timelineAction(page,'[data-layer="media"][data-index="0"]','details');await page.mouse.click(1,1);await page.waitForFunction(()=>!document.querySelector('#cutDetailsDialog'),'idle modal still dismisses via backdrop');
+  assert.deepEqual(errors,[]);await page.close();console.log('PASS '+(locale||'ja')+' person masks: pixels, transforms, source timing, links, portable persistence, UI progress, busy modal guards, mobile Stop and completion/cancel/failure unlock');
  }}finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});
