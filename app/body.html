@@ -368,20 +368,22 @@
  <section id="shortExportOptions" class="short-export-options" hidden>
   <div class="short-preview">
    <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
-   <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
-   <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
-   <div class="short-preview-markers"><button id="shortSetStart" type="button" class="ghost small">ここから</button><button id="shortSetEnd" type="button" class="ghost small">ここまで</button></div>
   </div>
-  <div>
-   <div class="fields">
-    <div class="field field-wide">
+  <div class="short-timeline">
      <div class="short-range-values"><label for="shortStart">開始（秒） <output id="shortStartValue" for="shortStart">0.000</output></label><label for="shortEnd">終了（秒） <output id="shortEndValue" for="shortEnd">0.000</output></label></div>
      <div id="shortRange" class="short-range">
       <span class="short-range-track"><span class="short-range-selection"></span></span>
       <input id="shortStart" type="range" min="0" max="1" step="0.001" value="0" aria-label="開始（秒）">
       <input id="shortEnd" type="range" min="0" max="1" step="0.001" value="1" aria-label="終了（秒）">
+      <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
      </div>
-    </div>
+     <div class="short-timeline-transport">
+      <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
+      <div class="short-preview-markers"><button id="shortSetStart" type="button" class="ghost small">ここから</button><button id="shortSetEnd" type="button" class="ghost small">ここまで</button></div>
+     </div>
+  </div>
+  <div class="short-fill-settings">
+   <div class="fields">
     <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
     <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
     <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>

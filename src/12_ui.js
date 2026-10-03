@@ -3323,7 +3323,8 @@ async function prepareShortPreview(time,play=false){
   const p=shortPreview;if(!p||S.exporting)return;p.plan=S.plan;
   if(!shortRangeValid()){pauseShortPreview();p.controller?.abort();return;}
   pauseShortPreview();p.controller?.abort();const controller=new AbortController();p.controller=controller;p.ready=false;p.error='';
-  p.t=J.clamp(time,0,S.plan.duration);p.plan=S.plan;syncShortPreviewMarkers();
+  const range=J.shortExportRange(S.plan,S.project.shortExport);
+  p.t=play&&(time<range.start||time>=range.end)?range.start:J.clamp(time,0,S.plan.duration);p.plan=S.plan;syncShortPreviewMarkers();
   $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
   try{
     await J.prepareMediaFrame(p.plan,Math.min(p.t,Math.max(0,p.plan.duration-.001)),controller.signal);
@@ -3343,8 +3344,8 @@ function startShortPreview(){
     if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
     if(!p.ready)return;
     if(p.playing){
-      p.t=Math.max(0,(now-p.clock)/1000);
-      if(p.t>=S.plan.duration){p.t=0;p.clock=now;}
+      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=Math.max(range.start,(now-p.clock)/1000);
+      if(p.t>=range.end){p.t=range.start;p.clock=now-p.t*1000;}
       J.syncMediaPreview(S.plan,p.t,true);p.need=true;
     }
     if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
@@ -3865,8 +3866,8 @@ function bind() {
     else $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Number($('shortStart').value)+gap));
     updateShortExport(true);
   });
-  // Two native, keyboard-accessible thumbs share one track. Pointer capture
-  // also lets touch users move either endpoint by dragging on the track.
+  // Range endpoints and the playhead share one keyboard-accessible track.
+  // Drag a circular endpoint to trim; elsewhere, click or drag to seek.
   const shortRange=$('shortRange');let rangeDrag=null;
   const moveShortRange=e=>{
     if(!rangeDrag||e.pointerId!==rangeDrag.pointer||$(rangeDrag.id).disabled)return;
@@ -3877,7 +3878,9 @@ function bind() {
     if(e.button!==0||$('shortStart').disabled||$('shortEnd').disabled)return;
     e.preventDefault();
     const rect=shortRange.getBoundingClientRect(),time=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1)*S.plan.duration;
-    const id=Math.abs(time-Number($('shortStart').value))<Math.abs(time-Number($('shortEnd').value))?'shortStart':'shortEnd';
+    const startDistance=Math.abs(time-Number($('shortStart').value)),endDistance=Math.abs(time-Number($('shortEnd').value));
+    const nearEndpoint=Math.min(startDistance,endDistance)/S.plan.duration*Math.max(1,rect.width-20)<=10&&Math.abs(e.clientY-rect.top-22)<=10;
+    const id=nearEndpoint?(startDistance<endDistance?'shortStart':'shortEnd'):'shortPreviewSeek';
     rangeDrag={id,pointer:e.pointerId};$(id).focus({preventScroll:true});shortRange.setPointerCapture(e.pointerId);moveShortRange(e);
   });
   shortRange.addEventListener('pointermove',moveShortRange);
