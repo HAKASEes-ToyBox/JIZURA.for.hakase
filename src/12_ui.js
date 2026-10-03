@@ -2468,7 +2468,7 @@ function mediaThumb(item, cls = '') {
   if (J.isMediaCopy(item.id)) return `<span class="missing ${cls}" title="${escapeHtml(item.name)}" aria-label="${escapeHtml(item.name)}">↻</span>`;
   const asset = J.mediaAssets.get(item.id);
   if (!asset) return `<span class="missing">素材なし</span>`;
-  return `<img class="${cls}" src="${asset.poster || asset.url}" alt="">`;
+  return `<img class="${cls}" data-media-thumb="${escapeHtml(item.id)}" src="${escapeHtml(asset.poster || asset.url)}" alt="">`;
 }
 function renderMediaList() {
   const layer = activeMediaLayer() || 'media', m = S.project[layer];
@@ -3692,6 +3692,10 @@ function bind() {
   storageWarning.textContent = J.mediaLabel('ブラウザ内に素材を保存できないため、一時保存で編集中です。曲・素材は再読み込みで失われます。ページを閉じる前に素材入りプロジェクトを保存してください。', 'Browser storage is unavailable. Imported audio and media are kept only for this session and will be lost on reload. Save a project with assets before closing this page.');
   document.querySelector('#app > .bar').appendChild(storageWarning);
   window.addEventListener('jizura-media-storage', () => { storageWarning.hidden = !J.hasTemporaryMedia(); });
+  window.addEventListener('jizura-media-poster',e=>{
+    for(const img of document.querySelectorAll('img[data-media-thumb]'))if(img.dataset.mediaThumb===e.detail.id)img.src=e.detail.poster;
+    S.need=true;
+  });
   window.addEventListener('beforeunload', event => {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });

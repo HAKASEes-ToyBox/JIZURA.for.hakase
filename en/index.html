@@ -5600,13 +5600,13 @@ J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
-    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;}catch(e){}
+    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;window.dispatchEvent(new CustomEvent('jizura-media-poster',{detail:{id:item.id,poster:asset.poster}}));}catch(e){}
   };
   const ready = () => {
     if(settled)return;settled=true;clearTimeout(timer);
     item.width = el.videoWidth || el.naturalWidth;
     item.height = el.videoHeight || el.naturalHeight;
-    let poster = item.type==='video'?'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="54"%3E%3Crect width="96" height="54" fill="%23222222"/%3E%3C/svg%3E':url;
+    let poster = item.type==='video'?'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="54"><rect width="96" height="54" fill="#222222"/><path d="M40 17v20l20-10z" fill="#8e8a94"/></svg>'):url;
     const posterElement = item.type === 'video' ? new Image() : null;
     if (posterElement) posterElement.src = poster;
     assets.set(item.id, { url, element: el, type: item.type, poster, posterElement, file });
@@ -44244,7 +44244,7 @@ function mediaThumb(item, cls = '') {
   if (J.isMediaCopy(item.id)) return `<span class="missing ${cls}" title="${escapeHtml(item.name)}" aria-label="${escapeHtml(item.name)}">↻</span>`;
   const asset = J.mediaAssets.get(item.id);
   if (!asset) return `<span class="missing">File unavailable</span>`;
-  return `<img class="${cls}" src="${asset.poster || asset.url}" alt="">`;
+  return `<img class="${cls}" data-media-thumb="${escapeHtml(item.id)}" src="${escapeHtml(asset.poster || asset.url)}" alt="">`;
 }
 function renderMediaList() {
   const layer = activeMediaLayer() || 'media', m = S.project[layer];
@@ -45468,6 +45468,10 @@ function bind() {
   storageWarning.textContent = J.mediaLabel('ブラウザ内に素材を保存できないため、一時保存で編集中です。曲 · 素材は再読み込みで失われます。ページを閉じる前に素材入りプロジェクトを保存してください。', 'Browser storage is unavailable. Imported audio and media are kept only for this session and will be lost on reload. Save a project with assets before closing this page.');
   document.querySelector('#app > .bar').appendChild(storageWarning);
   window.addEventListener('jizura-media-storage', () => { storageWarning.hidden = !J.hasTemporaryMedia(); });
+  window.addEventListener('jizura-media-poster',e=>{
+    for(const img of document.querySelectorAll('img[data-media-thumb]'))if(img.dataset.mediaThumb===e.detail.id)img.src=e.detail.poster;
+    S.need=true;
+  });
   window.addEventListener('beforeunload', event => {
     if (J.hasTemporaryMedia()) { event.preventDefault(); event.returnValue = ''; }
   });

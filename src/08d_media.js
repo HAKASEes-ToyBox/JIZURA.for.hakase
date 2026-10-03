@@ -366,13 +366,13 @@ J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
-    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;}catch(e){}
+    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;window.dispatchEvent(new CustomEvent('jizura-media-poster',{detail:{id:item.id,poster:asset.poster}}));}catch(e){}
   };
   const ready = () => {
     if(settled)return;settled=true;clearTimeout(timer);
     item.width = el.videoWidth || el.naturalWidth;
     item.height = el.videoHeight || el.naturalHeight;
-    let poster = item.type==='video'?'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="54"%3E%3Crect width="96" height="54" fill="%23222222"/%3E%3C/svg%3E':url;
+    let poster = item.type==='video'?'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="54"><rect width="96" height="54" fill="#222222"/><path d="M40 17v20l20-10z" fill="#8e8a94"/></svg>'):url;
     const posterElement = item.type === 'video' ? new Image() : null;
     if (posterElement) posterElement.src = poster;
     assets.set(item.id, { url, element: el, type: item.type, poster, posterElement, file });
