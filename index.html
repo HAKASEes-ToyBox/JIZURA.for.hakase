@@ -537,6 +537,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .person-cutout-options { display:grid; gap:14px; padding-top:18px; margin-top:18px; border-top:1px solid var(--line2); }
 .person-cutout-options h4 { margin:0; font-size:13px; }
 .person-cutout-options .check { display:flex; gap:8px; align-items:center; }
+.person-cutout-options .check:has(input:disabled) { color:var(--muted); cursor:default; }
+.person-cutout-options input:disabled { filter:grayscale(1); }
 .cut-details-dialog.person-cutout-busy :is(.cut-details-preview,.cut-details-history,.cut-details-tabs,.cut-details-actions,[data-detail-tab-panel]:not([data-detail-tab-panel="personCutout"])) { opacity:.4; filter:grayscale(1); }
 @media (max-width: 860px) { .cut-details-tabs { top: -16px; } }
 @media (max-width: 600px) { .cut-details-tabs { top: -12px; gap: 4px; } .cut-details-tabs button { padding: 6px 8px; font-size: 11px; } }
@@ -42465,6 +42467,7 @@ function openCutDetails(layer,index,part=0) {
     const progress=document.createElement('progress');progress.dataset.personProgress='';progress.max=1;progress.hidden=!personController;section.append(progress);
     const options=document.createElement('div');options.className='person-cutout-options';section.append(options);
     const effectsTitle=document.createElement('h4');effectsTitle.textContent=L('切り抜き効果','Cutout effects');options.append(effectsTitle);
+    const effectsHint=document.createElement('p');effectsHint.className='hint';effectsHint.textContent=L('マスク作成後に切り抜き効果をONにできます。','Generate a mask to enable cutout effects.');options.append(effectsHint);
     const setOption=(key,value)=>{draft.personCutout={...draft.personCutout,[key]:value};schedulePreview();};
     const display=document.createElement('input');display.type='checkbox';display.dataset.personDisplay='';display.checked=draft.personCutout?.display==='only';display.onchange=()=>setOption('display',display.checked?'only':'none');
     const displayLabel=document.createElement('label');displayLabel.className='check';const displayText=document.createElement('span');displayText.textContent=L('人物のみ表示','Show person only');displayLabel.append(display,displayText);options.append(displayLabel);
@@ -42476,14 +42479,16 @@ function openCutDetails(layer,index,part=0) {
       const busy=!!personController,ref=J.personCutout({...current,personCutout:draft.personCutout});
       fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
       for(const input of options.querySelectorAll('input,select'))input.disabled=busy||!available;
+      effectsHint.hidden=busy||available;
       if(personStatus){status.textContent=personStatus.text;if(personStatus.value==null)progress.removeAttribute('value');else progress.value=personStatus.value;}
       else {
-        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+`${ref.frameCount} ${L('枚','frames')}`:L('マスク作成後に切り抜き効果をONにできます。','Generate a mask to enable cutout effects.');
+        status.textContent=ref?L('保存済みマスク：','Saved mask: ')+`${ref.frameCount} ${L('枚','frames')}`:'';
         if(savedEntry){try{
           if(savedEntry.meta.model!==J.PERSON_MODEL.id || personFps!==savedEntry.meta.fps)status.textContent+=' — '+L('解析設定の変更により、現在の再生範囲を再作成します。','Changed analysis settings will regenerate the current playback range.');
           else {const coverage=J.personMaskCoverage({...previewCut,start},savedEntry);status.textContent+=' — '+(coverage.missing?L(`現在の再生範囲に${coverage.missing}枚不足しています。再実行で追加できます。`,`${coverage.missing} frames missing for the current playback range. Run again to add them.`):L('現在の再生範囲は作成済みです。','The current playback range is already covered.'));}
         }catch(error){status.textContent+=' — '+error.message;}}
       }
+      status.hidden=!status.textContent;
     };
     personSync=sync;
     const ref=J.personCutout({...current,personCutout:draft.personCutout});
@@ -42502,7 +42507,7 @@ function openCutDetails(layer,index,part=0) {
           if(p.phase==='plan'){additional=p.missing;personStatus={text:L(`再生範囲：${p.total}枚／作成済み：${p.reused}枚／追加：${p.missing}枚`,`Playback range: ${p.total} frames / saved: ${p.reused} / additional: ${p.missing}`),value:p.missing?0:1};}
           else if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
           else if(p.phase==='initialize')personStatus={text:L('モデルを初期化しています…','Initializing model…')};
-          else if(p.phase==='analyze')personStatus={text:L('不足分の人物マスクを作成しています：','Generating missing masks: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%)`+(p.reused?L(` — 作成済み${p.reused}枚を再利用`,` — reusing ${p.reused} saved frames`):'')+` — ${p.backend}`,value:p.completed/p.total};
+          else if(p.phase==='analyze')personStatus={text:L('人物マスクを作成しています：','Generating person masks: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%)`+(p.reused?L(` — 作成済み${p.reused}枚を再利用`,` — reusing ${p.reused} saved frames`):'')+` — ${p.backend}`,value:p.completed/p.total};
           else if(p.phase==='save')personStatus={text:L('マスクを保存しています…','Saving mask…')};
           sync();
         }});
