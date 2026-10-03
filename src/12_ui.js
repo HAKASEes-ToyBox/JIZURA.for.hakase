@@ -3341,12 +3341,18 @@ function startShortPreview(){
   };
   p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
 }
+function syncShortRange(){
+  const duration=S.plan.duration,start=Number($('shortStart').value),end=Number($('shortEnd').value);
+  $('shortStartValue').value=start.toFixed(3);$('shortEndValue').value=end.toFixed(3);
+  $('shortRange').style.setProperty('--range-start',`${start/duration*100}%`);
+  $('shortRange').style.setProperty('--range-end',`${end/duration*100}%`);
+}
 function initShortExport(){
   const s=J.shortExportSettings(S.project.shortExport),duration=S.plan.duration;
   if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
   S.project.shortExport=s;
-  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??+duration.toFixed(3));
-  $('shortStart').max=$('shortEnd').max=String(+duration.toFixed(3));
+  $('shortStart').max=$('shortEnd').max=String(duration);
+  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??duration);syncShortRange();
   $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
   $('shortExportError').textContent='';
   $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
@@ -3356,6 +3362,7 @@ function updateShortExport(rangeChanged=false){
   const start=$('shortStart').value,end=$('shortEnd').value;
   S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
   $('shortBlurValue').value=$('shortBlur').value;
+  syncShortRange();
   const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
   if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
   else{
@@ -3368,6 +3375,7 @@ function syncExportSettingsVisibility() {
   const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
   const short=shortExportActive(),mp4=!inDialog||S.exportKind==='mp4'||short,transparent=inDialog&&S.exportKind==='pnga';
   $('shortExportOptions').hidden=!short;
+  $('shortExportDescription').hidden=!short;
   for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
   for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
@@ -3832,7 +3840,30 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
-  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>updateShortExport(true));
+  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>{
+    const gap=Math.min(.001,S.plan.duration);
+    if(id==='shortStart')$('shortStart').value=String(Math.min(Number($('shortStart').value),Number($('shortEnd').value)-gap));
+    else $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Number($('shortStart').value)+gap));
+    updateShortExport(true);
+  });
+  // Two native, keyboard-accessible thumbs share one track. Pointer capture
+  // also lets touch users move either endpoint by dragging on the track.
+  const shortRange=$('shortRange');let rangeDrag=null;
+  const moveShortRange=e=>{
+    if(!rangeDrag||e.pointerId!==rangeDrag.pointer||$(rangeDrag.id).disabled)return;
+    const rect=shortRange.getBoundingClientRect(),fraction=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1),input=$(rangeDrag.id);
+    input.value=String(fraction*S.plan.duration);input.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  shortRange.addEventListener('pointerdown',e=>{
+    if(e.button!==0||$('shortStart').disabled||$('shortEnd').disabled)return;
+    e.preventDefault();
+    const rect=shortRange.getBoundingClientRect(),time=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1)*S.plan.duration;
+    const id=Math.abs(time-Number($('shortStart').value))<Math.abs(time-Number($('shortEnd').value))?'shortStart':'shortEnd';
+    rangeDrag={id,pointer:e.pointerId};$(id).focus({preventScroll:true});shortRange.setPointerCapture(e.pointerId);moveShortRange(e);
+  });
+  shortRange.addEventListener('pointermove',moveShortRange);
+  const endRangeDrag=e=>{if(rangeDrag?.pointer===e.pointerId)rangeDrag=null;};
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])shortRange.addEventListener(event,endRangeDrag);
   for(const id of ['shortFill','shortRes'])$(id).addEventListener('change',()=>updateShortExport());
   $('shortBlur').addEventListener('input',()=>updateShortExport());
   $('shortPreviewPlay').addEventListener('click',()=>{

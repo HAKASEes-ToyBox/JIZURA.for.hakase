@@ -485,6 +485,20 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .short-export-options { display:grid; grid-template-columns:minmax(0,1fr) 234px; gap:20px; margin:12px 0 20px; }
 .export-dialog.short-export-dialog { width:min(780px,calc(100vw - 32px)); }
 .short-export-options .fields, .short-export-dialog #exportSettings > .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.short-range-values { display:flex; justify-content:space-between; gap:12px; }
+.short-range-values output { color:var(--text); font-family:var(--mono); }
+.short-range { position:relative; height:44px; touch-action:none; cursor:pointer; }
+.short-range-track { position:absolute; left:10px; right:10px; top:19px; height:6px; border-radius:3px; background:var(--line2); }
+.short-range-selection { position:absolute; left:var(--range-start,0%); right:calc(100% - var(--range-end,100%)); height:100%; background:var(--amber); border-radius:3px; }
+.short-range input[type=range] { appearance:none; -webkit-appearance:none; position:absolute; inset:0; width:100%; height:44px; padding:0; margin:0; border:0; background:transparent; pointer-events:none; }
+.short-range input::-webkit-slider-runnable-track { background:transparent; height:6px; }
+.short-range input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:20px; height:20px; margin-top:-7px; border:2px solid var(--amber); border-radius:50%; background:var(--panel); pointer-events:auto; cursor:ew-resize; }
+.short-range input::-moz-range-track { background:transparent; height:6px; }
+.short-range input::-moz-range-thumb { box-sizing:border-box; width:20px; height:20px; border:2px solid var(--amber); border-radius:50%; background:var(--panel); pointer-events:auto; cursor:ew-resize; }
+.short-range input:focus-visible { outline:none; }
+.short-range input:focus-visible::-webkit-slider-thumb { outline:2px solid var(--text); outline-offset:3px; }
+.short-range input:focus-visible::-moz-range-thumb { outline:2px solid var(--text); outline-offset:3px; }
+.short-range:has(input:disabled) { opacity:.45; cursor:default; }
 .short-preview canvas { display:block; width:100%; height:auto; background:#000; border:1px solid var(--line); }
 .short-preview-transport { display:flex; align-items:center; gap:8px; margin:8px 0; }
 .short-preview > input { width:100%; }
@@ -1249,14 +1263,20 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 <dialog id="exportDlg" class="terms export-dialog" aria-labelledby="exportDlgTitle">
  <h2 id="exportDlgTitle">出力</h2>
+ <p id="shortExportDescription" class="note" hidden>元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
  <section id="shortExportOptions" class="short-export-options" hidden>
   <div>
-   <p class="note">元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
    <div class="fields">
-    <label class="field">開始（秒）<input id="shortStart" type="number" min="0" step="any" required></label>
-    <label class="field">終了（秒）<input id="shortEnd" type="number" min="0" step="any" required></label>
+    <div class="field field-wide">
+     <div class="short-range-values"><label for="shortStart">開始（秒） <output id="shortStartValue" for="shortStart">0.000</output></label><label for="shortEnd">終了（秒） <output id="shortEndValue" for="shortEnd">0.000</output></label></div>
+     <div id="shortRange" class="short-range">
+      <span class="short-range-track"><span class="short-range-selection"></span></span>
+      <input id="shortStart" type="range" min="0" max="1" step="0.001" value="0" aria-label="開始（秒）">
+      <input id="shortEnd" type="range" min="0" max="1" step="0.001" value="1" aria-label="終了（秒）">
+     </div>
+    </div>
     <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
     <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
     <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
@@ -45021,12 +45041,18 @@ function startShortPreview(){
   };
   p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
 }
+function syncShortRange(){
+  const duration=S.plan.duration,start=Number($('shortStart').value),end=Number($('shortEnd').value);
+  $('shortStartValue').value=start.toFixed(3);$('shortEndValue').value=end.toFixed(3);
+  $('shortRange').style.setProperty('--range-start',`${start/duration*100}%`);
+  $('shortRange').style.setProperty('--range-end',`${end/duration*100}%`);
+}
 function initShortExport(){
   const s=J.shortExportSettings(S.project.shortExport),duration=S.plan.duration;
   if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
   S.project.shortExport=s;
-  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??+duration.toFixed(3));
-  $('shortStart').max=$('shortEnd').max=String(+duration.toFixed(3));
+  $('shortStart').max=$('shortEnd').max=String(duration);
+  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??duration);syncShortRange();
   $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
   $('shortExportError').textContent='';
   $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
@@ -45036,6 +45062,7 @@ function updateShortExport(rangeChanged=false){
   const start=$('shortStart').value,end=$('shortEnd').value;
   S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
   $('shortBlurValue').value=$('shortBlur').value;
+  syncShortRange();
   const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
   if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
   else{
@@ -45048,6 +45075,7 @@ function syncExportSettingsVisibility() {
   const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
   const short=shortExportActive(),mp4=!inDialog||S.exportKind==='mp4'||short,transparent=inDialog&&S.exportKind==='pnga';
   $('shortExportOptions').hidden=!short;
+  $('shortExportDescription').hidden=!short;
   for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
   for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
@@ -45512,7 +45540,30 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
-  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>updateShortExport(true));
+  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>{
+    const gap=Math.min(.001,S.plan.duration);
+    if(id==='shortStart')$('shortStart').value=String(Math.min(Number($('shortStart').value),Number($('shortEnd').value)-gap));
+    else $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Number($('shortStart').value)+gap));
+    updateShortExport(true);
+  });
+  // Two native, keyboard-accessible thumbs share one track. Pointer capture
+  // also lets touch users move either endpoint by dragging on the track.
+  const shortRange=$('shortRange');let rangeDrag=null;
+  const moveShortRange=e=>{
+    if(!rangeDrag||e.pointerId!==rangeDrag.pointer||$(rangeDrag.id).disabled)return;
+    const rect=shortRange.getBoundingClientRect(),fraction=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1),input=$(rangeDrag.id);
+    input.value=String(fraction*S.plan.duration);input.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  shortRange.addEventListener('pointerdown',e=>{
+    if(e.button!==0||$('shortStart').disabled||$('shortEnd').disabled)return;
+    e.preventDefault();
+    const rect=shortRange.getBoundingClientRect(),time=J.clamp((e.clientX-rect.left-10)/Math.max(1,rect.width-20),0,1)*S.plan.duration;
+    const id=Math.abs(time-Number($('shortStart').value))<Math.abs(time-Number($('shortEnd').value))?'shortStart':'shortEnd';
+    rangeDrag={id,pointer:e.pointerId};$(id).focus({preventScroll:true});shortRange.setPointerCapture(e.pointerId);moveShortRange(e);
+  });
+  shortRange.addEventListener('pointermove',moveShortRange);
+  const endRangeDrag=e=>{if(rangeDrag?.pointer===e.pointerId)rangeDrag=null;};
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])shortRange.addEventListener(event,endRangeDrag);
   for(const id of ['shortFill','shortRes'])$(id).addEventListener('change',()=>updateShortExport());
   $('shortBlur').addEventListener('input',()=>updateShortExport());
   $('shortPreviewPlay').addEventListener('click',()=>{

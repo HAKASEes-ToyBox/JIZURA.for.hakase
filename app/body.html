@@ -362,14 +362,20 @@
 
 <dialog id="exportDlg" class="terms export-dialog" aria-labelledby="exportDlgTitle">
  <h2 id="exportDlgTitle">出力</h2>
+ <p id="shortExportDescription" class="note" hidden>元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
  <section id="shortExportOptions" class="short-export-options" hidden>
   <div>
-   <p class="note">元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
    <div class="fields">
-    <label class="field">開始（秒）<input id="shortStart" type="number" min="0" step="any" required></label>
-    <label class="field">終了（秒）<input id="shortEnd" type="number" min="0" step="any" required></label>
+    <div class="field field-wide">
+     <div class="short-range-values"><label for="shortStart">開始（秒） <output id="shortStartValue" for="shortStart">0.000</output></label><label for="shortEnd">終了（秒） <output id="shortEndValue" for="shortEnd">0.000</output></label></div>
+     <div id="shortRange" class="short-range">
+      <span class="short-range-track"><span class="short-range-selection"></span></span>
+      <input id="shortStart" type="range" min="0" max="1" step="0.001" value="0" aria-label="開始（秒）">
+      <input id="shortEnd" type="range" min="0" max="1" step="0.001" value="1" aria-label="終了（秒）">
+     </div>
+    </div>
     <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
     <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
     <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
