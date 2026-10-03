@@ -3299,7 +3299,7 @@ function playShortPreviewAudio(){
   if(p.audioClock)shortPreviewAudio.play(S.audio.buffer,p.t,J.shortExportRange(S.plan,S.project.shortExport).end);
 }
 function syncShortPreviewMarkers(){
-  const p=shortPreview,time=p?Math.round(p.t*1000)/1000:0,disabled=!!S.exporting||!p?.ready;
+  const p=shortPreview,time=p?Math.round(p.t*1000)/1000:0,disabled=!!S.exporting||!p?.ready||!shortRangeValid();
   $('shortSetStart').disabled=disabled||time>=S.plan.duration;
   $('shortSetEnd').disabled=disabled||time<=0;
 }
@@ -3313,10 +3313,13 @@ function setShortBoundary(id){
     if(time<=0)return;
     $('shortStart').value=String(Math.min(Number($('shortStart').value),Math.max(0,time-gap)));
   }
-  $(id).value=String(time);updateShortExport();prepareShortPreview(time);
+  $(id).value=String(time);syncShortRange();updateShortExport();prepareShortPreview(time);
 }
 function shortRangeValid(){
-  try{J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;}
+  try{
+    if(!$('shortStartValue').checkValidity()||!$('shortEndValue').checkValidity())throw new Error(J.mediaLabel('開始・終了を動画の範囲内で指定してください。','Choose a start and end within the video.'));
+    J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;
+  }
   catch(error){$('shortExportError').textContent=error.message;return false;}
 }
 function pauseShortPreview(){
@@ -3380,9 +3383,13 @@ function startShortPreview(){
   };
   p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
 }
-function syncShortRange(){
+function syncShortRange(fromSliders=true){
+  if(fromSliders){
+    $('shortStartValue').value=Number($('shortStart').value).toFixed(3);$('shortEndValue').value=Number($('shortEnd').value).toFixed(3);
+  }else{
+    for(const [slider,input] of [['shortStart','shortStartValue'],['shortEnd','shortEndValue']])if(Number.isFinite($(input).valueAsNumber))$(slider).value=String($(input).valueAsNumber);
+  }
   const duration=S.plan.duration,start=Number($('shortStart').value),end=Number($('shortEnd').value);
-  $('shortStartValue').value=start.toFixed(3);$('shortEndValue').value=end.toFixed(3);
   $('shortRange').style.setProperty('--range-start',`${start/duration*100}%`);
   $('shortRange').style.setProperty('--range-end',`${end/duration*100}%`);
 }
@@ -3391,19 +3398,20 @@ function initShortExport(){
   if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
   S.project.shortExport=s;
   $('shortStart').max=$('shortEnd').max=String(duration);
-  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??duration);syncShortRange();
+  $('shortStartValue').max=$('shortEndValue').max=String(duration);
+  $('shortStartValue').value=String(s.start);$('shortEndValue').value=String(s.end??duration);syncShortRange(false);
   $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
   $('shortExportError').textContent='';
   $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
   $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(duration);
 }
 function updateShortExport(rangeChanged=false){
-  const start=$('shortStart').value,end=$('shortEnd').value;
+  const start=$('shortStartValue').value,end=$('shortEndValue').value;
   S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
   $('shortBlurValue').value=$('shortBlur').value;
-  syncShortRange();
+  syncShortRange(false);
   const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
-  if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
+  if(!valid){pauseShortPreview();shortPreview?.controller?.abort();syncShortPreviewMarkers();}
   else{
     $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(S.plan.duration);
     if(rangeChanged)prepareShortPreview(S.project.shortExport.start);else if(shortPreview)shortPreview.need=true;
@@ -3537,7 +3545,7 @@ async function runExport(kind) {
   const mp4=kind==='mp4'||kind==='short';
   if(mp4&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
   if(mp4&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
-  if(kind==='short'&&(!$('shortStart').reportValidity()||!$('shortEnd').reportValidity()||!shortRangeValid()))return;
+  if(kind==='short'&&(!$('shortStartValue').reportValidity()||!$('shortEndValue').reportValidity()||!shortRangeValid()))return;
   if(!confirmHiddenLayers())return;
   const filename = J.exportFilename($('exportFilename').value, mp4 ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
@@ -3883,8 +3891,9 @@ function bind() {
     const gap=Math.min(.001,S.plan.duration);
     if(id==='shortStart')$('shortStart').value=String(Math.min(Number($('shortStart').value),Number($('shortEnd').value)-gap));
     else $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Number($('shortStart').value)+gap));
-    updateShortExport(true);
+    syncShortRange();updateShortExport(true);
   });
+  for(const id of ['shortStartValue','shortEndValue'])$(id).addEventListener('input',()=>updateShortExport(true));
   // Range endpoints and the playhead share one keyboard-accessible track.
   // Drag a circular endpoint to trim; elsewhere, click or drag to seek.
   const shortRange=$('shortRange');let rangeDrag=null;

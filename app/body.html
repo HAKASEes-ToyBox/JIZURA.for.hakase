@@ -370,7 +370,7 @@
    <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
   </div>
   <div class="short-timeline">
-     <div class="short-range-values"><label for="shortStart">開始（秒） <output id="shortStartValue" for="shortStart">0.000</output></label><label for="shortEnd">終了（秒） <output id="shortEndValue" for="shortEnd">0.000</output></label></div>
+     <div class="short-range-values"><label for="shortStartValue">開始（秒） <input id="shortStartValue" type="number" min="0" step="any" inputmode="decimal" value="0.000" required></label><label for="shortEndValue">終了（秒） <input id="shortEndValue" type="number" min="0" step="any" inputmode="decimal" value="0.000" required></label></div>
      <div id="shortRange" class="short-range">
       <span class="short-range-track"><span class="short-range-selection"></span></span>
       <input id="shortStart" type="range" min="0" max="1" step="0.001" value="0" aria-label="開始（秒）">

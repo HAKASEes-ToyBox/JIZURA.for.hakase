@@ -471,7 +471,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .export-dialog.short-export-dialog { width:min(780px,calc(100vw - 32px)); }
 .short-export-options .fields, .short-export-dialog #exportSettings > .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .short-range-values { display:flex; justify-content:space-between; gap:12px; font-size:11px; color:var(--muted); }
-.short-range-values output { color:var(--text); font-family:var(--mono); }
+.short-range-values label { display:flex; align-items:center; gap:6px; }
+.short-range-values input { width:88px; min-width:0; padding:4px 6px; color:var(--text); font-family:var(--mono); }
 .short-range { position:relative; height:44px; touch-action:none; cursor:pointer; }
 .short-range-track { position:absolute; left:10px; right:10px; top:19px; height:6px; border-radius:3px; background:var(--line2); }
 .short-range-selection { position:absolute; left:var(--range-start,0%); right:calc(100% - var(--range-end,100%)); height:100%; background:var(--amber); border-radius:3px; }
@@ -492,6 +493,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .short-export-error { color:var(--danger); font-size:12px; }
 .short-export-error:empty { display:none; }
 @media(max-width:620px) { .short-export-options { grid-template-columns:1fr; grid-template-areas:"preview" "timeline" "settings"; } .short-preview { width:min(234px,100%); justify-self:center; } }
+@media(max-width:620px) { .short-range-values label { flex-direction:column; align-items:flex-start; } .short-range-values label:last-child { align-items:flex-end; } .short-range-values input { width:96px; font-size:16px; } }
 .filename-field { margin-bottom: 10px; }
 
 .cut-details-dialog { width: min(1180px, 96vw); height: min(90vh, 920px); max-height: 90vh; overflow: hidden; border: 1px solid #555; border-radius: 12px; padding: 0; background: #191b20; color: #eee; }
