@@ -406,6 +406,7 @@ const seekMediaVideo = async (v, target, signal, name = '') => {
     ok();
   });
 };
+J.seekMediaVideo = seekMediaVideo;
 const transitionFrame = layer => layer === 'media' ? J.mediaTransitionFrame : J.foregroundTransitionFrame;
 const captureMediaVideo = (plan, cut, layer) => {
   const asset = J.mediaAssets.get(cut.itemId), v = asset && asset.element;
@@ -520,6 +521,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
+  const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
+  if(options.personPass && (!personFrame || options.personMode && (!J.personCutout(cut)?.[options.personMode] || J.personCutout(cut)?.display==='remove')))return false;
+  if(options.personPass)cut={...cut,decor:[],drawing:null};
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
   const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
   const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
@@ -528,8 +532,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
     const scale = cut.layout === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
     const fit = placement ? [placement.w * w, placement.h * h] : [sw * scale, sh * scale];
     const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-    const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+    const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+    const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+    const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
     ctx.save();
     ctx.translate(placement ? (placement.x + placement.w / 2) * w : w / 2, placement ? (placement.y + placement.h / 2) * h : h / 2);
     ctx.rotate((cut.placement?.angle || 0) * Math.PI / 180);
@@ -555,8 +560,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   if (!placement) ctx.translate(-focus.x, -focus.y);
   ctx.filter = ({ mono: 'grayscale(1)', sepia: 'sepia(1)', contrast: 'contrast(1.6)', blur: 'blur(8px)' })[cut.treat] || 'none';
   const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-  const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+  const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+  const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+  const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
@@ -568,7 +574,7 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
   const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaSourceAvailable(prev);
-  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut) });
+  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const w = ctx.canvas.width, h = ctx.canvas.height;
   const canvas = key => {
     const c = owner ? (owner[key] || (owner[key] = document.createElement('canvas'))) : document.createElement('canvas');
@@ -577,12 +583,13 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   };
   const A = canvas(layer + 'PrevLayer'), B = canvas(layer + 'NextLayer');
   const bg = plan.style && plan.style.schemes ? plan.style.schemes[0].bg : '#000';
-  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media') { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
+  const personAlpha=owner?.personMaskPass || [cut,prev].some(c=>['only','remove'].includes(J.personCutout?.(c)?.display));
+  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media' && !personAlpha) { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
   const prevSource = prev.type === 'video' ? (snapshot && snapshot.plan === plan && snapshot.index === prev.index ? snapshot.canvas : prev.itemId === cut.itemId && priorAsset.posterElement && priorAsset.posterElement.complete ? priorAsset.posterElement : null) : null;
-  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
-  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
+  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource,personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
+  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const p = J.clamp((t - cut.start) / cut.transDur);
   // A windowed background (mask) dissolves into the next one with each side keeping its own window;
   // masking the blended frame with only the new cut's mask would cut the old picture off at once.
@@ -594,12 +601,14 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
     ctx.globalAlpha = 1 - J.smooth(0, 1, p); ctx.drawImage(A, 0, 0);
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
-    ctx.drawImage(A, 0, 0); ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
+    if(personAlpha){ctx.globalAlpha=1-J.smooth(0,1,p);ctx.drawImage(A,0,0);ctx.globalCompositeOperation='lighter';}
+    else ctx.drawImage(A, 0, 0);
+    ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else {
     const st = plan.style, sc = st.schemes[0];
     try { J.TRANS[cut.trans].draw(ctx, A, B, p, { cw: w, ch: h, sc, scPrev: sc, st, P: cut.transP || {}, step: Math.floor(t * (plan.fps || 24)), t, scale: w / plan.W, allowFilter: true, seed: cut.seed | 0,
       // The foreground composites over lyrics/background, so transitions must not paint a backdrop.
-      transparent: layer !== 'media',
+      transparent: layer !== 'media' || personAlpha,
       tmp: (tw, th) => { const c = owner ? (owner.mediaTransTmp || (owner.mediaTransTmp = document.createElement('canvas'))) : document.createElement('canvas'); if (c.width !== tw || c.height !== th) { c.width = tw; c.height = th; } return c; } }); }
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }

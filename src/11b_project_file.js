@@ -61,6 +61,7 @@ J.packProject = async (project, audioFile) => {
   };
   const items = new Map([...project.media.items,...project.foreground.items].map(item=>[item.id,item]));
   for (const [id,item] of items) await add('media',id,J.mediaAssets.get(id)?.file || await J.loadMedia(id),item.name);
+  for (const [id,ref] of J.personMaskReferences?.(project) || []) await add('person',id,await J.personMaskBlob(ref),id+'.jizmat');
   if (project.audioAsset) await add('audio',project.audioAsset.id,audioFile || await J.loadMedia(project.audioAsset.id),project.audioAsset.name);
   for (const font of project.userFonts || []) if (font.file) await add('font',font.key,await J.readFontFile(font.key),font.label);
   const manifest = text.encode(JSON.stringify({format:'jizura',version:1,project,entries}));
@@ -84,7 +85,7 @@ J.unpackProject = async file => {
   if (manifest.format !== 'jizura' || manifest.version !== 1 || typeof manifest.project?.lyrics !== 'string' || !Array.isArray(manifest.entries)) throw fail();
   let end = 0; const seen = new Set(), files = [];
   for (const entry of manifest.entries) {
-    if (!['media','audio','font'].includes(entry.kind) || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.type !== 'string' || !Number.isSafeInteger(entry.offset) || !Number.isSafeInteger(entry.size) || entry.size < 0 || entry.offset !== end || start+end+entry.size > file.size || seen.has(entry.kind+':'+entry.id)) throw fail();
+    if (!['media','audio','font','person'].includes(entry.kind) || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.type !== 'string' || !Number.isSafeInteger(entry.offset) || !Number.isSafeInteger(entry.size) || entry.size < 0 || entry.offset !== end || start+end+entry.size > file.size || seen.has(entry.kind+':'+entry.id)) throw fail();
     seen.add(entry.kind+':'+entry.id); end += entry.size;
     files.push({...entry,file:new File([file.slice(start+entry.offset,start+end)],entry.name,{type:entry.type})});
   }
@@ -92,6 +93,10 @@ J.unpackProject = async file => {
   for (const item of [...(manifest.project.media?.items || []),...(manifest.project.foreground?.items || [])]) if (!seen.has('media:'+item.id)) throw fail();
   if (manifest.project.audioAsset && !seen.has('audio:'+manifest.project.audioAsset.id)) throw fail();
   for (const font of manifest.project.userFonts || []) if (font.file && !seen.has('font:'+font.key)) throw fail();
+  for (const [id,ref] of J.personMaskReferences?.(manifest.project) || []) {
+    if(!seen.has('person:'+id))throw fail();
+    await J.readPersonMask(files.find(entry=>entry.kind==='person'&&entry.id===id).file,ref);
+  }
   return {project:manifest.project,files,portable:true};
 };
 })();

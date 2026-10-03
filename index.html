@@ -529,6 +529,13 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .cut-details-tabs button { padding: 7px 10px; font-size: 12px; }
 .cut-details-tabs button[aria-selected=true] { color: #ffb000; border-color: #ffb000; background: #302719; }
 .cut-details-tab-panel[hidden] { display: none; }
+.person-cutout-controls { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; margin:14px 0; }
+.person-cutout-editor > button { margin:4px 8px 8px 0; }
+.person-cutout-editor progress { display:block; width:100%; height:14px; accent-color:var(--amber); }
+.person-cutout-editor progress[hidden] { display:none; }
+.person-cutout-editor [data-person-status] { overflow-wrap:anywhere; font-size:13px; }
+.person-cutout-options { display:grid; gap:14px; padding-top:18px; margin-top:18px; border-top:1px solid var(--line2); }
+.person-cutout-options .check { display:flex; gap:8px; align-items:center; }
 @media (max-width: 860px) { .cut-details-tabs { top: -16px; } }
 @media (max-width: 600px) { .cut-details-tabs { top: -12px; gap: 4px; } .cut-details-tabs button { padding: 6px 8px; font-size: 11px; } }
 @media (max-width: 860px) {
@@ -1197,6 +1204,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <h3 id="termsForkTitle">字面一 JIZURA ONE STOP EDITION</h3>
       <p>このfork版は、ワンストップでのリリックビデオ作成をコンセプトに<br>オリジナル版JIZURAに機能を追加したものです。<br>編集・書き出しはブラウザ内で処理します。</p>
       <p>fork版のソースコード：<a href="https://github.com/hirazisora/JIZURA" target="_blank" rel="noopener">https://github.com/hirazisora/JIZURA</a></p>
+      <p>人物切り抜きの外部モデル：RVM（GPL-3.0）、SkyTNT Anime Segmentation（Apache-2.0）。<a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">モデル・ライブラリの利用条件</a></p>
       <p class="muted mono">© 2026 hirazisora · MIT</p>
     </section>
     <div class="terms-foot"><button value="close" class="primary" autofocus>閉じる</button></div>
@@ -5628,6 +5636,7 @@ const seekMediaVideo = async (v, target, signal, name = '') => {
     ok();
   });
 };
+J.seekMediaVideo = seekMediaVideo;
 const transitionFrame = layer => layer === 'media' ? J.mediaTransitionFrame : J.foregroundTransitionFrame;
 const captureMediaVideo = (plan, cut, layer) => {
   const asset = J.mediaAssets.get(cut.itemId), v = asset && asset.element;
@@ -5742,6 +5751,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
+  const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
+  if(options.personPass && (!personFrame || options.personMode && (!J.personCutout(cut)?.[options.personMode] || J.personCutout(cut)?.display==='remove')))return false;
+  if(options.personPass)cut={...cut,decor:[],drawing:null};
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
   const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
   const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
@@ -5750,8 +5762,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
     const scale = cut.layout === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
     const fit = placement ? [placement.w * w, placement.h * h] : [sw * scale, sh * scale];
     const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-    const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+    const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+    const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+    const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
     ctx.save();
     ctx.translate(placement ? (placement.x + placement.w / 2) * w : w / 2, placement ? (placement.y + placement.h / 2) * h : h / 2);
     ctx.rotate((cut.placement?.angle || 0) * Math.PI / 180);
@@ -5777,8 +5790,9 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   if (!placement) ctx.translate(-focus.x, -focus.y);
   ctx.filter = ({ mono: 'grayscale(1)', sepia: 'sepia(1)', contrast: 'contrast(1.6)', blur: 'blur(8px)' })[cut.treat] || 'none';
   const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-  const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+  const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+  const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+  const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
@@ -5790,7 +5804,7 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
   const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaSourceAvailable(prev);
-  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut) });
+  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const w = ctx.canvas.width, h = ctx.canvas.height;
   const canvas = key => {
     const c = owner ? (owner[key] || (owner[key] = document.createElement('canvas'))) : document.createElement('canvas');
@@ -5799,12 +5813,13 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   };
   const A = canvas(layer + 'PrevLayer'), B = canvas(layer + 'NextLayer');
   const bg = plan.style && plan.style.schemes ? plan.style.schemes[0].bg : '#000';
-  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media') { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
+  const personAlpha=owner?.personMaskPass || [cut,prev].some(c=>['only','remove'].includes(J.personCutout?.(c)?.display));
+  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media' && !personAlpha) { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
   const prevSource = prev.type === 'video' ? (snapshot && snapshot.plan === plan && snapshot.index === prev.index ? snapshot.canvas : prev.itemId === cut.itemId && priorAsset.posterElement && priorAsset.posterElement.complete ? priorAsset.posterElement : null) : null;
-  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
-  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
+  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource,personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
+  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const p = J.clamp((t - cut.start) / cut.transDur);
   // A windowed background (mask) dissolves into the next one with each side keeping its own window;
   // masking the blended frame with only the new cut's mask would cut the old picture off at once.
@@ -5816,12 +5831,14 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
     ctx.globalAlpha = 1 - J.smooth(0, 1, p); ctx.drawImage(A, 0, 0);
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
-    ctx.drawImage(A, 0, 0); ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
+    if(personAlpha){ctx.globalAlpha=1-J.smooth(0,1,p);ctx.drawImage(A,0,0);ctx.globalCompositeOperation='lighter';}
+    else ctx.drawImage(A, 0, 0);
+    ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else {
     const st = plan.style, sc = st.schemes[0];
     try { J.TRANS[cut.trans].draw(ctx, A, B, p, { cw: w, ch: h, sc, scPrev: sc, st, P: cut.transP || {}, step: Math.floor(t * (plan.fps || 24)), t, scale: w / plan.W, allowFilter: true, seed: cut.seed | 0,
       // The foreground composites over lyrics/background, so transitions must not paint a backdrop.
-      transparent: layer !== 'media',
+      transparent: layer !== 'media' || personAlpha,
       tmp: (tw, th) => { const c = owner ? (owner.mediaTransTmp || (owner.mediaTransTmp = document.createElement('canvas'))) : document.createElement('canvas'); if (c.width !== tw || c.height !== th) { c.width = tw; c.height = th; } return c; } }); }
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }
@@ -8895,6 +8912,260 @@ J.detailFieldLabel=key=>{
 };
 })();
 
+/* Person mattes are source assets, not effect snapshots. Only small references
+   enter project JSON / undo; compressed, source-timed frames live in Blob storage. */
+(() => {
+'use strict';
+const L = (...args) => J.mediaLabel(...args), entries = new Map(), loading = new Map();
+J.PERSON_MODELS = {
+  rvm: {label: ['実写向け（RVM MobileNetV3）','Live action (RVM MobileNetV3)'], size: '~4 MB',
+    url: 'https://raw.githubusercontent.com/PeterL1n/RobustVideoMatting/72ed518756950796f10eea6eb6b301df97cef277/model/model.json'},
+  anime: {label: ['アニメ向け（SkyTNT Anime Segmentation／ISNet）','Anime (SkyTNT Anime Segmentation / ISNet)'], size: '176 MB',
+    url: 'https://huggingface.co/skytnt/anime-seg/resolve/a0a563c41338cbe0d23dfb4bfc3e243c518e5768/isnetis.onnx'},
+};
+const canvas = (w, h) => { const c = document.createElement('canvas'); c.width=w; c.height=h; return c; };
+const dims = s => [s.videoWidth || s.naturalWidth || s.width, s.videoHeight || s.naturalHeight || s.height];
+J.personCutout = cut => {
+  const p=cut?.personCutout;
+  return p && p.sourceId===cut.itemId && typeof p.maskId==='string' && J.PERSON_MODELS[p.model] ? p : null;
+};
+J.personMaskReferences = project => {
+  const refs=new Map();
+  for(const layer of ['media','foreground'])for(const options of Object.values(project[layer]?.cutOverrides || {})) {
+    const p=options.personCutout;
+    if(p?.maskId && p.sourceId && J.PERSON_MODELS[p.model])refs.set(p.maskId,p);
+  }
+  return refs;
+};
+const planMedia=J.planMedia;
+J.planMedia=function(project,plan,audioDuration,layer='media'){
+  const result=planMedia(project,plan,audioDuration,layer);
+  for(const cut of result.cuts){const ref=project[layer]?.cutOverrides?.[cut.index]?.personCutout;cut.personCutout=ref?.sourceId===cut.itemId?{...ref}:null;}
+  return result;
+};
+const encode = new TextEncoder(), decode = new TextDecoder();
+J.packPersonMask = (meta, frames) => {
+  let offset=0;
+  const index=frames.map(f=>{const entry={offset,size:f.size};offset+=f.size;return entry;});
+  const bytes=encode.encode(JSON.stringify({...meta,version:1,frames:index})), header=new Uint8Array(12);
+  header.set(encode.encode('JIZMAT01'));new DataView(header.buffer).setUint32(8,bytes.length,true);
+  return new Blob([header,bytes,...frames],{type:'application/x-jizura-matte'});
+};
+J.readPersonMask = async (blob, ref) => {
+  const fail=()=>new Error(L('人物マスクが不正です','Invalid person mask'));
+  if(!(blob instanceof Blob) || blob.size<12)throw fail();
+  const head=new Uint8Array(await blob.slice(0,12).arrayBuffer()),length=new DataView(head.buffer).getUint32(8,true),start=12+length;
+  if(decode.decode(head.slice(0,8))!=='JIZMAT01' || length>8*1024*1024 || start>blob.size)throw fail();
+  const meta=JSON.parse(await blob.slice(12,start).text());
+  if(meta.version!==1 || meta.sourceId!==ref.sourceId || meta.model!==ref.model || !Number.isFinite(meta.duration) || meta.duration<0 || !Number.isFinite(meta.fps) || meta.fps<1 || meta.fps>60 || !Number.isInteger(meta.width) || !Number.isInteger(meta.height) || meta.width<1 || meta.height<1 || meta.width>1024 || meta.height>1024 || !Array.isArray(meta.frames) || !meta.frames.length || meta.frames.length>216000)throw fail();
+  let end=0;
+  for(const f of meta.frames){if(!Number.isSafeInteger(f.offset)||f.offset!==end||!Number.isSafeInteger(f.size)||f.size<1||start+end+f.size>blob.size)throw fail();end+=f.size;}
+  if(start+end!==blob.size)throw fail();
+  return {blob,meta,start,decoded:new Map(),pending:new Map()};
+};
+J.attachPersonMask = async (ref,blob) => {
+  const entry=await J.readPersonMask(blob,ref),old=entries.get(ref.maskId);
+  if(old)for(const frame of old.decoded.values())frame.close?.();
+  entries.set(ref.maskId,entry);return entry;
+};
+J.loadPersonMask = ref => {
+  if(entries.has(ref.maskId))return Promise.resolve(entries.get(ref.maskId));
+  if(!loading.has(ref.maskId)){
+    const work=(async()=>{const blob=await J.loadMedia(ref.maskId);return blob ? J.attachPersonMask(ref,blob) : null;})();
+    loading.set(ref.maskId,work);work.finally(()=>loading.delete(ref.maskId)).catch(()=>{});
+  }
+  return loading.get(ref.maskId);
+};
+J.personMaskBlob = async ref => (await J.loadPersonMask(ref))?.blob;
+const frameIndex = (entry,cut,t) => {
+  const time=cut.type==='video'?J.mediaVideoTime(cut,t,entry.meta.duration):0;
+  return J.clamp(Math.floor(time*entry.meta.fps+1e-6),0,entry.meta.frames.length-1);
+};
+const decodeFrame = (entry,i) => {
+  if(entry.decoded.has(i)){const img=entry.decoded.get(i);entry.decoded.delete(i);entry.decoded.set(i,img);return Promise.resolve(img);}
+  if(!entry.pending.has(i)){
+    const f=entry.meta.frames[i],blob=entry.blob.slice(entry.start+f.offset,entry.start+f.offset+f.size,'image/png');
+    const work=(async()=>{
+      let img;
+      if(typeof createImageBitmap==='function')img=await createImageBitmap(blob);
+      else {img=new Image();const url=URL.createObjectURL(blob);try{img.src=url;await img.decode();}finally{URL.revokeObjectURL(url);}}
+      entry.decoded.set(i,img);
+      while(entry.decoded.size>12){const key=entry.decoded.keys().next().value;entry.decoded.get(key).close?.();entry.decoded.delete(key);}
+      window.dispatchEvent(new Event('jizura-person-mask'));return img;
+    })();
+    entry.pending.set(i,work);work.finally(()=>entry.pending.delete(i)).catch(()=>{});
+  }
+  return entry.pending.get(i);
+};
+J.preparePersonMask = async (cut,t,strict=false) => {
+  const ref=J.personCutout(cut);if(!ref)return;
+  const entry=await J.loadPersonMask(ref);
+  if(!entry){if(strict && (ref.display!=='none'||ref.behindLyrics||ref.behindForeground))throw new Error(L('人物マスクが見つかりません。人物切り抜きで再作成してください：','Person mask is missing. Generate it again: ')+cut.name);return;}
+  await decodeFrame(entry,frameIndex(entry,cut,t));
+};
+J.personMaskFrame = (cut,t) => {
+  const ref=J.personCutout(cut);if(!ref)return null;
+  const entry=entries.get(ref.maskId);
+  if(!entry){J.preparePersonMask(cut,t).catch(()=>{});return null;}
+  const i=frameIndex(entry,cut,t),img=entry.decoded.get(i);
+  if(!img)decodeFrame(entry,i).catch(()=>{});
+  return img || null;
+};
+const sources=new WeakMap();
+J.personMaskSource = (source,cut,t) => {
+  const ref=J.personCutout(cut);if(!ref || !['only','remove'].includes(ref.display))return source;
+  const matte=J.personMaskFrame(cut,t);if(!matte)return source;
+  const [sw,sh]=dims(source),k=Math.min(1,2048/Math.max(sw,sh));
+  let c=sources.get(source);if(!c){c=canvas(1,1);sources.set(source,c);}c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));
+  const x=c.getContext('2d');x.drawImage(source,0,0,c.width,c.height);x.globalCompositeOperation=ref.display==='only'?'destination-in':'destination-out';x.drawImage(matte,0,0,c.width,c.height);x.globalCompositeOperation='source-over';return c;
+};
+const occlusionCanvas=canvas(1,1),occlusionLayer=canvas(1,1),occlusionOwner={ensure(c,w,h){if(c.width!==w)c.width=w;if(c.height!==h)c.height=h;return c;},personMaskPass:true};
+J.personOccluders = (plan,t,mode,exclude) => ['media','foreground'].flatMap(layer=>plan.layerVisibility?.[layer]===false?[]:J.mediaCutsAt(plan,t,layer).filter(c=>{
+  if(c===exclude || c.opacity<=0)return false;
+  const enabled=c=>J.personCutout(c)?.[mode] && J.personCutout(c)?.display!=='remove',prev=plan[layer].cuts[c.index-1];
+  return enabled(c) || prev && c.trans && t-c.start<c.transDur && Math.abs(prev.end-c.start)<.06 && enabled(prev);
+}).map(c=>({layer,cut:c})));
+J.maskBehindPersons = (target,plan,t,mode,exclude) => {
+  const cuts=J.personOccluders(plan,t,mode,exclude);if(!cuts.length)return;
+  occlusionOwner.personMaskMode=mode;
+  const w=target.width,h=target.height;occlusionOwner.ensure(occlusionCanvas,w,h);occlusionOwner.ensure(occlusionLayer,w,h);
+  const mx=occlusionCanvas.getContext('2d'),lx=occlusionLayer.getContext('2d');mx.clearRect(0,0,w,h);
+  for(const {layer,cut} of cuts){
+    lx.setTransform(1,0,0,1,0,0);lx.globalAlpha=1;lx.globalCompositeOperation='source-over';lx.filter='none';lx.clearRect(0,0,w,h);
+    J.drawMedia(lx,plan,t,occlusionOwner,layer,false,cut);
+    if(J.maskMediaLayer && occlusionOwner.maskHandled!==cut)J.maskMediaLayer(occlusionLayer,cut,t,plan);
+    mx.globalAlpha=cut.opacity/100;mx.drawImage(occlusionLayer,0,0);
+  }
+  mx.globalAlpha=1;
+  const x=target.getContext('2d');x.save();x.setTransform(1,0,0,1,0,0);x.filter='none';x.globalAlpha=1;x.globalCompositeOperation='destination-out';x.drawImage(occlusionCanvas,0,0);x.restore();
+};
+window.addEventListener('jizura-person-mask',()=>{if(J.ui)J.ui.need=true;});
+const prepareMedia=J.prepareMediaFrame;
+J.prepareMediaFrame=async (plan,t,signal) => {
+  await prepareMedia(plan,t,signal);
+  for(const layer of ['media','foreground'])if(plan.layerVisibility?.[layer]!==false)for(const cut of J.mediaCutsAt(plan,t,layer)){
+    if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+    await J.preparePersonMask(cut,t,true);
+    const prev=plan[layer].cuts[cut.index-1];
+    if(prev && cut.trans && t-cut.start<cut.transDur && Math.abs(prev.end-cut.start)<.06)await J.preparePersonMask(prev,prev.end-.001,true);
+  }
+};
+// Everything below runs in an isolated worker. No video, model, or matte uploads.
+function personWorker(){
+  let engine,model,states,ratio,backend;
+  const progress=(phase,data={})=>postMessage({type:'progress',phase,...data});
+  const fetchModel=async url=>{
+    let cache;try{cache=await caches.open('jizura-person-models-v1');const hit=await cache.match(url);if(hit){progress('download',{cached:true,url});return await hit.arrayBuffer();}}catch(e){}
+    const response=await fetch(url);if(!response.ok)throw new Error('Model download: HTTP '+response.status);
+    const total=+(response.headers.get('Content-Length')||0),parts=[];let loaded=0,lastReport=0;
+    if(response.body){const reader=response.body.getReader();for(;;){const {value,done}=await reader.read();if(done)break;parts.push(value);loaded+=value.length;if(performance.now()-lastReport>=100){lastReport=performance.now();progress('download',{loaded,total,url});}}}
+    else {const bytes=new Uint8Array(await response.arrayBuffer());parts.push(bytes);loaded=bytes.length;}
+    progress('download',{loaded,total,url});
+    const blob=new Blob(parts);if(cache)try{await cache.put(url,new Response(blob));}catch(e){progress('cache-unavailable');}
+    return await blob.arrayBuffer();
+  };
+  onmessage=async event=>{
+    const m=event.data;
+    try{
+      if(m.type==='init'){
+        engine=m.model;
+        if(engine==='rvm'){
+          importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+          try{await tf.setBackend('webgl');await tf.ready();backend='WebGL';}catch(e){await tf.setBackend('cpu');await tf.ready();backend='CPU';}
+          const json=JSON.parse(new TextDecoder().decode(await fetchModel(m.url))),specs=[],parts=[];
+          for(const group of json.weightsManifest){specs.push(...group.weights);for(const path of group.paths)parts.push(await fetchModel(new URL(path,m.url).href));}
+          const weights=new Uint8Array(parts.reduce((n,b)=>n+b.byteLength,0));let offset=0;for(const part of parts){weights.set(new Uint8Array(part),offset);offset+=part.byteLength;}
+          progress('initialize');model=await tf.loadGraphModel({load:async()=>({modelTopology:json.modelTopology,weightSpecs:specs,weightData:weights.buffer,format:json.format,signature:json.signature})});
+          states=[tf.scalar(0),tf.scalar(0),tf.scalar(0),tf.scalar(0)];ratio=tf.scalar(.5);
+        }else{
+          importScripts('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.all.min.js');
+          ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';ort.env.wasm.numThreads=1;
+          const bytes=await fetchModel(m.url);progress('initialize');
+          // ISNet's ceil-mode MaxPool is unsupported by this WebGPU runtime;
+          // some devices silently produce invalid masks instead of rejecting it.
+          model=await ort.InferenceSession.create(bytes,{executionProviders:['wasm']});backend='CPU';
+        }
+        postMessage({type:'ready',backend});
+      }else if(m.type==='frame'){
+        let alpha,w=m.width,h=m.height;
+        if(engine==='rvm'){
+          const src=tf.tensor(new Float32Array(m.pixels),[1,h,w,3]);let output;
+          try{
+            output=await model.executeAsync({src,r1i:states[0],r2i:states[1],r3i:states[2],r4i:states[3],downsample_ratio:ratio},['pha','r1o','r2o','r3o','r4o']);
+            alpha=await output[0].data();w=output[0].shape[2];h=output[0].shape[1];tf.dispose(states);states=output.slice(1);
+          }finally{src.dispose();output?.[0].dispose();}
+        }else{
+          const input=new ort.Tensor('float32',new Float32Array(m.pixels),[1,3,h,w]);let out;
+          try{
+            out=await model.run({[model.inputNames[0]]:input});
+            const tensor=out[model.outputNames[0]];alpha=tensor.data;h=tensor.dims.at(-2);w=tensor.dims.at(-1);
+          }
+          finally{input.dispose();}
+          const data=new Uint8Array(alpha.length);for(let i=0;i<data.length;i++)data[i]=Math.round(Math.max(0,Math.min(1,alpha[i]))*255);
+          for(const value of Object.values(out))value.dispose();postMessage({type:'matte',width:w,height:h,alpha:data.buffer},[data.buffer]);return;
+        }
+        const data=new Uint8Array(w*h);for(let i=0;i<data.length;i++)data[i]=Math.round(Math.max(0,Math.min(1,alpha[i]))*255);
+        postMessage({type:'matte',width:w,height:h,alpha:data.buffer},[data.buffer]);
+      }
+    }catch(error){postMessage({type:'error',message:error.message || String(error)});}
+  };
+}
+const makeWorker=report=>{
+  const url=URL.createObjectURL(new Blob(['('+personWorker.toString()+')()'],{type:'text/javascript'})),worker=new Worker(url);URL.revokeObjectURL(url);
+  let pending;
+  const fail=error=>{if(pending){pending.reject(error);clearTimeout(pending.timer);pending=null;}};
+  const refreshTimeout=()=>{if(pending){clearTimeout(pending.timer);pending.timer=setTimeout(()=>fail(new Error(L('処理がタイムアウトしました。再実行してください。','Processing timed out. Please try again.'))),180000);}};
+  worker.onmessage=({data})=>{
+    if(data.type==='progress'){refreshTimeout();report(data);return;}
+    if(data.type==='error'){fail(new Error(data.message));return;}
+    if(pending){clearTimeout(pending.timer);pending.resolve(data);pending=null;}
+  };
+  worker.onerror=e=>fail(new Error(e.message || 'Person inference worker failed'));
+  return {request(message,transfer=[]){return new Promise((resolve,reject)=>{pending={resolve,reject};refreshTimeout();worker.postMessage(message,transfer);});},stop(){fail(new DOMException('Cancelled','AbortError'));worker.terminate();}};
+};
+J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) => {
+  const asset=J.mediaAssets.get(cut.itemId),def=J.PERSON_MODELS[modelId];
+  if(!asset || !def || J.isMediaCopy(cut.itemId))throw new Error(L('画像・動画素材を指定してください','Select an image or video asset'));
+  const worker=makeWorker(onProgress),abort=()=>worker.stop();signal?.addEventListener('abort',abort,{once:true});
+  let source,url;
+  try{
+    if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+    // A separate decoder leaves detail-preview playback and the main editor untouched.
+    if(asset.type==='video'){
+      if(!asset.file)throw new Error(L('動画素材を再読み込みしてください','Please import the video again'));
+      source=document.createElement('video');source.muted=true;source.playsInline=true;source.preload='auto';url=URL.createObjectURL(asset.file);source.src=url;
+      await new Promise((resolve,reject)=>{const timer=setTimeout(()=>finish(new Error('Video metadata timed out')),30000);const finish=error=>{clearTimeout(timer);source.onloadedmetadata=source.onerror=null;signal?.removeEventListener('abort',cancel);error?reject(error):resolve();};const cancel=()=>finish(new DOMException('Cancelled','AbortError'));source.onloadedmetadata=()=>finish();source.onerror=()=>finish(new Error('Cannot decode source video'));signal?.addEventListener('abort',cancel,{once:true});});
+    }else source=asset.element;
+    const [sw,sh]=dims(source),duration=asset.type==='video'?source.duration:0;
+    if(!sw||!sh||!Number.isFinite(duration))throw new Error(L('素材のサイズ・長さを取得できません','Cannot read source dimensions or duration'));
+    fps=J.clamp(Math.round(fps),1,60);const count=duration?Math.ceil(duration*fps):1;
+    if(count>216000)throw new Error(L('動画が長すぎます。短い素材に分割してください。','Video is too long. Split it into shorter files.'));
+    onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url});
+    const k=Math.min(1,512/Math.max(sw,sh)),mw=Math.max(1,Math.round(sw*k)),mh=Math.max(1,Math.round(sh*k));
+    const iw=modelId==='anime'?1024:mw,ih=modelId==='anime'?1024:mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d'),frames=[];
+    const fit=modelId==='anime'?Math.min(iw/sw,ih/sh):k,fw=Math.min(iw,Math.round(sw*fit)),fh=Math.min(ih,Math.round(sh*fit)),px=Math.floor((iw-fw)/2),py=Math.floor((ih-fh)/2);
+    for(let i=0;i<count;i++){
+      if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+      if(duration)await J.seekMediaVideo(source,Math.min(i/fps,duration-.001),signal,cut.name);
+      ix.clearRect(0,0,iw,ih);ix.drawImage(source,px,py,fw,fh);const rgba=ix.getImageData(0,0,iw,ih).data,pixels=new Float32Array(iw*ih*3);
+      for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[modelId==='anime'?c*iw*ih+n:n*3+c]=rgba[n*4+c]/255;
+      const result=await worker.request({type:'frame',width:iw,height:ih,pixels:pixels.buffer},[pixels.buffer]);
+      alphaCanvas.width=result.width;alphaCanvas.height=result.height;const image=ax.createImageData(result.width,result.height),alpha=new Uint8Array(result.alpha);
+      for(let n=0;n<alpha.length;n++){image.data[n*4]=image.data[n*4+1]=image.data[n*4+2]=255;image.data[n*4+3]=alpha[n];}ax.putImageData(image,0,0);
+      ox.clearRect(0,0,mw,mh);ox.drawImage(alphaCanvas,px,py,fw,fh,0,0,mw,mh);
+      frames.push(await new Promise((resolve,reject)=>output.toBlob(blob=>blob?resolve(blob):reject(new Error('Cannot encode person mask')),'image/png')));
+      onProgress({phase:'analyze',completed:i+1,total:count,backend:ready.backend});
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
+    if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
+    onProgress({phase:'save'});
+    const ref={maskId:'person_'+crypto.randomUUID(),sourceId:cut.itemId,model:modelId,display:'none',behindLyrics:false,behindForeground:false,fps,width:mw,height:mh,frameCount:count,duration};
+    const blob=J.packPersonMask({sourceId:ref.sourceId,model:modelId,fps,width:mw,height:mh,duration},frames);
+    await J.storeMedia(ref.maskId,blob);await J.attachPersonMask(ref,blob);await J.preparePersonMask({...cut,personCutout:ref},cut.start);return ref;
+  }finally{worker.stop();signal?.removeEventListener('abort',abort);if(url){source.pause();source.removeAttribute('src');source.load();URL.revokeObjectURL(url);}}
+};
+})();
+
 /* ============================================================
    JIZURA — frame renderer: background, chroma passes, HUD, post FX
    ============================================================ */
@@ -8968,6 +9239,7 @@ class Renderer {
       for (const cut of J.mediaCutsAt(plan, t, 'foreground').filter(c => J.mediaAssets.has(c.itemId))) {
         lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
         J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit, cut);
+        if(!opt.previewEdit && J.maskBehindPersons)J.maskBehindPersons(layer,plan,t,'behindForeground',cut);
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = cut.opacity / 100;
         ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
         ctx.drawImage(layer, 0, 0); ctx.restore();
@@ -9090,7 +9362,8 @@ class Renderer {
       // cut's opacity. Reuse the buffer even for long groups of retained lyrics.
       let target = ctx;
       const mask = J.activeMask ? J.activeMask(cut) : null;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask) {
+      const personOcclusion = !opt.copyLyrics && J.personOccluders?.(plan,t,'behindLyrics').length;
+      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -9154,6 +9427,7 @@ class Renderer {
         }
         // The cut mask applies to the finished cut, after its effects, in stage units.
         if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H, { cut, t: tq, plan });
+        if(personOcclusion)J.maskBehindPersons(target.canvas,plan,t,'behindLyrics');
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }
@@ -9845,6 +10119,7 @@ J.packProject = async (project, audioFile) => {
   };
   const items = new Map([...project.media.items,...project.foreground.items].map(item=>[item.id,item]));
   for (const [id,item] of items) await add('media',id,J.mediaAssets.get(id)?.file || await J.loadMedia(id),item.name);
+  for (const [id,ref] of J.personMaskReferences?.(project) || []) await add('person',id,await J.personMaskBlob(ref),id+'.jizmat');
   if (project.audioAsset) await add('audio',project.audioAsset.id,audioFile || await J.loadMedia(project.audioAsset.id),project.audioAsset.name);
   for (const font of project.userFonts || []) if (font.file) await add('font',font.key,await J.readFontFile(font.key),font.label);
   const manifest = text.encode(JSON.stringify({format:'jizura',version:1,project,entries}));
@@ -9868,7 +10143,7 @@ J.unpackProject = async file => {
   if (manifest.format !== 'jizura' || manifest.version !== 1 || typeof manifest.project?.lyrics !== 'string' || !Array.isArray(manifest.entries)) throw fail();
   let end = 0; const seen = new Set(), files = [];
   for (const entry of manifest.entries) {
-    if (!['media','audio','font'].includes(entry.kind) || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.type !== 'string' || !Number.isSafeInteger(entry.offset) || !Number.isSafeInteger(entry.size) || entry.size < 0 || entry.offset !== end || start+end+entry.size > file.size || seen.has(entry.kind+':'+entry.id)) throw fail();
+    if (!['media','audio','font','person'].includes(entry.kind) || typeof entry.id !== 'string' || typeof entry.name !== 'string' || typeof entry.type !== 'string' || !Number.isSafeInteger(entry.offset) || !Number.isSafeInteger(entry.size) || entry.size < 0 || entry.offset !== end || start+end+entry.size > file.size || seen.has(entry.kind+':'+entry.id)) throw fail();
     seen.add(entry.kind+':'+entry.id); end += entry.size;
     files.push({...entry,file:new File([file.slice(start+entry.offset,start+end)],entry.name,{type:entry.type})});
   }
@@ -9876,6 +10151,10 @@ J.unpackProject = async file => {
   for (const item of [...(manifest.project.media?.items || []),...(manifest.project.foreground?.items || [])]) if (!seen.has('media:'+item.id)) throw fail();
   if (manifest.project.audioAsset && !seen.has('audio:'+manifest.project.audioAsset.id)) throw fail();
   for (const font of manifest.project.userFonts || []) if (font.file && !seen.has('font:'+font.key)) throw fail();
+  for (const [id,ref] of J.personMaskReferences?.(manifest.project) || []) {
+    if(!seen.has('person:'+id))throw fail();
+    await J.readPersonMask(files.find(entry=>entry.kind==='person'&&entry.id===id).file,ref);
+  }
   return {project:manifest.project,files,portable:true};
 };
 })();
@@ -42010,6 +42289,7 @@ function openCutDetails(layer,index,part=0) {
   let removedDetail = null;
   const openDetails = new Map();
   let activeDetailTab='basic';
+  let personModel=draft.personCutout?.model || 'rvm',personFps=draft.personCutout?.fps || Math.min(24,S.plan.fps || 24),personController=null,personStatus=null;
   const dialog = document.createElement('dialog'); dialog.id='cutDetailsDialog'; dialog.className='cut-details-dialog';
   dialog.setAttribute('aria-label',L('カットの詳細編集','Edit cut details'));dialog.tabIndex=-1;
   // Left: a live preview of this cut that stays in view; right: the settings, which scroll on their own.
@@ -42049,6 +42329,7 @@ function openCutDetails(layer,index,part=0) {
     if(detailHistory.length>100)detailHistory.shift();detailHistoryIndex=detailHistory.length-1;syncDetailHistory();
   }
   function moveDetailHistory(delta){
+    if(personController)return;
     const next=detailHistoryIndex+delta;if(next<0||next>=detailHistory.length)return;
     const focused=document.activeElement,attribute=['data-detail-field','data-mask-field','data-mask-shape','data-mask-motion','data-detail-undo','data-detail-redo'].find(a=>focused?.hasAttribute(a));
     const focusSelector=attribute?`[${attribute}="${CSS.escape(focused.getAttribute(attribute))}"]`:'[data-detail-undo]';
@@ -42110,6 +42391,57 @@ function openCutDetails(layer,index,part=0) {
     return size>=1?null:{x:clampTo(r.x+r.w/2),y:clampTo(r.y+r.h/2),size};
   }
   const zoomCanvas=document.createElement('canvas');
+  function personEditor(parent){
+    if(lyric)return;
+    const section=document.createElement('section');section.dataset.detailSection='personCutout';section.className='person-cutout-editor';parent.append(section);
+    const hint=document.createElement('p');hint.className='hint';hint.textContent=L('素材全体から人物マスクを作成します。配置・演出や再生範囲を変えても追従します。初回はモデルをダウンロードします。','Generate a person mask for the entire source. It follows placement, effects and source playback changes. The model downloads on first use.');section.append(hint);
+    const controls=document.createElement('div');controls.className='person-cutout-controls';section.append(controls);
+    const field=(title,input)=>{const label=document.createElement('label');label.className='cut-detail-field';const text=document.createElement('span');text.textContent=title;label.append(text,input);controls.append(label);};
+    const model=document.createElement('select');model.dataset.personModel='';for(const [id,def] of Object.entries(J.PERSON_MODELS)){const option=document.createElement('option');option.value=id;option.textContent=L(...def.label)+' — '+def.size;model.append(option);}model.value=personModel;model.onchange=()=>{personModel=model.value;};field(L('モデル','Model'),model);
+    const fps=document.createElement('input');fps.type='number';fps.min=1;fps.max=60;fps.step=1;fps.value=personFps;fps.dataset.personFps='';fps.onchange=()=>{personFps=J.clamp(Math.round(+fps.value||24),1,60);fps.value=personFps;};field(L('動画の解析枚数／秒','Video analysis frames / second'),fps);
+    const note=document.createElement('p');note.className='hint';note.textContent=L('アニメ用は176MBです。動画は長さと解析枚数に応じて時間がかかります。解析枚数を下げると動きの速い箇所でマスクがずれることがあります。','The anime model is 176 MB. Video processing time depends on duration and frame rate. Lower analysis rates may cause mask misalignment during fast motion.');section.append(note);
+    const run=document.createElement('button');run.type='button';run.dataset.personRun='';run.textContent=L('人物切り抜きを実行','Generate person mask');
+    const stop=document.createElement('button');stop.type='button';stop.dataset.personCancel='';stop.textContent=L('処理を中止','Stop processing');stop.hidden=!personController;stop.onclick=()=>personController?.abort();section.append(run,stop);
+    const status=document.createElement('p');status.dataset.personStatus='';status.setAttribute('role','status');status.setAttribute('aria-live','polite');section.append(status);
+    const progress=document.createElement('progress');progress.dataset.personProgress='';progress.max=1;progress.hidden=!personController;section.append(progress);
+    const options=document.createElement('div');options.className='person-cutout-options';section.append(options);
+    const setOption=(key,value)=>{draft.personCutout={...draft.personCutout,[key]:value};schedulePreview();};
+    const display=document.createElement('select');display.dataset.personDisplay='';
+    for(const [id,ja,en] of [['none','通常表示','Normal display'],['only','人物のみ表示','Show person only'],['remove','人物を削除（背景に穴が開く）','Remove person (leave a hole)']]){const option=document.createElement('option');option.value=id;option.textContent=L(ja,en);display.append(option);}display.value=draft.personCutout?.display || 'none';display.onchange=()=>setOption('display',display.value);
+    const displayLabel=document.createElement('label');displayLabel.className='cut-detail-field';displayLabel.textContent=L('素材の表示','Source display');displayLabel.append(display);options.append(displayLabel);
+    for(const [key,ja,en] of [['behindLyrics','文字を人物の後ろへ','Place text behind the person'],['behindForeground','前景を人物の後ろへ','Place foreground behind the person']]){
+      const label=document.createElement('label');label.className='check';const input=document.createElement('input');input.type='checkbox';input.dataset.personOption=key;input.checked=!!draft.personCutout?.[key];input.onchange=()=>setOption(key,input.checked);const text=document.createElement('span');text.textContent=L(ja,en);label.append(input,text);options.append(label);
+    }
+    let available=false;
+    const sync=()=>{
+      const busy=!!personController,ref=J.personCutout({...current,personCutout:draft.personCutout});
+      model.disabled=busy;fps.disabled=busy||current.type!=='video';run.disabled=busy||!J.mediaAssets.has(current.itemId)||J.isMediaCopy(current.itemId);stop.hidden=!busy;progress.hidden=!busy;
+      for(const input of options.querySelectorAll('input,select'))input.disabled=busy||!available;
+      if(personStatus){status.textContent=personStatus.text;if(personStatus.value==null)progress.removeAttribute('value');else progress.value=personStatus.value;}
+      else status.textContent=ref?L('保存済みマスク：','Saved mask: ')+L(...J.PERSON_MODELS[ref.model].label)+` (${ref.frameCount} ${L('枚','frames')})`:L('マスク作成後に表示処理をONにできます。','Generate a mask to enable display options.');
+    };
+    const ref=J.personCutout({...current,personCutout:draft.personCutout});
+    if(ref)J.loadPersonMask(ref).then(entry=>{available=!!entry;if(!entry)status.textContent=L('保存済みマスクが見つかりません。再作成してください。','Saved mask is missing. Generate it again.');else sync();}).catch(()=>{status.textContent=L('保存済みマスクを読み込めません。再作成してください。','Cannot load the saved mask. Generate it again.');});
+    run.onclick=async()=>{
+      if(personController)return;
+      const c={...current},controller=new AbortController();personController=controller;const playingBefore=previewPlaying;previewPlaying=false;syncPreviewPlay();
+      const freeze=busy=>{for(const input of formHost.querySelectorAll('input,select,textarea,button'))if(!input.hasAttribute('data-person-cancel') && input.textContent!==L('キャンセル','Cancel')){if(busy){input.dataset.personWasDisabled=String(input.disabled);input.disabled=true;}else if(input.dataset.personWasDisabled!==undefined){input.disabled=input.dataset.personWasDisabled==='true';delete input.dataset.personWasDisabled;}}};
+      freeze(true);personStatus={text:L('モデルを準備しています…','Preparing model…')};sync();
+      try{
+        const result=await J.generatePersonMask(c,personModel,{fps:personFps,signal:controller.signal,onProgress:p=>{
+          if(p.phase==='download')personStatus={text:p.cached?L('保存済みモデルを読み込んでいます…','Loading cached model…'):L('モデルをダウンロードしています：','Downloading model: ')+(p.loaded?(p.loaded/1048576).toFixed(1)+' MB'+(p.total?' / '+(p.total/1048576).toFixed(1)+' MB':''):'…'),value:p.total?p.loaded/p.total:null};
+          else if(p.phase==='initialize')personStatus={text:L('モデルを初期化しています…','Initializing model…')};
+          else if(p.phase==='analyze')personStatus={text:L('人物マスクを作成しています：','Generating mask: ')+`${p.completed} / ${p.total} (${Math.round(p.completed/p.total*100)}%) — ${p.backend}`,value:p.completed/p.total};
+          else if(p.phase==='save')personStatus={text:L('マスクを保存しています…','Saving mask…')};
+          sync();
+        }});
+        if(controller.signal.aborted || !dialog.open)return;
+        draft.personCutout=result;personStatus={text:L('マスクを作成しました。下の表示処理をONにできます。','Mask generated. Enable display options below.'),value:1};rememberDetail();current=refreshPreview();
+      }catch(error){personStatus={text:error.name==='AbortError'?L('処理を中止しました。既存のマスクは保持しています。','Processing stopped. The existing mask is preserved.'):L('人物切り抜きに失敗しました：','Person mask generation failed: ')+error.message};}
+      finally{personController=null;previewPlaying=playingBefore;previewLast=performance.now();syncPreviewPlay();if(dialog.open){freeze(false);render();}}
+    };
+    sync();
+  }
   // ---- Mask editor: circles / rectangles placed on a reference image of the mask's frame ----
   const maskRef=document.createElement('canvas'),maskRefRenderer=new J.Renderer();
   let maskRefKey=null,maskRefInfo=null,maskSelected=0;
@@ -42565,6 +42897,7 @@ function openCutDetails(layer,index,part=0) {
         const param={enter:'enterP',hold:'holdP',exit:'exitP',technique:'techniqueP',entrance:'entranceP',departure:'departureP',layout:'params',treat:'treatP',bg:'bgP',cam:'camP',trans:'transP'}[field];
         if(param&&draft.details)delete draft.details[param];
         if(field==='technique'&&draft.details)for(const key of ['hold','treat','trans','transP'])delete draft.details[key];
+        if(field==='itemId' && draft.personCutout?.sourceId!==input.value){delete draft.personCutout;personStatus=null;}
         preview();
       }
     });
@@ -42622,6 +42955,7 @@ function openCutDetails(layer,index,part=0) {
       fieldEditor(grid,field,clone(value??(field==='opacity'?100:'')),v=>write(field,['itemId','technique','entrance','departure'].includes(field)&&v===''?null:v,true));
     }
     maskEditor(grid);
+    personEditor(grid);
     for(const field of J.cutDetailKeys[lyric?'lyrics':'media']) {
       if(field==='mask'||field==='fontParams') continue;// masks have their own editor; font paths follow layout font controls
       const parameterSlot={enterP:'enter',holdP:'hold',exitP:'exit',techniqueP:'technique',entranceP:'entrance',departureP:'departure'}[field];
@@ -42649,6 +42983,7 @@ function openCutDetails(layer,index,part=0) {
       ['effects',L('加工・演出','Effects'),['treat','treatP','bg','bgP','trans','transP','transDur','effectSettings','effectFx','effectEvents']],
       ['decor',L('装飾','Decorations'),['decor']],
       ['mask',L('マスク','Mask'),['mask']],
+      ['personCutout',L('人物切り抜き','Person cutout'),['personCutout']],
       ['placement',L('配置・サイズ','Position / size'),['area','placement','contentScale']],
       ['other',L('その他','Other'),[]],
     ];
@@ -42713,6 +43048,7 @@ function openCutDetails(layer,index,part=0) {
   }
   dialog.addEventListener('close',()=>{
     document.removeEventListener('keydown',detailShortcut,true);
+    personController?.abort();
     cancelAnimationFrame(previewFrame);clearTimeout(previewTimer);dialog.remove();
     // Hand shared video elements back to the editor's own time.
     J.syncMediaPreview(S.plan,S.t,false);S.need=true;
@@ -42788,6 +43124,7 @@ function removeLyricCut(line,part) {
 function setMediaCutAsset(layer,index,itemId) {
   if(S.exporting || S.tap)return;
   const m=S.project[layer];
+  if(m.cutOverrides[index]?.personCutout?.sourceId!==itemId && m.cutOverrides[index])delete m.cutOverrides[index].personCutout;
   // Freeze the displayed order before switching from shuffled to manual selection.
   if(m.randomOrder){
     for(const cut of S.plan[layer].cuts)mediaOv(cut.index,{itemId:cut.itemId || null},layer);
@@ -43986,6 +44323,7 @@ async function restoreMediaAssets() {
     if (J.mediaAssets.has(item.id)) continue;
     try { const blob = await J.loadMedia(item.id); if (blob) { const el = await J.attachMedia(item, blob); el.addEventListener('seeked', () => { S.need = true; }); } } catch (e) {}
   }
+  for(const ref of J.personMaskReferences(S.project).values())try{await J.loadPersonMask(ref);}catch(e){}
   replan();
 }
 function setOv(i, patch) {
@@ -45598,6 +45936,10 @@ async function openProjectFile(file,report=()=>{}) {
       await step(L('素材を保存しています：','Saving asset: ')+entry.name,()=>entry.kind==='font'?J.saveFontFile(entry.id,entry.file):J.storeMedia(entry.id,entry.file));
     }
     await step(L('フォントを復元しています','Restoring fonts'),()=>J.restoreFontFiles(project.userFonts));
+    for(const ref of J.personMaskReferences(project).values()){
+      const blob=files.get('person:'+ref.maskId) || await J.loadMedia(ref.maskId);
+      if(blob)await J.attachPersonMask(ref,blob);
+    }
     replaceProject(project,audio,audioFile,assets);
   } catch (err) { releaseProjectAssets(assets); throw err; }
 }
