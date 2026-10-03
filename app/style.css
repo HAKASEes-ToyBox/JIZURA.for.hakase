@@ -464,7 +464,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 @media (min-width: 761px) { #app.compact-ui .header-menu-items { left: 0; right: auto; } }
 .export-dialog .fields { margin-bottom: 12px; }
 .export-dialog .outbtns { margin: 16px 0; }
-.short-export-options { display:grid; grid-template-columns:minmax(0,1fr) 234px; gap:20px; margin:12px 0 20px; }
+.short-export-options { display:grid; grid-template-columns:234px minmax(0,1fr); gap:20px; margin:12px 0 20px; }
 .export-dialog.short-export-dialog { width:min(780px,calc(100vw - 32px)); }
 .short-export-options .fields, .short-export-dialog #exportSettings > .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .short-range-values { display:flex; justify-content:space-between; gap:12px; }
@@ -484,6 +484,8 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .short-preview canvas { display:block; width:100%; height:auto; background:#000; border:1px solid var(--line); }
 .short-preview-transport { display:flex; align-items:center; gap:8px; margin:8px 0; }
 .short-preview > input { width:100%; }
+.short-preview-markers { display:flex; gap:8px; margin-top:8px; }
+.short-preview-markers button { flex:1; }
 .short-export-error { color:var(--danger); font-size:12px; }
 .short-export-error:empty { display:none; }
 @media(max-width:620px) { .short-export-options { grid-template-columns:1fr; } .short-preview { width:min(234px,100%); justify-self:center; } }

@@ -370,6 +370,7 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    'ここから': 'Start here', 'ここまで': 'End here',
     'ショート用出力': 'Export for Shorts', 'ショート用MP4を書き出す': 'Export Shorts MP4',
     '元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。': 'Keep the original composition centered and fill the space above and below in a 9:16 portrait video.',
     '開始（秒）': 'Start (seconds)', '終了（秒）': 'End (seconds)', '縦型の動画サイズ': 'Portrait video size', '上下の補間': 'Fill above and below',

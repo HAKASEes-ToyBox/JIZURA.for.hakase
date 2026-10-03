@@ -366,6 +366,12 @@
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
  <section id="shortExportOptions" class="short-export-options" hidden>
+  <div class="short-preview">
+   <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
+   <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
+   <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
+   <div class="short-preview-markers"><button id="shortSetStart" type="button" class="ghost small">ここから</button><button id="shortSetEnd" type="button" class="ghost small">ここまで</button></div>
+  </div>
   <div>
    <div class="fields">
     <div class="field field-wide">
@@ -381,11 +387,6 @@
     <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
    </div>
    <p id="shortExportError" class="short-export-error" role="status"></p>
-  </div>
-  <div class="short-preview">
-   <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
-   <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
-   <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
   </div>
  </section>
  <div id="exportDialogContent"></div>

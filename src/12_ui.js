@@ -3288,6 +3288,23 @@ function renderTech() {
 const shortExportActive=()=>$('exportSettings').parentElement.id==='exportDialogContent'&&S.exportKind==='short';
 const activeExportProject=()=>shortExportActive()?J.shortExportProject(S.project):S.project;
 let shortPreview=null;
+function syncShortPreviewMarkers(){
+  const p=shortPreview,time=p?Math.round(p.t*1000)/1000:0,disabled=!!S.exporting||!p?.ready;
+  $('shortSetStart').disabled=disabled||time>=S.plan.duration;
+  $('shortSetEnd').disabled=disabled||time<=0;
+}
+function setShortBoundary(id){
+  const p=shortPreview;if(!p?.ready||S.exporting)return;
+  const duration=S.plan.duration,gap=Math.min(.001,duration),time=J.clamp(Math.round(p.t*1000)/1000,0,duration);
+  if(id==='shortStart'){
+    if(time>=duration)return;
+    $('shortEnd').value=String(Math.max(Number($('shortEnd').value),Math.min(duration,time+gap)));
+  }else{
+    if(time<=0)return;
+    $('shortStart').value=String(Math.min(Number($('shortStart').value),Math.max(0,time-gap)));
+  }
+  $(id).value=String(time);updateShortExport();prepareShortPreview(time);
+}
 function shortRangeValid(){
   try{J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;}
   catch(error){$('shortExportError').textContent=error.message;return false;}
@@ -3306,13 +3323,14 @@ async function prepareShortPreview(time,play=false){
   const p=shortPreview;if(!p||S.exporting)return;p.plan=S.plan;
   if(!shortRangeValid()){pauseShortPreview();p.controller?.abort();return;}
   pauseShortPreview();p.controller?.abort();const controller=new AbortController();p.controller=controller;p.ready=false;p.error='';
-  const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=J.clamp(time,range.start,Math.max(range.start,range.end-.001));p.plan=S.plan;
+  p.t=J.clamp(time,0,S.plan.duration);p.plan=S.plan;syncShortPreviewMarkers();
   $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
   try{
-    await J.prepareMediaFrame(p.plan,p.t,controller.signal);
+    await J.prepareMediaFrame(p.plan,Math.min(p.t,Math.max(0,p.plan.duration-.001)),controller.signal);
     if(shortPreview!==p||controller.signal.aborted)return;
     p.ready=true;p.need=true;p.playing=play;p.clock=performance.now()-p.t*1000;
     $('shortExportError').textContent='';
+    syncShortPreviewMarkers();
     $('shortPreviewPlay').textContent=play?'❚❚':'▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel(play?'プレビューを一時停止':'プレビューを再生',play?'Pause preview':'Play preview'));
   }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;}}
   finally{if(p.controller===controller)p.controller=null;}
@@ -3325,8 +3343,8 @@ function startShortPreview(){
     if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
     if(!p.ready)return;
     if(p.playing){
-      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=(now-p.clock)/1000;
-      if(p.t>=range.end){p.t=range.start;p.clock=now-p.t*1000;}
+      p.t=Math.max(0,(now-p.clock)/1000);
+      if(p.t>=S.plan.duration){p.t=0;p.clock=now;}
       J.syncMediaPreview(S.plan,p.t,true);p.need=true;
     }
     if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
@@ -3334,9 +3352,10 @@ function startShortPreview(){
     try{
       const canvas=$('shortExportPreview'),fit=Math.min(canvas.width/S.plan.W,canvas.height/S.plan.H),sw=Math.max(1,Math.round(S.plan.W*fit)),sh=Math.max(1,Math.round(S.plan.H*fit));
       if(p.source.width!==sw||p.source.height!==sh){p.source.width=sw;p.source.height=sh;}
-      p.renderer.frame(p.source.getContext('2d',{alpha:false}),S.plan,p.t,{scale:sw/S.plan.W});
+      p.renderer.frame(p.source.getContext('2d',{alpha:false}),S.plan,Math.min(p.t,Math.max(0,S.plan.duration-.001)),{scale:sw/S.plan.W});
       p.portrait.frame(canvas.getContext('2d',{alpha:false}),p.source,S.project.shortExport);
       $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+      syncShortPreviewMarkers();
     }catch(error){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}
   };
   p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
@@ -3356,7 +3375,7 @@ function initShortExport(){
   $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
   $('shortExportError').textContent='';
   $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
-  $('shortPreviewSeek').min=String(s.start);$('shortPreviewSeek').max=String(s.end??duration);
+  $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(duration);
 }
 function updateShortExport(rangeChanged=false){
   const start=$('shortStart').value,end=$('shortEnd').value;
@@ -3366,8 +3385,8 @@ function updateShortExport(rangeChanged=false){
   const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
   if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
   else{
-    const range=J.shortExportRange(S.plan,S.project.shortExport);$('shortPreviewSeek').min=String(range.start);$('shortPreviewSeek').max=String(range.end);
-    if(rangeChanged)prepareShortPreview(range.start);else if(shortPreview)shortPreview.need=true;
+    $('shortPreviewSeek').min='0';$('shortPreviewSeek').max=String(S.plan.duration);
+    if(rangeChanged)prepareShortPreview(S.project.shortExport.start);else if(shortPreview)shortPreview.need=true;
   }
   syncQuality();codecNote();autosave();
 }
@@ -3872,6 +3891,8 @@ function bind() {
     else prepareShortPreview(shortPreview.t,true);
   });
   $('shortPreviewSeek').addEventListener('input',e=>prepareShortPreview(Number(e.target.value)));
+  $('shortSetStart').addEventListener('click',()=>setShortBoundary('shortStart'));
+  $('shortSetEnd').addEventListener('click',()=>setShortBoundary('shortEnd'));
   document.fonts?.addEventListener('loadingdone',()=>{if(shortPreview)shortPreview.need=true;});
   // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
   const themeBalanceNote = () => {
