@@ -17,9 +17,9 @@ const {timelineAction}=require('./ui_helpers.cjs');
    window.Worker=class{
     constructor(){stats.workers++;this.stopped=false;}
     postMessage(m){let data;
-     if(m.type==='init')data={type:'ready',backend:'Test'};
+     if(m.type==='init'){stats.model=m.model;stats.hasGraph=!!m.graph;data={type:'ready',backend:'Test'};}
      else if(m.type==='reset'){stats.resets++;data={type:'reset'};}
-     else{stats.frames.push(sourceSlot);const alpha=new Uint8Array(m.width*m.height);for(let y=0;y<m.height;y++)for(let z=0;z<m.width;z++)alpha[y*m.width+z]=(sourceSlot%2?z>=m.width/2:z<m.width/2)?255:0;data={type:'matte',width:m.width,height:m.height,alpha:alpha.buffer};}
+     else{stats.inputSize=[m.width,m.height];stats.frames.push(sourceSlot);const alpha=new Uint8Array(m.width*m.height);for(let y=0;y<m.height;y++)for(let z=0;z<m.width;z++)alpha[y*m.width+z]=(sourceSlot%2?z>=m.width/2:z<m.width/2)?255:0;data={type:'matte',width:m.width,height:m.height,alpha:alpha.buffer};}
      setTimeout(()=>{if(!this.stopped)this.onmessage?.({data});},0);
     }
     terminate(){this.stopped=true;}
@@ -44,6 +44,12 @@ const {timelineAction}=require('./ui_helpers.cjs');
     const playback={...cut,videoStart:3.75,videoLoop:true,personCutout:loop.ref};await J.preparePersonMask(playback,10,true);const atTail=!!J.personMaskFrame(playback,10);await J.preparePersonMask(playback,10.25,true);const atLoop=!!J.personMaskFrame(playback,10.25);
     const gap={...cut,videoStart:3.5,personCutout:loop.ref};const missingNull=J.personMaskFrame(gap,10)===null;let strictReject=false;try{await J.preparePersonMask(gap,10,true);}catch(e){strictReject=true;}
     const all=await run({...cut,end:20,videoLoop:true,personCutout:loop.ref}),allRepeat=await run({...cut,end:30,videoLoop:true,personCutout:all.ref}),changedFps=await run({...cut,end:20,videoLoop:true,personCutout:all.ref},'rvm',2),changedModel=await run({...cut,end:10.25,videoStart:0,personCutout:all.ref},'anime',4);
+    const to512=await run({...cut,end:10.25,videoStart:0,personCutout:changedModel.ref},'anime512',4);
+    const more512=await run({...cut,end:10.5,videoStart:0,personCutout:to512.ref},'anime512',4);
+    const repeat512=await run({...cut,end:10.5,videoStart:0,personCutout:more512.ref},'anime512',4);
+    const variantProject=J.defaultProject();variantProject.media.items=[item];variantProject.media.cutOverrides={0:{itemId:item.id,personCutout:more512.ref}};
+    const variantPortable=await J.unpackProject(await J.packProject(variantProject));
+    const variantEntry=await J.readPersonMask(variantPortable.files.find(f=>f.kind==='person').file,more512.ref);
     const legacy={...first.ref,maskId:'person_legacy',frameCount:16},onePng=first.entry.blob.slice(first.entry.start,first.entry.start+first.entry.meta.frames[0].size,'image/png');await J.attachPersonMask(legacy,J.packPersonMask({sourceId:item.id,model:'rvm',fps:4,width:96,height:64,duration:4},Array(16).fill(onePng)));
     const old=await run({...cut,personCutout:legacy});
     const aborter=new AbortController();stats={workers:0,frames:[],resets:0,seeks:[],progress:[]};let aborted=false;
@@ -55,7 +61,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
     const generate=J.generatePersonMask;window.rangeUICalls=[];J.generatePersonMask=async(cut,model,options)=>{stats={workers:0,frames:[],resets:0,seeks:[],progress:[]};const job={cut:{...cut},done:false};rangeUICalls.push(job);const ref=await generate(cut,model,options);job.stats={...stats};job.ref=ref;job.done=true;return ref;};
     window.rangeFixture=async()=>Array.from(new Uint8Array(await (await J.packProject(J.ui.project)).arrayBuffer()));keepWorker=true;
     const simplify=v=>({ref:v.ref,stats:v.stats,slots:v.slots,version:v.entry.meta.version});
-    return {sourceDuration,cases,first:simplify(first),extended:simplify(extended),short:simplify(short),repeat:simplify(repeat),late:simplify(late),loop:simplify(loop),all:simplify(all),allRepeat:simplify(allRepeat),changedFps:simplify(changedFps),changedModel:simplify(changedModel),old:simplify(old),oldFrameKept,atTail,atLoop,missingNull,strictReject,aborted,cancelledKept,invalidRejected,portableSlots:[...portableEntry.slots.keys()]};
+    return {sourceDuration,cases,first:simplify(first),extended:simplify(extended),short:simplify(short),repeat:simplify(repeat),late:simplify(late),loop:simplify(loop),all:simplify(all),allRepeat:simplify(allRepeat),changedFps:simplify(changedFps),changedModel:simplify(changedModel),to512:simplify(to512),more512:simplify(more512),repeat512:simplify(repeat512),portable512:{model:variantEntry.meta.model,slots:[...variantEntry.slots.keys()]},old:simplify(old),oldFrameKept,atTail,atLoop,missingNull,strictReject,aborted,cancelledKept,invalidRejected,portableSlots:[...portableEntry.slots.keys()]};
    }finally{if(!keepWorker){window.Worker=NativeWorker;J.seekMediaVideo=nativeSeek;}}
   });
   assert.equal(result.sourceDuration,4);assert.deepEqual(result.cases,[[4,5],[4,5,6,7],[4,5],[0,15],Array.from({length:16},(_,i)=>i),[15]]);
@@ -65,6 +71,9 @@ const {timelineAction}=require('./ui_helpers.cjs');
   assert.equal(result.short.ref.maskId,result.extended.ref.maskId);assert.equal(result.old.version,1);
   assert.deepEqual(result.late.stats.frames,[12,13]);assert.deepEqual(result.loop.stats.frames,[0,15]);assert.equal(result.loop.stats.resets,1);assert.deepEqual(result.all.stats.frames,[1,14]);assert.equal(result.all.ref.frameCount,16);
   assert.deepEqual(result.changedFps.stats.frames,[0,2,4,6,8,10,12,14]);assert.equal(result.changedFps.ref.frameCount,8);assert.equal(result.changedModel.ref.frameCount,1);assert.equal(result.changedModel.stats.workers,1);
+  assert.deepEqual(result.changedModel.stats.inputSize,[1024,1024]);assert.equal(result.changedModel.stats.hasGraph,false);
+  assert.deepEqual(result.to512.stats.inputSize,[512,512]);assert.equal(result.to512.stats.hasGraph,true);assert.equal(result.to512.ref.model,'anime512');assert.notEqual(result.to512.ref.maskId,result.changedModel.ref.maskId);assert.deepEqual(result.to512.stats.frames,[0]);
+  assert.deepEqual(result.more512.stats.frames,[1]);assert.equal(result.more512.stats.progress[0].reused,1);assert.equal(result.repeat512.stats.workers,0);assert.deepEqual(result.portable512,{model:'anime512',slots:[0,1]});
   assert.equal(result.atTail,true);assert.equal(result.atLoop,true);assert.equal(result.missingNull,true);assert.equal(result.strictReject,true);assert.equal(result.aborted,true);assert.equal(result.cancelledKept,true);assert.equal(result.invalidRejected,2);assert.deepEqual(result.portableSlots,result.loop.slots);
   if(process.env.PERSON_TEST_OUTPUT&&!locale)fs.writeFileSync(process.env.PERSON_TEST_OUTPUT+'/person-range-fixture.jizuraichi',Buffer.from(await page.evaluate(()=>rangeFixture())));
   const modal=page.locator('#cutDetailsDialog');await timelineAction(page,'[data-layer="media"][data-index="0"]','details');await modal.locator('[data-detail-tab="basic"]').click();await modal.locator('[data-detail-field="endTime"]').fill('1.5');await modal.locator('[data-detail-field="endTime"]').press('Tab');await modal.locator('[data-detail-tab="personCutout"]').click();

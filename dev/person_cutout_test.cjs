@@ -47,7 +47,7 @@ const {timelineAction}=require('./ui_helpers.cjs');
   assert.ok(result.followError<=1,'mask follows placement, rotation, motion and source effects');
   assert.equal(result.kept,true);assert.equal(result.stale,null);assert.equal(result.portable,true);assert.equal(result.rejected,true);assert.equal(result.offset,0);assert.equal(result.loop,255);
   await timelineAction(page,'[data-layer="media"][data-index="0"]','details');const modal=page.locator('#cutDetailsDialog');await modal.locator('[data-detail-tab="personCutout"]').click();
-  assert.equal(await modal.locator('[data-person-model] option').count(),2);await modal.locator('[data-person-display]').selectOption('only');await modal.locator('[data-person-option="behindLyrics"]').check();
+  assert.equal(await modal.locator('[data-person-model] option').count(),3);await modal.locator('[data-person-display]').selectOption('only');await modal.locator('[data-person-option="behindLyrics"]').check();
   // Exercise UI progress and completion without downloading models in this regression suite.
   await page.evaluate(()=>{J.generatePersonMask=async(c,m,o)=>{o.onProgress({phase:'analyze',completed:1,total:2,backend:'Test'});await new Promise(r=>setTimeout(r,120));const ref=J.ui.project.media.cutOverrides[0].personCutout;return {...ref,model:m};};});
   await modal.locator('[data-person-run]').click();assert.match(await modal.locator('[data-person-status]').textContent(),/50%/);assert.equal(await modal.locator('[data-person-display]').isDisabled(),true);

@@ -3,11 +3,15 @@
 (() => {
 'use strict';
 const L = (...args) => J.mediaLabel(...args), entries = new Map(), loading = new Map();
+const animeWeightsUrl='https://huggingface.co/skytnt/anime-seg/resolve/a0a563c41338cbe0d23dfb4bfc3e243c518e5768/isnetis.onnx';
 J.PERSON_MODELS = {
   rvm: {label: ['実写向け（RVM MobileNetV3）','Live action (RVM MobileNetV3)'], size: '~4 MB',
     url: 'https://raw.githubusercontent.com/PeterL1n/RobustVideoMatting/72ed518756950796f10eea6eb6b301df97cef277/model/model.json'},
-  anime: {label: ['アニメ向け（SkyTNT Anime Segmentation／ISNet）','Anime (SkyTNT Anime Segmentation / ISNet)'], size: '176 MB',
-    url: 'https://huggingface.co/skytnt/anime-seg/resolve/a0a563c41338cbe0d23dfb4bfc3e243c518e5768/isnetis.onnx'},
+  anime512: {label: ['アニメ向け（ISNet 512×512・軽量）','Anime (ISNet 512×512, faster)'], size: '176 MB', inputSize:512,
+    url:animeWeightsUrl, graph:'__ANIME512_GRAPH__',
+    weightsSha256:'f15622d853e8260172812b657053460e20806f04b9e05147d49af7bed31a6e99'},
+  anime: {label: ['アニメ向け（ISNet 1024×1024・従来版）','Anime (ISNet 1024×1024, original)'], size: '176 MB', inputSize:1024,
+    url:animeWeightsUrl},
 };
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width=w; c.height=h; return c; };
 const dims = s => [s.videoWidth || s.naturalWidth || s.width, s.videoHeight || s.naturalHeight || s.height];
@@ -223,9 +227,18 @@ function personWorker(){
           importScripts('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.all.min.js');
           ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';ort.env.wasm.numThreads=1;
           const bytes=await fetchModel(m.url);progress('initialize');
+          const options={executionProviders:['wasm']};let graph=bytes;
+          if(m.graph){
+            // The compact 512 graph references unchanged weights at verified
+            // offsets inside the original ONNX, sharing its existing cache.
+            const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+            if(hash!==m.weightsSha256)throw new Error('ISNet model checksum mismatch. Clear the model cache and retry.');
+            graph=Uint8Array.from(atob(m.graph),c=>c.charCodeAt(0));
+            options.externalData=[{path:'isnetis.onnx',data:new Uint8Array(bytes)}];
+          }
           // ISNet's ceil-mode MaxPool is unsupported by this WebGPU runtime;
           // some devices silently produce invalid masks instead of rejecting it.
-          model=await ort.InferenceSession.create(bytes,{executionProviders:['wasm']});backend='CPU';
+          model=await ort.InferenceSession.create(graph,options);backend='CPU';
         }
         postMessage({type:'ready',backend});
       }else if(m.type==='reset'){
@@ -295,21 +308,21 @@ J.generatePersonMask = async (cut,modelId,{fps=24,signal,onProgress=()=>{}}={}) 
     onProgress({phase:'plan',total:targets.length,reused,missing:missing.length});
     if(!missing.length)return {...prior};
     if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
-    worker=makeWorker(onProgress);onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url});
-    const iw=modelId==='anime'?1024:mw,ih=modelId==='anime'?1024:mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d');
-    const fit=modelId==='anime'?Math.min(iw/sw,ih/sh):k,fw=Math.min(iw,Math.round(sw*fit)),fh=Math.min(ih,Math.round(sh*fit)),px=Math.floor((iw-fw)/2),py=Math.floor((ih-fh)/2);
+    worker=makeWorker(onProgress);onProgress({phase:'download',loaded:0,total:0});const ready=await worker.request({type:'init',model:modelId,url:def.url,graph:def.graph,weightsSha256:def.weightsSha256});
+    const iw=def.inputSize||mw,ih=def.inputSize||mh,input=canvas(iw,ih),ix=input.getContext('2d',{willReadFrequently:true}),output=canvas(mw,mh),ox=output.getContext('2d'),alphaCanvas=canvas(iw,ih),ax=alphaCanvas.getContext('2d');
+    const fit=def.inputSize?Math.min(iw/sw,ih/sh):k,fw=Math.min(iw,Math.round(sw*fit)),fh=Math.min(ih,Math.round(sh*fit)),px=Math.floor((iw-fw)/2),py=Math.floor((ih-fh)/2);
     for(const [n,i] of missing.entries()){
       if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
       if(n && i!==missing[n-1]+1 && modelId==='rvm')await worker.request({type:'reset'});
       if(duration)await J.seekMediaVideo(source,Math.min(i/fps,duration-.001),signal,cut.name);
       ix.clearRect(0,0,iw,ih);ix.drawImage(source,px,py,fw,fh);const rgba=ix.getImageData(0,0,iw,ih).data,pixels=new Float32Array(iw*ih*3);
-      for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[modelId==='anime'?c*iw*ih+n:n*3+c]=rgba[n*4+c]/255;
-      const result=await worker.request({type:'frame',width:iw,height:ih,pixels:pixels.buffer},[pixels.buffer]);
+      for(let n=0;n<iw*ih;n++)for(let c=0;c<3;c++)pixels[def.inputSize?c*iw*ih+n:n*3+c]=rgba[n*4+c]/255;
+      const inferenceStart=performance.now(),result=await worker.request({type:'frame',width:iw,height:ih,pixels:pixels.buffer},[pixels.buffer]),inferenceMs=Math.round(performance.now()-inferenceStart);
       alphaCanvas.width=result.width;alphaCanvas.height=result.height;const image=ax.createImageData(result.width,result.height),alpha=new Uint8Array(result.alpha);
       for(let n=0;n<alpha.length;n++){image.data[n*4]=image.data[n*4+1]=image.data[n*4+2]=255;image.data[n*4+3]=alpha[n];}ax.putImageData(image,0,0);
       ox.clearRect(0,0,mw,mh);ox.drawImage(alphaCanvas,px,py,fw,fh,0,0,mw,mh);
       frames.set(i,await new Promise((resolve,reject)=>output.toBlob(blob=>blob?resolve(blob):reject(new Error('Cannot encode person mask')),'image/png')));
-      onProgress({phase:'analyze',completed:n+1,total:missing.length,reused,required:targets.length,sourceFrame:i,backend:ready.backend});
+      onProgress({phase:'analyze',completed:n+1,total:missing.length,reused,required:targets.length,sourceFrame:i,backend:ready.backend,inferenceMs});
       await new Promise(resolve=>setTimeout(resolve,0));
     }
     if(signal?.aborted)throw new DOMException('Cancelled','AbortError');
