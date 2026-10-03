@@ -19,6 +19,7 @@
       <details class="header-menu" id="outputMenu">
         <summary>出力</summary><div class="header-menu-items">
           <button id="menuMP4" data-export-dialog="mp4">MP4 を書き出す</button>
+          <button id="menuShort" data-export-dialog="short">ショート用出力</button>
           <button id="menuPNG" data-export-dialog="png">連番PNG（ZIP）</button>
           <button id="menuPNGA" data-export-dialog="pnga">透過PNG（ZIP・背景なし）</button>
           <button id="btnAE" title="After Effects パネル用の構成データを書き出す">AE用に書き出し</button>
@@ -295,6 +296,7 @@
         <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
         <div class="outbtns">
           <button id="btnMP4" class="primary">MP4 を書き出す</button>
+          <button id="btnShort" class="primary" hidden>ショート用MP4を書き出す</button>
           <button id="btnPNG">連番PNG（ZIP）</button>
           <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
         </div>
@@ -362,6 +364,24 @@
  <h2 id="exportDlgTitle">出力</h2>
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
+ <section id="shortExportOptions" class="short-export-options" hidden>
+  <div>
+   <p class="note">元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
+   <div class="fields">
+    <label class="field">開始（秒）<input id="shortStart" type="number" min="0" step="any" required></label>
+    <label class="field">終了（秒）<input id="shortEnd" type="number" min="0" step="any" required></label>
+    <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
+    <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
+    <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
+   </div>
+   <p id="shortExportError" class="short-export-error" role="status"></p>
+  </div>
+  <div class="short-preview">
+   <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
+   <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
+   <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
+  </div>
+ </section>
  <div id="exportDialogContent"></div>
  <div class="terms-foot"><button id="btnCloseExport" type="button">閉じる</button></div>
 </dialog>

@@ -68,6 +68,7 @@ function mergeProject(p) {
   const d = J.defaultProject();
   const o = Object.assign(d, p || {});
   if (o.videoSize) { const [w, h] = J.outputSize(o); o.videoSize = { w, h }; }
+  o.shortExport=J.shortExportSettings(o.shortExport);
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
   o.timing.cutTimes = o.timing.cutTimes || {};
@@ -304,7 +305,7 @@ function sizeViewport() {
 // Detail previews share the imported videos with the main renderer. Their seeked
 // events request main redraws, which must not reset the videos to the main clock.
 function syncMainMediaPreview() {
-  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
@@ -3284,25 +3285,108 @@ function renderTech() {
 }
 
 /* ---------------- output tab ---------------- */
+const shortExportActive=()=>$('exportSettings').parentElement.id==='exportDialogContent'&&S.exportKind==='short';
+const activeExportProject=()=>shortExportActive()?J.shortExportProject(S.project):S.project;
+let shortPreview=null;
+function shortRangeValid(){
+  try{J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;}
+  catch(error){$('shortExportError').textContent=error.message;return false;}
+}
+function pauseShortPreview(){
+  if(!shortPreview)return;
+  shortPreview.playing=false;
+  for(const asset of J.mediaAssets.values())if(asset.type==='video')asset.element.pause();
+  $('shortPreviewPlay').textContent='▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel('プレビューを再生','Play preview'));
+}
+function stopShortPreview(){
+  if(!shortPreview)return;
+  pauseShortPreview();shortPreview.controller?.abort();cancelAnimationFrame(shortPreview.raf);shortPreview=null;
+}
+async function prepareShortPreview(time,play=false){
+  const p=shortPreview;if(!p||S.exporting)return;p.plan=S.plan;
+  if(!shortRangeValid()){pauseShortPreview();p.controller?.abort();return;}
+  pauseShortPreview();p.controller?.abort();const controller=new AbortController();p.controller=controller;p.ready=false;p.error='';
+  const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=J.clamp(time,range.start,Math.max(range.start,range.end-.001));p.plan=S.plan;
+  $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+  try{
+    await J.prepareMediaFrame(p.plan,p.t,controller.signal);
+    if(shortPreview!==p||controller.signal.aborted)return;
+    p.ready=true;p.need=true;p.playing=play;p.clock=performance.now()-p.t*1000;
+    $('shortExportError').textContent='';
+    $('shortPreviewPlay').textContent=play?'❚❚':'▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel(play?'プレビューを一時停止':'プレビューを再生',play?'Pause preview':'Play preview'));
+  }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;}}
+  finally{if(p.controller===controller)p.controller=null;}
+}
+function startShortPreview(){
+  stopShortPreview();if(!shortExportActive())return;
+  const p=shortPreview={renderer:new J.Renderer(),portrait:new J.ShortFrameRenderer(),source:document.createElement('canvas'),t:S.project.shortExport.start,plan:S.plan,ready:false,need:true,playing:false};
+  const tick=now=>{
+    if(shortPreview!==p)return;p.raf=requestAnimationFrame(tick);if(S.exporting)return;
+    if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
+    if(!p.ready)return;
+    if(p.playing){
+      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=(now-p.clock)/1000;
+      if(p.t>=range.end){p.t=range.start;p.clock=now-p.t*1000;}
+      J.syncMediaPreview(S.plan,p.t,true);p.need=true;
+    }
+    if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
+    p.need=false;p.lastDraw=now;
+    try{
+      const canvas=$('shortExportPreview'),fit=Math.min(canvas.width/S.plan.W,canvas.height/S.plan.H),sw=Math.max(1,Math.round(S.plan.W*fit)),sh=Math.max(1,Math.round(S.plan.H*fit));
+      if(p.source.width!==sw||p.source.height!==sh){p.source.width=sw;p.source.height=sh;}
+      p.renderer.frame(p.source.getContext('2d',{alpha:false}),S.plan,p.t,{scale:sw/S.plan.W});
+      p.portrait.frame(canvas.getContext('2d',{alpha:false}),p.source,S.project.shortExport);
+      $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+    }catch(error){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}
+  };
+  p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
+}
+function initShortExport(){
+  const s=J.shortExportSettings(S.project.shortExport),duration=S.plan.duration;
+  if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
+  S.project.shortExport=s;
+  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??+duration.toFixed(3));
+  $('shortStart').max=$('shortEnd').max=String(+duration.toFixed(3));
+  $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
+  $('shortExportError').textContent='';
+  $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
+  $('shortPreviewSeek').min=String(s.start);$('shortPreviewSeek').max=String(s.end??duration);
+}
+function updateShortExport(rangeChanged=false){
+  const start=$('shortStart').value,end=$('shortEnd').value;
+  S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
+  $('shortBlurValue').value=$('shortBlur').value;
+  const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
+  if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
+  else{
+    const range=J.shortExportRange(S.plan,S.project.shortExport);$('shortPreviewSeek').min=String(range.start);$('shortPreviewSeek').max=String(range.end);
+    if(rangeChanged)prepareShortPreview(range.start);else if(shortPreview)shortPreview.need=true;
+  }
+  syncQuality();codecNote();autosave();
+}
 function syncExportSettingsVisibility() {
   const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
-  const mp4=!inDialog||S.exportKind==='mp4',transparent=inDialog&&S.exportKind==='pnga';
+  const short=shortExportActive(),mp4=!inDialog||S.exportKind==='mp4'||short,transparent=inDialog&&S.exportKind==='pnga';
+  $('shortExportOptions').hidden=!short;
+  for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
+  for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
   $('outAudio').closest('label').hidden=!mp4;
   $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
   $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
-  $('outKey').closest('label').hidden=transparent;
-  $('exportSettings').querySelector('.key-note').hidden=transparent;
+  $('outKey').closest('label').hidden=transparent||short;
+  $('exportSettings').querySelector('.key-note').hidden=transparent||short;
   $('codecNote').hidden=!mp4;
 }
 function syncQuality() {
+  const project=activeExportProject();
   const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
     if(option.value==='qp'){option.textContent=names.qp;continue;}
-    let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
+    let rate;try{rate=J.videoBitrate(project,option.value);}catch{rate=null;}
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
-  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
+  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(project,'high'))/1e6);
   $('outQP').value=String(S.project.exportQP ?? 12);
   syncExportSettingsVisibility();
 }
@@ -3332,31 +3416,39 @@ function syncOut() {
 let codecNoteVersion=0;
 async function codecNote() {
   const version=++codecNoteVersion,isQP=S.project.quality==='qp';
-  const [w, h] = J.outputSize(S.project);
-  let bitrate;try{if(isQP)J.videoQuantizer(S.project);else bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const project=activeExportProject(),[w, h] = J.outputSize(project);
+  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;$('eMP4').disabled=true;return;}
   const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
-  if(version!==codecNoteVersion)return;
+  if(version!==codecNoteVersion||S.exporting)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  $('btnShort').disabled=!vc||shortExportActive()&&!shortRangeValid();
   if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA', 'eMP4'];
 function openExportDialog(kind) {
   if (S.exporting) return;
   pause();
-  const mp4 = kind === 'mp4';
+  const mp4 = kind === 'mp4'||kind==='short';
   S.exportKind = kind;
-  $('exportFilename').value = baseName() + (mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
+  $('exportDlg').classList.toggle('short-export-dialog',kind==='short');
+  if(kind==='short')initShortExport();
+  $('exportFilename').value = baseName() + (kind==='short'?'_short.mp4':mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
   $('exportDlgTitle').textContent = J.mediaLabel(mp4 ? 'MP4 を書き出す' : kind === 'pnga' ? '透過PNG（ZIP・背景なし）' : '連番PNG（ZIP）', mp4 ? 'Export MP4' : kind === 'pnga' ? 'Transparent PNG (ZIP)' : 'PNG sequence (ZIP)');
+  if(kind==='short')$('exportDlgTitle').textContent=J.mediaLabel('ショート用出力','Export for Shorts');
   $('exportDialogContent').appendChild($('exportSettings'));
-  for (const [id,type] of [['btnMP4','mp4'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
+  for (const [id,type] of [['btnMP4','mp4'],['btnShort','short'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
   syncOut();codecNote(); $('exportDlg').showModal();
+  if(kind==='short')startShortPreview();
 }
 function restoreExportSettings() {
+  stopShortPreview();
+  $('exportDlg').classList.remove('short-export-dialog');
   $('exportSettingsHome').appendChild($('exportSettings'));
+  $('btnShort').hidden=true;
   for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
-  syncQuality();
+  syncQuality();codecNote();syncMainMediaPreview();S.need=true;
 }
 function baseName() {
   const k = J.keyMode(S.project);
@@ -3395,14 +3487,17 @@ function confirmHiddenLayers() {
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
-  if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
-  if(kind==='mp4'&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  const mp4=kind==='mp4'||kind==='short';
+  if(mp4&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
+  if(mp4&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  if(kind==='short'&&(!$('shortStart').reportValidity()||!$('shortEnd').reportValidity()||!shortRangeValid()))return;
   if(!confirmHiddenLayers())return;
-  const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
+  const filename = J.exportFilename($('exportFilename').value, mp4 ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
   pause();
+  if(kind==='short')stopShortPreview();
   const ac = new AbortController(); S.exporting = ac;
-  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),$('exportFilename')].map(el=>[el,el.disabled]);
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('exportFilename')].map(el=>[el,el.disabled]);
   settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
@@ -3416,7 +3511,7 @@ async function runExport(kind) {
   try {
     // Ask while the export click still has user activation. Stream large MP4s
     // straight to this file instead of holding the whole movie in browser RAM.
-    if(kind==='mp4'&&typeof window.showSaveFilePicker==='function'){
+    if(mp4&&typeof window.showSaveFilePicker==='function'){
       try{
         const handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'MP4',accept:{'video/mp4':['.mp4']}}]});
         fileStream=await handle.createWritable();
@@ -3426,8 +3521,8 @@ async function runExport(kind) {
       }
     }
     await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
-    if (kind === 'mp4') {
-      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream });
+    if (mp4) {
+      const r = await J.exportMP4({ plan: S.plan, project: activeExportProject(), audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream,short:kind==='short'?{...S.project.shortExport}:null });
       fileStream=null;
       txt.textContent = `完成 ${(r.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
       const res = r.saved?'saved':await J.saveFile(filename, r.blob);
@@ -3439,7 +3534,7 @@ async function runExport(kind) {
     }
   } catch (e) {
     if(fileStream)try{await fileStream.abort();}catch{}
-    if(e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
+    if(ac.signal.aborted||e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
   } finally {
@@ -3447,6 +3542,7 @@ async function runExport(kind) {
     settingsInputs.forEach(([el,disabled])=>{el.disabled=disabled;}); $('btnCloseExport').disabled = false;
     EXP_BTNS.forEach(id => { $(id).disabled = false; });
     codecNote();
+    if(kind==='short')startShortPreview();
   }
 }
 
@@ -3736,6 +3832,16 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
+  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>updateShortExport(true));
+  for(const id of ['shortFill','shortRes'])$(id).addEventListener('change',()=>updateShortExport());
+  $('shortBlur').addEventListener('input',()=>updateShortExport());
+  $('shortPreviewPlay').addEventListener('click',()=>{
+    if(!shortPreview)return;
+    if(shortPreview.playing||shortPreview.controller){shortPreview.controller?.abort();pauseShortPreview();}
+    else prepareShortPreview(shortPreview.t,true);
+  });
+  $('shortPreviewSeek').addEventListener('input',e=>prepareShortPreview(Number(e.target.value)));
+  document.fonts?.addEventListener('loadingdone',()=>{if(shortPreview)shortPreview.need=true;});
   // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
   const themeBalanceNote = () => {
     const L = J.mediaLabel, unified = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified';
@@ -4271,7 +4377,7 @@ function bind() {
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
   $('outQuality').addEventListener('change', e => {
     S.project.quality=e.target.value;
-    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(S.project,'high');
+    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(activeExportProject(),'high');
     syncQuality();codecNote();autosave();
   });
   $('outBitrate').addEventListener('input',e=>{
@@ -4290,6 +4396,7 @@ function bind() {
   });
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
+  $('btnShort').addEventListener('click', () => runExport('short'));
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));

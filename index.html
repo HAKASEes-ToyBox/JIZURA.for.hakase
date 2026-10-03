@@ -482,6 +482,15 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 @media (min-width: 761px) { #app.compact-ui .header-menu-items { left: 0; right: auto; } }
 .export-dialog .fields { margin-bottom: 12px; }
 .export-dialog .outbtns { margin: 16px 0; }
+.short-export-options { display:grid; grid-template-columns:minmax(0,1fr) 234px; gap:20px; margin:12px 0 20px; }
+.export-dialog.short-export-dialog { width:min(780px,calc(100vw - 32px)); }
+.short-export-options .fields, .short-export-dialog #exportSettings > .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.short-preview canvas { display:block; width:100%; height:auto; background:#000; border:1px solid var(--line); }
+.short-preview-transport { display:flex; align-items:center; gap:8px; margin:8px 0; }
+.short-preview > input { width:100%; }
+.short-export-error { color:var(--danger); font-size:12px; }
+.short-export-error:empty { display:none; }
+@media(max-width:620px) { .short-export-options { grid-template-columns:1fr; } .short-preview { width:min(234px,100%); justify-self:center; } }
 .filename-field { margin-bottom: 10px; }
 
 .cut-details-dialog { width: min(1180px, 96vw); height: min(90vh, 920px); max-height: 90vh; overflow: hidden; border: 1px solid #555; border-radius: 12px; padding: 0; background: #191b20; color: #eee; }
@@ -897,6 +906,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       <details class="header-menu" id="outputMenu">
         <summary>出力</summary><div class="header-menu-items">
           <button id="menuMP4" data-export-dialog="mp4">MP4 を書き出す</button>
+          <button id="menuShort" data-export-dialog="short">ショート用出力</button>
           <button id="menuPNG" data-export-dialog="png">連番PNG（ZIP）</button>
           <button id="menuPNGA" data-export-dialog="pnga">透過PNG（ZIP・背景なし）</button>
           <button id="btnAE" title="After Effects パネル用の構成データを書き出す">AE用に書き出し</button>
@@ -1173,6 +1183,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <label class="row" style="gap:6px;margin-top:10px"><input id="outAudio" type="checkbox" checked> 曲を動画に含める</label>
         <div class="outbtns">
           <button id="btnMP4" class="primary">MP4 を書き出す</button>
+          <button id="btnShort" class="primary" hidden>ショート用MP4を書き出す</button>
           <button id="btnPNG">連番PNG（ZIP）</button>
           <button id="btnPNGA">透過PNG（ZIP・背景なし）</button>
         </div>
@@ -1240,6 +1251,24 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
  <h2 id="exportDlgTitle">出力</h2>
  <label class="field filename-field">ファイル名<input id="exportFilename" type="text" maxlength="180" autocomplete="off"></label>
  <p class="note">拡張子は自動で付加されます。使用できない文字は置き換えます。</p>
+ <section id="shortExportOptions" class="short-export-options" hidden>
+  <div>
+   <p class="note">元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。</p>
+   <div class="fields">
+    <label class="field">開始（秒）<input id="shortStart" type="number" min="0" step="any" required></label>
+    <label class="field">終了（秒）<input id="shortEnd" type="number" min="0" step="any" required></label>
+    <label class="field field-wide">縦型の動画サイズ<select id="shortRes"><option value="720">720 × 1280</option><option value="1080" selected>1080 × 1920</option><option value="1440">1440 × 2560</option><option value="2160">2160 × 3840</option></select></label>
+    <label class="field field-wide">上下の補間<select id="shortFill"><option value="zoom">元動画を拡大した背景</option><option value="tile">元動画を上下に並べる</option><option value="ambient">拡散（映像の色を余白へ広げる）</option></select></label>
+    <label class="field field-wide">ぼかし度合い <output id="shortBlurValue">35</output><input id="shortBlur" type="range" min="0" max="100" value="35"></label>
+   </div>
+   <p id="shortExportError" class="short-export-error" role="status"></p>
+  </div>
+  <div class="short-preview">
+   <canvas id="shortExportPreview" width="234" height="416" aria-label="ショート用出力のプレビュー"></canvas>
+   <div class="short-preview-transport"><button id="shortPreviewPlay" type="button" class="ghost small" aria-label="プレビューを再生">▶</button><span id="shortPreviewTime" class="tc">00:00.00</span></div>
+   <input id="shortPreviewSeek" type="range" min="0" max="1" step="0.001" value="0" aria-label="ショート用プレビューの再生位置">
+  </div>
+ </section>
  <div id="exportDialogContent"></div>
  <div class="terms-foot"><button id="btnCloseExport" type="button">閉じる</button></div>
 </dialog>
@@ -3921,6 +3950,7 @@ J.defaultProject = () => ({
   keyBg: 'off',                   // 合成用の背景: 'off' | 'green' (グリーンバック) | 'black' (ブラックバック)
   seed: 20260922,
   aspect: '16:9', res: 1080, fps: 24,
+  shortExport: {start:0,end:null,mode:'zoom',blur:35,res:1080},
   fx: { motion: 0.7, glitch: 0.55, chroma: 0.7, decor: 0.5, density: 0.55, texture: 0.6, flash: true, onTwos: true, koma: 12, hud: 'auto', bgSwitch: 0.35 },
   enabled: Object.fromEntries(J.GROUP_KEYS.map(g => [g, Object.fromEntries(J.order(g).map(k => [k, true]))])),
   timing: { bpm: 0, offset: 0.4, snap: true, tail: 0.9, lineTimes: {}, cutTimes: {}, lineScale: 1 },
@@ -9940,11 +9970,11 @@ J.pickAudioCodec = async (sr, chn) => {
   return null;
 };
 
-async function resample(buffer, sr, duration) {
+async function resample(buffer, sr, duration, start = 0) {
   const chn = Math.min(2, buffer.numberOfChannels);
   const len = Math.ceil(duration * sr);
   const oc = new OfflineAudioContext(chn, len, sr);
-  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); src.start(0);
+  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); if(start<buffer.duration)src.start(0,start);
   return oc.startRendering();
 }
 
@@ -9993,7 +10023,9 @@ J.createMP4Output = fileStream => {
     async abort(){parts=[];await queue;if(fileStream)try{await fileStream.abort();}catch{}}
   };
 };
-J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal, fileStream }) => {
+J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal, fileStream, short }) => {
+  if(short)project=J.shortExportProject(project,short);
+  const range=short?J.shortExportRange(plan,short):{start:0,end:plan.duration},duration=range.end-range.start;
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
@@ -10017,15 +10049,20 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d', { alpha: false });
   const R = new J.Renderer();
-  const total = Math.max(1, Math.round(plan.duration * fps));
-  const scale = w / plan.W;
+  const total = Math.max(1, Math.round(duration * fps));
+  const source=short?document.createElement('canvas'):canvas;
+  if(short){const fit=Math.min(w/plan.W,h/plan.H);source.width=Math.max(1,Math.round(plan.W*fit));source.height=Math.max(1,Math.round(plan.H*fit));}
+  const sourceCtx=short?source.getContext('2d',{alpha:false}):ctx,portrait=short?new J.ShortFrameRenderer():null;
+  const scale = source.width / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
   try {
   for (let i = 0; i < total; i++) {
     if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
-    await J.prepareMediaFrame(plan, i / fps, signal);
-    R.frame(ctx, plan, i / fps, { scale });
+    const time=range.start+i/fps;
+    await J.prepareMediaFrame(plan, time, signal);
+    R.frame(sourceCtx, plan, time, { scale });
+    if(portrait)portrait.frame(ctx,source,short);
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
     try{venc.encode(vf, { keyFrame: i % (fps * 2) === 0,...(qp==null?{}:{avc:{quantizer:qp}}) });}
     finally{vf.close();}
@@ -10039,7 +10076,7 @@ J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', 
   await output.drain();
   if (ac) {
     onProgress && onProgress(0.99, '音声をエンコード中');
-    const rs = await resample(audio.buffer, ac.sr, plan.duration);
+    const rs = await resample(audio.buffer, ac.sr, duration, range.start);
     const chn = rs.numberOfChannels;
     aenc = new AudioEncoder({ output: (chunk, meta) => {try{muxer.addAudioChunk(chunk,meta);}catch(e){err=e;}}, error: e => { err = e; } });
     aenc.configure({ codec: ac.codec, sampleRate: ac.sr, numberOfChannels: chn, bitrate: 192000 });
@@ -10168,7 +10205,7 @@ const magic = 'JIZURA01', text = new TextEncoder(), decode = new TextDecoder();
 const fail = () => new Error(J.mediaLabel('プロジェクトファイルが不正または未対応の形式です', 'Invalid or unsupported project file'));
 // Explicit settings allowlist keeps song content and future asset fields out of presets.
 const settingKeys = ['themes','themeBalance','style','mood','extra','wa','horror','typo','kinetic','keyBg',
-  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','exportBitrate','exportQP','includeAudio','fx','enabled',
+  'seed','aspect','res','fps','videoSize','videoSizeMode','quality','exportBitrate','exportQP','includeAudio','shortExport','fx','enabled',
   'lyricEffects','colors','colorTheme','fonts','userFonts','compositeFonts','effectFavorites','favoriteSequence','customEffects'];
 const clone = value => JSON.parse(JSON.stringify(value));
 J.projectSettings = project => {
@@ -41567,6 +41604,80 @@ J.favoriteAPI={
 };
 })();
 
+/* Portrait output of a selected interval, preserving the source composition. */
+(() => {
+'use strict';
+J.shortExportSettings = value => {
+  const s=value && typeof value==='object'?value:{};
+  return {start:Number.isFinite(+s.start)?Math.max(0,+s.start):0,end:s.end==null?null:Number.isFinite(+s.end)?Math.max(0,+s.end):null,
+    mode:['zoom','tile','ambient'].includes(s.mode)?s.mode:'zoom',blur:Number.isFinite(+s.blur)?J.clamp(+s.blur,0,100):35,
+    res:[720,1080,1440,2160].includes(+s.res)?+s.res:1080};
+};
+J.shortExportRange = (plan, settings) => {
+  const start=settings.start,end=settings.end==null?plan.duration:settings.end;
+  if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end>plan.duration+.001||end<=start||start>=plan.duration)
+    throw new Error(J.mediaLabel('開始・終了を動画の範囲内で指定し、終了を開始より後にしてください。','Choose a start and end within the video, with the end after the start.'));
+  return {start,end:Math.min(end,plan.duration)};
+};
+J.shortExportProject = (project, settings=J.shortExportSettings(project.shortExport)) => ({...project,aspect:'9:16',res:settings.res,videoSize:{w:settings.res,h:Math.round(settings.res*16/9/2)*2}});
+
+// Small, separable box-blur passes also work on Safari without canvas filters.
+// The working image is bounded, so large output sizes do not multiply CPU work.
+const blurPixels = (pixels,w,h,r,scratch) => {
+  const span=r*2+1;
+  for(let pass=0;pass<3;pass++){
+    for(let y=0;y<h;y++){
+      const row=y*w*4;let red=0,green=0,blue=0;
+      for(let k=-r;k<=r;k++){const i=row+J.clamp(k,0,w-1)*4;red+=pixels[i];green+=pixels[i+1];blue+=pixels[i+2];}
+      for(let x=0;x<w;x++){
+        const i=row+x*4;scratch[i]=red/span;scratch[i+1]=green/span;scratch[i+2]=blue/span;scratch[i+3]=255;
+        const a=row+J.clamp(x-r,0,w-1)*4,b=row+J.clamp(x+r+1,0,w-1)*4;
+        red+=pixels[b]-pixels[a];green+=pixels[b+1]-pixels[a+1];blue+=pixels[b+2]-pixels[a+2];
+      }
+    }
+    for(let x=0;x<w;x++){
+      let red=0,green=0,blue=0;
+      for(let k=-r;k<=r;k++){const i=(J.clamp(k,0,h-1)*w+x)*4;red+=scratch[i];green+=scratch[i+1];blue+=scratch[i+2];}
+      for(let y=0;y<h;y++){
+        const i=(y*w+x)*4;pixels[i]=red/span;pixels[i+1]=green/span;pixels[i+2]=blue/span;pixels[i+3]=255;
+        const a=(J.clamp(y-r,0,h-1)*w+x)*4,b=(J.clamp(y+r+1,0,h-1)*w+x)*4;
+        red+=scratch[b]-scratch[a];green+=scratch[b+1]-scratch[a+1];blue+=scratch[b+2]-scratch[a+2];
+      }
+    }
+  }
+};
+class ShortFrameRenderer {
+  constructor(){this.background=document.createElement('canvas');this.scratch=null;}
+  frame(ctx,source,settings){
+    const w=ctx.canvas.width,h=ctx.canvas.height,sw=source.width,sh=source.height,fit=Math.min(w/sw,h/sh),dw=sw*fit,dh=sh*fit,x=(w-dw)/2,y=(h-dh)/2;
+    const blurred=settings.blur>0,k=blurred?Math.min(1,384/Math.max(w,h)):1,bw=Math.max(1,Math.round(w*k)),bh=Math.max(1,Math.round(h*k)),bg=this.background;
+    if(bg.width!==bw||bg.height!==bh){bg.width=bw;bg.height=bh;}
+    const bx=bg.getContext('2d',{willReadFrequently:true});bx.setTransform(1,0,0,1,0,0);bx.globalAlpha=1;bx.globalCompositeOperation='source-over';bx.fillStyle='#000';bx.fillRect(0,0,bw,bh);
+    if(settings.mode==='ambient'){
+      const edge=Math.max(1,sh*.08),top=y/h*bh,bottom=(y+dh)/h*bh;
+      if(top>0)bx.drawImage(source,0,0,sw,edge,0,0,bw,top+1);
+      if(bottom<bh)bx.drawImage(source,0,sh-edge,sw,edge,0,bottom-1,bw,bh-bottom+1);
+    }else if(settings.mode==='tile'){
+      const rh=sh*bw/sw,center=(bh-rh)/2;
+      for(let yy=center-Math.ceil(center/rh)*rh;yy<bh;yy+=rh)bx.drawImage(source,0,yy,bw,rh);
+    }else{
+      const cover=Math.max(bw/sw,bh/sh),cw=sw*cover,ch=sh*cover;bx.drawImage(source,(bw-cw)/2,(bh-ch)/2,cw,ch);
+    }
+    if(blurred){
+      const image=bx.getImageData(0,0,bw,bh);if(this.scratch?.length!==image.data.length)this.scratch=new Uint8ClampedArray(image.data.length);
+      blurPixels(image.data,bw,bh,Math.max(1,Math.round(settings.blur/100*bw*.12)),this.scratch);bx.putImageData(image,0,0);
+    }
+    ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.filter='none';ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);ctx.drawImage(bg,0,0,w,h);
+    if(settings.mode==='ambient'){
+      const shade=(a,b)=>{if(b<=a)return;const g=ctx.createLinearGradient(0,a,0,b);g.addColorStop(0,'rgba(0,0,0,.5)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,a,w,b-a);};
+      shade(0,y);ctx.save();ctx.translate(0,h);ctx.scale(1,-1);shade(0,y);ctx.restore();
+    }
+    ctx.drawImage(source,x,y,dw,dh);ctx.restore();
+  }
+}
+J.ShortFrameRenderer=ShortFrameRenderer;
+})();
+
 /* ============================================================
    JIZURA — editor UI
    ============================================================ */
@@ -41637,6 +41748,7 @@ function mergeProject(p) {
   const d = J.defaultProject();
   const o = Object.assign(d, p || {});
   if (o.videoSize) { const [w, h] = J.outputSize(o); o.videoSize = { w, h }; }
+  o.shortExport=J.shortExportSettings(o.shortExport);
   o.fx = Object.assign(J.defaultProject().fx, (p && p.fx) || {});
   o.timing = Object.assign(J.defaultProject().timing, (p && p.timing) || {});
   o.timing.cutTimes = o.timing.cutTimes || {};
@@ -41873,7 +41985,7 @@ function sizeViewport() {
 // Detail previews share the imported videos with the main renderer. Their seeked
 // events request main redraws, which must not reset the videos to the main clock.
 function syncMainMediaPreview() {
-  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open)J.syncMediaPreview(S.plan,S.t,S.playing);
+  if(!$('cutDetailsDialog')?.open&&!$('effectFavoritesDialog')?.open&&!($('exportDlg')?.open&&S.exportKind==='short'))J.syncMediaPreview(S.plan,S.t,S.playing);
 }
 function draw() {
   const c = $('view'), ctx = c.getContext('2d');
@@ -44853,25 +44965,108 @@ function renderTech() {
 }
 
 /* ---------------- output tab ---------------- */
+const shortExportActive=()=>$('exportSettings').parentElement.id==='exportDialogContent'&&S.exportKind==='short';
+const activeExportProject=()=>shortExportActive()?J.shortExportProject(S.project):S.project;
+let shortPreview=null;
+function shortRangeValid(){
+  try{J.shortExportRange(S.plan,S.project.shortExport);$('shortExportError').textContent=shortPreview?.error||'';return true;}
+  catch(error){$('shortExportError').textContent=error.message;return false;}
+}
+function pauseShortPreview(){
+  if(!shortPreview)return;
+  shortPreview.playing=false;
+  for(const asset of J.mediaAssets.values())if(asset.type==='video')asset.element.pause();
+  $('shortPreviewPlay').textContent='▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel('プレビューを再生','Play preview'));
+}
+function stopShortPreview(){
+  if(!shortPreview)return;
+  pauseShortPreview();shortPreview.controller?.abort();cancelAnimationFrame(shortPreview.raf);shortPreview=null;
+}
+async function prepareShortPreview(time,play=false){
+  const p=shortPreview;if(!p||S.exporting)return;p.plan=S.plan;
+  if(!shortRangeValid()){pauseShortPreview();p.controller?.abort();return;}
+  pauseShortPreview();p.controller?.abort();const controller=new AbortController();p.controller=controller;p.ready=false;p.error='';
+  const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=J.clamp(time,range.start,Math.max(range.start,range.end-.001));p.plan=S.plan;
+  $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+  try{
+    await J.prepareMediaFrame(p.plan,p.t,controller.signal);
+    if(shortPreview!==p||controller.signal.aborted)return;
+    p.ready=true;p.need=true;p.playing=play;p.clock=performance.now()-p.t*1000;
+    $('shortExportError').textContent='';
+    $('shortPreviewPlay').textContent=play?'❚❚':'▶';$('shortPreviewPlay').setAttribute('aria-label',J.mediaLabel(play?'プレビューを一時停止':'プレビューを再生',play?'Pause preview':'Play preview'));
+  }catch(error){if(shortPreview===p&&!controller.signal.aborted){p.error=error.message;$('shortExportError').textContent=error.message;}}
+  finally{if(p.controller===controller)p.controller=null;}
+}
+function startShortPreview(){
+  stopShortPreview();if(!shortExportActive())return;
+  const p=shortPreview={renderer:new J.Renderer(),portrait:new J.ShortFrameRenderer(),source:document.createElement('canvas'),t:S.project.shortExport.start,plan:S.plan,ready:false,need:true,playing:false};
+  const tick=now=>{
+    if(shortPreview!==p)return;p.raf=requestAnimationFrame(tick);if(S.exporting)return;
+    if(p.plan!==S.plan){prepareShortPreview(p.t);return;}
+    if(!p.ready)return;
+    if(p.playing){
+      const range=J.shortExportRange(S.plan,S.project.shortExport);p.t=(now-p.clock)/1000;
+      if(p.t>=range.end){p.t=range.start;p.clock=now-p.t*1000;}
+      J.syncMediaPreview(S.plan,p.t,true);p.need=true;
+    }
+    if(!p.need||p.playing&&now-(p.lastDraw??-Infinity)<1000/Math.min(30,S.plan.fps)-1)return;
+    p.need=false;p.lastDraw=now;
+    try{
+      const canvas=$('shortExportPreview'),fit=Math.min(canvas.width/S.plan.W,canvas.height/S.plan.H),sw=Math.max(1,Math.round(S.plan.W*fit)),sh=Math.max(1,Math.round(S.plan.H*fit));
+      if(p.source.width!==sw||p.source.height!==sh){p.source.width=sw;p.source.height=sh;}
+      p.renderer.frame(p.source.getContext('2d',{alpha:false}),S.plan,p.t,{scale:sw/S.plan.W});
+      p.portrait.frame(canvas.getContext('2d',{alpha:false}),p.source,S.project.shortExport);
+      $('shortPreviewTime').textContent=J.fmtTime(p.t);$('shortPreviewSeek').value=String(p.t);
+    }catch(error){p.error=error.message;$('shortExportError').textContent=error.message;pauseShortPreview();}
+  };
+  p.raf=requestAnimationFrame(tick);prepareShortPreview(p.t);
+}
+function initShortExport(){
+  const s=J.shortExportSettings(S.project.shortExport),duration=S.plan.duration;
+  if(s.start>=duration||s.end!=null&&(s.end<=s.start||s.end>duration)){s.start=0;s.end=null;}
+  S.project.shortExport=s;
+  $('shortStart').value=String(s.start);$('shortEnd').value=String(s.end??+duration.toFixed(3));
+  $('shortStart').max=$('shortEnd').max=String(+duration.toFixed(3));
+  $('shortFill').value=s.mode;$('shortBlur').value=String(s.blur);$('shortBlurValue').value=String(s.blur);$('shortRes').value=String(s.res);
+  $('shortExportError').textContent='';
+  $('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=false;
+  $('shortPreviewSeek').min=String(s.start);$('shortPreviewSeek').max=String(s.end??duration);
+}
+function updateShortExport(rangeChanged=false){
+  const start=$('shortStart').value,end=$('shortEnd').value;
+  S.project.shortExport={start:start===''?NaN:Number(start),end:end===''?NaN:Number(end),mode:$('shortFill').value,blur:Number($('shortBlur').value),res:Number($('shortRes').value)};
+  $('shortBlurValue').value=$('shortBlur').value;
+  const valid=shortRangeValid();$('shortPreviewPlay').disabled=$('shortPreviewSeek').disabled=!valid;
+  if(!valid){pauseShortPreview();shortPreview?.controller?.abort();}
+  else{
+    const range=J.shortExportRange(S.plan,S.project.shortExport);$('shortPreviewSeek').min=String(range.start);$('shortPreviewSeek').max=String(range.end);
+    if(rangeChanged)prepareShortPreview(range.start);else if(shortPreview)shortPreview.need=true;
+  }
+  syncQuality();codecNote();autosave();
+}
 function syncExportSettingsVisibility() {
   const inDialog=$('exportSettings').parentElement.id==='exportDialogContent';
-  const mp4=!inDialog||S.exportKind==='mp4',transparent=inDialog&&S.exportKind==='pnga';
+  const short=shortExportActive(),mp4=!inDialog||S.exportKind==='mp4'||short,transparent=inDialog&&S.exportKind==='pnga';
+  $('shortExportOptions').hidden=!short;
+  for(const id of ['outAspect','outRes','outVideoSize'])$(id).closest('label').hidden=short;
+  for(const id of ['outVideoWidth','outVideoHeight'])$(id).closest('label').hidden=short||$('outVideoSize').value!=='custom';
   $('outQuality').closest('label').hidden=!mp4;
   $('outAudio').closest('label').hidden=!mp4;
   $('outBitrate').closest('label').hidden=!mp4||S.project.quality!=='custom';
   $('outQP').closest('label').hidden=$('outQPNote').hidden=!mp4||S.project.quality!=='qp';
-  $('outKey').closest('label').hidden=transparent;
-  $('exportSettings').querySelector('.key-note').hidden=transparent;
+  $('outKey').closest('label').hidden=transparent||short;
+  $('exportSettings').querySelector('.key-note').hidden=transparent||short;
   $('codecNote').hidden=!mp4;
 }
 function syncQuality() {
+  const project=activeExportProject();
   const names={standard:J.mediaLabel('標準','Standard'),high:J.mediaLabel('高','High'),max:J.mediaLabel('最高','Maximum'),custom:J.mediaLabel('任意ビットレート','Custom bitrate'),qp:J.mediaLabel('画質優先（QP指定）','Quality priority (QP)')};
   for(const option of $('outQuality').options){
     if(option.value==='qp'){option.textContent=names.qp;continue;}
-    let rate;try{rate=J.videoBitrate(S.project,option.value);}catch{rate=null;}
+    let rate;try{rate=J.videoBitrate(project,option.value);}catch{rate=null;}
     option.textContent=names[option.value]+(rate==null?'':` (${+(rate/1e6).toFixed(3)} Mbps)`);
   }
-  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(S.project,'high'))/1e6);
+  $('outBitrate').value=String((S.project.exportBitrate ?? J.videoBitrate(project,'high'))/1e6);
   $('outQP').value=String(S.project.exportQP ?? 12);
   syncExportSettingsVisibility();
 }
@@ -44901,31 +45096,39 @@ function syncOut() {
 let codecNoteVersion=0;
 async function codecNote() {
   const version=++codecNoteVersion,isQP=S.project.quality==='qp';
-  const [w, h] = J.outputSize(S.project);
-  let bitrate;try{if(isQP)J.videoQuantizer(S.project);else bitrate=J.videoBitrate(S.project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('eMP4').disabled=true;return;}
+  const project=activeExportProject(),[w, h] = J.outputSize(project);
+  let bitrate;try{if(isQP)J.videoQuantizer(project);else bitrate=J.videoBitrate(project);}catch(err){$('codecNote').textContent=err.message;$('btnMP4').disabled=true;$('btnShort').disabled=true;$('eMP4').disabled=true;return;}
   const vc = await J.pickVideoCodec(w, h, S.project.fps, bitrate,{bitrateMode:isQP?'quantizer':'variable'});
-  if(version!==codecNoteVersion)return;
+  if(version!==codecNoteVersion||S.exporting)return;
   $('codecNote').textContent = vc ? `このブラウザでは ${vc.label} で書き出します（${w}×${h} / ${S.project.fps}fps）。書き出し中はタブを開いたままにしてください。` : 'このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome / Edge の最新版で開くか、連番PNGを使ってください。';
   $('btnMP4').disabled = !vc; $('eMP4').disabled = !vc;
+  $('btnShort').disabled=!vc||shortExportActive()&&!shortRangeValid();
   if(!vc&&isQP)$('codecNote').textContent=J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.');
   if (!vc) $('eMP4').title = 'このブラウザは MP4 書き出しに対応していません（Chrome / Edge 推奨）';
 }
-const EXP_BTNS = ['btnMP4', 'btnPNG', 'btnPNGA', 'eMP4'];
+const EXP_BTNS = ['btnMP4', 'btnShort', 'btnPNG', 'btnPNGA', 'eMP4'];
 function openExportDialog(kind) {
   if (S.exporting) return;
   pause();
-  const mp4 = kind === 'mp4';
+  const mp4 = kind === 'mp4'||kind==='short';
   S.exportKind = kind;
-  $('exportFilename').value = baseName() + (mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
+  $('exportDlg').classList.toggle('short-export-dialog',kind==='short');
+  if(kind==='short')initShortExport();
+  $('exportFilename').value = baseName() + (kind==='short'?'_short.mp4':mp4 ? '.mp4' : kind === 'pnga' ? '_alpha_png.zip' : '_png.zip');
   $('exportDlgTitle').textContent = J.mediaLabel(mp4 ? 'MP4 を書き出す' : kind === 'pnga' ? '透過PNG（ZIP・背景なし）' : '連番PNG（ZIP）', mp4 ? 'Export MP4' : kind === 'pnga' ? 'Transparent PNG (ZIP)' : 'PNG sequence (ZIP)');
+  if(kind==='short')$('exportDlgTitle').textContent=J.mediaLabel('ショート用出力','Export for Shorts');
   $('exportDialogContent').appendChild($('exportSettings'));
-  for (const [id,type] of [['btnMP4','mp4'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
+  for (const [id,type] of [['btnMP4','mp4'],['btnShort','short'],['btnPNG','png'],['btnPNGA','pnga']]) $(id).hidden = kind !== type;
   syncOut();codecNote(); $('exportDlg').showModal();
+  if(kind==='short')startShortPreview();
 }
 function restoreExportSettings() {
+  stopShortPreview();
+  $('exportDlg').classList.remove('short-export-dialog');
   $('exportSettingsHome').appendChild($('exportSettings'));
+  $('btnShort').hidden=true;
   for (const id of ['btnMP4','btnPNG','btnPNGA','codecNote']) $(id).hidden = false;
-  syncQuality();
+  syncQuality();codecNote();syncMainMediaPreview();S.need=true;
 }
 function baseName() {
   const k = J.keyMode(S.project);
@@ -44964,14 +45167,17 @@ function confirmHiddenLayers() {
 async function runExport(kind) {
   if (S.exporting) return;
   if (!$('exportDlg').open || S.exportKind !== kind) { openExportDialog(kind); return; }
-  if(kind==='mp4'&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
-  if(kind==='mp4'&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  const mp4=kind==='mp4'||kind==='short';
+  if(mp4&&S.project.quality==='custom'&&!$('outBitrate').reportValidity())return;
+  if(mp4&&S.project.quality==='qp'&&!$('outQP').reportValidity())return;
+  if(kind==='short'&&(!$('shortStart').reportValidity()||!$('shortEnd').reportValidity()||!shortRangeValid()))return;
   if(!confirmHiddenLayers())return;
-  const filename = J.exportFilename($('exportFilename').value, kind === 'mp4' ? '.mp4' : '.zip', baseName());
+  const filename = J.exportFilename($('exportFilename').value, mp4 ? '.mp4' : '.zip', baseName());
   $('exportFilename').value = filename;
   pause();
+  if(kind==='short')stopShortPreview();
   const ac = new AbortController(); S.exporting = ac;
-  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),$('exportFilename')].map(el=>[el,el.disabled]);
+  const settingsInputs = [...$('exportSettings').querySelectorAll('input,select'),...$('shortExportOptions').querySelectorAll('input,select,button'),$('exportFilename')].map(el=>[el,el.disabled]);
   settingsInputs.forEach(([el])=>{el.disabled=true;}); $('btnCloseExport').disabled = true;
   const boxes = [...document.querySelectorAll('.exp-box')];
   const setText = m => boxes.forEach(b => { b.querySelector('.exp-text').textContent = m; });
@@ -44985,7 +45191,7 @@ async function runExport(kind) {
   try {
     // Ask while the export click still has user activation. Stream large MP4s
     // straight to this file instead of holding the whole movie in browser RAM.
-    if(kind==='mp4'&&typeof window.showSaveFilePicker==='function'){
+    if(mp4&&typeof window.showSaveFilePicker==='function'){
       try{
         const handle=await window.showSaveFilePicker({suggestedName:filename,types:[{description:'MP4',accept:{'video/mp4':['.mp4']}}]});
         fileStream=await handle.createWritable();
@@ -44995,8 +45201,8 @@ async function runExport(kind) {
       }
     }
     await J.ensureFonts(S.project.lyrics + (S.project.title || '') + (S.project.artist || '') + HUD_CHARS + J.drawingText(S.plan), J.fontsOfPlan(S.plan));
-    if (kind === 'mp4') {
-      const r = await J.exportMP4({ plan: S.plan, project: S.project, audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream });
+    if (mp4) {
+      const r = await J.exportMP4({ plan: S.plan, project: activeExportProject(), audio: S.project.includeAudio !== false ? S.audio : null, quality: S.project.quality || 'high', onProgress, signal: ac.signal, fileStream,short:kind==='short'?{...S.project.shortExport}:null });
       fileStream=null;
       txt.textContent = `完成 ${(r.size / 1048576).toFixed(1)}MB・${r.codec}${r.audio ? ' + ' + r.audio.toUpperCase() : ''}・${((performance.now() - t0) / 1000).toFixed(0)}秒`;
       const res = r.saved?'saved':await J.saveFile(filename, r.blob);
@@ -45008,7 +45214,7 @@ async function runExport(kind) {
     }
   } catch (e) {
     if(fileStream)try{await fileStream.abort();}catch{}
-    if(e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
+    if(ac.signal.aborted||e?.name==='AbortError'){txt.textContent=J.mediaLabel('キャンセルしました','Cancelled');return;}
     txt.textContent = 'エラー: ' + (e && e.message ? e.message : e);
     console.error(e);
   } finally {
@@ -45016,6 +45222,7 @@ async function runExport(kind) {
     settingsInputs.forEach(([el,disabled])=>{el.disabled=disabled;}); $('btnCloseExport').disabled = false;
     EXP_BTNS.forEach(id => { $(id).disabled = false; });
     codecNote();
+    if(kind==='short')startShortPreview();
   }
 }
 
@@ -45305,6 +45512,16 @@ function bind() {
   $('btnCloseExport').addEventListener('click',()=>{if(!S.exporting)$('exportDlg').close();});
   $('exportDlg').addEventListener('cancel',e=>{if(S.exporting)e.preventDefault();});
   $('exportDlg').addEventListener('close',restoreExportSettings);
+  for(const id of ['shortStart','shortEnd'])$(id).addEventListener('input',()=>updateShortExport(true));
+  for(const id of ['shortFill','shortRes'])$(id).addEventListener('change',()=>updateShortExport());
+  $('shortBlur').addEventListener('input',()=>updateShortExport());
+  $('shortPreviewPlay').addEventListener('click',()=>{
+    if(!shortPreview)return;
+    if(shortPreview.playing||shortPreview.controller){shortPreview.controller?.abort();pauseShortPreview();}
+    else prepareShortPreview(shortPreview.t,true);
+  });
+  $('shortPreviewSeek').addEventListener('input',e=>prepareShortPreview(Number(e.target.value)));
+  document.fonts?.addEventListener('loadingdone',()=>{if(shortPreview)shortPreview.need=true;});
   // 統一感重視 / にぎやかさ重視: the note shows the side that is switched on.
   const themeBalanceNote = () => {
     const L = J.mediaLabel, unified = document.querySelector('#themesDlg input[name=themeBalance]:checked')?.value === 'unified';
@@ -45840,7 +46057,7 @@ function bind() {
   ['outFps', 'eFps'].forEach(id => $(id).addEventListener('change', e => { S.project.fps = +e.target.value; syncOut(); replan(); codecNote(); }));
   $('outQuality').addEventListener('change', e => {
     S.project.quality=e.target.value;
-    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(S.project,'high');
+    if(e.target.value==='custom'&&S.project.exportBitrate==null)S.project.exportBitrate=J.videoBitrate(activeExportProject(),'high');
     syncQuality();codecNote();autosave();
   });
   $('outBitrate').addEventListener('input',e=>{
@@ -45859,6 +46076,7 @@ function bind() {
   });
   $('outAudio').addEventListener('change', e => { S.project.includeAudio = e.target.checked; autosave(); });
   $('btnMP4').addEventListener('click', () => runExport('mp4'));
+  $('btnShort').addEventListener('click', () => runExport('short'));
   $('btnPNG').addEventListener('click', () => runExport('png'));
   $('btnPNGA').addEventListener('click', () => runExport('pnga'));
   document.querySelectorAll('.exp-cancel').forEach(b => b.addEventListener('click', () => { if (S.exporting) S.exporting.abort(); }));
