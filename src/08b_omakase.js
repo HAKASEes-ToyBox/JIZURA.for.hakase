@@ -60,13 +60,15 @@ J.omakase = (project, rnd = Math.random, choices = {}) => {
   // technique subset per group: everything tagged with the mood (plus the mood's hand-picked core items),
   // a sprinkle of everything else, and a minimum count so the planner always has room to vary
   const enabled = {};
-  const MIN = { layout: 6, enter: 5, exit: 5, hold: 3, decor: 6, treat: 4, bg: 4, cam: 3, fx: 4, trans: 3 };
+  // 統一感重視: far fewer techniques are switched on, so the planner has less to vary between.
+  const unified = project.themeBalance === 'unified';
+  const MIN = unified ? { layout: 3, enter: 3, exit: 2, hold: 2, decor: 3, treat: 2, bg: 2, cam: 2, fx: 2, trans: 2 } : { layout: 6, enter: 5, exit: 5, hold: 3, decor: 6, treat: 4, bg: 4, cam: 3, fx: 4, trans: 3 };
   for (const g of J.GROUP_KEYS) {
     const order = J.order(g).filter(k => !(J.registry(g)[k] || {}).special && (!J.randomOk || J.randomOk(project, g, k)));
     const hand = ['layout', 'enter', 'exit'].includes(g) && Array.isArray(M[g]) ? M[g] : [];   // (M.fx holds slider ranges, not a list)
     const prefer = mood === 'chaos' ? null : new Set([...hand, ...J.taggedWith(g, mood)]);
     const on = {};
-    for (const k of order) on[k] = prefer ? (prefer.has(k) || rnd() < 0.22) : rnd() < 0.8;
+    for (const k of order) on[k] = prefer ? (prefer.has(k) ? (!unified || rnd() < 0.45) : rnd() < (unified ? 0.03 : 0.22)) : rnd() < (unified ? 0.3 : 0.8);
     const offs = order.filter(k => !on[k]);
     let n = order.length - offs.length;
     while (n < Math.min(MIN[g] || 3, order.length) && offs.length) { const k = offs.splice(Math.floor(rnd() * offs.length), 1)[0]; on[k] = true; n++; }

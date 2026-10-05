@@ -57,7 +57,8 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--host', default='127.0.0.1', help='Use 0.0.0.0 for LAN preview')
     args = parser.parse_args()
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
-    print(f'Preview: http://127.0.0.1:{args.port}/ [{branch_name()}]', flush=True)
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    print(f'Preview: http://{args.host}:{args.port}/ [{branch_name()}]', flush=True)
     server.serve_forever()

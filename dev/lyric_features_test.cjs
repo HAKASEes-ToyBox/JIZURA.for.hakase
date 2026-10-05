@@ -58,13 +58,24 @@ const assert = require('node:assert/strict');
         const retained = groupedPlan.cuts.filter(c => c.group != null);
         check(retained.length === 3 && retained.every(c => c.displayEnd === 4), 'independent areas preserve grouped lifetimes');
         check(new Set(retained.map(c => JSON.stringify(c.area))).size === 3, 'retained cuts must receive their own varied areas');
-        check(same(groupedPlan.cuts.map(c => c.area),individualPlan.cuts.map(c => c.area)), 'braces must not change per-cut automatic placement');
+        // A 1シーン group is composed as one scene now (own sizes, no collisions) around the foreground.
+        const groupFore = J.planMedia(groupedProject,groupedPlan,null,'foreground');
+        check(retained.every(c => c.arrangement && c.areaMode === 'auto'), '1シーン groups are composed as one scene');
+        for (const c of retained) for (const f of groupFore.cuts.filter(f => f.start < (c.slotEnd ?? c.end) && f.end + .6 > c.start))
+          check(overlap(c.area,J.foregroundBounds(groupedProject,groupedPlan,f)) < 1e-8, '1シーン cuts avoid the foreground');
+        check(!same(groupedPlan.cuts.map(c => c.area),individualPlan.cuts.map(c => c.area)), 'and differ from separate per-cut placement');
         const active = J.lyricCutsAt(groupedPlan,2.5).map(J.lyricRenderCut);
         check(active.length === 3 && same(active.map(c => c.area),retained.map(c => c.area)), 'simultaneously retained lyrics render with their individual areas');
         check(same(retained.map(c => c.area),J.plan(groupedProject).cuts.filter(c => c.group != null).map(c => c.area)), 'grouped areas are reproducible');
         check(!same(retained.map(c => c.area),J.plan({...groupedProject,seed:1235}).cuts.filter(c => c.group != null).map(c => c.area)), 'shuffle varies grouped areas');
         const strong = auto.cuts.find(c => c.emphasis);
-        check(overlap(strong.area,J.foregroundBounds(p,auto,fore.cuts[0])) > .05, 'emphasis ignores foreground avoidance');
+        // Emphasis may lie over the foreground (alone, or as the big word of a composed scene), so across seeds some do.
+        let overlays = 0;
+        for (let seed = 1; seed <= 20; seed++) {
+          const q = J.plan({...p,seed}), fq = J.planMedia({...p,seed},q,null,'foreground'), e = q.cuts.find(c => c.emphasis);
+          if (overlap(e.area,J.foregroundBounds(p,q,fq.cuts[0])) > .03) overlays++;
+        }
+        check(overlays >= 3, 'emphasis ignores foreground avoidance ' + overlays + '/20');
         const noAvoid = J.plan({...p,lyricEffects:{autoPlacement:true,avoidForeground:false}});
         check(noAvoid.cuts[0].area.w * noAvoid.cuts[0].area.h > auto.cuts[0].area.w * auto.cuts[0].area.h, 'avoidance off restores unconstrained area');
         const variant = type => {
@@ -169,7 +180,7 @@ const assert = require('node:assert/strict');
       assert.equal(await page.locator('#lyricAutoPlacement').isChecked(),true);
       const firstArea=await page.evaluate(()=>J.ui.plan.cuts[0].area);
       await page.locator('#lineList .lyric-area-thumb').first().click();
-      assert.equal(await page.locator('#areaResetAuto').isVisible(),true);
+      assert.equal(await page.locator('#areaResetAuto').isVisible(),true);assert.equal(await page.locator('#areaResetAuto').isDisabled(),true);
       const draft=await page.evaluate(()=>J.ui.areaEdit.draft);
       assert.deepEqual(draft,firstArea,'area editor starts at the resolved automatic area');
       await page.locator('#areaResetFull').click();await page.locator('#areaApplyOne').click();
@@ -177,7 +188,7 @@ const assert = require('node:assert/strict');
       await page.locator('#btnShuffle').click();
       assert.equal(await page.evaluate(()=>J.ui.plan.cuts[0].area.w),1,'manual full-stage reset survives shuffle');
       await page.locator('#lineList .lyric-area-thumb').first().click();
-      await page.locator('#areaResetAuto').click();await page.locator('#areaApplyOne').click();
+      await page.locator('#areaResetAuto').click();assert.ok(await page.evaluate(()=>!!J.ui.areaEdit));await page.locator('#areaApplyOne').click();
       await page.waitForFunction(()=>J.ui.plan.cuts[0].areaMode==='auto');
       await page.locator('#lineList .lock').first().click();
       const locked=await page.evaluate(()=>J.ui.plan.cuts.filter(c=>c.line===0).map(c=>c.area));

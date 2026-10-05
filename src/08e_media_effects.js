@@ -53,26 +53,30 @@ for (const [key, ja, en] of [
 ]) add('transition_' + key, ja, en, 'transition', 'fade', 'still', 'fade', 'none', key);
 J.mediaEffectSettings = (p, layer = 'media') => {
   // Projects saved before the layer split have one shared mediaEffects object.
-  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, applyLyricBackground: true, decor: true, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
+  const settings = Object.assign({ motion: 1, treatment: 1, duration: 0.45, autoPlacement: true, dynamicBackground: true, applyLyricBackground: true, decor: true, decorEnabled: {}, sizeMin: 75, sizeMax: 125, enabled: {} }, p[layer]?.effects || p.mediaEffects || {});
   for (const [key, min, max, fallback] of [['motion', 0, 2, 1], ['treatment', 0, 1, 1], ['duration', .05, 1.5, .45]]) settings[key] = Number.isFinite(+settings[key]) ? J.clamp(+settings[key], min, max) : fallback;
   const sizeMin = Number.isFinite(+settings.sizeMin) ? J.clamp(+settings.sizeMin, 0, 500) : 75;
   const sizeMax = Number.isFinite(+settings.sizeMax) ? J.clamp(+settings.sizeMax, 0, 500) : 125;
   settings.sizeMin = Math.min(sizeMin, sizeMax); settings.sizeMax = Math.max(sizeMin, sizeMax);
   settings.enabled = settings.enabled && typeof settings.enabled === 'object' ? Object.assign({}, settings.enabled) : {};
   settings.decor = settings.decor !== false;
+  settings.dynamicBackground = settings.dynamicBackground !== false;
   settings.decorEnabled = settings.decorEnabled && typeof settings.decorEnabled === 'object' ? Object.assign({}, settings.decorEnabled) : {};
   return settings;
 };
 J.randomMediaEffectSettings = (project, layer, rnd = Math.random) => {
-  const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH);
-  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < .55]));
+  // Only the techniques this layer can use (the background-only masks stay out of the foreground).
+  const settings = J.mediaEffectSettings(project, layer), keys = Object.keys(J.MEDIA_TECH).filter(key => !J.mediaTechAllowed || J.mediaTechAllowed(key, layer));
+  // 統一感重視 switches on far fewer techniques.
+  const unified = project.themeBalance === 'unified';
+  settings.enabled = Object.fromEntries(keys.map(key => [key, rnd() < (unified ? .2 : .55)]));
   // Keep a usable pool even for an unlucky draw, while still producing a subset.
   const pick = () => keys[Math.floor(rnd() * keys.length)];
   if (keys.length && !keys.some(key => settings.enabled[key])) settings.enabled[pick()] = true;
   if (keys.length > 1 && keys.every(key => settings.enabled[key])) settings.enabled[pick()] = false;
   // Decorations: a random set of front ones (back ones sit under the source), at least one.
   const decor = (J.order ? J.order('decor') : []).filter(key => J.DECOR?.[key]), front = decor.filter(key => J.DECOR[key].layer === 'front');
-  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < .55]));
+  settings.decorEnabled = Object.fromEntries(decor.map(key => [key, J.DECOR[key].layer === 'front' && rnd() < (unified ? .25 : .55)]));
   if (front.length && !front.some(key => settings.decorEnabled[key])) settings.decorEnabled[front[Math.floor(rnd() * front.length)]] = true;
   return settings;
 };
@@ -86,17 +90,19 @@ J.mediaTechnique = (project, ov, rng, layer = 'media') => {
     if (legacy) return { technique: 'legacy' };
     key = ov.seed != null ? null : 'none';
   }
-  if (key !== 'none' && !J.MEDIA_TECH[key]) {
-    const pool = Object.keys(J.MEDIA_TECH).filter(k => !J.MEDIA_TECH[k].stage && settings.enabled[k] !== false);
+  // Unknown keys, and background-only techniques on the foreground, fall back to the automatic pick.
+  if (key !== 'none' && !(J.MEDIA_TECH[key] && (!J.mediaTechAllowed || J.mediaTechAllowed(key, layer)))) {
+    const pool = Object.keys(J.MEDIA_TECH).filter(k => !J.MEDIA_TECH[k].stage && settings.enabled[k] !== false && (!J.mediaTechAllowed || J.mediaTechAllowed(k, layer)));
     key = pool.length ? rng.pick(pool) : 'none';
   }
   // Keep the cut's source filename; technique labels are read from MEDIA_TECH.
-  const { name, ...recipe } = J.MEDIA_TECH[key] || {};
+  const { name, customDefinition, custom, ...recipe } = J.MEDIA_TECH[key] || {};
   return Object.assign({ technique: key, effectSettings: settings, layout: 'contain', enter: 'cut', hold: 'still', exit: 'cut', treat: 'none', trans: 'none' }, recipe);
 };
 J.mediaTechniqueName = cut => cut.technique === 'legacy' ? label('従来の設定', 'Legacy settings') : J.MEDIA_TECH[cut.technique]?.name || label('演出無し', 'No effects');
 
 J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
+  const customCut=cut;cut=J.resolveCustomMediaCut?.(cut)||cut;
   // Also synchronize old projects and manually selected legacy hold names.
   if (J.mediaBpmHoldAliases?.[cut.hold]) cut = {...cut, hold:J.mediaBpmHoldAliases[cut.hold]};
   const settings = cut.effectSettings || {}, amount = settings.motion ?? 1, treatment = settings.treatment ?? 1;
@@ -149,6 +155,7 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     x += v.x; y += v.y; rotation += v.rotation; scale *= v.scale; alpha *= v.alpha;
     sx *= v.sx ?? 1; sy *= v.sy ?? 1;
   }
+  if(J.customMediaMotion){const v=J.customMediaMotion(customCut,p,fade,out,w,h);x+=v.x;y+=v.y;rotation+=v.rotation;scale*=v.scale;sx*=v.sx;sy*=v.sy;alpha*=v.alpha;}
   ctx.translate(x * amount, y * amount); ctx.rotate(rotation * amount); if (skew) ctx.transform(1, 0, Math.tan(skew * amount), 1, 0, 0); ctx.scale(Math.max(0.001, 1 + (scale * sx - 1) * amount), Math.max(0.001, 1 + (scale * sy - 1) * amount)); ctx.globalAlpha *= alpha;
   const mask = (type, q) => {
     if (q >= 1) return;
@@ -176,11 +183,11 @@ J.paintMediaEffect = (ctx, source, fit, cut, p, fade, out) => {
     for (const n of [-2, -1, 1, 2]) { if (cut.treat === 'prism') ctx.filter = `hue-rotate(${n * 65}deg)`; draw(n * w * .035 * treatment); }
     ctx.restore();
   }
-  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front'); return; }
+  if (J.drawMediaVariation && J.drawMediaVariation(ctx, source, fit, cut, p, treatment)) { decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);return; }
   if (cut.treat === 'triptych' && treatment > 0) { for (const n of [-1, 0, 1]) draw(n * w / 3, 0, w / 3, h / 3); }
   else if (cut.treat === 'glitch' && treatment > 0) {
     for (let i = 0; i < 12; i++) { ctx.save(); ctx.beginPath(); ctx.rect(-w, -h / 2 + i * h / 12, w * 2, h / 12 + .5); ctx.clip(); draw(Math.sin(Math.floor(p * 32) * 19 + i * 31 + cut.seed) * w * .035 * treatment); ctx.restore(); }
   } else draw();
-  decor('front');
+  decor('front');J.drawCustomMedia?.(ctx,source,fit,customCut,p,fade,out);
 };
 })();

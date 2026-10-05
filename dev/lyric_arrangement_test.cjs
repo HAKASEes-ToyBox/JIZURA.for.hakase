@@ -23,11 +23,14 @@ for(let seed=1;seed<=20;seed++){
  const off=group(plan(lyrics.shared,seed,{lyricEffects:{autoPlacement:false}}).plan);check(off.every(c=>!c.arrangement),'1シーン untouched without auto placement '+seed);
  const cuts=group(plan(lyrics.shared,seed,{lyricEffects:{autoPlacement:true}}).plan);check(cuts.every(c=>c.arrangement&&c.areaMode==='auto'),'1シーン arranged '+seed);
  for(let i=0;i<cuts.length;i++)for(let j=i+1;j<cuts.length;j++){const a=cuts[i].area,b=cuts[j].area;check(ov(a,b)<=.33*Math.min(a.w*a.h,b.w*b.h)+1e-9,'shared overlap '+seed);}}
-// Manual areas and scenes with a foreground keep their previous handling.
+// Manual areas keep their previous handling; scenes with a foreground are composed around it, inside its zone.
 {const {plan:pl}=plan(lyrics.avoid,3,{overrides:{0:{area:{x:.1,y:.1,w:.5,h:.4,angle:0}}}});check(group(pl).every(c=>!c.arrangement),'manual areas skip arrangement');
  const p=J.defaultProject();p.lyrics=lyrics.avoid;p.lyricEffects={autoPlacement:true};const c=document.createElement('canvas');c.width=40;c.height=30;J.mediaAssets.set('fgA',{element:c,type:'image'});
  p.foreground={...p.foreground,items:[{id:'fgA',name:'a.png',type:'image',width:40,height:30}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'fgA',technique:null}}};
- check(group(J.plan(p)).every(c=>!c.arrangement),'foreground scenes use the composition zone');}
+ const planFg=J.plan(p),fgCut=J.planMedia(p,planFg,null,'foreground').cuts[0],fgBox=J.foregroundBounds(p,planFg,fgCut),zone=J.COMPOSITION_BY_ID[fgCut.composition].zone,gc=group(planFg);
+ check(gc.length>=2&&gc.every(c=>c.arrangement&&c.areaMode==='group'),'foreground scenes are composed too');
+ check(gc.every(c=>ov(c.area,fgBox)<1e-9),'and keep clear of the foreground');
+ for(let i=0;i<gc.length;i++)for(let j=i+1;j<gc.length;j++)check(ov(gc[i].area,gc[j].area)<1e-9,'and of each other');}
 // Deterministic; Randomize / re-layout (placement seed) change the arrangement.
 {const a=group(plan(lyrics.avoid,9).plan).map(c=>JSON.stringify(c.area)).join();check(a===group(plan(lyrics.avoid,9).plan).map(c=>JSON.stringify(c.area)).join(),'deterministic');
  const seen=new Set();for(let s=1;s<=12;s++){const {p}=plan(lyrics.avoid,9);p.lyricCutOptions={'0:0':{placementSeed:s}};seen.add(group(J.plan(p))[0].arrangement);}check(seen.size>=4,'placement seed varies arrangement '+seen.size);}

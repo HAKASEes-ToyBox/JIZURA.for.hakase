@@ -4,6 +4,32 @@ const root=path.join(__dirname,'..');
 (async()=>{const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const lang of ['','en/']){const page=await browser.newPage({viewport:{width:1500,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const url='http://localhost:8765/'+lang;await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(root,lang,'index.html'))}):r.abort());await page.goto(url);
 const result=await page.evaluate(()=>{
 const failures=[],check=(ok,m)=>{if(!ok)failures.push(m)};
+// Mask opacity controls concealment, including overlapping shapes and inversion.
+check(J.normalizeMask({}).opacity===100,'legacy mask opacity defaults to 100');
+check(J.normalizeMask({}).feather===0&&J.normalizeMask({feather:150}).feather===100,'feather defaults and bounds');
+const softAlpha=(feather,invert=false,opacity=100,size=200)=>{
+ const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.fillRect(0,0,size,size);
+ const mask=J.normalizeMask({enabled:true,feather,invert,opacity,shapes:[{type:'rect',cx:.5,cy:.5,w:.5,h:.5}]});
+ J.applyMaskToCanvas(c,mask,new DOMMatrix([size,0,0,size,0,0]),1,1);
+ return [.2,.3,.5].map(u=>x.getImageData(Math.round(u*size),size/2,1,1).data[3]);
+};
+const hard=softAlpha(0),soft=softAlpha(50),inverse=softAlpha(50,true),half=softAlpha(50,false,50),large=softAlpha(50,false,100,400);
+check(hard[0]===0&&hard[1]===255,'zero feather preserves hard edges');
+check(soft[0]>0&&soft[1]<255&&soft[2]>250,'feather creates an edge gradient');
+check(soft.every((v,i)=>Math.abs(v+inverse[i]-255)<=1),'feather inversion complements alpha');
+check(half.every((v,i)=>Math.abs(v-(127.5+soft[i]/2))<=2),'feather combines with opacity');
+check(soft.every((v,i)=>Math.abs(v-large[i])<=5),'feather scales with export resolution');
+check(J.normalizeMask({opacity:150}).opacity===100&&J.normalizeMask({opacity:-1}).opacity===0,'opacity bounds');
+for(const invert of [false,true])for(const opacity of [0,50,100]){
+ const c=document.createElement('canvas');c.width=100;c.height=100;const x=c.getContext('2d');
+ x.fillStyle='rgba(255,0,0,0.8)';x.fillRect(0,0,100,100);
+ const m=J.normalizeMask({enabled:true,invert,opacity,shapes:[{type:'rect',cx:.4,cy:.5,w:.4,h:.6},{type:'rect',cx:.6,cy:.5,w:.4,h:.6}]});
+ J.applyMaskToCanvas(c,m,new DOMMatrix([100,0,0,100,0,0]),1,1);
+ for(const [px,inside] of [[5,false],[30,true],[50,true]]){
+  const expected=204*((invert?inside:!inside)?1-opacity/100:1);
+  check(Math.abs(x.getImageData(px,50,1,1).data[3]-expected)<=1,`opacity ${opacity}, invert ${invert}, pixel ${px}`);
+ }
+}
 for(const [id,color] of [['bl','#1030ff'],['gr','#10ff30']]){const c=document.createElement('canvas');c.width=160;c.height=90;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,160,90);J.mediaAssets.set(id,{element:c,type:'image'});}
 const out=document.createElement('canvas');out.width=320;out.height=180;const ctx=out.getContext('2d'),renderer=new J.Renderer();
 const project=(opts={})=>{const p=J.defaultProject();p.lyrics=opts.lyrics||'';p.title='';p.durationOverride=8;p.lyricEffects={...p.lyricEffects,autoPlacement:false};p.overrides={0:{single:true,layout:'center'}};// one full-stage, centred cut
@@ -87,8 +113,8 @@ await page.evaluate(()=>{const p=J.ui.project;const c=document.createElement('ca
  p.media={...p.media,items:[{id:'mk',name:'mk.png',type:'image',width:160,height:90}],manualCuts:true,cutCount:1,timing:{lineTimes:{0:0}},cutOverrides:{0:{itemId:'mk',technique:'none'}}};J.uiApi.syncUI();J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
 const modal=page.locator('#cutDetailsDialog'),section=modal.locator('[data-detail-section="mask"]');
-assert.equal((await section.locator('summary').textContent()),lang?'Mask':'マスク');assert.equal(await section.evaluate(el=>el.open),false);
-await section.locator('summary').click();
+assert.equal(await section.locator(':scope > summary').count(),0);
+await modal.locator('[data-detail-tab="mask"]').click();
 assert.equal(await section.locator('[data-mask-field="target"] option').allTextContents().then(x=>x.join('/')),lang?'Source/Cut':'素材/カット');
 await section.locator('[data-mask-field="enabled"]').check();
 // The first circle is round on screen: width × frame aspect = height.
@@ -109,45 +135,55 @@ const after=+await section.locator('[data-mask-shape="cx"]').inputValue();assert
 // Lock aspect (default on): width edits scale height; off: independent.
 assert.equal(await section.locator('[data-mask-shape="lockAspect"]').isChecked(),true);
 let ratio=+await section.locator('[data-mask-shape="h"]').inputValue()/ +await section.locator('[data-mask-shape="w"]').inputValue();
-await section.locator('[data-mask-shape="w"]').fill('0.2');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
-assert.ok(Math.abs(+await section.locator('[data-mask-shape="h"]').inputValue()-.2*ratio)<.002,'locked width edit');
+await section.locator('[data-mask-shape="w"]').fill('20');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+assert.ok(Math.abs(+await section.locator('[data-mask-shape="h"]').inputValue()-20*ratio)<.002,'locked width edit');
 // Resizing by the corner handle keeps the ratio too.
-const shape=async()=>page.evaluate(()=>{const g=k=>+document.querySelector(`[data-mask-shape="${k}"]`).value;return {cx:g('cx'),cy:g('cy'),w:g('w'),h:g('h'),angle:g('angle')};});
+const shape=async()=>page.evaluate(()=>{const g=k=>+document.querySelector(`[data-mask-shape="${k}"]`).value;return {cx:g('cx'),cy:g('cy'),w:g('w')/100,h:g('h')/100,angle:g('angle')};});
 let s=await shape();const cb=await section.locator('canvas').boundingBox(),toPage=(u,v)=>[cb.x+u*cb.width,cb.y+v*cb.height];
 const rad=s.angle*Math.PI/180,hx=s.cx+(s.w/2*Math.cos(rad)*cb.width-s.h/2*Math.sin(rad)*cb.height)/cb.width,hy=s.cy+(s.w/2*Math.sin(rad)*cb.width+s.h/2*Math.cos(rad)*cb.height)/cb.height;
 await page.mouse.move(...toPage(hx,hy));await page.mouse.down();await page.mouse.move(...toPage(hx+.08,hy+.02),{steps:4});await page.mouse.up();
 let t=await shape();assert.ok(t.w>s.w*1.2&&Math.abs(t.h/t.w-s.h/s.w)<.01,'locked handle resize '+JSON.stringify([s,t]));
-// Dragging around the shape rotates it (rotation cursor on hover); Shift snaps to 15°.
-s=t;const ring=[s.cx+(s.w/2*cb.width+14)/cb.width,s.cy];await page.mouse.move(...toPage(...ring));
-assert.equal(await section.locator('canvas').evaluate(c=>c.style.cursor),'var(--rotate-cursor)');
-await page.mouse.down();await page.mouse.move(...toPage(s.cx,s.cy+(s.w/2*cb.width+14)/cb.height),{steps:8});await page.mouse.up();
+// Dedicated handle rotates (rotation cursor on hover).
+s=t;const grip=section.locator('.area-rotate-handle.e'),gb=await grip.boundingBox();
+await page.mouse.move(gb.x+gb.width/2,gb.y+gb.height/2);assert.match(await grip.evaluate(c=>getComputedStyle(c).cursor),/data:image/);
+const center=toPage(s.cx,s.cy),dx=gb.x+gb.width/2-center[0],dy=gb.y+gb.height/2-center[1];
+await page.mouse.down();await page.mouse.move(center[0]-dy,center[1]+dx,{steps:8});await page.mouse.up();
 t=await shape();assert.ok(Math.abs(t.angle-s.angle-90)<3,'rotated '+s.angle+' -> '+t.angle);assert.deepEqual([t.cx,t.cy,t.w,t.h],[s.cx,s.cy,s.w,s.h]);
 await section.locator('[data-mask-shape="lockAspect"]').uncheck();const hBefore=+await section.locator('[data-mask-shape="h"]').inputValue();
-await section.locator('[data-mask-shape="w"]').fill('0.3');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
+await section.locator('[data-mask-shape="w"]').fill('30');await section.locator('[data-mask-shape="w"]').dispatchEvent('change');
 assert.equal(+await section.locator('[data-mask-shape="h"]').inputValue(),hBefore);
 // Motion: all None at first; pick a technique, an entrance (a reveal shape) and an exit.
 assert.equal(await section.locator('.cut-mask-motion h4').textContent(),lang?'Mask motion':'マスクのモーション');
 assert.deepEqual(await section.locator('select[data-mask-motion]').evaluateAll(els=>els.map(e=>e.value)),['none','none','none']);
 await section.locator('[data-mask-motion="technique"]').selectOption('rollAcross');await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await section.locator('[data-mask-motion="departure"]').selectOption('exit_fade');
 await section.locator('[data-mask-motion="duration"]').fill('0.8');await section.locator('[data-mask-motion="duration"]').dispatchEvent('change');
+assert.equal(await section.locator('[data-mask-field="opacity"]').inputValue(),'100');
+await section.locator('[data-mask-field="opacity"]').fill('50');
+assert.equal(await section.locator('[data-mask-field="feather"]').inputValue(),'0');
+await section.locator('[data-mask-field="feather"]').evaluate(el=>{el.value='40';el.dispatchEvent(new Event('input',{bubbles:true}));});
 await section.locator('[data-mask-field="invert"]').check();await section.locator('[data-mask-field="target"]').selectOption('cut');
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Cut:':'カット：'));
+assert.ok(await section.locator('.cut-mask-target-row [data-mask-field=target]').count());assert.ok(await section.locator('.cut-mask-target-row .cut-mask-hint').count());assert.ok(await section.locator('.cut-mask-aspect [data-mask-shape=lockAspect]').count());assert.equal(await section.locator('.cut-mask-stage').evaluate(el=>el.previousElementSibling.className),'cut-mask-tools');assert.equal(await section.locator('.cut-mask-tools').evaluate(el=>el.previousElementSibling.className),'cut-mask-aspect');assert.equal(await section.locator('.cut-mask-controls').evaluate(el=>el.children[1].className),'cut-mask-target-row');
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();
 const saved=await page.evaluate(()=>{const m=J.ui.project.media.cutOverrides[0].details.mask;return {enabled:m.enabled,target:m.target,invert:m.invert,types:m.shapes.map(s=>s.type),plan:!!J.ui.plan.media.cuts[0].mask};});
 assert.deepEqual(saved,{enabled:true,target:'cut',invert:true,types:['ellipse','rect'],plan:true});
+assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.opacity),50);
+assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].mask.opacity),50);
+assert.equal(await page.evaluate(()=>J.ui.plan.media.cuts[0].mask.feather),40);
+assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.feather),40);
 assert.equal(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.shapes[1].lockAspect),false);
 assert.deepEqual(await page.evaluate(()=>J.ui.project.media.cutOverrides[0].details.mask.motion),{technique:'rollAcross',entrance:'iris',departure:'exit_fade',amount:1,duration:.8});
 // Setting a reveal entrance and back to None, with the default circle's un-rounded size, still applies and shows the source.
 await page.evaluate(()=>{delete J.ui.project.media.cutOverrides[0].details.mask;J.uiApi.replan();});
 await timelineAction(page,'[data-layer="media"]','details');
-await section.locator('summary').click();await section.locator('[data-mask-field="enabled"]').check();
+await modal.locator('[data-detail-tab="mask"]').click();await section.locator('[data-mask-field="enabled"]').check();
 await section.locator('[data-mask-motion="entrance"]').selectOption('iris');await page.waitForTimeout(400);await section.locator('[data-mask-motion="entrance"]').selectOption('none');
 assert.equal(await modal.locator('form').evaluate(f=>f.checkValidity()),true);
 await modal.getByRole('button',{name:lang?'Apply':'適用',exact:true}).click();await modal.waitFor({state:'detached'});
 const shown=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=320;c.height=180;const x=c.getContext('2d');new J.Renderer().frame(x,J.ui.plan,3,{scale:320/J.ui.plan.W,noHud:true,noLyrics:true});const d=x.getImageData(0,0,320,180).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i]>180&&d[i+1]<90&&d[i+2]<90)n++;return {entrance:J.ui.project.media.cutOverrides[0].details.mask.motion.entrance,red:n/(d.length/4)};});
 assert.equal(shown.entrance,'none');assert.ok(shown.red>.05,'source visible after reveal reset '+JSON.stringify(shown));
 // Lyric cut details show the mask section with the display-area hint.
-await page.locator('#lineList .cut-details-open').first().click();await section.locator('summary').click();
+await page.locator('#lineList .cut-details-open').first().click();await modal.locator('[data-detail-tab="mask"]').click();
 assert.ok((await section.locator('.cut-mask-hint').textContent()).startsWith(lang?'Source: masks the lyric':'素材：表示範囲'));
 await modal.getByRole('button',{name:lang?'Cancel':'キャンセル',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(lang||'ja','cut mask passed');await page.close();}}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

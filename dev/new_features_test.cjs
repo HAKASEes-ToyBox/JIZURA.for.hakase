@@ -58,11 +58,7 @@ const assert = require('node:assert/strict');
       }), [true, true, true, true, true]);
       await page.locator('#tapStop').click();
       await page.locator('.foreground-placement-open').first().click();
-      await page.evaluate(() => {
-        const el = document.querySelector('#areaEditOverlay'), rect = document.querySelector('#areaEditRect').getBoundingClientRect();
-        el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rect.x + rect.width / 2, clientY: rect.y + 3 }));
-      });
-      const rotationCursor = await page.locator('#areaEditOverlay').evaluate(el => ({ inline: el.style.cursor, computed: getComputedStyle(el).cursor, rect: document.querySelector('#areaEditRect').style.cursor }));
+      const rotationCursor = await page.locator('.area-rotate-handle.n').evaluate(el => ({ computed: getComputedStyle(el).cursor }));
       assert.match(rotationCursor.computed, /data:image\/svg\+xml/, JSON.stringify(rotationCursor));
       await page.locator('#areaCancel').click();
       await page.locator('#sourceForeground').click();

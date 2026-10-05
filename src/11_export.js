@@ -32,7 +32,7 @@ J.saveFile = async (filename, data) => {
 };
 
 /* ---------- codec negotiation ---------- */
-J.pickVideoCodec = async (w, h, fps, bitrate) => {
+J.pickVideoCodec = async (w, h, fps, bitrate, {bitrateMode='variable'}={}) => {
   if (typeof VideoEncoder === 'undefined') return null;
   const cands = [
     { codec: 'avc1.640033', mux: 'avc', label: 'H.264 High' },
@@ -42,9 +42,12 @@ J.pickVideoCodec = async (w, h, fps, bitrate) => {
     { codec: 'av01.0.12M.08', mux: 'av1', label: 'AV1' },
   ];
   for (const c of cands) {
-    const cfg = { codec: c.codec, width: w, height: h, bitrate, framerate: fps };
+    // Keep H.264's 0–51 QP scale; never substitute another codec or bitrate mode.
+    if(bitrateMode==='quantizer'&&c.mux!=='avc')continue;
+    const cfg = { codec: c.codec, width: w, height: h, framerate: fps, bitrateMode, latencyMode:'quality' };
+    if(bitrateMode!=='quantizer')cfg.bitrate=bitrate;
     if (c.mux === 'avc') cfg.avc = { format: 'avc' };
-    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) return Object.assign({}, c, { cfg }); } catch (e) {}
+    try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported && (bitrateMode!=='quantizer'||s.config.bitrateMode==='quantizer')) return Object.assign({}, c, { cfg }); } catch (e) {}
   }
   return null;
 };
@@ -56,59 +59,116 @@ J.pickAudioCodec = async (sr, chn) => {
   return null;
 };
 
-async function resample(buffer, sr, duration) {
+async function resample(buffer, sr, duration, start = 0) {
   const chn = Math.min(2, buffer.numberOfChannels);
   const len = Math.ceil(duration * sr);
   const oc = new OfflineAudioContext(chn, len, sr);
-  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); src.start(0);
+  const src = oc.createBufferSource(); src.buffer = buffer; src.connect(oc.destination); if(start<buffer.duration)src.start(0,start);
   return oc.startRendering();
 }
 
 /* ---------- MP4 ---------- */
-J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signal }) => {
+// One source for the UI labels, codec probe and actual video encoder (bits/s).
+J.videoBitrate = (project, quality=project.quality||'high', fps=project.fps) => {
+  const [w,h]=J.outputSize(project),px=w*h*fps;
+  const bitrate=quality==='custom' ? (project.exportBitrate ?? px*.28)
+    : px*(quality==='max' ? .42 : quality==='high' ? .28 : .16);
+  if(!Number.isFinite(bitrate)||bitrate<1||bitrate>Number.MAX_SAFE_INTEGER)throw new Error(J.mediaLabel('ビットレートは正の数で指定してください。','Enter a positive bitrate.'));
+  return Math.round(bitrate);
+};
+J.videoQuantizer = project => {
+  const qp=project.exportQP ?? 12;
+  if(!Number.isInteger(qp)||qp<0||qp>51)throw new Error(J.mediaLabel('QPは0～51の整数で指定してください。','Enter an integer QP from 0 to 51.'));
+  return qp;
+};
+// The muxer patches earlier headers. Keep positional writes and avoid a single
+// allocation proportional to the entire movie (especially large QP0 exports).
+J.createMP4Output = fileStream => {
+  let parts=[],size=0,queue=Promise.resolve(),error=null;
+  const write=(data,position)=>{
+    const append=position===size;
+    size=Math.max(size,position+data.byteLength);
+    if(fileStream){queue=queue.then(()=>fileStream.write({type:'write',position,data})).catch(e=>{error ||= e;});return;}
+    if(append){parts.push({start:position,end:size,blob:new Blob([data])});return;}
+    const end=position+data.byteLength,next=[];
+    for(const part of parts){
+      if(part.end<=position||part.start>=end){next.push(part);continue;}
+      if(part.start<position)next.push({start:part.start,end:position,blob:part.blob.slice(0,position-part.start)});
+      if(part.end>end)next.push({start:end,end:part.end,blob:part.blob.slice(end-part.start)});
+    }
+    next.push({start:position,end,blob:new Blob([data])});parts=next.sort((a,b)=>a.start-b.start);
+  };
+  const drain=async()=>{await queue;if(error)throw error;};
+  return {
+    target:new Mp4Muxer.StreamTarget({onData:write,chunked:true,chunkSize:1024*1024}),
+    drain,
+    async finish(){
+      await drain();
+      if(fileStream){await fileStream.close();return {saved:true,size,blob:null};}
+      let at=0;for(const part of parts){if(part.start!==at)throw Error('Incomplete MP4 output');at=part.end;}
+      const blob=new Blob(parts.map(part=>part.blob),{type:'video/mp4'});parts=[];
+      return {saved:false,size:blob.size,blob};
+    },
+    async abort(){parts=[];await queue;if(fileStream)try{await fileStream.abort();}catch{}}
+  };
+};
+J.exportMP4 = async ({ plan, project, audio, quality = project.quality||'high', onProgress, signal, fileStream, short }) => {
   if (J.pauseAllVideos) J.pauseAllVideos();
+  if(short)project=J.shortExportProject(project,short);
+  const range=short?J.shortExportRange(plan,short):{start:0,end:plan.duration},duration=range.end-range.start;
   J.mediaTransitionFrame = null;
   J.foregroundTransitionFrame = null;
   const [w, h] = J.outputSize(project);
   const fps = plan.fps;
-  const px = w * h * fps;
-  const bitrate = Math.round(px * (quality === 'max' ? 0.42 : quality === 'high' ? 0.28 : 0.16));
-  const vc = await J.pickVideoCodec(w, h, fps, bitrate);
+  const qp=quality==='qp'?J.videoQuantizer(project):null;
+  const bitrate = qp==null ? J.videoBitrate(project,quality,fps) : undefined;
+  const vc = await J.pickVideoCodec(w, h, fps, bitrate,{bitrateMode:qp==null?'variable':'quantizer'});
+  if(!vc&&qp!=null)throw new Error(J.mediaLabel('このブラウザは画質優先（QP指定）に対応していません。別の画質設定または連番PNGを使用してください。','This browser does not support QP encoding. Choose another quality setting or a PNG sequence.'));
   if (!vc) throw new Error('このブラウザは動画エンコード（WebCodecs）に対応していません。Chrome か Edge の最新版で開いてください。');
   let ac = null;
   if (audio && audio.buffer && project.includeAudio !== false) ac = await J.pickAudioCodec(48000, Math.min(2, audio.buffer.numberOfChannels));
-  const target = new Mp4Muxer.ArrayBufferTarget();
-  const muxOpts = { target, video: { codec: vc.mux, width: w, height: h, frameRate: fps }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
+  const output=J.createMP4Output(fileStream);
+  let venc,aenc,completed=false;
+  try {
+  const muxOpts = { target:output.target, video: { codec: vc.mux, width: w, height: h, frameRate: fps }, fastStart: false, firstTimestampBehavior: 'offset' };
   if (ac) muxOpts.audio = { codec: ac.mux, numberOfChannels: Math.min(2, audio.buffer.numberOfChannels), sampleRate: ac.sr };
   const muxer = new Mp4Muxer.Muxer(muxOpts);
   let err = null;
-  const venc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { err = e; } });
+  venc = new VideoEncoder({ output: (chunk, meta) => {try{muxer.addVideoChunk(chunk,meta);}catch(e){err=e;}}, error: e => { err = e; } });
   venc.configure(Object.assign({}, vc.cfg, { latencyMode: 'quality' }));
   const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d', { alpha: false });
   const R = new J.Renderer();
-  const total = Math.max(1, Math.round(plan.duration * fps));
-  const scale = w / plan.W;
+  const total = Math.max(1, Math.round(duration * fps));
+  const source=short?document.createElement('canvas'):canvas;
+  if(short){const fit=Math.min(w/plan.W,h/plan.H);source.width=Math.max(1,Math.round(plan.W*fit));source.height=Math.max(1,Math.round(plan.H*fit));}
+  const sourceCtx=short?source.getContext('2d',{alpha:false}):ctx,portrait=short?new J.ShortFrameRenderer():null;
+  const scale = source.width / plan.W;
   const prevRes = J.glyphs.maxRes; J.glyphs.maxRes = h >= 1000 ? 768 : 512;
   try {
   for (let i = 0; i < total; i++) {
     if (signal && signal.aborted) { try { venc.close(); } catch (e) {} throw new Error('キャンセルしました'); }
     if (err) throw err;
-    await J.prepareMediaFrame(plan, i / fps, signal);
-    R.frame(ctx, plan, i / fps, { scale });
+    const time=range.start+i/fps;
+    await J.prepareMediaFrame(plan, time, signal);
+    R.frame(sourceCtx, plan, time, { scale });
+    if(portrait)portrait.frame(ctx,source,short);
     const vf = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
-    venc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
-    vf.close();
+    try{venc.encode(vf, { keyFrame: i % (fps * 2) === 0,...(qp==null?{}:{avc:{quantizer:qp}}) });}
+    finally{vf.close();}
     while (venc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2));
+    await output.drain();
     if (i % 3 === 0) { onProgress && onProgress(i / total, `フレーム ${i + 1}/${total}`); await new Promise(r => setTimeout(r, 0)); }
   }
   } finally { J.glyphs.maxRes = prevRes; }
   await venc.flush(); venc.close();
+  if(err)throw err;
+  await output.drain();
   if (ac) {
     onProgress && onProgress(0.99, '音声をエンコード中');
-    const rs = await resample(audio.buffer, ac.sr, plan.duration);
+    const rs = await resample(audio.buffer, ac.sr, duration, range.start);
     const chn = rs.numberOfChannels;
-    const aenc = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: e => { err = e; } });
+    aenc = new AudioEncoder({ output: (chunk, meta) => {try{muxer.addAudioChunk(chunk,meta);}catch(e){err=e;}}, error: e => { err = e; } });
     aenc.configure({ codec: ac.codec, sampleRate: ac.sr, numberOfChannels: chn, bitrate: 192000 });
     const frames = rs.length, block = 4800;
     for (let off = 0; off < frames; off += block) {
@@ -118,13 +178,23 @@ J.exportMP4 = async ({ plan, project, audio, quality = 'high', onProgress, signa
       const ad = new AudioData({ format: 'f32-planar', sampleRate: ac.sr, numberOfFrames: n, numberOfChannels: chn, timestamp: Math.round(off * 1e6 / ac.sr), data });
       aenc.encode(ad); ad.close();
       if (aenc.encodeQueueSize > 16) await new Promise(r => setTimeout(r, 1));
+      await output.drain();
+      if(signal?.aborted)throw new Error('キャンセルしました');
+      if(err)throw err;
     }
     await aenc.flush(); aenc.close();
     if (err) throw err;
   }
   muxer.finalize();
+  if(signal?.aborted)throw new Error('キャンセルしました');
+  const saved=await output.finish();completed=true;
   onProgress && onProgress(1, '完了');
-  return { blob: new Blob([target.buffer], { type: 'video/mp4' }), codec: vc.label, audio: ac ? ac.mux : null, width: w, height: h };
+  return { ...saved, codec: vc.label, audio: ac ? ac.mux : null, width: w, height: h };
+  } finally {
+    if(venc&&venc.state!=='closed')try{venc.close();}catch{}
+    if(aenc&&aenc.state!=='closed')try{aenc.close();}catch{}
+    if(!completed)await output.abort();
+  }
 };
 
 /* ---------- PNG sequence as ZIP (store, no compression) ---------- */

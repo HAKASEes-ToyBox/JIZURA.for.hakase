@@ -1,6 +1,9 @@
 """English copy for the browser edition. The Japanese source stays authoritative."""
 
 BODY = {
+    'href="THIRD_PARTY_NOTICES.md"': 'href="../THIRD_PARTY_NOTICES.md"',
+    '人物切り抜きの外部モデル：RVM（GPL-3.0）。': 'External person-cutout model: RVM (GPL-3.0). ',
+    'モデル・ライブラリの利用条件': 'Model and library licenses',
     '設定のみ書き出し': 'Export settings only',
     '設定のみ読み込み': 'Import settings only',
     '歌詞・曲': 'Lyrics & music',
@@ -12,7 +15,7 @@ BODY = {
     'このfork版は、ワンストップでのリリックビデオ作成をコンセプトに<br>オリジナル版JIZURAに機能を追加したものです。<br>編集・書き出しはブラウザ内で処理します。': 'This fork adds features to the original JIZURA<br>based on the concept of one-stop lyric video creation.<br>Editing and export run in your browser.',
 
     'テーマ設定': 'Theme settings', '選択を解除': 'Clear selection',
-    '複数選択できます。おまかせでは、選んだテーマのいずれかに合う設定候補から構成します。未選択の場合は制限しません。': 'Select multiple themes. Randomize builds an arrangement from candidates matching one of your selected themes. No selection means unrestricted.',
+    '統一感重視': 'Unified look', 'にぎやかさ重視': 'Lively look', '統一感・にぎやかさ': 'Unified or lively',
     'このfork版は、テーマに合わせた構成選定と、背景・前景の画像・動画編集機能を追加しています。編集・書き出しはブラウザ内で処理します。': 'This fork adds theme-guided arrangements and background/foreground image and video editing. Editing and export run in your browser.',
     '<button id="btnApplyThemes" type="button">適用</button>': '<button id="btnApplyThemes" type="button">Apply</button>',
 
@@ -62,6 +65,7 @@ BODY = {
     'タップで同期': 'Tap to sync', '開始(秒)': 'Start (s)', '行の長さ': 'Line duration',
     '拍にスナップ': 'Snap to beat', '手動タイミングを消す': 'Clear manual timing',
     '曲に合わせて、各行が始まる瞬間に': 'Press', 'かボタンを押してください。': 'or the button as each line starts.',
+    '挿入したいタイミングでボタンをクリック（またはスペースキー）': 'Click the button (or press Space) at the moment you want to insert.',
     '次:': 'Next:', '終了する': 'Finish', '行とカット': 'Lines and cuts',
     '再生位置': 'Playback position', 'タイムライン（クリックで移動）': 'Timeline (click to seek)',
     '前の案に戻る': 'Previous variation', '次の案へ進む': 'Next variation',
@@ -93,6 +97,12 @@ BODY = {
     'スタイル次第': 'Auto (by style)', '常に表示': 'Always show', '表示しない': 'Hide',
     '同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。': 'The same seed produces the same arrangement. Reroll or lock individual lines in the list on the left.',
     '手法を名前で絞り込み': 'Filter techniques by name',
+    'あいまい検索': 'Fuzzy search',
+    '任意ビットレート': 'Custom bitrate',
+    'ビットレート（Mbps）': 'Bitrate (Mbps)',
+    '画質優先（QP指定）': 'Quality priority (QP)',
+    '圧縮の強さ（QP）': 'Compression (QP)',
+    '値が小さいほど高画質、大きいほど軽量になります。低QPはPCからの利用を推奨。': 'Lower values mean higher quality; higher values mean smaller files. A PC is recommended for low QP.',
     'グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。': 'Green screen and black background render white text and effects over a solid color, without background patterns, paper texture, particles or vignette. The preview shows the export. Use a chroma key for green or Screen blending / a luma key for black to composite over footage.',
     '曲を動画に含める': 'Include audio in video', '連番PNG（ZIP）': 'PNG sequence (ZIP)',
     '透過PNG（ZIP・背景なし）': 'Transparent PNG (ZIP)',
@@ -360,6 +370,13 @@ def replace_copy(source, glossary):
 # Fork UI text is translated before the original glossary so short common
 # words such as 歌詞 and 追加 cannot split a longer fork label in half.
 FORK_BODY = {
+    'ここから': 'Start here', 'ここまで': 'End here',
+    'ショート用出力': 'Export for Shorts', 'ショート用MP4を書き出す': 'Export Shorts MP4',
+    '元の映像を中央に表示し、上下の余白を補間して9:16の縦型動画にします。': 'Keep the original composition centered and fill the space above and below in a 9:16 portrait video.',
+    '開始（秒）': 'Start (seconds)', '終了（秒）': 'End (seconds)', '縦型の動画サイズ': 'Portrait video size', '上下の補間': 'Fill above and below',
+    '元動画を拡大した背景': 'Enlarged original video', '元動画を上下に並べる': 'Repeat the original above and below',
+    '拡散（映像の色を余白へ広げる）': 'Ambient diffusion (spread edge colors)', 'ぼかし度合い': 'Blur amount',
+    'ショート用出力のプレビュー': 'Shorts export preview', 'ショート用プレビューの再生位置': 'Shorts preview position', 'プレビューを再生': 'Play preview',
     "歌詞を挿入": "Insert lyrics",
     "前景を挿入": "Insert foreground",
     "背景を挿入": "Insert background",
@@ -460,7 +477,10 @@ FORK_BODY = {
     'ドラッグして歌詞の表示範囲を指定': 'Drag to select the lyrics display area',
     'アスペクト比を固定': 'Lock aspect ratio',
     '幅（画面比％）': 'Width (% of canvas)', '高さ（画面比％）': 'Height (% of canvas)',
+    '全域表示': 'Full area', '角度リセット': 'Reset angle', '画面全域': 'Full screen', '配置決定': 'Set placement', '以降すべて同じ配置': 'Use this placement from here onward',
     '角度（°）': 'Rotation (°)', '全域へリセット': 'Reset to full area',
+    '角度をリセット': 'Reset rotation', '編集モード': 'Edit mode',
+    'スクショ': 'Screenshot', 'プレビューをPNGで保存': 'Save preview as PNG',
     'この行だけに適用': 'Apply to this line', 'これ以降全てに適用': 'Apply from here onward',
     '前景タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Foreground timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',
     '歌詞タイムライン（境界をドラッグして開始時刻を変更、ほかは再生位置を移動）': 'Lyrics timeline (drag a cut boundary to change its start time; drag elsewhere to seek)',

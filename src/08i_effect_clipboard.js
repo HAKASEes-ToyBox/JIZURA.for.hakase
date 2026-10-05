@@ -2,8 +2,8 @@
 (() => {
 'use strict';
 const clone=v=>JSON.parse(JSON.stringify(v));
-const lyricKeys=['drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
-const mediaKeys=['drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
+const lyricKeys=['enterP','holdP','exitP','drawing','layout','enter','hold','exit','inDur','outDur','stagger','decor','scheme','treat','treatP','bg','bgP','cam','camP','trans','transP','transDur','motionScale','contentScale','fonts','palette','fontParams','params','seed','effectEvents','effectStyle','effectFx'];
+const mediaKeys=['techniqueP','entranceP','departureP','drawing','layout','enter','hold','exit','treat','trans','transP','transDur','effectSettings','bpm','beatOffset','independentPhases','decor'];
 const pick=(value,keys)=>Object.fromEntries(keys.filter(k=>value[k]!==undefined).map(k=>[k,clone(value[k])]));
 J.cutFontParams = value => {
   const result = [];
@@ -27,15 +27,19 @@ J.cutEffectsPayload=(cut,layer,plan)=>{
     for (const key of ['chunks','msgs','units']) if (Array.isArray(details.params?.[key])) delete details.params[key];
   }
   if(kind==='media' && details.effectSettings)details.effectSettings=pick(details.effectSettings,['motion','treatment','duration']);
-  return {format:'jizura-cut-effects',version:1,kind,details,native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
+  return {format:'jizura-cut-effects',version:1,kind,details,...(J.customEffectDependencies?.(cut).length?{components:J.customEffectDependencies(cut)}:{}),native:pick(cut,kind==='lyrics'?['blend','opacity','frontmost']:['technique','entrance','departure','chromaKey','chromaColor','blend','opacity'])};
 };
 J.readCutEffects=text=>{
-  if(typeof text!=='string'||text.length>262144)throw Error('invalid');
+  if(typeof text!=='string'||text.length>2359296)throw Error('invalid');
   const data=JSON.parse(text,(key,value)=>{
     if(['__proto__','constructor','prototype'].includes(key))throw Error('invalid');
     return value;
   });
   if(data?.format!=='jizura-cut-effects'||data.version!==1||!['lyrics','media'].includes(data.kind)||!data.details||typeof data.details!=='object'||Array.isArray(data.details))throw Error('invalid');
+  if(data.components){
+    const components=J.validateCustomEffects(data.components),plain={...data};delete plain.components;
+    return J.withCustomEffects(components,()=>({...J.readCutEffects(JSON.stringify(plain)),components}));
+  }
   const payload=J.cutEffectsPayload({...data.details,...data.native},data.kind);
   const d=payload.details,n=payload.native;
   if(d.drawing) d.drawing=J.validateDrawing(d.drawing);
@@ -65,29 +69,33 @@ J.clearPastedLyricEffects = (project, line = null) => {
     const details=options.details;
     // Recognize projects saved before the explicit pasted-effects marker existed.
     if (!options.pastedEffects && !details?.effectStyle && !details?.effectEvents && !(details?.fonts && details?.palette)) continue;
-    options.details=pick(details || {},['text','area','mask']);
+    options.details=pick(details || {},['text','note','area','mask']);
     delete options.pastedEffects;
     if (!Object.keys(options.details).length) delete options.details;
   }
 };
 J.pasteCutEffects=(project,plan,layer,cut,payload)=>{
   if(payload.kind!==(layer==='lyrics'?'lyrics':'media'))throw Error('incompatible');
+  if(payload.components)J.importCustomEffects(project,payload.components);
   if(layer==='lyrics'){
     const key=`${cut.line}:${cut.part}`,old=project.lyricCutOptions[key]||{};
     // Keep target text and display area while retaining the exact visual parameters.
-    const preserved=pick(old.details||{},['text','area','mask']);
+    const preserved=pick(old.details||{},['text','note','area','mask']);
     project.lyricCutOptions[key]={...old,...clone(payload.native),pastedEffects:true,details:{...clone(payload.details),...preserved}};
   }else{
     // Masks are shape settings like the placement: the target keeps its own.
     const old={...project[layer].overrides?.[cut.itemId],...project[layer].cutOverrides[cut.index]},details={...clone(payload.details),...pick(old.details||{},['mask'])};
+    // The placement below becomes manual: keep the target's automatic layout window with it.
+    let layoutMask;
+    if(details.mask===undefined&&cut.bgLayout&&cut.mask&&JSON.stringify(cut.mask)===cut.bgLayout.sig){details.mask=clone(cut.mask);layoutMask=cut.bgLayout.sig;}
     details.effectSettings={...cut.effectSettings,...details.effectSettings};
     let placement=cut.placement;
     if(!placement){const dim=J.mediaSourceDimensions(plan,cut,cut.start)||{width:plan.W,height:plan.H};
       const scale=cut.layout==='cover'?Math.max(plan.W/dim.width,plan.H/dim.height):Math.min(plan.W/dim.width,plan.H/dim.height);
       placement={cx:.5,cy:.5,w:dim.width*scale/plan.W,h:dim.height*scale/plan.H,angle:0,lockAspect:true};
     }
-    const patch={...old,...clone(payload.native),placement:clone(placement),details};
-    if(old.lock)Object.assign(patch,{lockedTechnique:patch.technique,lockedEntrance:patch.entrance,lockedDeparture:patch.departure,lockedPlacement:clone(placement),lockedPlacementMode:'manual'});
+    const patch={...old,...clone(payload.native),placement:clone(placement),details,...(layoutMask?{layoutMask}:{})};
+    if(old.lock)Object.assign(patch,{lockedTechnique:patch.technique,lockedEntrance:patch.entrance,lockedDeparture:patch.departure,lockedPlacement:clone(placement),lockedPlacementMode:'manual',lockedLayout:undefined});
     project[layer].cutOverrides[cut.index]=patch;
   }
 };

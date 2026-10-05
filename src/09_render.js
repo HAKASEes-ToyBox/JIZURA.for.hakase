@@ -71,6 +71,7 @@ class Renderer {
       for (const cut of J.mediaCutsAt(plan, t, 'foreground').filter(c => J.mediaAssets.has(c.itemId))) {
         lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalAlpha = 1; lx.globalCompositeOperation = 'source-over'; lx.filter = 'none'; lx.clearRect(0, 0, cw, ch);
         J.drawForegroundLayer(lx, plan, t, this, !!opt.previewEdit, cut);
+        if(!opt.previewEdit && J.maskBehindPersons)J.maskBehindPersons(layer,plan,t,'behindForeground',cut);
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = cut.opacity / 100;
         ctx.globalCompositeOperation = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
         ctx.drawImage(layer, 0, 0); ctx.restore();
@@ -119,7 +120,9 @@ class Renderer {
       for (const cut of J.mediaCutsAt(plan, t, 'media').filter(J.mediaSourceAvailable)) {
         mx.setTransform(1,0,0,1,0,0);mx.globalAlpha=1;mx.globalCompositeOperation='source-over';mx.clearRect(0,0,cw,ch);
         J.drawMedia(mx, plan, t, this, 'media', !!opt.previewEdit, cut);
-        if (!opt.previewEdit && J.maskMediaLayer) J.maskMediaLayer(mediaLayer, cut, t, plan);
+        // A transition between windowed cuts has already masked each side (drawMedia).
+        const masked = this.maskHandled === cut; this.maskHandled = null;
+        if (!opt.previewEdit && J.maskMediaLayer && !masked) J.maskMediaLayer(mediaLayer, cut, t, plan);
         ctx.globalAlpha=cut.opacity/100;
         ctx.globalCompositeOperation={normal:'source-over',multiply:'multiply',screen:'screen',overlay:'overlay'}[cut.blend] || 'source-over';
         ctx.drawImage(mediaLayer,0,0);
@@ -191,7 +194,8 @@ class Renderer {
       // cut's opacity. Reuse the buffer even for long groups of retained lyrics.
       let target = ctx;
       const mask = J.activeMask ? J.activeMask(cut) : null;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask) {
+      const personOcclusion = !opt.copyLyrics && J.personOccluders?.(plan,t,'behindLyrics').length;
+      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -255,6 +259,7 @@ class Renderer {
         }
         // The cut mask applies to the finished cut, after its effects, in stage units.
         if (mask && mask.target === 'cut') J.applyMaskToCanvas(target.canvas, mask, new DOMMatrix([scale, 0, 0, scale, 0, 0]), W, H, { cut, t: tq, plan });
+        if(personOcclusion)J.maskBehindPersons(target.canvas,plan,t,'behindLyrics');
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = opacity; ctx.globalCompositeOperation = composite;
         ctx.drawImage(target.canvas, 0, 0); ctx.restore();
       }
@@ -396,12 +401,14 @@ class Renderer {
     const effectCut = J.cutAt(plan,tq);
     const fx = effectCut?.effectFx || plan.fx, st = effectCut?.effectStyle || plan.style;
     const active = plan.events.filter(ev => t >= ev.t && t < ev.t + Math.max(ev.dur, 1 / plan.fps));
-    const needScratch = active.some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
+    const baseEvent=ev=>J.FXE[ev.type]?.customBase?{...ev,type:J.FXE[ev.type].customBase}:ev;
+    const needScratch = active.map(baseEvent).some(ev => ['slice', 'block', 'zoom', 'mosaic'].includes(ev.type) || (J.FXE[ev.type] && J.FXE[ev.type].scratch)) || (!opt.fast && (st.glow || 0) > 0);
     const S = needScratch ? this.ensure(this.scratch, cw, ch) : null;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
     const copy = () => { const sx = S.getContext('2d'); sx.globalCompositeOperation = 'copy'; sx.drawImage(ctx.canvas, 0, 0); sx.globalCompositeOperation = 'source-over'; };
     const clock24 = Math.floor(t * 24);           // glitch randomness changes at most 24 times a second at any output fps
-    for (const ev of active) {
+    for (const event of active) {
+      const ev=baseEvent(event);
       const k = (t - ev.t) / Math.max(ev.dur, 1e-3);
       const st2 = clock24;
       const D = J.FXE[ev.type];
@@ -411,7 +418,7 @@ class Renderer {
           D.draw(ctx, ev, k, { cw, ch, S, sc, st, step: st2, t, scale, renderer: this, allowFilter, opt, tmp: (w, h) => this.ensure(this.tiny, w, h), tmp2: (w, h) => this.ensure(this.small2 || (this.small2 = mk(2, 2)), w, h) });
         } catch (e) { console.warn('fx', ev.type, e); }
         ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none'; ctx.imageSmoothingEnabled = true;
-        continue;
+        J.drawCustomEvent?.(ctx,event,k,sc);continue;
       }
       if (ev.type === 'slice') {
         copy();
@@ -450,9 +457,10 @@ class Renderer {
         tx.imageSmoothingEnabled = true; tx.drawImage(S, 0, 0, T.width, T.height);
         ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 0.85 * (1 - k); ctx.drawImage(T, 0, 0, cw, ch); ctx.globalAlpha = 1; ctx.imageSmoothingEnabled = true;
       }
+      J.drawCustomEvent?.(ctx,event,k,sc);
     }
     // bloom
-    const glow = (st.glow || 0.6) * 0.5 * (fx.texture ?? 0.6);
+    const glow = (st.glow ?? 0.6) * 0.5 * (fx.texture ?? 0.6);
     if (!opt.fast && allowFilter && glow > 0.05 && !opt.transparent) {
       const sw = Math.round(cw / 4), sh = Math.round(ch / 4);
       const Sm = this.ensure(this.small, sw, sh), sx = Sm.getContext('2d');

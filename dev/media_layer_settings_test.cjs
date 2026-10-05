@@ -33,6 +33,8 @@ const assert = require('node:assert/strict');
       await page.locator('#fileProject').setInputFiles({name:'shared.jizura.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(legacy))});
       await page.waitForFunction(() => J.ui.plan.foreground.cuts.length === 6);
       const snapshot = layer => page.evaluate(layer => ({project:J.ui.project[layer],cuts:J.ui.plan[layer].cuts}), layer);
+      // The foreground composes with the background's dynamic layouts: when the background tab changes, only the foreground's placement may follow.
+      const settingsOnly = (s, layer) => layer === 'media' ? JSON.parse(JSON.stringify(s, (k, v) => ['placement', 'composition', 'compositionZone', 'placementMode'].includes(k) ? undefined : v)) : s;
       for (const layer of ['foreground','media']) {
         const initial = await snapshot(layer);
         // Settings added since then take their defaults; every old shared value survives.
@@ -51,8 +53,9 @@ const assert = require('node:assert/strict');
         assert.equal(await tab.innerText(), layer === 'foreground' ? (locale ? 'Foreground' : '前景') : (locale ? 'Background' : '背景'));
         assert.equal(await panel.isVisible(), true);
         assert.equal(await page.locator(`#${other}EffectsPanel`).isVisible(), false);
-        assert.equal(await panel.locator('[data-media-tech]').count(), await page.evaluate(()=>Object.keys(J.MEDIA_TECH).length));
-        assert.equal(await panel.locator('details[data-media-group]').count(),9);// 8 technique categories + 装飾
+        // The マスク category (background-only techniques) appears in the background panel only.
+        assert.equal(await panel.locator('[data-media-tech]').count(), await page.evaluate(layer=>Object.keys(J.MEDIA_TECH).filter(key=>J.mediaTechAllowed(key,layer)).length,layer));
+        assert.equal(await panel.locator('details[data-media-group]').count(),layer==='media'?10:9);// 8 technique categories (+ マスク on the background) + 装飾
         assert.equal(await panel.locator('details[open]').count(),0,'categories initially collapse independently per layer');
         assert.equal(await panel.locator('[data-media-tech]').first().isVisible(),false);
         const cinema = panel.locator('[data-media-group="cinema"]'), total = await cinema.locator('[data-media-tech]').count();
@@ -77,7 +80,8 @@ const assert = require('node:assert/strict');
         }
         await panel.locator('[data-media-setting="autoPlacement"]').check();
         assert.ok((await snapshot(layer)).cuts.every(c => c.placementMode === 'auto'));
-        assert.deepEqual(await snapshot(other), untouched, 'sliders and automatic placement must stay local to the tab');
+        // The foreground composes with the background's dynamic layouts, so its placement follows the background tab's automatic placement.
+        assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'sliders and automatic placement must stay local to the tab');
 
         await panel.locator('[data-media-action="disable"]').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === 'none'));
@@ -91,7 +95,7 @@ const assert = require('node:assert/strict');
         await page.locator('#btnRedo').click();
         assert.ok((await snapshot(layer)).cuts.every(c => c.technique === technique));
         await panel.locator('[data-media-action="enable"]').click();
-        assert.equal(await panel.locator('[data-media-tech]:checked').count(), await page.evaluate(()=>Object.keys(J.MEDIA_TECH).length));
+        assert.equal(await panel.locator('[data-media-tech]:checked').count(), await page.evaluate(layer=>Object.keys(J.MEDIA_TECH).filter(key=>J.mediaTechAllowed(key,layer)).length,layer));
         assert.deepEqual(await snapshot(other), untouched, 'enable/disable and undo must stay local to the tab');
         await page.locator('#btnUndo').click();
 
@@ -100,7 +104,7 @@ const assert = require('node:assert/strict');
         const afterShuffle = await snapshot(layer);
         assert.notDeepEqual(afterShuffle.cuts.map(c => c.placement), beforeShuffle.cuts.map(c => c.placement));
         assert.deepEqual(afterShuffle.project.effects, beforeShuffle.project.effects);
-        assert.deepEqual(await snapshot(other), untouched, 'tab shuffle must not change the other layer or its material order');
+        assert.deepEqual(settingsOnly(await snapshot(other), layer), settingsOnly(untouched, layer), 'tab shuffle must not change the other layer or its material order');
       }
       const beforeGlobal = {foreground:await snapshot('foreground'),media:await snapshot('media')};
       await page.locator('#btnShuffle').click();

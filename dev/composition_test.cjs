@@ -46,10 +46,11 @@ for(let seed=1;seed<=10;seed++){const p=setup(seed,{lyrics:'30:夜明けの色�
 {const p=setup(5,{cuts:6}),a=planOf(p).foreground.cuts.map(c=>c.composition).join();check(a===planOf(p).foreground.cuts.map(c=>c.composition).join(),'deterministic');
  p.foreground.seed=2;const b=planOf(p).foreground.cuts.map(c=>c.composition).join();p.seed=99;const c=planOf(p).foreground.cuts.map(c=>c.composition).join();check(a!==b&&b!==c,'shuffle/randomize variation');}
 // Backgrounds: framing patterns, varied, never smaller than the whole source and never exposing an edge.
+// (Dynamic layouts frame the source through a mask window instead; background_layout_test covers those.)
 {const used=new Set();for(let seed=1;seed<=30;seed++){const p=J.defaultProject();p.seed=seed;
   p.media={...p.media,items:[{id:'bg',name:'bg.png',type:'image',width:400,height:300}],manualCuts:true,cutCount:6,timing:{lineTimes:{0:0,1:2,2:4,3:6,4:8,5:10}},cutOverrides:Object.fromEntries(Array.from({length:6},(_,i)=>[i,{itemId:'bg',technique:null}]))};
   const plan=J.plan(p),cuts=J.planMedia(p,plan,null,'media').cuts,fit=J.mediaPlacementRect(null,400,300,plan.W,plan.H);
-  cuts.forEach((c,i)=>{used.add(c.composition);if(i)check(c.composition!==cuts[i-1].composition,'background repeat '+seed);const r=J.mediaPlacementRect(c.placement,400,300,plan.W,plan.H);
+  cuts.forEach((c,i)=>{used.add(c.composition);if(i)check(c.composition!==cuts[i-1].composition,'background repeat '+seed);if(c.bgLayout)return;const r=J.mediaPlacementRect(c.placement,400,300,plan.W,plan.H);
    check(r.w>=fit.w-1e-9&&r.h>=fit.h-1e-9,'background smaller than whole '+seed);
    for(const [s,e] of [[r.x,r.w],[r.y,r.h]])check(e>=1?s<=1e-9&&s+e>=1-1e-9:s>=-1e-9&&s+e<=1+1e-9,'background edge '+seed+' '+c.composition);});}
  check(used.size>=9,'background patterns '+used.size);stats.backgrounds=used.size;}

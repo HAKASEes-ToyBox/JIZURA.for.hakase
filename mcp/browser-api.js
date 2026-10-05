@@ -81,6 +81,7 @@
             typeof d === "string" ? d : d.id,
             `${layer}/${i}/decor`,
           );
+        if(J.customEffectDependencies(cut).length)warnings.push(`${layer}/${i}: custom components require visual theme review`);
         if(cut.drawing)warnings.push(`${layer}/${i}: custom drawing requires visual theme review`);
         const motion = cut.mask?.motion;
         if (motion)
@@ -104,6 +105,7 @@
     revision++;
     review = null;
     inspected.clear();
+    J.activateCustomEffects(S.project);
     A.syncUI();
     A.replan();
   }
@@ -124,6 +126,7 @@
     }
   }
   function validateProject(p) {
+    J.validateCustomEffects(p.customEffects||[]);
     if (typeof p.lyrics !== "string" || p.lyrics.length > 200000)
       throw Error("lyrics must be a string (max 200000 characters)");
     if (!Number.isFinite(p.fps) || p.fps < 1 || p.fps > 120)
@@ -204,6 +207,14 @@
   }
   window.JizuraMCP = {
     favoriteSpec(){return J.favoriteAPI.spec();},
+    customEffectSpec(){return J.customEffectsAPI.spec();},
+    customEffectList(){return J.customEffectsAPI.list(S.project);},
+    customEffectValidate({components}){return J.customEffectsAPI.validate(components);},
+    customEffectImport({components}){return mutate(()=>J.customEffectsAPI.import(S.project,components));},
+    async customEffectPreview({id,layer,index,time,width}){
+      const payload=J.customEffectsAPI.payload(S.project,id,layer==='foreground'||layer==='media'?'media':'lyrics');
+      return this.favoritePreview({payload,layer,index,time,width});
+    },
     favoriteList(){return clone(S.project.effectFavorites||[]);},
     favoriteValidate({payload}){return J.favoriteAPI.validate(payload);},
     favoriteSave({name,payload,id,layer,index}){
@@ -521,6 +532,7 @@
         themes: J.THEMES,
         defaults: J.defaultProject(),
         favoriteSpec: J.favoriteAPI.spec(),
+        customEffects: J.customEffectsAPI.list(S.project),
         detailKeys: J.cutDetailKeys,
         masks: J.MASK_SHAPES,
         copySources: J.mediaCopyItems("media"),

@@ -67,13 +67,15 @@ J.autoMediaPlacement = (project, cut, item, plan, layer) => {
   let placement = { cx: position(px, w), cy: position(py, h), w, h, lockAspect: true, angle: 0 };
   // Foregrounds follow a scene composition (split, corner, inset, hero…) that the lyrics then fit around.
   if (!background && J.pickComposition) {
-    const comp = J.pickComposition(cut, plan, layer, item.croppedEdges);
+    const comp = J.pickComposition(cut, plan, layer, item.croppedEdges, J.backgroundSceneAt ? J.backgroundSceneAt(project, plan, cut.start, cut.end) : null);
     cut.composition = comp.id;
+    if (comp.bg) cut.compositionZone = comp.zone;
     placement = J.compositionPlacement(comp, cut, fit, dynamic);
   }
   // Backgrounds use framing patterns (whole, fill, zooms anchored to sides or corners, detail crops).
-  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit);
   const edges = item.croppedEdges || {}, crop = .2;
+  const cropped = ['left', 'right', 'top', 'bottom'].some(edge => edges[edge] === true);
+  if (background && J.backgroundPlacement) placement = J.backgroundPlacement(cut, plan, fit, { dynamic: settings.dynamicBackground !== false && !cropped });
   if (!['left','right','top','bottom'].some(edge => edges[edge] === true)) return placement;
   // Hide 20% of the source extent at each selected edge. Opposite edges
   // leave the middle 60% in frame, enlarging proportionally when necessary.
@@ -230,6 +232,10 @@ J.planMedia = (project, lyricPlan, audioDuration, layer = 'media') => {
       // Old locks without a stored placement retain their original centered framing.
       cut.placement = J.normalizeMediaPlacement(ov.lockedPlacement);
       cut.placementMode = ov.lockedPlacementMode || (cut.placement ? 'auto' : 'default');
+      // A locked dynamic background keeps its window and the scene data lyrics compose against.
+      if (ov.lockedLayout && layer === 'media') {
+        cut.bgLayout = JSON.parse(JSON.stringify(ov.lockedLayout)); cut.mask = JSON.parse(cut.bgLayout.sig); cut.composition = 'layout:' + cut.bgLayout.id;
+      }
     } else if (cut.technique && !['none', 'legacy'].includes(cut.technique) && cut.effectSettings?.autoPlacement !== false) {
       cut.placement = J.autoMediaPlacement(project, cut, (findItem(cut.itemId)?.type==='copy'?{...findItem(cut.itemId),width:lyricPlan.W,height:lyricPlan.H}:findItem(cut.itemId)), lyricPlan, layer);
       cut.placementMode = 'auto';
@@ -293,13 +299,15 @@ const dbOp = async (mode, cb) => {
 // Read bytes before retaining an asset so saving over the source project cannot
 // invalidate video URLs, IndexedDB entries, or a later project download.
 const mediaSnapshots = new WeakMap();
-J.snapshotMediaFile = file => {
+J.snapshotMediaFile = (file, onProgress = () => {}) => {
   if (!(file instanceof Blob)) return Promise.reject(new Error('Missing media file'));
-  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file);
+  if (mediaSnapshots.has(file)) return mediaSnapshots.get(file).then(copy=>{onProgress(file.size,file.size);return copy;});
   const task = (async () => {
     const parts = [], chunk = 4 * 1024 * 1024;
+    onProgress(0,file.size);
     for (let offset = 0; offset < file.size; offset += chunk) {
       parts.push(new Blob([await file.slice(offset, offset + chunk).arrayBuffer()]));
+      onProgress(Math.min(offset+chunk,file.size),file.size);
     }
     const copy = typeof file.name === 'string'
       ? new File(parts, file.name, { type: file.type, lastModified: file.lastModified })
@@ -340,13 +348,15 @@ J.removeMedia = async id => {
 J.releaseMediaAsset = asset => {
   if (!asset) return;
   if (asset.element && asset.type === 'video') {
+    previewVideoWarmups.get(asset.element)?.abort();previewVideoWarmups.delete(asset.element);
     asset.element.pause(); asset.element.removeAttribute('src'); asset.element.load();
   } else if (asset.element) asset.element.removeAttribute('src');
   if (asset.posterElement) asset.posterElement.removeAttribute('src');
   if (asset.url) URL.revokeObjectURL(asset.url);
 };
-J.attachMedia = async (item, file, assets = J.mediaAssets) => {
-  file = await J.snapshotMediaFile(file);
+J.attachMedia = async (item, file, assets = J.mediaAssets, onProgress = () => {}) => {
+  file = await J.snapshotMediaFile(file,(loaded,total)=>onProgress({phase:'read',loaded,total}));
+  onProgress({phase:'decode'});
   return new Promise((resolve, reject) => {
   const previous = assets.get(item.id); if (previous) J.releaseMediaAsset(previous);
   const url = URL.createObjectURL(file);
@@ -357,13 +367,13 @@ J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   const timer=setTimeout(fail,30000);
   const updatePoster=()=>{
     const asset=assets.get(item.id);if(!asset||asset.element!==el||el.readyState<2)return;
-    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;}catch(e){}
+    try{const c=document.createElement('canvas');c.width=96;c.height=54;c.getContext('2d').drawImage(el,0,0,96,54);asset.poster=c.toDataURL('image/png');asset.posterElement.src=asset.poster;window.dispatchEvent(new CustomEvent('jizura-media-poster',{detail:{id:item.id,poster:asset.poster}}));}catch(e){}
   };
   const ready = () => {
     if(settled)return;settled=true;clearTimeout(timer);
     item.width = el.videoWidth || el.naturalWidth;
     item.height = el.videoHeight || el.naturalHeight;
-    let poster = item.type==='video'?'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="54"%3E%3Crect width="96" height="54" fill="%23222222"/%3E%3C/svg%3E':url;
+    let poster = item.type==='video'?'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="54"><rect width="96" height="54" fill="#222222"/><path d="M40 17v20l20-10z" fill="#8e8a94"/></svg>'):url;
     const posterElement = item.type === 'video' ? new Image() : null;
     if (posterElement) posterElement.src = poster;
     assets.set(item.id, { url, element: el, type: item.type, poster, posterElement, file });
@@ -377,54 +387,43 @@ J.attachMedia = async (item, file, assets = J.mediaAssets) => {
   el.src = url;
   });
 };
+const previewVideoWarmups = new WeakMap();
+const iosVideoPlayback = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const seekMediaVideo = async (v, target, signal, name = '') => {
-  v.pause();
+  const warming=previewVideoWarmups.get(v);
+  if(warming&&warming.signal!==signal){warming.abort();previewVideoWarmups.delete(v);}
+  v.pause(); v.playbackRate = 1;
   const dur = v.duration || 1;
-  const safeSec = Math.max(0, Math.min(target, Math.max(0, dur - 0.04)));
-  if (signal?.aborted) throw new Error('Cancelled');
-  if (Math.abs(v.currentTime - safeSec) < 0.015 && v.readyState >= 2 && !v.seeking && !v.ended) return;
-  if (v.ended) {
-    try { v.currentTime = 0; } catch (e) {}
-  }
+  target = Math.max(0, Math.min(target, Math.max(0, dur - 0.04)));
+  if (signal?.aborted)throw new Error('Cancelled');
+  if (v.ended) { try { v.currentTime = 0; } catch (e) {} }
+  if (Math.abs(v.currentTime - target) < 0.002 && v.readyState >= 2 && !v.seeking && !v.ended) return;
   await new Promise((resolve, reject) => {
-    let done = false;
-    let timer = null;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (timer) clearTimeout(timer);
-      v.pause();
-      v.removeEventListener('seeked', ok);
-      v.removeEventListener('loadeddata', ok);
-      v.removeEventListener('canplay', ok);
-      v.removeEventListener('error', fail);
-      if (signal) signal.removeEventListener('abort', abort);
-    };
-    const ok = () => {
-      if (done || v.readyState < 2 || v.seeking) return;
-      if (Math.abs(v.currentTime - safeSec) > 0.02) {
-        v.pause();
-        try { v.currentTime = safeSec; } catch (e) {}
-        return;
-      }
-      finish();
-      resolve();
-    };
-    const fail = () => {
-      if (done) return;
-      finish();
-      reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした', 'Could not prepare video playback position') + (name ? '：' + name : '') + ` (${safeSec.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));
-    };
-    const abort = () => { if (done) return; finish(); reject(new Error('Cancelled')); };
-    timer = setTimeout(fail, 15000);
-    v.addEventListener('seeked', ok);
-    v.addEventListener('loadeddata', ok);
-    v.addEventListener('canplay', ok);
-    v.addEventListener('error', fail, { once: true });
+    let done=false,poll,wakeTimer;
+    const finish = () => {done=true;clearTimeout(timer);clearTimeout(wakeTimer);clearInterval(poll);v.pause();v.removeEventListener('seeked',ok);v.removeEventListener('loadeddata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',fail);if(signal)signal.removeEventListener('abort',abort);};
+    // Mobile decoders may need playback through the rewind too. Pause only
+    // after the requested frame is available, otherwise the seek can stall.
+    const ok = () => {if(done||v.readyState<2||v.seeking)return;if(Math.abs(v.currentTime-target)>.02){v.currentTime=target;return;}finish();resolve();};
+    const fail = () => {if(done)return;finish();reject(new Error(J.mediaLabel('動画の再生位置を準備できませんでした','Could not prepare video playback position') + (name ? '：' + name : '') + ` (${target.toFixed(3)}s; readyState=${v.readyState}; mediaError=${v.error?.code || 0})`));};
+    const abort = () => {if(done)return;finish();reject(new Error('Cancelled'));};
+    const timer=setTimeout(fail,15000);
+    // Some mobile decoders finish a seek without delivering a seeked/canplay
+    // event. Check readiness as well, and stop polling as soon as it settles.
+    poll=setInterval(()=>{if(v.error)fail();else ok();},16);
+    v.addEventListener('seeked',ok);v.addEventListener('loadeddata',ok);v.addEventListener('canplay',ok);v.addEventListener('error',fail,{once:true});
     if (signal) signal.addEventListener('abort', abort, { once: true });
     if (v.error) { fail(); return; }
-    try { v.currentTime = safeSec; } catch (error) { fail(); return; }
-    if (v.readyState < 2) v.play().then(() => { if (done) v.pause(); else ok(); }).catch(() => { if (!done) ok(); });
+    try { if(Math.abs(v.currentTime-target)>.002)v.currentTime = target; } catch (error) { fail(); return; }
+    // Some mobile decoders need playback to produce the first frame. Rewind
+    // to the requested frame before resolving; the project clock stays paused.
+    // An interrupted play() (e.g. the preview sync pausing the element) is not
+    // fatal: the seeked/canplay events or the timeout still settle the seek.
+    // A late play() promise must not pause a newer playback request.
+    const wakeDecoder=()=>{if(!done&&(v.readyState<2||v.seeking))v.play().then(()=>{if(!done)ok();}).catch(()=>{if(!done)ok();});};
+    // A decoded video usually seeks while paused. Starting it immediately can
+    // overshoot the target before iOS delivers seeked, causing endless rewinds.
+    // Only start playback if no frame exists or the paused seek has stalled.
+    if(v.readyState<2)wakeDecoder();else if(v.seeking)wakeTimer=setTimeout(wakeDecoder,500);
     ok();
   });
 };
@@ -459,8 +458,13 @@ J.prepareMediaFrame = async (plan, t, signal) => {
       if (prior) { await seekMediaVideo(prior.element, J.mediaVideoTime(prev, prev.end - 0.001, prior.element.duration), signal, prev.name); captureMediaVideo(plan, prev, layer); }
     }
     if (cut.type !== 'video') continue;
-    const asset = J.mediaAssets.get(cut.itemId); if (asset) await seekMediaVideo(asset.element, J.mediaVideoTime(cut, t, asset.element.duration), signal, cut.name);
+    const asset = J.mediaAssets.get(cut.itemId); if (asset) {await seekMediaVideo(asset.element, J.mediaVideoTime(cut, t, asset.element.duration), signal, cut.name);asset.previewError=null;}
   }
+};
+const playMediaPreview = asset => {
+  if(!asset.element.paused||asset.previewPlayPending)return;
+  const pending=asset.element.play();asset.previewPlayPending=pending;
+  pending.catch(()=>{}).finally(()=>{if(asset.previewPlayPending===pending)asset.previewPlayPending=null;});
 };
 J.syncMediaPreview = (plan, t, playing) => {
   const active = new Map();
@@ -476,16 +480,43 @@ J.syncMediaPreview = (plan, t, playing) => {
   for (const [id, asset] of J.mediaAssets) {
     if (asset.type !== 'video') continue;
     const v = asset.element, cut = active.get(id);
-    if (!cut) { v.pause(); v.loop = false;asset.previewCut=null;continue; }
+    if (!cut) { previewVideoWarmups.get(v)?.abort();v.pause(); v.loop = false; v.playbackRate = 1;asset.previewCut=null;continue; }
     v.loop = !!cut.videoLoop;
     const target = J.mediaVideoTime(cut, t, v.duration);
     const changed=asset.previewCut!==cut||t<(asset.previewTime??t)-.05;
     asset.previewCut=cut;asset.previewTime=t;
-    if(v.seeking){v.pause();continue;}
+    // Metadata alone cannot be drawn. Let the decoder produce a frame before
+    // normal preview syncing is allowed to pause it or replace its seek.
+    if(previewVideoWarmups.has(v))continue;
+    if(v.readyState<2||!playing&&(v.seeking||Math.abs(v.currentTime-target)>.02)){
+      if(!asset.previewError){
+        const controller=new AbortController();previewVideoWarmups.set(v,controller);
+        seekMediaVideo(v,target,controller.signal,cut.name).catch(error=>{
+          if(!controller.signal.aborted){asset.previewError=error.message;window.dispatchEvent(new CustomEvent('jizura-media-error',{detail:{id:cut.itemId,message:error.message}}));}
+        }).finally(()=>{
+          if(previewVideoWarmups.get(v)===controller)previewVideoWarmups.delete(v);
+          window.dispatchEvent(new Event('jizura-media-ready'));
+        });
+      }
+      continue;
+    }
+    if(v.seeking){if(playing)playMediaPreview(asset);continue;}
     const now=performance.now();
-    if (Math.abs(v.currentTime - target) > (playing ? 0.18 : 0.02) && (!playing||changed||now-(asset.previewSeekAt??-Infinity)>700)) {v.pause();asset.previewSeekAt=now;v.currentTime = target;continue;}
-    if (playing && v.paused) v.play().catch(() => {});
-    if (!playing) v.pause();
+    // While playing, drift is absorbed by nudging the playback rate instead of seeking: every seek stalls the
+    // decoder, and a video that starts a little late (or decodes slowly) used to be re-seeked again and again.
+    let drift = v.currentTime - target;
+    if (cut.videoLoop && v.duration > 0) drift = ((drift % v.duration) + 1.5 * v.duration) % v.duration - v.duration / 2;
+    if (!playing) {
+      v.playbackRate = 1;
+      v.pause(); continue;
+    }
+    if (changed ? Math.abs(drift) > 0.1 : Math.abs(drift) > 0.6 && now - (asset.previewSeekAt ?? -Infinity) > 1500) { asset.previewSeekAt = now; v.playbackRate = 1; v.currentTime = target;playMediaPreview(asset);continue; }
+    playMediaPreview(asset);
+    // ahead → slow down, behind → speed up (bounded so it is not noticeable); close enough → normal speed
+    // Changing playbackRate repeatedly can interrupt the iOS decoder. Keep its
+    // speed steady; cut changes and large drift still use the seek above.
+    const rate = iosVideoPlayback || Math.abs(drift) < 0.04 ? 1 : J.clamp(1 - drift * 0.8, 0.8, 1.25);
+    if (Math.abs(v.playbackRate - rate) > 0.02) v.playbackRate = rate;
   }
 };
 const chromaCanvases = new WeakMap();
@@ -541,16 +572,20 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   const asset = J.mediaAssets.get(cut.itemId); if (!asset && !options.source) return false;
   const src = options.source || asset.element, sw = src.videoWidth || src.naturalWidth || src.width, sh = src.videoHeight || src.naturalHeight || src.height;
   if (!sw || !sh) return false;
+  const personFrame = options.personPass ? J.personMaskFrame?.(cut,t) : null;
+  if(options.personPass && (!personFrame || options.personMode && !J.personCutout(cut)?.[options.personMode]))return false;
+  if(options.personPass)cut={...cut,decor:[],drawing:null};
   const w = ctx.canvas.width, h = ctx.canvas.height, d = Math.max(0.04, cut.end - cut.start), p = J.clamp((t - cut.start) / d, 0, 1);
-  const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(cut.effectSettings?.duration || 0.45, d * 0.3));
-  const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(cut.effectSettings?.duration || 0.45, d * 0.3));
+  const fade = options.noEnter ? 1 : Math.min(1, (t - cut.start) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
+  const out = options.noExit ? 1 : Math.min(1, (cut.end - t) / Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), d * 0.3));
   if (cut.technique && (cut.technique !== 'legacy' || cut.independentPhases) && J.paintMediaEffect) {
     const placement = cut.placement && J.mediaPlacementRect(cut.placement, sw, sh, w, h);
     const scale = cut.layout === 'cover' ? Math.max(w / sw, h / sh) : Math.min(w / sw, h / sh);
     const fit = placement ? [placement.w * w, placement.h * h] : [sw * scale, sh * scale];
     const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-    const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-    const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+    const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+    const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+    const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
     ctx.save();
     ctx.translate(placement ? (placement.x + placement.w / 2) * w : w / 2, placement ? (placement.y + placement.h / 2) * h : h / 2);
     ctx.rotate((cut.placement?.angle || 0) * Math.PI / 180);
@@ -576,19 +611,21 @@ J.drawMediaCut = (ctx, cut, t, options = {}) => {
   if (!placement) ctx.translate(-focus.x, -focus.y);
   ctx.filter = ({ mono: 'grayscale(1)', sepia: 'sepia(1)', contrast: 'contrast(1.6)', blur: 'blur(8px)' })[cut.treat] || 'none';
   const previewScale = options.previewEdit ? Math.min(1, w / sw, h / sh) : 1;
-  const keyed = cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src;
-  const source = J.maskMediaSource ? J.maskMediaSource(keyed, cut, t) : keyed;
+  const keyed = personFrame || (cut.type === 'video' && cut.chromaKey ? J.chromaSource(src, cut, Math.max(1, Math.round(sw * previewScale)), Math.max(1, Math.round(sh * previewScale))) : src);
+  const person = !options.personPass && J.personMaskSource ? J.personMaskSource(keyed,cut,t) : keyed;
+  const source = J.maskMediaSource ? J.maskMediaSource(person, cut, t) : person;
   ctx.drawImage(source, -fit[0] / 2, -fit[1] / 2, fit[0], fit[1]); ctx.restore();
   return true;
 };
 J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = J.mediaAt(plan, t, layer)) => {
   if (!J.mediaSourceAvailable(cut)) return false;
   owner ||= {};
+  owner.maskHandled = null;
   const sourceFor = c => J.isMediaCopy(c.itemId) ? J.mediaCopySource(plan,c,t,owner,ctx.canvas.width,ctx.canvas.height) : null;
   const prev = cut.index > 0 ? plan[layer].cuts[cut.index - 1] : null;
   const next = plan[layer].cuts[cut.index + 1];
   const active = !previewEdit && prev && cut.trans && t - cut.start < cut.transDur && Math.abs(prev.end - cut.start) < 0.06 && J.mediaSourceAvailable(prev);
-  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut) });
+  if (!active) return J.drawMediaCut(ctx, cut, t, { noEnter: !cut.independentPhases && !!cut.trans, noExit: !cut.independentPhases && !!(next && next.trans && Math.abs(next.start - cut.end) < 0.06), previewEdit, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const w = ctx.canvas.width, h = ctx.canvas.height;
   const canvas = key => {
     const c = owner ? (owner[key] || (owner[key] = document.createElement('canvas'))) : document.createElement('canvas');
@@ -597,21 +634,32 @@ J.drawMedia = (ctx, plan, t, owner, layer = 'media', previewEdit = false, cut = 
   };
   const A = canvas(layer + 'PrevLayer'), B = canvas(layer + 'NextLayer');
   const bg = plan.style && plan.style.schemes ? plan.style.schemes[0].bg : '#000';
-  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media') { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
+  const personAlpha=owner?.personMaskPass || [cut,prev].some(c=>J.personCutout?.(c)?.display==='only');
+  const clear = c => { const x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over'; x.filter = 'none'; x.clearRect(0, 0, w, h); if (layer === 'media' && !personAlpha) { x.fillStyle = bg; x.fillRect(0, 0, w, h); } return x; };
   const snapshot = transitionFrame(layer);
   const priorAsset = J.mediaAssets.get(prev.itemId);
   const prevSource = prev.type === 'video' ? (snapshot && snapshot.plan === plan && snapshot.index === prev.index ? snapshot.canvas : prev.itemId === cut.itemId && priorAsset.posterElement && priorAsset.posterElement.complete ? priorAsset.posterElement : null) : null;
-  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource });
-  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut) });
+  J.drawMediaCut(clear(A), prev, Math.max(prev.start, prev.end - 0.001), { noExit: true, source: sourceFor(prev) || prevSource,personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
+  J.drawMediaCut(clear(B), cut, t, { noEnter: !cut.independentPhases, source:sourceFor(cut),personPass:owner?.personMaskPass,personMode:owner?.personMaskMode });
   const p = J.clamp((t - cut.start) / cut.transDur);
+  // A windowed background (mask) dissolves into the next one with each side keeping its own window;
+  // masking the blended frame with only the new cut's mask would cut the old picture off at once.
+  const masked = layer === 'media' && !previewEdit && J.maskMediaLayer && (J.activeMask(prev) || J.activeMask(cut));
+  if (masked) { J.maskMediaLayer(A, prev, Math.max(prev.start, prev.end - 0.001), plan); J.maskMediaLayer(B, cut, t, plan); owner.maskHandled = cut; }
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'none';
-  if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
-    ctx.drawImage(A, 0, 0); ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
+  if (masked) {
+    // Premultiplied dissolve: A·(1−p) + B·p, so the old window fades out where the new one is not.
+    ctx.globalAlpha = 1 - J.smooth(0, 1, p); ctx.drawImage(A, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
+  } else if (cut.trans === 'crossfade' || !J.TRANS || !J.TRANS[cut.trans]) {
+    if(personAlpha){ctx.globalAlpha=1-J.smooth(0,1,p);ctx.drawImage(A,0,0);ctx.globalCompositeOperation='lighter';}
+    else ctx.drawImage(A, 0, 0);
+    ctx.globalAlpha = J.smooth(0, 1, p); ctx.drawImage(B, 0, 0);
   } else {
     const st = plan.style, sc = st.schemes[0];
     try { J.TRANS[cut.trans].draw(ctx, A, B, p, { cw: w, ch: h, sc, scPrev: sc, st, P: cut.transP || {}, step: Math.floor(t * (plan.fps || 24)), t, scale: w / plan.W, allowFilter: true, seed: cut.seed | 0,
       // The foreground composites over lyrics/background, so transitions must not paint a backdrop.
-      transparent: layer !== 'media',
+      transparent: layer !== 'media' || personAlpha,
       tmp: (tw, th) => { const c = owner ? (owner.mediaTransTmp || (owner.mediaTransTmp = document.createElement('canvas'))) : document.createElement('canvas'); if (c.width !== tw || c.height !== th) { c.width = tw; c.height = th; } return c; } }); }
     catch (e) { console.warn('media trans', cut.trans, e); ctx.drawImage(B, 0, 0); }
   }

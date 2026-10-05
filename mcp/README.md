@@ -146,6 +146,6 @@ npm test
 
 ## エージェント独自のお気に入り演出
 
-`favorite_spec` → `favorite_validate` → `favorite_save` → `favorite_preview` → `export_start(kind="favorites")` で独自演出を作成・確認し、`.jizuraichifav` として配布できます。プレビューはMCPの画像応答として返ります。既存演出の調整と、JSON描画プログラムによる新しい文字・図形・素材アニメーションに対応します。
+`custom_effect_spec` → 標準効果を選択 → 不足する要素だけ `custom_effect_validate` / `custom_effect_import` → `custom_effect_preview` → `favorite_save` / `favorite_preview` → `export_start(kind="favorites")` で独自演出を作成・確認し、`.jizuraichifav` として配布できます。プレビューはMCPの画像応答として返ります。登場・保持・退場・背景・装飾などの標準要素に登録し、標準効果と組み合わせます。取り込んだ効果は一覧に［追加］付きで表示され、テーマの候補、再抽選、詳細パラメータ編集にも対応します。定義はプロジェクト／設定のみ／お気に入りファイルに保存されます。従来のカット全体を置き換える `details.drawing` も読み込めます。
 
 仕様・実例・ブラウザAPIは [エージェント向けお気に入り仕様](../docs/AGENT_FAVORITES.md) を参照してください。読み込みは `asset_import(kind="favorites", mode="append"|"replace")`。`favorite_list` / `favorite_apply` / `favorite_delete` で管理できます。

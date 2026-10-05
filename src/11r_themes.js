@@ -20,6 +20,26 @@ const presets = {
   dreamy: { category:'taste', name:L('幻想的','Dreamy'), moods:['calm','emotional'], styles:['hud','noir','magenta'], media:['drift','orbit','rackFocus','beatBreathe'], phases:['enter_blur','iris','enter_fade'], motion:[.3,.7], duration:[.65,1.3], flash:false },
   retro: { category:'taste', name:L('レトロ','Retro'), moods:['editorial','graphic'], styles:['paper','caution','transit'], media:['panorama','pullOut','filmstrip','stipplePrint','beatSway'], phases:['blinds','wipe','enter_fade'], motion:[.35,.7], duration:[.35,.7], flash:false },
 };
+// Mask pack (background only): framing that suits each theme's pace.
+const masksByTheme = {
+  typo: ['maskCinemascope','maskSplitScreen','maskSlashParallax'],
+  kinetic: ['maskBeatWindows','maskShutterBeat','maskSlashParallax','maskDetailGrid'],
+  wa: ['maskCinemascope','maskDoubleExposure'],
+  horror: ['maskCinemascope','maskShutterBeat'],
+  pop: ['maskShapeZoom','maskDotMatrix','maskBeatWindows','maskDetailGrid'],
+  ballad: ['maskDoubleExposure','maskCinemascope','maskRings'],
+  rock: ['maskShutterBeat','maskSlashParallax','maskBeatWindows'],
+  dance: ['maskBeatWindows','maskShutterBeat','maskDotMatrix','maskRings','maskDetailGrid'],
+  hiphop: ['maskSplitScreen','maskDetailGrid','maskBeatWindows'],
+  jazz: ['maskCinemascope','maskSplitScreen'],
+  acoustic: ['maskDoubleExposure','maskCinemascope'],
+  cool: ['maskSplitScreen','maskSlashParallax','maskCinemascope','maskDetailGrid'],
+  cute: ['maskShapeZoom','maskDotMatrix','maskRings'],
+  elegant: ['maskCinemascope','maskDoubleExposure','maskRings'],
+  dreamy: ['maskDoubleExposure','maskShapeZoom','maskRings'],
+  retro: ['maskDotMatrix','maskSplitScreen','maskCinemascope'],
+};
+for (const [key, masks] of Object.entries(masksByTheme)) presets[key].media.push(...masks);
 // Curated additions from the rhythmic media pack; keep gentle themes restrained.
 const rhythmByTheme = {
   pop: ['beatSideHop','beatZoomSteps','beatSpring','beatSquash','beatTwistHop','beatSwayZoom'],
@@ -106,7 +126,7 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
   look.fx.motion = Math.min(1,J.lerp(...theme.motion,rnd()));
   if (!theme.flash) {look.fx.glitch=Math.min(look.fx.glitch,.2);look.fx.chroma=Math.min(look.fx.chroma,.4);}
   for (const group of J.GROUP_KEYS) {
-    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<.75);
+    const pool = pools.lyrics[group], selected = pool.filter(()=>rnd()<(project.themeBalance==='unified'?.4:.75));
     if (!selected.length && pool.length) selected.push(pick(pool));
     for (const id of neutral[group] || []) if (pool.includes(id)) selected.push(id);
     const enabled = new Set(selected);
@@ -116,11 +136,11 @@ J.omakase = (project,rnd=Math.random,choices={}) => {
     const settings = J.mediaEffectSettings(project,layer), on = new Set();
     // Preserve a usable independent pool for main motion, entrance and exit.
     for (const stage of [undefined,'enter','exit']) {
-      const pool = pools.media.filter(id=>J.MEDIA_TECH[id].stage===stage);
-      for (const id of pool) if (rnd()<.65) on.add(id);
+      const pool = pools.media.filter(id=>J.MEDIA_TECH[id].stage===stage && J.mediaTechAllowed(id,layer));
+      for (const id of pool) if (rnd()<(project.themeBalance==='unified'?.3:.65)) on.add(id);
       if (pool.length && !pool.some(id=>on.has(id))) on.add(pick(pool));
     }
-    settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).map(id=>[id,on.has(id)]));
+    settings.enabled = Object.fromEntries(Object.keys(J.MEDIA_TECH).filter(id=>J.mediaTechAllowed(id,layer)).map(id=>[id,on.has(id)]));
     // Media decorations follow the theme's lyric decoration pool (front ones only).
     settings.decorEnabled = Object.fromEntries(J.order('decor').filter(id=>J.DECOR[id]).map(id=>[id,!!look.enabled.decor?.[id] && J.DECOR[id].layer==='front']));
     settings.motion = J.lerp(...theme.motion,rnd()); settings.duration = J.lerp(...theme.duration,rnd());

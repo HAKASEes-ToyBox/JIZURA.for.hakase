@@ -42,7 +42,7 @@ let renderer = null;
 const decorCut = cut => {
   let c = cut.decorCut;
   if (!c || c.source !== cut.decor || c.start !== cut.start || c.end !== cut.end) {
-    const dur = Math.max(.04, cut.end - cut.start), phase = Math.min(cut.effectSettings?.duration || .45, dur * .3);
+    const dur = Math.max(.04, cut.end - cut.start), phase = Math.min(Math.max(.001,cut.effectSettings?.duration ?? .45), dur * .3);
     c = { source: cut.decor, start: cut.start, end: cut.end, dur, inDur: phase, outDur: phase, seed: cut.seed | 0, text: '', words: [], note: null, scheme: 0, decor: cut.decor, index: cut.index | 0 };
     Object.defineProperty(cut, 'decorCut', { value: c, configurable: true, writable: true });
   }
