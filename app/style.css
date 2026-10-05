@@ -176,7 +176,7 @@ button.remove-media-cut:hover, button.remove-media-cut:focus-visible { color: #f
 .lyric-frontmost input { margin: 0; accent-color: var(--amber); }
 
 /* ---------- stage ---------- */
-.col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; }
+.col-stage { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-width: 0; max-width: 100%; overflow-x: hidden; }
 .viewport { position: relative; width: 100%; background: #000; border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; }
 .viewport canvas { display: block; width: 100%; height: auto; max-height: none; object-fit: contain; }
 .area-edit-overlay { position: absolute; z-index: 4; touch-action: none; pointer-events: none; }
@@ -234,6 +234,7 @@ button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
 #mediaTimeline { width: 100%; height: 52px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; touch-action: none; }
 #foregroundTimeline { width: 100%; height: 52px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; touch-action: none; }
 .timeline-stack { position: relative; display: grid; gap: 6px; min-width: 0; }
+.timeline-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; box-sizing: border-box; padding-right: 8px; padding-bottom: 6px; }
 .ghost-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
 .ghost-toggle input { accent-color: var(--amber); cursor: pointer; }
 .timeline-volume { display: flex; align-items: center; gap: 4px; font: 11px var(--mono); color: var(--muted); margin-left: auto; }
@@ -652,7 +653,7 @@ dialog.terms .terms-fork h3 { color: var(--cyan); }
 .fullscreen-transport input[type=range] { flex: 1; min-width: 0; accent-color: var(--amber); }
 .fullscreen-transport .tc { font: 12px var(--mono); white-space: nowrap; }
 
-.timeline-with-visibility { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 6px; min-width: 0; }
+.timeline-with-visibility { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 6px; min-width: 0; max-width: 100%; overflow: hidden; }
 .layer-visibility-controls { position: relative; }
 .layer-visibility-controls button { position: absolute; left: 0; width: 30px; height: 30px; padding: 5px; color: var(--cyan); }
 .layer-visibility-controls button[aria-pressed=false] { color: var(--muted); }

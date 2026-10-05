@@ -556,17 +556,22 @@ function syncTimelinePan(){
   const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
   input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
-function setTimelineZoom(zoom, anchorFraction = null, mouseX = null) {
+function setTimelineZoom(zoom) {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
-  const center = scroll.scrollLeft + scroll.clientWidth / 2;
-  const fraction = anchorFraction != null ? anchorFraction : center / Math.max(1, stack.clientWidth);
+  const D = Math.max(0.001, S.plan ? S.plan.duration : 1);
+  const progress = J.clamp((S.t || 0) / D, 0, 1);
+  const oldWidth = Math.max(1, stack.clientWidth);
+  const barX = progress * oldWidth;
+  const offsetInView = barX - scroll.scrollLeft;
+  const inView = offsetInView >= 0 && offsetInView <= scroll.clientWidth;
+  const targetOffset = inView ? offsetInView : (scroll.clientWidth / 2);
+
   S.timelineZoom = J.clamp(zoom, 1, 8);
   sizeTimelineStack();
-  if (mouseX != null) {
-    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - mouseX);
-  } else {
-    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
-  }
+  const newWidth = Math.max(1, stack.clientWidth);
+  const newBarX = progress * newWidth;
+  scroll.scrollLeft = Math.max(0, newBarX - targetOffset);
+
   syncTimelinePan();
   $('timelineZoomValue').textContent = `${Math.round(S.timelineZoom * 100)}%`;
   $('timelineZoomOut').disabled = S.timelineZoom <= 1;
@@ -770,6 +775,10 @@ function rerollLyricLine(index) {
   setOv(index, { seed: (current.seed | 0) + 1, ...LYRIC_UNLOCK, ...(current.lock ? { lock: true, lockedAreas: current.lockedAreas } : {}) });
   relock('lyrics', index);
   replan();
+  const targetCut = S.plan.cuts.find(c => c.line === index);
+  const seekTime = targetCut ? (targetCut.renderStart ?? targetCut.start) : line.start;
+  seek(seekTime);
+  followTimelinePlayhead();
 }
 function disableAndReroll(layer,index,part=null) {
   const project=S.project;
@@ -843,9 +852,12 @@ function mediaCutOptions(layer, index) {
 function rerollMediaCut(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
   if (!cut || !options) return;
+  const start = cut.start;
   mediaOv(index, { technique: null, seed: (options.seed | 0) + 1, ...MEDIA_UNLOCK, ...(options.lock ? { lock: true, lockedPlacement: options.lockedPlacement, lockedPlacementMode: options.lockedPlacementMode, lockedLayout: options.lockedLayout, lockedItemId: options.lockedItemId } : {}) }, layer);
   relock(layer, index);
   replan();
+  seek(start);
+  followTimelinePlayhead();
 }
 function toggleMediaCutLock(layer, index) {
   const cut = S.plan[layer].cuts[index], options = mediaCutOptions(layer, index);
@@ -4171,17 +4183,13 @@ function bind() {
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
-  // Ctrl + マウスホイールでタイムライン縮尺をスムーズにズーム
+  // Ctrl + マウスホイールでタイムライン縮尺を再生バー中心にスムーズにズーム
   $('timelineScroll').addEventListener('wheel', e => {
     if (!e.ctrlKey) return;
     e.preventDefault();
     timelineUserScroll = performance.now();
-    const scroll = $('timelineScroll'), stack = $('timelineStack');
-    const rect = scroll.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const fraction = (scroll.scrollLeft + mouseX) / Math.max(1, stack.clientWidth);
     const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
-    setTimelineZoom(S.timelineZoom * factor, fraction, mouseX);
+    setTimelineZoom(S.timelineZoom * factor);
   }, { passive: false });
   // タイムライン音量スライダー・消音ボタン
   $('timelineVolume')?.addEventListener('input', e => {
@@ -4949,7 +4957,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 J.ui = S;
 J.uiAudio = AP;
 // hooks for hosts that embed the app (the After Effects CEP panel)
-J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
+J.uiApi = { toast, replan, syncUI, pause, seek, setTimelineZoom, flushSave, loadAudioFile, restartPreview,
   openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
   removeLyricCut, removeMediaCut, connectTimelineBoundaries,
   boundaryGroupLimits, commitTimelineBoundary };
