@@ -252,7 +252,13 @@ button.play { width: 40px; height: 34px; padding: 0; font-size: 14px; }
 #mediaTimeline { width: 100%; height: 52px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; touch-action: none; }
 #foregroundTimeline { width: 100%; height: 52px; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; touch-action: none; }
 .timeline-stack { position: relative; display: grid; gap: 6px; min-width: 0; }
-.timeline-scroll { width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; padding-right: 8px; padding-bottom: 6px; }
+.ghost-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+.ghost-toggle input { accent-color: var(--amber); cursor: pointer; }
+.timeline-volume { display: flex; align-items: center; gap: 4px; font: 11px var(--mono); color: var(--muted); margin-left: auto; }
+.timeline-volume button { min-width: 25px; min-height: 25px; padding: 2px 4px; font-size: 13px; background: transparent; border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; color: var(--fg); line-height: 1; }
+.timeline-volume button:hover { background: rgba(255,255,255,0.08); }
+.timeline-volume input[type=range] { width: 75px; height: 14px; accent-color: var(--amber); cursor: pointer; }
+.timeline-volume span { min-width: 34px; text-align: right; }
 .timeline-zoom { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font: 11px var(--mono); color: var(--muted); }
 .timeline-zoom button { min-width: 27px; min-height: 25px; padding: 2px 6px; }
 .timeline-zoom span { min-width: 44px; text-align: center; }
@@ -1035,7 +1041,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         </div>
         <button id="tapStop" class="ghost">終了する</button>
       </div>
-      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">編集モード</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入り演出</button><button id="previewScreenshot" type="button" class="ghost small" title="プレビューをPNGで保存">スクショ</button><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
+      <div class="preview-options"><label class="item-frame-toggle"><input id="showItemFrames" type="checkbox" checked><span id="showItemFramesLabel">編集モード</span></label><label class="ghost-toggle" title="歌い出しの前に文字の輪郭・シルエットを先行表示します"><input id="showGhostPreRoll" type="checkbox"><span id="showGhostPreRollLabel">予兆表示</span></label><button id="effectFavorites" type="button" class="ghost small">☆お気に入り演出</button><button id="previewScreenshot" type="button" class="ghost small" title="プレビューをPNGで保存">スクショ</button><button id="previewFullscreen" type="button" class="ghost small">全画面でプレビュー</button></div>
       <div class="transport">
         <button id="btnPlay" class="play" aria-label="再生">▶</button>
         <span id="timeNow" class="tc">00:00.00</span><span class="tc muted">/</span><button id="timeDur" class="tc muted duration-value" type="button" title="動画全体の長さを入力（空欄で自動）" aria-label="動画全体の長さを入力">00:00.00</button><input id="timeDurInput" class="tc duration-input" type="text" inputmode="decimal" aria-label="動画全体の長さ（秒または分:秒、空欄で自動）" hidden>
@@ -1055,6 +1061,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <div class="playhead-primary" role="group" aria-labelledby="playheadMenuLabel"><button type="button" data-playhead-menu="insert" aria-expanded="false"></button><button type="button" data-playhead-menu="split" aria-expanded="false"></button><button type="button" data-playhead-menu="endHere" aria-expanded="false"></button><button type="button" data-playhead-menu="untilNext" aria-expanded="false"></button><button id="relayoutAtPlayhead" type="button" disabled></button></div>
         <div class="playhead-secondary" role="group" hidden><button id="insertForegroundAtPlayhead" type="button" data-playhead-action="insert" data-layer="foreground" disabled></button><button id="insertLyricAtPlayhead" type="button" data-playhead-action="insert" data-layer="lyrics" disabled></button><button id="insertBackgroundAtPlayhead" type="button" data-playhead-action="insert" data-layer="media" disabled></button><button id="splitForegroundCut" type="button" data-playhead-action="split" data-layer="foreground" disabled></button><button id="splitBackgroundCut" type="button" data-playhead-action="split" data-layer="media" disabled></button><button id="endForegroundHere" type="button" data-playhead-action="endHere" data-layer="foreground" disabled></button><button id="endLyricHere" type="button" data-playhead-action="endHere" data-layer="lyrics" disabled></button><button id="endBackgroundHere" type="button" data-playhead-action="endHere" data-layer="media" disabled></button><button id="untilNextForeground" type="button" data-playhead-action="untilNext" data-layer="foreground" disabled></button><button id="untilNextLyric" type="button" data-playhead-action="untilNext" data-layer="lyrics" disabled></button><button id="untilNextBackground" type="button" data-playhead-action="untilNext" data-layer="media" disabled></button></div>
       </div>
+      <div class="timeline-volume"><button id="volumeMuteBtn" type="button" aria-label="消音切替" title="消音切替">🔊</button><input id="timelineVolume" type="range" min="0" max="100" value="100" title="音量"><span id="timelineVolumeValue" aria-live="polite">100%</span></div>
       <div class="timeline-zoom"><button id="timelineZoomOut" type="button" aria-label="タイムラインを縮小">−</button><span id="timelineZoomValue" aria-live="polite">100%</span><button id="timelineZoomIn" type="button" aria-label="タイムラインを拡大">＋</button></div>
       </div>
       <div class="timeline-with-visibility"><div id="layerVisibilityControls" class="layer-visibility-controls"></div><div id="timelineScroll" class="timeline-scroll"><div id="timelineStack" class="timeline-stack">
@@ -4942,6 +4949,27 @@ J.plan = (project, audio, chain) => {
   plan.energy = audio && audio.energy ? audio.energy : null;
   plan.energyRate = audio && audio.energyRate ? audio.energyRate : 0;
   if (J.finishLyricPlan) J.finishLyricPlan(project, plan, audio);
+  // 先行着地（アンセティシペーション）補正: 各カットの歌い出しにアニメーション完了を着地させる (案A)
+  const anticipation = project.anticipation !== false;
+  plan.anticipation = anticipation;
+  plan.ghostPreRoll = !!project.ghostPreRoll;
+  let prevSequentialEnd = 0;
+  for (let i = 0; i < plan.cuts.length; i++) {
+    const cut = plan.cuts[i];
+    if (cut.blank) continue;
+    if (anticipation) {
+      const lead = Math.min(cut.inDur || 0.3, 0.35);
+      const idealStart = Math.max(0, cut.start - lead);
+      const floor = (prevSequentialEnd <= cut.start) ? prevSequentialEnd : 0;
+      const rStart = Math.min(cut.start, Math.max(idealStart, floor));
+      cut.renderStart = rStart;
+      cut.leadTime = Math.max(0, cut.start - rStart);
+      prevSequentialEnd = cut.end;
+    } else {
+      cut.renderStart = cut.start;
+      cut.leadTime = 0;
+    }
+  }
   return plan;
 };
 
@@ -6824,7 +6852,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 J.lyricCutsAt = (plan, t) => {
   const inserted=plan.cuts.find(c=>c.insertedAtPlayhead && t>=c.start && t<c.end);
   if(inserted)return [inserted];
-  return plan.cuts.filter(c => !c.blank && c.start <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
+  return plan.cuts.filter(c => !c.blank && (c.renderStart ?? c.start) <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
 };
 J.lyricRenderCut = cut => cut.displayEnd != null ? Object.assign({}, cut, {
   end: cut.displayEnd, dur: cut.displayEnd - cut.start,
@@ -9764,8 +9792,15 @@ const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Mat
 // The latest-starting cut still showing at t (cuts may overlap).
 J.cutAt = (plan, t) => {
   const cs = plan.cuts; let lo = 0, hi = cs.length - 1, ans = -1;
-  while (lo <= hi) { const m = (lo + hi) >> 1; if (cs[m].start <= t) { ans = m; lo = m + 1; } else hi = m - 1; }
-  for (let i = ans; i >= 0; i--) if (t < cs[i].end) return cs[i];
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    const s = cs[m].renderStart ?? cs[m].start;
+    if (s <= t) { ans = m; lo = m + 1; } else hi = m - 1;
+  }
+  for (let i = ans; i >= 0; i--) {
+    const s = cs[i].renderStart ?? cs[i].start;
+    if (t >= s && t < (cs[i].displayEnd ?? cs[i].end)) return cs[i];
+  }
   return null;
 };
 
@@ -9941,7 +9976,8 @@ class Renderer {
     const contentCuts = [...new Map(contentPasses.flatMap(P => [...P.cuts])).values()]
       .sort((a, b) => Number(!!a.frontmost) - Number(!!b.frontmost) || a.index - b.index);
     for (const cut of contentCuts) {
-      const opacity = J.clamp((cut.opacity ?? 100) / 100);
+      const isGhost = plan.ghostPreRoll && cut.renderStart != null && tq < cut.start;
+      const opacity = J.clamp((cut.opacity ?? 100) / 100) * (isGhost ? 0.38 : 1);
       if (opacity === 0) continue;
       const composite = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
       // Flatten glyphs, decorations and ghost passes once before applying the
@@ -9949,7 +9985,7 @@ class Renderer {
       let target = ctx;
       const mask = J.activeMask ? J.activeMask(cut) : null;
       const personOcclusion = !opt.copyLyrics && J.personOccluders?.(plan,t,'behindLyrics').length;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
+      if (opacity !== 1 || isGhost || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -10077,7 +10113,17 @@ class Renderer {
     const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: {...(cut?.effectStyle || plan.style),...(cut?.fonts ? {fonts:cut.fonts} : {})}, fx: cut?.effectFx || plan.fx, fps: plan.fps, cut, plan }, o);
     if (cut && cut.motionScale < 1) env.fx = Object.assign({}, env.fx, { motion: env.fx.motion * cut.motionScale });
     if (cut) {
-      env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
+      const rStart = cut.renderStart ?? cut.start;
+      const actualLead = cut.start - rStart;
+      if (actualLead > 0.01) {
+        if (o.t < cut.start) {
+          env.pIn = J.clamp((o.t - rStart) / actualLead);
+        } else {
+          env.pIn = 1;
+        }
+      } else {
+        env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
+      }
       env.pOut = cut.outDur > 0 ? J.clamp((o.lt - (cut.dur - cut.outDur)) / cut.outDur) : 0;
     } else { env.pIn = 1; env.pOut = 0; }
     const ghost = env.pass !== 'main';
@@ -42220,21 +42266,66 @@ const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), 
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
-  ctx: null, src: null, startAt: 0,
+  ctx: null, src: null, gain: null, volume: 1.0, muted: false, lastVolume: 1.0, startAt: 0,
+  ensureContext() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = this.muted ? 0 : this.volume;
+      this.gain.connect(this.ctx.destination);
+    }
+  },
+  setVolume(vol) {
+    this.volume = J.clamp(+vol, 0, 1);
+    if (this.volume > 0) this.muted = false;
+    this.applyVolume();
+  },
+  toggleMute() {
+    if (this.muted) {
+      this.muted = false;
+      if (this.volume <= 0) this.volume = this.lastVolume || 1.0;
+    } else {
+      this.lastVolume = this.volume > 0 ? this.volume : (this.lastVolume || 1.0);
+      this.muted = true;
+    }
+    this.applyVolume();
+  },
+  applyVolume() {
+    const eff = this.muted ? 0 : this.volume;
+    if (this.ctx && this.gain) {
+      try { this.gain.gain.setValueAtTime(eff, this.ctx.currentTime); } catch (e) { this.gain.gain.value = eff; }
+    }
+    if (S.previewVideos) {
+      for (const v of S.previewVideos.values()) { try { v.volume = eff; } catch (e) {} }
+    }
+    if (S.previewVideoWarmups) {
+      for (const v of S.previewVideoWarmups.values()) { try { v.volume = eff; } catch (e) {} }
+    }
+    syncVolumeUI();
+  },
   play(buffer, offset, end = null) {
-    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.ensureContext();
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.stop();
     const off = end==null ? Math.max(0, Math.min(offset, buffer.duration - 0.01)) : Math.max(0,offset);
     this.startAt = this.ctx.currentTime - off;
     if(end!=null&&(off>=buffer.duration||end<=off))return;
-    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.ctx.destination);
+    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.gain);
     if(end==null)s.start(0,off);else s.start(0,off,Math.min(end,buffer.duration)-off);
     this.src = s;
   },
   stop() { if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} this.src = null; } },
   time() { return this.ctx ? this.ctx.currentTime - this.startAt : 0; },
 };
+function syncVolumeUI() {
+  const slider = $('timelineVolume'), label = $('timelineVolumeValue'), btn = $('volumeMuteBtn');
+  if (!slider || !label || !btn) return;
+  const pct = Math.round((AP.muted ? 0 : AP.volume) * 100);
+  slider.value = AP.muted ? 0 : Math.round(AP.volume * 100);
+  label.textContent = `${pct}%`;
+  btn.textContent = AP.muted || AP.volume <= 0 ? '🔇' : (AP.volume < 0.5 ? '🔉' : '🔊');
+  btn.setAttribute('aria-label', AP.muted ? '消音解除' : '消音');
+}
 const NO_AUDIO_LABEL = '曲なし（読み込むと拍を検出してカットを合わせます）';
 function removeAudio() {
   if (!S.audio) return;
@@ -42705,13 +42796,18 @@ function syncTimelinePan(){
   const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
   input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
-function setTimelineZoom(zoom) {
+function setTimelineZoom(zoom, anchorFraction = null, mouseX = null) {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
   const center = scroll.scrollLeft + scroll.clientWidth / 2;
-  const fraction = center / Math.max(1, stack.clientWidth);
+  const fraction = anchorFraction != null ? anchorFraction : center / Math.max(1, stack.clientWidth);
   S.timelineZoom = J.clamp(zoom, 1, 8);
   sizeTimelineStack();
-  scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
+  if (mouseX != null) {
+    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - mouseX);
+  } else {
+    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
+  }
+  syncTimelinePan();
   $('timelineZoomValue').textContent = `${Math.round(S.timelineZoom * 100)}%`;
   $('timelineZoomOut').disabled = S.timelineZoom <= 1;
   $('timelineZoomIn').disabled = S.timelineZoom >= 8;
@@ -42767,6 +42863,14 @@ function drawTimeline() {
     const x0 = X(cut.start), x1 = X(cut.end), lane = laneBox('lyrics', lanesInfo.lanes.get(cut), lanesInfo.count, c);
     const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0));
     const hue = layoutHue(cut.layout);
+    // 先行着地帯（リードゾーン）
+    if (cut.renderStart != null && cut.renderStart < cut.start) {
+      const xr = X(cut.renderStart);
+      x.fillStyle = `hsla(${hue},60%,50%,${overlapping ? 0.08 : 0.12})`;
+      x.fillRect(xr, y0, Math.max(1, x0 - xr), lh);
+      x.fillStyle = `hsla(${hue},70%,60%,0.35)`;
+      x.fillRect(xr, y0, Math.max(1, 1.5 * dpr), lh);
+    }
     x.fillStyle = `hsla(${hue},70%,58%,${overlapping ? 0.2 : 0.28})`; x.fillRect(x0, y0, Math.max(1, x1 - x0 - 1), lh);
     if (overlapping) { x.strokeStyle = `hsla(${hue},80%,62%,0.55)`; x.lineWidth = dpr; x.strokeRect(x0 + .5, y0 + .5, Math.max(1, x1 - x0 - 1), lh - 1); }
     x.fillStyle = `hsla(${hue},80%,62%,${overlapping ? 0.8 : 0.95})`; x.fillRect(x0, y0, Math.max(1, 2 * dpr), lh);
@@ -46113,7 +46217,9 @@ function syncUI() {
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
   $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; langNote();
+  if ($('showGhostPreRoll')) $('showGhostPreRoll').checked = !!S.project.ghostPreRoll;
   renderFontRoles(); renderColors(); renderFx(); renderTech(); renderMediaEffects(); syncOut(); drawStyleGrid();
+  syncVolumeUI();
 }
 
 /* ---------------- wiring ---------------- */
@@ -46138,6 +46244,16 @@ function bind() {
   $('showItemFramesLabel').textContent=J.mediaLabel('編集モード','Edit mode');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
+  const ghostToggle = $('showGhostPreRoll');
+  if (ghostToggle) {
+    ghostToggle.checked = !!(S.project && S.project.ghostPreRoll);
+    ghostToggle.addEventListener('change', () => {
+      if (!S.project) return;
+      S.project.ghostPreRoll = ghostToggle.checked;
+      if (S.plan) S.plan.ghostPreRoll = ghostToggle.checked;
+      S.need = true;
+    });
+  }
   document.addEventListener('click',e=>{
     if(S.exporting || S.tap || document.querySelector('dialog[open]'))return;
     if(e.target.closest('.item-frame-toggle,#areaEditControls'))return;
@@ -46295,6 +46411,26 @@ function bind() {
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
+  // Ctrl + マウスホイールでタイムライン縮尺をスムーズにズーム
+  $('timelineScroll').addEventListener('wheel', e => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    timelineUserScroll = performance.now();
+    const scroll = $('timelineScroll'), stack = $('timelineStack');
+    const rect = scroll.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const fraction = (scroll.scrollLeft + mouseX) / Math.max(1, stack.clientWidth);
+    const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    setTimelineZoom(S.timelineZoom * factor, fraction, mouseX);
+  }, { passive: false });
+  // タイムライン音量スライダー・消音ボタン
+  $('timelineVolume')?.addEventListener('input', e => {
+    AP.setVolume(e.target.value / 100);
+  });
+  $('volumeMuteBtn')?.addEventListener('click', () => {
+    AP.toggleMute();
+  });
+  syncVolumeUI();
   // A dedicated touch scrollbar leaves boundary dragging and seeking intact.
   const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
   panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
@@ -47051,6 +47187,7 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
+J.uiAudio = AP;
 // hooks for hosts that embed the app (the After Effects CEP panel)
 J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
   openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,

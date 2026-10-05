@@ -423,7 +423,7 @@ J.applyLyricGroupAvoidance = (project, plan) => {
 J.lyricCutsAt = (plan, t) => {
   const inserted=plan.cuts.find(c=>c.insertedAtPlayhead && t>=c.start && t<c.end);
   if(inserted)return [inserted];
-  return plan.cuts.filter(c => !c.blank && c.start <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
+  return plan.cuts.filter(c => !c.blank && (c.renderStart ?? c.start) <= t && t < (c.displayEnd ?? c.end)).sort((a, b) => a.index - b.index);
 };
 J.lyricRenderCut = cut => cut.displayEnd != null ? Object.assign({}, cut, {
   end: cut.displayEnd, dur: cut.displayEnd - cut.start,

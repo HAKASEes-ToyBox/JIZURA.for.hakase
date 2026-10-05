@@ -10,8 +10,15 @@ const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Mat
 // The latest-starting cut still showing at t (cuts may overlap).
 J.cutAt = (plan, t) => {
   const cs = plan.cuts; let lo = 0, hi = cs.length - 1, ans = -1;
-  while (lo <= hi) { const m = (lo + hi) >> 1; if (cs[m].start <= t) { ans = m; lo = m + 1; } else hi = m - 1; }
-  for (let i = ans; i >= 0; i--) if (t < cs[i].end) return cs[i];
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    const s = cs[m].renderStart ?? cs[m].start;
+    if (s <= t) { ans = m; lo = m + 1; } else hi = m - 1;
+  }
+  for (let i = ans; i >= 0; i--) {
+    const s = cs[i].renderStart ?? cs[i].start;
+    if (t >= s && t < (cs[i].displayEnd ?? cs[i].end)) return cs[i];
+  }
   return null;
 };
 
@@ -187,7 +194,8 @@ class Renderer {
     const contentCuts = [...new Map(contentPasses.flatMap(P => [...P.cuts])).values()]
       .sort((a, b) => Number(!!a.frontmost) - Number(!!b.frontmost) || a.index - b.index);
     for (const cut of contentCuts) {
-      const opacity = J.clamp((cut.opacity ?? 100) / 100);
+      const isGhost = plan.ghostPreRoll && cut.renderStart != null && tq < cut.start;
+      const opacity = J.clamp((cut.opacity ?? 100) / 100) * (isGhost ? 0.38 : 1);
       if (opacity === 0) continue;
       const composite = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay' }[cut.blend] || 'source-over';
       // Flatten glyphs, decorations and ghost passes once before applying the
@@ -195,7 +203,7 @@ class Renderer {
       let target = ctx;
       const mask = J.activeMask ? J.activeMask(cut) : null;
       const personOcclusion = !opt.copyLyrics && J.personOccluders?.(plan,t,'behindLyrics').length;
-      if (opacity !== 1 || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
+      if (opacity !== 1 || isGhost || composite !== 'source-over' || backgroundMedia && !opt.noPost || mask || personOcclusion) {
         const layer = this.ensure(this.lyricCutLayer || (this.lyricCutLayer = mk(2, 2)), cw, ch);
         target = layer.getContext('2d'); target.setTransform(1, 0, 0, 1, 0, 0); target.globalAlpha = 1; target.globalCompositeOperation = 'source-over'; target.filter = 'none';
         target.clearRect(0, 0, cw, ch); target.setTransform(scale, 0, 0, scale, 0, 0);
@@ -323,7 +331,17 @@ class Renderer {
     const env = Object.assign({ ctx, W, H, sc: cut?.palette || sc, st: {...(cut?.effectStyle || plan.style),...(cut?.fonts ? {fonts:cut.fonts} : {})}, fx: cut?.effectFx || plan.fx, fps: plan.fps, cut, plan }, o);
     if (cut && cut.motionScale < 1) env.fx = Object.assign({}, env.fx, { motion: env.fx.motion * cut.motionScale });
     if (cut) {
-      env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
+      const rStart = cut.renderStart ?? cut.start;
+      const actualLead = cut.start - rStart;
+      if (actualLead > 0.01) {
+        if (o.t < cut.start) {
+          env.pIn = J.clamp((o.t - rStart) / actualLead);
+        } else {
+          env.pIn = 1;
+        }
+      } else {
+        env.pIn = J.clamp(o.lt / Math.max(0.01, cut.inDur));
+      }
       env.pOut = cut.outDur > 0 ? J.clamp((o.lt - (cut.dur - cut.outDur)) / cut.outDur) : 0;
     } else { env.pIn = 1; env.pOut = 0; }
     const ghost = env.pass !== 'main';

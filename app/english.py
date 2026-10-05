@@ -14,6 +14,11 @@ BODY = {
     '<summary>出力</summary>': '<summary>Export</summary>',
     'このfork版は、ワンストップでのリリックビデオ作成をコンセプトに<br>オリジナル版JIZURAに機能を追加したものです。<br>編集・書き出しはブラウザ内で処理します。': 'This fork adds features to the original JIZURA<br>based on the concept of one-stop lyric video creation.<br>Editing and export run in your browser.',
 
+    '予兆表示': 'Anticipation',
+    '歌い出しの前に文字の輪郭・シルエットを先行表示します': 'Show subtle preview of lyrics before singing begins',
+    '消音切替': 'Toggle mute',
+    '消音': 'Mute',
+    '音量': 'Volume',
     'テーマ設定': 'Theme settings', '選択を解除': 'Clear selection',
     '統一感重視': 'Unified look', 'にぎやかさ重視': 'Lively look', '統一感・にぎやかさ': 'Unified or lively',
     'このfork版は、テーマに合わせた構成選定と、背景・前景の画像・動画編集機能を追加しています。編集・書き出しはブラウザ内で処理します。': 'This fork adds theme-guided arrangements and background/foreground image and video editing. Editing and export run in your browser.',

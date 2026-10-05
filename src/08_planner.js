@@ -651,6 +651,27 @@ J.plan = (project, audio, chain) => {
   plan.energy = audio && audio.energy ? audio.energy : null;
   plan.energyRate = audio && audio.energyRate ? audio.energyRate : 0;
   if (J.finishLyricPlan) J.finishLyricPlan(project, plan, audio);
+  // 先行着地（アンセティシペーション）補正: 各カットの歌い出しにアニメーション完了を着地させる (案A)
+  const anticipation = project.anticipation !== false;
+  plan.anticipation = anticipation;
+  plan.ghostPreRoll = !!project.ghostPreRoll;
+  let prevSequentialEnd = 0;
+  for (let i = 0; i < plan.cuts.length; i++) {
+    const cut = plan.cuts[i];
+    if (cut.blank) continue;
+    if (anticipation) {
+      const lead = Math.min(cut.inDur || 0.3, 0.35);
+      const idealStart = Math.max(0, cut.start - lead);
+      const floor = (prevSequentialEnd <= cut.start) ? prevSequentialEnd : 0;
+      const rStart = Math.min(cut.start, Math.max(idealStart, floor));
+      cut.renderStart = rStart;
+      cut.leadTime = Math.max(0, cut.start - rStart);
+      prevSequentialEnd = cut.end;
+    } else {
+      cut.renderStart = cut.start;
+      cut.leadTime = 0;
+    }
+  }
   return plan;
 };
 

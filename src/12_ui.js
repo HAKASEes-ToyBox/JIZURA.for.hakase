@@ -26,21 +26,66 @@ const S = { project: null, plan: null, audio: null, renderer: new J.Renderer(), 
 
 /* WebAudio player (works inside sandboxed pages where blob media may be blocked) */
 const AP = {
-  ctx: null, src: null, startAt: 0,
+  ctx: null, src: null, gain: null, volume: 1.0, muted: false, lastVolume: 1.0, startAt: 0,
+  ensureContext() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = this.muted ? 0 : this.volume;
+      this.gain.connect(this.ctx.destination);
+    }
+  },
+  setVolume(vol) {
+    this.volume = J.clamp(+vol, 0, 1);
+    if (this.volume > 0) this.muted = false;
+    this.applyVolume();
+  },
+  toggleMute() {
+    if (this.muted) {
+      this.muted = false;
+      if (this.volume <= 0) this.volume = this.lastVolume || 1.0;
+    } else {
+      this.lastVolume = this.volume > 0 ? this.volume : (this.lastVolume || 1.0);
+      this.muted = true;
+    }
+    this.applyVolume();
+  },
+  applyVolume() {
+    const eff = this.muted ? 0 : this.volume;
+    if (this.ctx && this.gain) {
+      try { this.gain.gain.setValueAtTime(eff, this.ctx.currentTime); } catch (e) { this.gain.gain.value = eff; }
+    }
+    if (S.previewVideos) {
+      for (const v of S.previewVideos.values()) { try { v.volume = eff; } catch (e) {} }
+    }
+    if (S.previewVideoWarmups) {
+      for (const v of S.previewVideoWarmups.values()) { try { v.volume = eff; } catch (e) {} }
+    }
+    syncVolumeUI();
+  },
   play(buffer, offset, end = null) {
-    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.ensureContext();
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.stop();
     const off = end==null ? Math.max(0, Math.min(offset, buffer.duration - 0.01)) : Math.max(0,offset);
     this.startAt = this.ctx.currentTime - off;
     if(end!=null&&(off>=buffer.duration||end<=off))return;
-    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.ctx.destination);
+    const s = this.ctx.createBufferSource(); s.buffer = buffer; s.connect(this.gain);
     if(end==null)s.start(0,off);else s.start(0,off,Math.min(end,buffer.duration)-off);
     this.src = s;
   },
   stop() { if (this.src) { try { this.src.stop(); } catch (e) {} try { this.src.disconnect(); } catch (e) {} this.src = null; } },
   time() { return this.ctx ? this.ctx.currentTime - this.startAt : 0; },
 };
+function syncVolumeUI() {
+  const slider = $('timelineVolume'), label = $('timelineVolumeValue'), btn = $('volumeMuteBtn');
+  if (!slider || !label || !btn) return;
+  const pct = Math.round((AP.muted ? 0 : AP.volume) * 100);
+  slider.value = AP.muted ? 0 : Math.round(AP.volume * 100);
+  label.textContent = `${pct}%`;
+  btn.textContent = AP.muted || AP.volume <= 0 ? '🔇' : (AP.volume < 0.5 ? '🔉' : '🔊');
+  btn.setAttribute('aria-label', AP.muted ? '消音解除' : '消音');
+}
 const NO_AUDIO_LABEL = '曲なし（読み込むと拍を検出してカットを合わせます）';
 function removeAudio() {
   if (!S.audio) return;
@@ -511,13 +556,18 @@ function syncTimelinePan(){
   const scroll=$('timelineScroll'),max=Math.max(0,scroll.scrollWidth-scroll.clientWidth);
   input.max=String(max);input.value=String(scroll.scrollLeft);input.disabled=max<=8;
 }
-function setTimelineZoom(zoom) {
+function setTimelineZoom(zoom, anchorFraction = null, mouseX = null) {
   const scroll = $('timelineScroll'), stack = $('timelineStack');
   const center = scroll.scrollLeft + scroll.clientWidth / 2;
-  const fraction = center / Math.max(1, stack.clientWidth);
+  const fraction = anchorFraction != null ? anchorFraction : center / Math.max(1, stack.clientWidth);
   S.timelineZoom = J.clamp(zoom, 1, 8);
   sizeTimelineStack();
-  scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
+  if (mouseX != null) {
+    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - mouseX);
+  } else {
+    scroll.scrollLeft = Math.max(0, fraction * stack.clientWidth - scroll.clientWidth / 2);
+  }
+  syncTimelinePan();
   $('timelineZoomValue').textContent = `${Math.round(S.timelineZoom * 100)}%`;
   $('timelineZoomOut').disabled = S.timelineZoom <= 1;
   $('timelineZoomIn').disabled = S.timelineZoom >= 8;
@@ -573,6 +623,14 @@ function drawTimeline() {
     const x0 = X(cut.start), x1 = X(cut.end), lane = laneBox('lyrics', lanesInfo.lanes.get(cut), lanesInfo.count, c);
     const y0 = lane.top * dpr, lh = Math.max(2, lane.height * dpr - (overlapping ? 1 : 0));
     const hue = layoutHue(cut.layout);
+    // 先行着地帯（リードゾーン）
+    if (cut.renderStart != null && cut.renderStart < cut.start) {
+      const xr = X(cut.renderStart);
+      x.fillStyle = `hsla(${hue},60%,50%,${overlapping ? 0.08 : 0.12})`;
+      x.fillRect(xr, y0, Math.max(1, x0 - xr), lh);
+      x.fillStyle = `hsla(${hue},70%,60%,0.35)`;
+      x.fillRect(xr, y0, Math.max(1, 1.5 * dpr), lh);
+    }
     x.fillStyle = `hsla(${hue},70%,58%,${overlapping ? 0.2 : 0.28})`; x.fillRect(x0, y0, Math.max(1, x1 - x0 - 1), lh);
     if (overlapping) { x.strokeStyle = `hsla(${hue},80%,62%,0.55)`; x.lineWidth = dpr; x.strokeRect(x0 + .5, y0 + .5, Math.max(1, x1 - x0 - 1), lh - 1); }
     x.fillStyle = `hsla(${hue},80%,62%,${overlapping ? 0.8 : 0.95})`; x.fillRect(x0, y0, Math.max(1, 2 * dpr), lh);
@@ -3919,7 +3977,9 @@ function syncUI() {
   $('lineScale').value = S.project.timing.lineScale ?? 1;
   $('snap').checked = !!S.project.timing.snap;
   $('lyricLang').value = J.LANG_LABEL[S.project.lang] ? S.project.lang : 'auto'; langNote();
+  if ($('showGhostPreRoll')) $('showGhostPreRoll').checked = !!S.project.ghostPreRoll;
   renderFontRoles(); renderColors(); renderFx(); renderTech(); renderMediaEffects(); syncOut(); drawStyleGrid();
+  syncVolumeUI();
 }
 
 /* ---------------- wiring ---------------- */
@@ -3944,6 +4004,16 @@ function bind() {
   $('showItemFramesLabel').textContent=J.mediaLabel('編集モード','Edit mode');
   try {frameToggle.checked=localStorage.getItem('jizura.itemFrames')!=='false';}catch(e){}
   frameToggle.addEventListener('change',()=>{try{localStorage.setItem('jizura.itemFrames',String(frameToggle.checked));}catch(e){}S.need=true;drawItemFrames();});
+  const ghostToggle = $('showGhostPreRoll');
+  if (ghostToggle) {
+    ghostToggle.checked = !!(S.project && S.project.ghostPreRoll);
+    ghostToggle.addEventListener('change', () => {
+      if (!S.project) return;
+      S.project.ghostPreRoll = ghostToggle.checked;
+      if (S.plan) S.plan.ghostPreRoll = ghostToggle.checked;
+      S.need = true;
+    });
+  }
   document.addEventListener('click',e=>{
     if(S.exporting || S.tap || document.querySelector('dialog[open]'))return;
     if(e.target.closest('.item-frame-toggle,#areaEditControls'))return;
@@ -4101,6 +4171,26 @@ function bind() {
   $('timelineZoomOut').addEventListener('click', () => setTimelineZoom(S.timelineZoom / 1.5));
   $('timelineZoomIn').addEventListener('click', () => setTimelineZoom(S.timelineZoom * 1.5));
   $('timelineZoomOut').disabled = true;
+  // Ctrl + マウスホイールでタイムライン縮尺をスムーズにズーム
+  $('timelineScroll').addEventListener('wheel', e => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    timelineUserScroll = performance.now();
+    const scroll = $('timelineScroll'), stack = $('timelineStack');
+    const rect = scroll.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const fraction = (scroll.scrollLeft + mouseX) / Math.max(1, stack.clientWidth);
+    const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    setTimelineZoom(S.timelineZoom * factor, fraction, mouseX);
+  }, { passive: false });
+  // タイムライン音量スライダー・消音ボタン
+  $('timelineVolume')?.addEventListener('input', e => {
+    AP.setVolume(e.target.value / 100);
+  });
+  $('volumeMuteBtn')?.addEventListener('click', () => {
+    AP.toggleMute();
+  });
+  syncVolumeUI();
   // A dedicated touch scrollbar leaves boundary dragging and seeking intact.
   const panLabel=document.createElement('label');panLabel.className='timeline-touch-scroll';
   panLabel.textContent=J.mediaLabel('タイムラインを横に移動','Scroll timeline');
@@ -4857,6 +4947,7 @@ function boot() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
+J.uiAudio = AP;
 // hooks for hosts that embed the app (the After Effects CEP panel)
 J.uiApi = { toast, replan, syncUI, pause, seek, flushSave, loadAudioFile, restartPreview,
   openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
