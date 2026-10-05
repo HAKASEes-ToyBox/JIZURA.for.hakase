@@ -66,7 +66,7 @@
 
       <div class="sec" id="mediaPane" hidden>
         <div class="sec-h media-pane-heading"><h2 id="mediaPaneTitle">背景</h2></div>
-        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label></div>
+        <div class="media-upload-row"><p class="hint">画像・動画をここへドラッグ＆ドロップ、または「追加」から選択できます。素材はこのブラウザに保存されます。</p><label class="file">追加<input id="mediaFiles" type="file" accept="image/*,video/*" multiple></label><button type="button" id="btnSpriteExtract" class="ghost" style="margin-left:6px;white-space:nowrap" title="グリーンバック等の複数ポーズ画像から一括切り出し">✂️ シート切り出し</button></div>
         <div id="mediaList" class="media-list"></div>
         <div id="mediaCutInsert" class="media-lyric-insert">
           <fieldset id="backgroundInsertSources" hidden><legend>一括挿入する項目</legend></fieldset>
@@ -404,3 +404,80 @@
   <div class="terms-foot"><button value="cancel">キャンセル</button><button value="save" class="primary">保存</button></div>
  </form>
 </dialog>
+
+<dialog id="spriteExtractDlg" class="terms sprite-extract-dialog" aria-labelledby="spriteExtractTitle">
+  <div class="se-header">
+    <h2 id="spriteExtractTitle">キャラシート切り出し</h2>
+    <button type="button" class="btn-close" id="btnCloseSpriteExtract" aria-label="閉じる">×</button>
+  </div>
+  <div class="se-body">
+    <div class="se-left">
+      <div class="se-canvas-wrap">
+        <canvas id="sePreview"></canvas>
+        <div id="seDropzone" class="se-dropzone">
+          <p>キャラシート画像をドラッグ＆ドロップ<br>またはクリックして選択</p>
+          <input type="file" id="seFileInput" accept="image/*" hidden>
+        </div>
+      </div>
+      <div class="se-canvas-hint">※ 画像をクリックするとその位置の色をキーカラーとして取得します（スポイト）</div>
+    </div>
+    <div class="se-right">
+      <fieldset class="se-group">
+        <legend>分割方式</legend>
+        <div class="se-mode-row">
+          <label><input type="radio" name="seMode" value="ccl" checked> 自動検出（ポーズ塊を認識）</label>
+          <label><input type="radio" name="seMode" value="grid"> グリッド等分割</label>
+        </div>
+        <div id="seGridOpts" class="se-grid-opts" hidden>
+          <label>行 <input type="number" id="seRows" value="2" min="1" max="20" class="se-num"></label>
+          <span>×</span>
+          <label>列 <input type="number" id="seCols" value="5" min="1" max="20" class="se-num"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="se-group">
+        <legend>クロマキー（背景透過）</legend>
+        <div class="se-row">
+          <label class="se-color-label">キーカラー: <input type="color" id="seKeyColor" value="#00ff00"></label>
+          <button type="button" id="seBtnPick" class="ghost small">スポイト</button>
+          <button type="button" id="seBtnAutoColor" class="ghost small">自動色検出</button>
+        </div>
+        <div class="se-slider-row">
+          <label for="seThreshold">色許容度: <span id="seThresholdVal">45</span></label>
+          <input type="range" id="seThreshold" min="5" max="150" value="45">
+        </div>
+        <div class="se-slider-row">
+          <label for="seFeather">境界ぼかし: <span id="seFeatherVal">2</span>px</label>
+          <input type="range" id="seFeather" min="0" max="15" value="2">
+        </div>
+      </fieldset>
+
+      <div class="se-action-row">
+        <button type="button" id="seBtnAnalyze" class="primary" style="width:100%">再検出・更新</button>
+      </div>
+
+      <div class="se-thumb-header">
+        <strong>検出結果: <span id="seCount">0</span>件</strong>
+        <div class="se-thumb-btns">
+          <button type="button" id="seCheckAll" class="ghost small">全選択</button>
+          <button type="button" id="seUncheckAll" class="ghost small">全解除</button>
+        </div>
+      </div>
+      <div id="seThumbList" class="se-thumb-list"></div>
+
+      <div class="se-footer">
+        <label class="field se-target-field">登録先:
+          <select id="seTargetLayer">
+            <option value="foreground" selected>前景レイヤー</option>
+            <option value="media">背景レイヤー</option>
+          </select>
+        </label>
+        <div class="se-footer-btns">
+          <button type="button" id="seBtnCancel">キャンセル</button>
+          <button type="button" id="seBtnRegister" class="primary">一括登録して追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+

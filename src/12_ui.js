@@ -4299,8 +4299,12 @@ function bind() {
     dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close('cancel');}});
     document.body.append(dialog);dialog.showModal();dialog.querySelector('[value="cancel"]').focus();
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.areaEdit && !document.querySelector('dialog[open]')) { e.preventDefault(); cancelAreaEditor(); } });
   $('mediaFiles').addEventListener('change', async e => { const files = Array.from(e.target.files || []); e.target.value = ''; await addMediaFiles(files, activeMediaLayer() || 'media'); });
+  if ($('btnSpriteExtract')) {
+    $('btnSpriteExtract').addEventListener('click', () => {
+      if (window.SpriteExtractor) window.SpriteExtractor.open(activeMediaLayer() || 'foreground');
+    });
+  }
   const mediaPane = $('mediaPane');
   const hasFiles = e => Array.from(e.dataTransfer && e.dataTransfer.types || []).includes('Files');
   mediaPane.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; mediaPane.classList.add('media-drop-active'); });
@@ -4956,9 +4960,11 @@ function boot() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 J.ui = S;
 J.uiAudio = AP;
+J.addMediaFiles = addMediaFiles;
+J.activeMediaLayer = activeMediaLayer;
 // hooks for hosts that embed the app (the After Effects CEP panel)
 J.uiApi = { toast, replan, syncUI, pause, seek, setTimelineZoom, flushSave, loadAudioFile, restartPreview,
   openProjectFile, replaceProject, ensureFonts, splitMediaCut, insertLyricAtPlayhead,
   removeLyricCut, removeMediaCut, connectTimelineBoundaries,
-  boundaryGroupLimits, commitTimelineBoundary };
+  boundaryGroupLimits, commitTimelineBoundary, addMediaFiles, activeMediaLayer };
 })();
